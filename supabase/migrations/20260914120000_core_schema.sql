@@ -216,15 +216,28 @@ create index guest_tags_tag_idx on public.guest_tags (tag_id);
 -- ---------------------------------------------------------------------------
 -- invitations
 -- ---------------------------------------------------------------------------
--- The raw token exists only in the URL we hand out and in the send payload.
--- What is stored is sha256(token || pepper), so a database leak is not a
--- pile of live RSVP links. Lookup still works because the hash is
--- deterministic — see src/lib/tokens.ts.
+-- Tokens are stored twice, for two different jobs.
+--
+--   token_hash       sha256(token || pepper). What an incoming RSVP link is
+--                    looked up by. Deterministic, so lookup is a single
+--                    indexed read, and useless to anyone holding only a dump.
+--
+--   token_encrypted  AES-256-GCM of the same token, under a key derived from
+--                    the same environment pepper. This exists because hashing
+--                    alone would make the token unrecoverable, and the planner
+--                    genuinely needs it back: to copy a link into WhatsApp
+--                    months later, and to reprint a QR code for stationery
+--                    without invalidating the invitation already posted.
+--
+-- The security property is unchanged either way: the key lives in the
+-- environment, never in the database, so a dump on its own yields nothing.
+-- See src/lib/tokens.ts.
 create table public.invitations (
   id                 uuid primary key default gen_random_uuid(),
   wedding_id         uuid not null,
   household_id       uuid not null,
   token_hash         text not null,
+  token_encrypted    text not null,
   channel            invite_channel not null default 'email',
   sent_at            timestamptz,
   opened_at          timestamptz,

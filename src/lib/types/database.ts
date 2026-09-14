@@ -234,6 +234,7 @@ export type InvitationRow = {
   wedding_id: string;
   household_id: string;
   token_hash: string;
+  token_encrypted: string;
   channel: InviteChannel;
   sent_at: string | null;
   opened_at: string | null;

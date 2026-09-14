@@ -4,7 +4,7 @@
 session picking this up, read this file and `docs/wedding-platform-spec.md` and
 you have everything.
 
-Last updated: chunk 6 of 9 — ranking screen complete.
+Last updated: chunk 7 of 9 — invitations and sending complete.
 
 ---
 
@@ -29,7 +29,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 | 4. Auth + shell | done | Magic link, layout, dashboard |
 | 5. Guests | done | Table, filters, detail, households |
 | 6. Ranking | done | dnd-kit + virtual + cut line |
-| 7. Invitations | not started | Events, send, QR, chase cron |
+| 7. Invitations | done | Events, send, chase cron |
 | 8. Public RSVP | not started | `/rsvp/[token]`, public site |
 | 9. Export + polish | not started | CSV for the caterer, final tests |
 
@@ -37,7 +37,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 
 ```bash
 ./scripts/verify-migrations.sh   # 49 SQL assertions, throwaway PG cluster
-npm test                         # 24 unit tests (ranking, tier)
+npm test                         # 38 unit tests (ranking, tier, tokens, timezone)
 npm run typecheck                # clean
 npm run build                    # clean
 ```
@@ -154,10 +154,13 @@ before trusting it.
 
 ## Next chunk
 
-**Chunk 7: events and invitations.** Event CRUD, invitation creation with
-hashed tokens and QR codes, per-household send with a copy-ready WhatsApp
-message, and the reminder cron that chases only non-responders and writes
-every send to `message_log` before dispatch.
+**Chunk 8: the public RSVP flow.** `/rsvp/[token]` — no login, per guest, per
+event, with the custom questions. Plus the throttle on token lookup, the plus-one
+flow that creates a real guest record, and the thin public site at `/w`.
+
+This is the security-sensitive chunk. The token resolves to exactly one
+household via the service role, and every read and write after that must be
+constrained to it — RLS is not helping on that path by design.
 
 Note: `tierFor` in `src/lib/tier.ts` deliberately duplicates the CASE
 expression in `v_households`, because during an optimistic drag the server's

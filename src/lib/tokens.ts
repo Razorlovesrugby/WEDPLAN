@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
-import { serverEnv } from "./env";
+import { absoluteUrl, serverEnv } from "./env";
 
 /**
  * Invitation tokens.
@@ -54,4 +54,66 @@ export function hashClientIp(ip: string): string {
     .update(`${ip}${serverEnv().INVITE_TOKEN_PEPPER}`)
     .digest("hex")
     .slice(0, 32);
+}
+
+// ---------------------------------------------------------------------------
+// Recovering a token
+// ---------------------------------------------------------------------------
+// Hashing alone would be a dead end. The planner needs the token back — to
+// paste a link into WhatsApp for the relatives who don't do email, and to
+// reprint a QR code without invalidating the invitation already in the post.
+//
+// So the token is also stored encrypted, under a key derived from the same
+// pepper. The key never touches the database, so a dump still yields nothing;
+// the difference from a plain hash is only that the application, holding the
+// environment, can read it back.
+
+import { createCipheriv, createDecipheriv } from "node:crypto";
+
+const ENCRYPTION_ALGORITHM = "aes-256-gcm";
+
+/** 32 bytes from the pepper, domain-separated so it is not the hashing input. */
+function encryptionKey(): Buffer {
+  return createHash("sha256").update(`${serverEnv().INVITE_TOKEN_PEPPER}:token-encryption`).digest();
+}
+
+/** `iv.ciphertext.tag`, all base64url. */
+export function encryptToken(token: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ENCRYPTION_ALGORITHM, encryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [iv, ciphertext, cipher.getAuthTag()]
+    .map((part) => part.toString("base64url"))
+    .join(".");
+}
+
+/**
+ * Returns null rather than throwing when the payload will not decrypt. That
+ * happens for one foreseeable reason — the pepper was rotated — and the UI
+ * should say "this link can't be recovered, reissue it" rather than crash.
+ */
+export function decryptToken(payload: string): string | null {
+  const parts = payload.split(".");
+  if (parts.length !== 3) return null;
+  const [ivPart, ciphertextPart, tagPart] = parts as [string, string, string];
+
+  try {
+    const decipher = createDecipheriv(
+      ENCRYPTION_ALGORITHM,
+      encryptionKey(),
+      Buffer.from(ivPart, "base64url"),
+    );
+    decipher.setAuthTag(Buffer.from(tagPart, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextPart, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** The link a household actually follows. */
+export function invitationUrl(token: string): string {
+  return absoluteUrl(`/rsvp/${token}`);
 }
