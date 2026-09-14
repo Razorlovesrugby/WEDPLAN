@@ -56,11 +56,22 @@ if [ ${#tests[@]} -gt 0 ]; then
   echo "==> running tests"
   total=0
   for f in "${tests[@]}"; do
+    # psql's exit status is authoritative (ON_ERROR_STOP is set in each
+    # file); the grep is only for reporting. Written as an `if` rather than
+    # `grep ... && exit 1`, because that form returns non-zero whenever grep
+    # finds nothing, which under `set -e` aborts the run silently after the
+    # first passing file.
+    set +e
     out="$(psql -q -f "$f" 2>&1)"
-    n="$(grep -c '  ok  ' <<<"$out" || true)"
+    status=$?
+    set -e
+    n="$(grep -c "  ok  " <<<"$out" || true)"
     total=$((total + n))
     echo "    $(basename "$f") — $n assertions"
-    grep -E 'FAIL|ERROR' <<<"$out" && exit 1
+    if [ "$status" -ne 0 ] || grep -qE "FAIL|ERROR" <<<"$out"; then
+      echo "$out" | grep -E "FAIL|ERROR" | head -20
+      exit 1
+    fi
   done
   echo "    $total assertions passed"
 fi

@@ -142,12 +142,12 @@ begin
 
   -- One live invitation per household.
   begin
-    insert into public.invitations (wedding_id, household_id, token_hash)
+    insert into public.invitations (wedding_id, household_id, token_hash, token_encrypted)
     values ('11111111-1111-4111-8111-111111111111',
-            'd0000000-0000-4000-8000-000000000001', 'hash-one');
-    insert into public.invitations (wedding_id, household_id, token_hash)
+            'd0000000-0000-4000-8000-000000000001', 'hash-one', 'enc-one');
+    insert into public.invitations (wedding_id, household_id, token_hash, token_encrypted)
     values ('11111111-1111-4111-8111-111111111111',
-            'd0000000-0000-4000-8000-000000000001', 'hash-two');
+            'd0000000-0000-4000-8000-000000000001', 'hash-two', 'enc-two');
     raise exception 'FAIL — second live invitation accepted';
   exception when unique_violation then
     raise notice '  ok  second live invitation rejected';
