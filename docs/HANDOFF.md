@@ -4,7 +4,7 @@
 session picking this up, read this file and `docs/wedding-platform-spec.md` and
 you have everything.
 
-Last updated: chunk 5 of 9 — guest list complete.
+Last updated: chunk 6 of 9 — ranking screen complete.
 
 ---
 
@@ -28,7 +28,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 | 3. Core lib | done | Fractional ranking, tokens, env, Supabase clients |
 | 4. Auth + shell | done | Magic link, layout, dashboard |
 | 5. Guests | done | Table, filters, detail, households |
-| 6. Ranking | not started | dnd-kit + virtual + cut line |
+| 6. Ranking | done | dnd-kit + virtual + cut line |
 | 7. Invitations | not started | Events, send, QR, chase cron |
 | 8. Public RSVP | not started | `/rsvp/[token]`, public site |
 | 9. Export + polish | not started | CSV for the caterer, final tests |
@@ -37,7 +37,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 
 ```bash
 ./scripts/verify-migrations.sh   # 49 SQL assertions, throwaway PG cluster
-npm test                         # 17 unit tests (fractional ranking)
+npm test                         # 24 unit tests (ranking, tier)
 npm run typecheck                # clean
 npm run build                    # clean
 ```
@@ -154,7 +154,12 @@ before trusting it.
 
 ## Next chunk
 
-**Chunk 6: the ranking screen.** `/guests/rank` with dnd-kit, TanStack Virtual
-from the start, and the capacity cut line drawn across the list. A drag writes
-one cell via `rankBetween`. The cut line is a stored rank on the wedding, so
-moving it re-tiers the waitlist with no write to households.
+**Chunk 7: events and invitations.** Event CRUD, invitation creation with
+hashed tokens and QR codes, per-household send with a copy-ready WhatsApp
+message, and the reminder cron that chases only non-responders and writes
+every send to `message_log` before dispatch.
+
+Note: `tierFor` in `src/lib/tier.ts` deliberately duplicates the CASE
+expression in `v_households`, because during an optimistic drag the server's
+answer describes the pre-drag order. It is tested against exactly the cases
+the SQL suite asserts, so the two cannot drift apart silently.
