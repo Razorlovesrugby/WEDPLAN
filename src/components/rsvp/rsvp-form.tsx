@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
+import { QuestionField, type AnswerValue } from "./question-field";
 import type {
   EventRow,
   GuestRow,
@@ -18,7 +19,7 @@ type GuestState = {
   dietary: string;
   accessibility: string;
   responses: Record<string, RsvpStatus>;
-  answers: Record<string, string>;
+  answers: Record<string, AnswerValue>;
 };
 
 const CHOICES: { value: RsvpStatus; label: string }[] = [
@@ -62,21 +63,21 @@ export function RsvpForm({
           .filter((q) => q.scope === "guest")
           .map((q) => [
             q.id,
-            String(
-              answers.find((a) => a.question_id === q.id && a.guest_id === guest.id)?.value ?? "",
+            toAnswerValue(
+              answers.find((a) => a.question_id === q.id && a.guest_id === guest.id)?.value,
             ),
           ]),
       ),
     })),
   );
 
-  const [householdAnswers, setHouseholdAnswers] = useState<Record<string, string>>(() =>
+  const [householdAnswers, setHouseholdAnswers] = useState<Record<string, AnswerValue>>(() =>
     Object.fromEntries(
       questions
         .filter((q) => q.scope === "household")
         .map((q) => [
           q.id,
-          String(answers.find((a) => a.question_id === q.id && a.household_id !== null)?.value ?? ""),
+          toAnswerValue(answers.find((a) => a.question_id === q.id && a.household_id !== null)?.value),
         ]),
     ),
   );
@@ -209,25 +210,17 @@ export function RsvpForm({
             </label>
 
             {guestQuestions.map((question) => (
-              <label key={question.id} className="mt-3 block">
-                <span className="mb-1 block text-sm font-medium">
-                  {question.label}
-                  {question.required ? <span aria-hidden> *</span> : null}
-                </span>
-                <input
-                  required={question.required}
-                  value={guestState.answers[question.id] ?? ""}
-                  onChange={(e) =>
-                    updateGuest(guest.id, {
-                      answers: { ...guestState.answers, [question.id]: e.target.value },
-                    })
-                  }
-                  className="field"
-                />
-                {question.help_text ? (
-                  <span className="mt-1 block text-xs text-muted">{question.help_text}</span>
-                ) : null}
-              </label>
+              <QuestionField
+                key={question.id}
+                question={question}
+                idPrefix={guest.id}
+                value={guestState.answers[question.id]}
+                onChange={(value) =>
+                  updateGuest(guest.id, {
+                    answers: { ...guestState.answers, [question.id]: value },
+                  })
+                }
+              />
             ))}
           </fieldset>
         );
@@ -237,44 +230,15 @@ export function RsvpForm({
         <fieldset className="card p-5">
           <legend className="px-1 font-serif text-lg">A few last things</legend>
           {householdQuestions.map((question) => (
-            <label key={question.id} className="mt-3 block">
-              <span className="mb-1 block text-sm font-medium">
-                {question.label}
-                {question.required ? <span aria-hidden> *</span> : null}
-              </span>
-              {question.type === "long_text" ? (
-                <textarea
-                  rows={3}
-                  required={question.required}
-                  value={householdAnswers[question.id] ?? ""}
-                  onChange={(e) =>
-                    setHouseholdAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))
-                  }
-                  className="field"
-                />
-              ) : question.type === "boolean" ? (
-                <select
-                  value={householdAnswers[question.id] ?? ""}
-                  onChange={(e) =>
-                    setHouseholdAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))
-                  }
-                  className="field"
-                >
-                  <option value="">Not sure yet</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              ) : (
-                <input
-                  required={question.required}
-                  value={householdAnswers[question.id] ?? ""}
-                  onChange={(e) =>
-                    setHouseholdAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))
-                  }
-                  className="field"
-                />
-              )}
-            </label>
+            <QuestionField
+              key={question.id}
+              question={question}
+              idPrefix="household"
+              value={householdAnswers[question.id]}
+              onChange={(value) =>
+                setHouseholdAnswers((prev) => ({ ...prev, [question.id]: value }))
+              }
+            />
           ))}
         </fieldset>
       ) : null}
@@ -292,4 +256,19 @@ export function RsvpForm({
       </div>
     </form>
   );
+}
+
+
+/**
+ * A stored answer back into form state.
+ *
+ * jsonb round-trips as whatever was written: a string for most types, an
+ * array for multi_select. Anything else (a number, a null) becomes an empty
+ * string rather than rendering "null" into the box the guest is looking at.
+ */
+function toAnswerValue(value: unknown): AnswerValue {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }

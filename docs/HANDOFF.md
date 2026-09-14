@@ -3,12 +3,13 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 2. V1 feature-complete against the amended spec. The
-migrations have now been applied to a real project — see **Live project**
-below before trusting anything in section 2.
+Last updated: session 3. V1 is now complete against the amended spec — the
+four gaps session 1 left open are built. Still never exercised against the
+live database: see **Live project** below and section 2 before trusting
+anything.
 
-Branch: `claude/hand-off-reading-60efdu`. Session 1's branch was merged to
-`main` in PR #1; work from `main`.
+Branch: `claude/hand-off-reading-60efdu`, from `main`. Session 1's branch was
+merged in PR #1.
 
 ---
 
@@ -68,28 +69,41 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/login`, `/auth/callback` | Magic link, sign-up disabled |
 | `/` | Dashboard; every number links to the list behind it |
 | `/guests` | Table, URL-backed filters, inline edit, bulk tagging, CSV export |
+| `/guests/import` | **New in 3.** CSV import: mapping, dedupe, per-row review |
 | `/guests/[id]`, `/households/[id]`, `/households/new` | Detail and editing |
 | `/guests/rank` | Drag ranking, virtualised, two cut lines, waitlist suggestions |
 | `/events` | Event CRUD in the venue's timezone |
+| `/questions` | **New in 3.** RSVP question builder — type, scope, options, order |
 | `/invitations` | Create, send, copy link, WhatsApp text, mute, reissue |
+| `/invitations/print` | **New in 3.** QR sheet for stationery, in ranking order |
 | `/rsvp/[token]` | Public RSVP — no login, throttled, per guest per event |
 | `/w` | Public site, thin and noindex |
 | `/setup` | Explains the bootstrap step when no wedding is attached |
 | `/api/cron/reminders` | Weekly chase of non-responders only |
 | `/api/export/[kind]` | Guest, household and catering CSV |
+| `/api/qr/[invitationId]` | **New in 3.** One QR code, PNG or `?format=svg` |
 
 ### Checks
 
 ```bash
 npm run typecheck                 # clean
-npm test                          # 47 unit tests
+npm test                          # 119 unit tests
 ./scripts/verify-migrations.sh    # 52 SQL assertions, throwaway PG cluster
 ./scripts/verify-bootstrap.sh     # bootstrap on a clean database
-npm run build                     # clean, 16 routes
+npm run build                     # clean, 20 routes
 ```
 
+All five were run at the end of session 3 and all five passed.
+
+`npm run build` needs the three `NEXT_PUBLIC_*` variables set or it fails at
+"Collecting page data" — the env validation is deliberate. Placeholders are
+enough, and `.github/workflows/verify.yml` has the ones CI uses.
+
 Both SQL scripts build their own PostgreSQL cluster — no Docker, no network, no
-Supabase CLI. Neither may run as root (`initdb` refuses). CI runs all five.
+Supabase CLI. **Neither may run as root** (`initdb` refuses), but that is not a
+reason to skip them: in a container running as root, `su postgres -c "cd $PWD
+&& ./scripts/verify-migrations.sh"` works, because the PostgreSQL package
+creates that user. CI runs all five.
 
 ---
 
@@ -106,7 +120,12 @@ Read this before trusting the green checks above.
   signs in and loads a page.
 - **No UI has been opened in a browser.** It type-checks and builds; nobody has
   clicked it. Expect the first hour of real use to find layout and empty-state
-  problems.
+  problems. This applies double to everything session 3 added: the import
+  wizard, the question builder and the print sheet have unit tests under the
+  logic but not one rendered pixel behind them.
+- **Nothing has been printed.** `/invitations/print` is laid out for A4 with
+  `@media print` rules that no printer has seen. Print one page before
+  committing a stationery run to it.
 - **No email has been sent.** Without `RESEND_API_KEY` the sender logs instead,
   by design. The templates have never met a real inbox or a spam filter.
 - **The magic-link flow has never completed**, because that needs a live
@@ -154,18 +173,14 @@ them before you assume the spec describes what exists.
 
 ### 3c. Spec items in V1 that are NOT built
 
-These are genuine gaps in V1 scope, not deferrals to V2. Each has its
-groundwork in place.
+Four of the seven were closed in session 3. What is left:
 
 | Missing | Spec says | State |
 | --- | --- | --- |
-| **QR codes** | "QR code generated per token for printed stationery" | `qrcode` is installed and tokens are now recoverable, so this is one small render route. Nothing blocks it. |
-| **CSV import** | "CSV import with column mapping and dedupe on email plus fuzzy name" | `pg_trgm` is enabled and `rankSequence` handles bulk insertion. The UI is unbuilt — mapping and dedupe preview are most of the work. |
-| **Custom question builder** | "Custom question builder with type, scope and required flag" | Table, types, scope and required flag all exist and are rendered on the RSVP form. Questions can only be created in SQL. |
 | **Saved views** | "Saved views" on `/guests` | Table, RLS policy and a per-collaborator privacy test exist. No UI. |
 | **Inline edit** | "Inline edit" on the guest table | Built for email and dietary only — the two fields touched most while chasing. Everything else is on the detail page. |
-| **Rich question types** | `single_select`, `multi_select` | In the enum and stored; the RSVP form renders them as text inputs. Options are already modelled as jsonb. |
 | **Site content editing** | Structured blocks | Rendered, but editable only in SQL. |
+| **An answers view** | — | Not a spec item, but noticed while building the builder: custom answers are written and never read back anywhere in the planner. A question you can ask and cannot read is half a feature. |
 
 ### 3d. Added beyond the spec
 
@@ -176,15 +191,22 @@ groundwork in place.
 - **`/setup`**, explaining the bootstrap step rather than leaving a dead
   redirect.
 - **Two verification scripts and CI**, neither of which the spec asked for.
+- **Session 3's dedupe runs in JavaScript, not in `pg_trgm`.** The spec asks
+  for fuzzy name matching and the schema has the index for it; the matching
+  happens in memory instead. See section 5.7 for why, and for when to change
+  it back.
 
 ---
 
 ## 4. What the next few sessions should be
 
-Roughly a session each, in this order. The first is not optional — everything
-after it assumes a live database.
+The order below is no longer the order things happened. Session 3 built the
+V1 gaps ahead of session 2's live run, because the database work needs the
+planner and the code did not. That was the right trade, but it means **the
+outstanding item is the oldest one, and it is the one everything else waits
+on**: nothing in this app has met a real database.
 
-### Session 2 — Get it running for real
+### Session 2 — Get it running for real (STILL OUTSTANDING)
 
 1. ~~Create the Supabase project.~~ Done — `lsgbwxisqqazahgkibmj`.
 2. ~~Apply `0001`, `0002`, `0003` in the SQL editor.~~ Reported done; the
@@ -204,20 +226,26 @@ after it assumes a live database.
 lead time, sitting directly in front of the one immovable deadline. It is the
 likeliest thing to make V1 technically complete but practically broken.
 
-### Session 3 — Close the V1 gaps
+### Session 3 — Close the V1 gaps (DONE)
 
-In this order, because it is the order you will need them:
+1. ~~**CSV import**~~ — `/guests/import`. Parser, mapping, dedupe, per-row
+   review, bulk insert through `rankSequence`.
+2. ~~**QR codes**~~ — `/api/qr/[invitationId]` and the `/invitations/print`
+   sheet.
+3. ~~**Question builder**~~ — `/questions`, with deactivate-instead-of-delete
+   once a question has answers.
+4. ~~**Rich question types**~~ — `single_select` and `multi_select` render as
+   radios and checkboxes, and answers are validated against the option set
+   server-side.
 
-1. **CSV import** — the fastest way to get hundreds of households in.
-2. **QR codes** — a render route plus a print view, needed before stationery
-   goes to a printer.
-3. **Question builder** — so the RSVP questions stop being a SQL job.
+### Session 4 — First real use, then whatever it exposes
 
-### Session 4 — Everything the first real use exposes
+Do session 2 first; this is what follows it. The import screen is the one to
+exercise hardest, with a real export from wherever the names actually live —
+it is new, it writes in bulk, and its dedupe has only ever seen test data.
 
-Deliberately vague, because it should be driven by what session 2 finds rather
-than planned now. Likely candidates: saved views, inline edit on more fields,
-rich question types, realtime so two people editing see each other.
+Then: saved views, inline edit on more fields, an answers view (section 3c),
+realtime so two people editing see each other.
 
 ### Session 5 onward — V2
 
@@ -228,7 +256,7 @@ That decision changes the `email_*` tables, so make it before the V2 migration.
 
 ---
 
-## 5. The six things worth knowing before changing anything
+## 5. The nine things worth knowing before changing anything
 
 **1. Tenancy is a foreign key, not a convention.** Every tenant table carries
 `wedding_id`, every parent carries a redundant `unique (id, wedding_id)`, and
@@ -264,6 +292,30 @@ bypasses RLS. Two legitimate callers: the public RSVP path (scoped by resolving
 a token to one household) and the cron sender. Everything a signed-in
 collaborator does goes through `src/lib/supabase/server.ts`.
 
+**7. Import dedupe runs in JavaScript, and that is a decision, not an
+oversight.** `0001` enables `pg_trgm` and builds `guests_name_trgm_idx` for
+exactly this. `src/lib/import/trigram.ts` reimplements pg_trgm's algorithm in
+memory instead, because reaching the index means a similarity RPC, an RPC
+means a `0004`, and the migrations are frozen — an import that cannot run
+until somebody pastes SQL into a dashboard is an import nobody uses. The
+comparison is a few hundred names against a few hundred, behind a preview
+screen. **If the guest list ever runs to thousands, or a second wedding
+shares the database, move it to the index** — the index is already there, and
+the threshold constants are in that file.
+
+**8. The import never merges, only skips.** A duplicate is reported with what
+it matched and defaults to skip; the user flips it. Both mistakes are bad —
+a wrongly skipped guest gets no invitation, a wrongly created one gets two
+place cards — but only one is visible at the moment it happens. A skipped row
+is on screen with its reason; a duplicate created is discovered at the
+stationer's. Do not add an auto-merge.
+
+**9. Deleting an RSVP question destroys its answers.** `rsvp_answers`
+cascades on the question's foreign key. `removeQuestion` therefore counts
+answers first and deactivates rather than deletes when there are any — the
+answers are the reason the question existed. Anything that offers to tidy up
+questions must keep that check.
+
 ---
 
 ## 6. Traps that have already cost time
@@ -280,6 +332,14 @@ The same class of bug appeared three times: the generic mismatch above,
 `Record<string, unknown>` constraint — use type aliases), and empty
 `Relationships`. All three failed silently. **When a Supabase query's types look
 suspiciously permissive, check for `never` before trusting it.**
+
+**A prefix rule that matched the wrong thing, silently.** The CSV importer
+read the Side column with `/^(a|bride|...)/`, so "Aunt Margaret's lot" started
+with `a` and became the bride's side — a third of a seating plan mislabelled
+with no error anywhere. A unit test caught it before it ran on real data.
+Every value parser in `src/lib/import/columns.ts` now matches exactly, the
+same rule the header synonyms already followed. **When parsing what a human
+typed into a spreadsheet, exact beats clever: the wrong guess looks right.**
 
 **A test harness that cannot fail.** `verify-migrations.sh` briefly contained
 `grep -E 'FAIL|ERROR' <<<"$out" && exit 1`, which returns non-zero whenever grep
@@ -307,6 +367,23 @@ it fail on purpose once and check that it says so.
   paste it into a real project.
 - **`supabase/seed.sql` creates two weddings.** The second exists so the
   tenancy tests have something they must not be able to see. Development only.
+- **QR codes are served `no-store` and inlined as data URIs on the print
+  sheet.** The image encodes the RSVP link, which is the household's only
+  credential. A cached code outlives the invitation it belongs to — reissue
+  one and a cached image still opens the old link. Do not add caching to
+  `/api/qr`, and do not "optimise" the print sheet into `<img src="/api/qr/…">`:
+  90 cards would become 90 requests, and the browser prints whatever arrived
+  before the dialog opened.
+- **The import re-parses the file on commit.** The browser sends the file text
+  and the list of lines to skip — never the parsed guest rows. The server
+  rebuilds the plan itself, so a tampered payload can skip rows but cannot
+  invent a guest or reach another wedding.
+- **A half-built choice question falls back to a text box.** A `single_select`
+  with no options renders as text on the RSVP form rather than as nothing —
+  but `coerceAnswer` still drops the answer, because an option not on the
+  question is not a valid answer to it. That asymmetry is deliberate: the
+  guest is not shown a dead control, and the caterer is not shown free text
+  where a choice was meant.
 
 ---
 
@@ -323,6 +400,12 @@ it fail on purpose once and check that it says so.
   and three components asking the same question cost one query.
 - **Blank form field means null; absent key means untouched.** Collapsing the
   two is how a partial update silently wipes a column.
+- **Pure logic lives in `src/lib/`, not beside the action that uses it.** A
+  `"use server"` module may only export async functions, so anything worth
+  unit-testing has to sit outside one — `src/lib/rsvp-answers.ts` was pulled
+  out of the RSVP action for exactly that reason, and it guards a public
+  endpoint. Put the rule in `lib/`, import it into the action, test it
+  directly.
 
 ---
 
@@ -336,3 +419,16 @@ real:
    `weddings.rsvp_lock_at` wherever it is set.
 3. **Guest pool size and final capacity.** Sets `weddings.capacity`.
 4. **Sending domain.** See session 2 above.
+
+Added in session 3, and answerable without the planner:
+
+5. **Did `bootstrap.sql` actually run on `lsgbwxisqqazahgkibmj`?** Section 0
+   records the migrations as applied on the planner's word and the bootstrap
+   as assumed. Until somebody runs the three checks in
+   `supabase/migrations/README.md` and reads the numbers back, the live
+   schema's state is hearsay — and a missing bootstrap looks exactly like a
+   broken app, because the dashboard renders nothing without a wedding row.
+6. **Which organisation owns that project?** A session whose Supabase
+   connector is scoped elsewhere sees only `arm15lite_PROD` and concludes the
+   account is empty. Recording the organisation alongside the ref in section 0
+   would close that trap for good.

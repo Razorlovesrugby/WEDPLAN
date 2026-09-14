@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveInvitation } from "@/server/rsvp/resolve";
+import { coerceAnswer } from "@/lib/rsvp-answers";
 import { fail, ok, type ActionResult } from "./result";
 import type { GuestRow } from "@/lib/types/database";
 
@@ -15,6 +16,16 @@ import type { GuestRow } from "@/lib/types/database";
  * that it did not receive, or a wedding id. Every id in the payload is checked
  * against the set this token actually owns before a single row is written.
  */
+
+/**
+ * An answer is a string for every question type except multi_select, which is
+ * an array. `value` is jsonb, so the array is stored as an array rather than
+ * as a joined string that nothing could query back out.
+ */
+const answerValue = z.union([
+  z.string().max(2000),
+  z.array(z.string().max(200)).max(50),
+]);
 
 const submissionSchema = z.object({
   token: z.string(),
@@ -32,11 +43,11 @@ const submissionSchema = z.object({
             status: z.enum(["yes", "no", "maybe", "pending"]),
           }),
         ),
-        answers: z.record(z.string().uuid(), z.string().max(2000)).optional(),
+        answers: z.record(z.string().uuid(), answerValue).optional(),
       }),
     )
     .max(40),
-  householdAnswers: z.record(z.string().uuid(), z.string().max(2000)).optional(),
+  householdAnswers: z.record(z.string().uuid(), answerValue).optional(),
 });
 
 export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved: number }>> {
@@ -119,13 +130,14 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
     for (const [questionId, value] of Object.entries(guest.answers ?? {})) {
       const question = questionById.get(questionId);
       if (!question || question.scope !== "guest") continue;
+      const answer = coerceAnswer(question, value);
       await supabase.from("rsvp_answers").upsert(
         {
           wedding_id: weddingId,
           question_id: questionId,
           guest_id: guest.guestId,
           household_id: null,
-          value: value === "" ? null : value,
+          value: answer ?? null,
           answered_at: now,
         },
         { onConflict: "question_id,guest_id" },
@@ -136,13 +148,14 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
   for (const [questionId, value] of Object.entries(parsed.data.householdAnswers ?? {})) {
     const question = questionById.get(questionId);
     if (!question || question.scope !== "household") continue;
+    const answer = coerceAnswer(question, value);
     await supabase.from("rsvp_answers").upsert(
       {
         wedding_id: weddingId,
         question_id: questionId,
         guest_id: null,
         household_id: context.household.id,
-        value: value === "" ? null : value,
+        value: answer ?? null,
         answered_at: now,
       },
       { onConflict: "question_id,household_id" },

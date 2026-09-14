@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/guests/rank", label: "Ranking" },
   { href: "/events", label: "Events" },
   { href: "/invitations", label: "Invitations" },
+  { href: "/questions", label: "Questions" },
 ] as const;
 
 export function Nav() {

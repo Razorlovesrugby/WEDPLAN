@@ -48,9 +48,14 @@ export default async function InvitationsPage({
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl">Invitations</h1>
-        <span className="text-sm text-muted">
-          {sent} sent · {complete} fully answered · {allRows.length} households
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted">
+            {sent} sent · {complete} fully answered · {allRows.length} households
+          </span>
+          <Link href="/invitations/print" className="btn" prefetch={false}>
+            Print QR codes
+          </Link>
+        </div>
       </div>
 
       {active ? (
