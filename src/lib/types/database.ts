@@ -31,14 +31,91 @@ type NullableKeys<Row> = {
 type Insertable<Row, Generated extends keyof Row> = Omit<Row, Generated | NullableKeys<Row>> &
   Partial<Pick<Row, (Generated | NullableKeys<Row>) & keyof Row>>;
 
-type Table<Row, Generated extends keyof Row> = {
+/**
+ * One foreign key, in the shape PostgREST's select parser expects.
+ *
+ * These are not decoration. The parser resolves an embedded select —
+ * `guests(*, households(display_name))` — by looking through Relationships.
+ * Leave the array empty and the embed resolves to `never`, which is
+ * assignable to anything, so the query still compiles and silently loses all
+ * type safety.
+ */
+type Rel<
+  Name extends string,
+  Columns extends string[],
+  Ref extends string,
+  RefColumns extends string[],
+  OneToOne extends boolean = false,
+> = {
+  foreignKeyName: Name;
+  columns: Columns;
+  isOneToOne: OneToOne;
+  referencedRelation: Ref;
+  referencedColumns: RefColumns;
+};
+
+type Table<Row, Generated extends keyof Row, Relationships extends unknown[] = []> = {
   Row: Row;
   Insert: Insertable<Row, Generated>;
   Update: Partial<Row>;
-  Relationships: [];
+  Relationships: Relationships;
 };
 
 type View<Row> = { Row: Row; Relationships: [] };
+
+// ---------------------------------------------------------------------------
+// Relationships
+// ---------------------------------------------------------------------------
+// Only the foreign keys the app actually embeds through. `supabase gen types`
+// emits the full set once a project exists; until then, adding an embed means
+// adding its relationship here or the result silently becomes `never`.
+//
+// Note the two-column references: tenancy is enforced by composite foreign
+// keys on (parent_id, wedding_id), so these mirror that.
+
+type GuestRelationships = [
+  Rel<
+    "guests_household_id_wedding_id_fkey",
+    ["household_id", "wedding_id"],
+    "households",
+    ["id", "wedding_id"]
+  >,
+];
+
+type GuestTagRelationships = [
+  Rel<"guest_tags_guest_id_wedding_id_fkey", ["guest_id", "wedding_id"], "guests", ["id", "wedding_id"]>,
+  Rel<"guest_tags_tag_id_wedding_id_fkey", ["tag_id", "wedding_id"], "tags", ["id", "wedding_id"]>,
+];
+
+type RsvpRelationships = [
+  Rel<"rsvps_guest_id_wedding_id_fkey", ["guest_id", "wedding_id"], "guests", ["id", "wedding_id"]>,
+  Rel<"rsvps_event_id_wedding_id_fkey", ["event_id", "wedding_id"], "events", ["id", "wedding_id"]>,
+];
+
+type InvitationRelationships = [
+  Rel<
+    "invitations_household_id_wedding_id_fkey",
+    ["household_id", "wedding_id"],
+    "households",
+    ["id", "wedding_id"],
+    true
+  >,
+];
+
+type InvitationEventRelationships = [
+  Rel<
+    "invitation_events_invitation_id_wedding_id_fkey",
+    ["invitation_id", "wedding_id"],
+    "invitations",
+    ["id", "wedding_id"]
+  >,
+  Rel<
+    "invitation_events_event_id_wedding_id_fkey",
+    ["event_id", "wedding_id"],
+    "events",
+    ["id", "wedding_id"]
+  >,
+];
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -315,12 +392,16 @@ export type Database = {
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
       events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted">;
-      guests: Table<GuestRow, "id" | Timestamps | "age_band" | "is_plus_one" | "sort_order">;
+      guests: Table<
+        GuestRow,
+        "id" | Timestamps | "age_band" | "is_plus_one" | "sort_order",
+        GuestRelationships
+      >;
       tags: Table<TagRow, "id" | "created_at" | "colour">;
-      guest_tags: Table<GuestTagRow, "created_at">;
-      invitations: Table<InvitationRow, "id" | Timestamps | "channel">;
-      invitation_events: Table<InvitationEventRow, never>;
-      rsvps: Table<RsvpRow, "id" | Timestamps | "status">;
+      guest_tags: Table<GuestTagRow, "created_at", GuestTagRelationships>;
+      invitations: Table<InvitationRow, "id" | Timestamps | "channel", InvitationRelationships>;
+      invitation_events: Table<InvitationEventRow, never, InvitationEventRelationships>;
+      rsvps: Table<RsvpRow, "id" | Timestamps | "status", RsvpRelationships>;
       rsvp_questions: Table<
         RsvpQuestionRow,
         "id" | Timestamps | "type" | "scope" | "required" | "options" | "sort_order" | "active"

@@ -4,7 +4,7 @@
 session picking this up, read this file and `docs/wedding-platform-spec.md` and
 you have everything.
 
-Last updated: chunk 4 of 9 — auth and dashboard complete.
+Last updated: chunk 5 of 9 — guest list complete.
 
 ---
 
@@ -27,7 +27,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 | 2. Database | done | 16 tables, RLS, views, seed, 49 SQL assertions |
 | 3. Core lib | done | Fractional ranking, tokens, env, Supabase clients |
 | 4. Auth + shell | done | Magic link, layout, dashboard |
-| 5. Guests | not started | Table, filters, detail, households |
+| 5. Guests | done | Table, filters, detail, households |
 | 6. Ranking | not started | dnd-kit + virtual + cut line |
 | 7. Invitations | not started | Events, send, QR, chase cron |
 | 8. Public RSVP | not started | `/rsvp/[token]`, public site |
@@ -91,7 +91,13 @@ It is derived in `v_households` from the household's rank against
 `weddings.cut_rank` and `weddings.tier_b_rank`. Moving a cut line re-tiers the
 entire waitlist with no write. Do not add a `tier` column, however tempting.
 
-**5. The service role client is a loaded gun.**
+**5. Empty `Relationships` arrays break embedded selects silently.**
+PostgREST's type parser resolves `guests(*, households(name))` by looking
+through the `Relationships` array in `src/lib/types/database.ts`. Leave it
+empty and the embed resolves to `never` — which compiles fine and loses all
+type safety. If you add an embed, add its relationship.
+
+**6. The service role client is a loaded gun.**
 `src/lib/supabase/admin.ts` bypasses RLS. It has exactly two legitimate
 callers: the public RSVP path (scoped by resolving a token to one household)
 and the cron sender. Anything a signed-in collaborator does goes through
@@ -129,9 +135,26 @@ below, but (1) and (2) decide whether the schedule is real:
 
 ---
 
+## A trap that cost real time, so you don't repeat it
+
+`@supabase/ssr` and `@supabase/supabase-js` must stay version-compatible.
+`ssr` 0.5.2 passed `SupabaseClient`'s generics in the order supabase-js used
+at 2.43; by 2.116 that order had changed, so every table in the app resolved
+to `never`. Nothing failed — `never` is assignable to anything, so queries
+type-checked and casts looked reasonable. `src/lib/types/guard.ts` now breaks
+the build if it happens again. **Do not "simplify" that file away.**
+
+The same class of bug bit twice more: `interface` row types (no implicit index
+signature, so they fail supabase-js's `Record<string, unknown>` constraint) and
+empty `Relationships` arrays. All three failed silently rather than loudly.
+When a Supabase query's types look suspiciously permissive, check for `never`
+before trusting it.
+
+---
+
 ## Next chunk
 
-**Chunk 5: guests.** The biggest single piece of UI in V1 — the table at
-`/guests` with filters and saved views, guest detail, household detail, and
-the server actions behind them. Filters are URL state, so a filtered list is
-a link you can send to your partner.
+**Chunk 6: the ranking screen.** `/guests/rank` with dnd-kit, TanStack Virtual
+from the start, and the capacity cut line drawn across the list. A drag writes
+one cell via `rankBetween`. The cut line is a stored rank on the wedding, so
+moving it re-tiers the waitlist with no write to households.

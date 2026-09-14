@@ -13,12 +13,6 @@ export type GuestListItem = GuestRow & {
   rsvps: { event_id: string; status: RsvpStatus }[];
 };
 
-type GuestQueryRow = GuestRow & {
-  households: { display_name: string; rank: string; address: string | null } | null;
-  guest_tags: { tag_id: string }[] | null;
-  rsvps: { event_id: string; status: RsvpStatus }[] | null;
-};
-
 /**
  * Everything about the guests of one wedding, shaped for the table.
  *
@@ -55,7 +49,7 @@ export const listGuests = cache(
       ((households ?? []) as HouseholdView[]).map((h) => [h.id, h.tier]),
     );
 
-    const rows: GuestListItem[] = ((guests ?? []) as unknown as GuestQueryRow[]).map((guest) => ({
+    const rows: GuestListItem[] = (guests ?? []).map((guest) => ({
       ...guest,
       household_name: guest.households?.display_name ?? "—",
       household_rank: guest.households?.rank ?? "",
