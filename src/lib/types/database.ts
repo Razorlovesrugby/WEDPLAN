@@ -311,6 +311,18 @@ export type SiteContentRow = {
   updated_at: string;
 }
 
+/**
+ * The throttle table. Deliberately has no wedding_id: a failed token lookup
+ * has no wedding to attribute itself to, which is the point of a throttle.
+ * Service role only — there is no RLS policy on it at all.
+ */
+export type RsvpTokenAttemptRow = {
+  id: number;
+  ip_hash: string;
+  succeeded: boolean;
+  attempted_at: string;
+};
+
 export type SavedViewRow = {
   id: string;
   wedding_id: string;
@@ -411,6 +423,7 @@ export type Database = {
       message_log: Table<MessageLogRow, "id" | "created_at" | "channel" | "status">;
       site_content: Table<SiteContentRow, "id" | "updated_at" | "payload" | "sort_order" | "visible">;
       saved_views: Table<SavedViewRow, "id" | "created_at" | "filters">;
+      rsvp_token_attempts: Table<RsvpTokenAttemptRow, "id" | "succeeded" | "attempted_at">;
     };
     Views: {
       v_households: View<HouseholdView>;

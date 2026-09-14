@@ -4,7 +4,7 @@
 session picking this up, read this file and `docs/wedding-platform-spec.md` and
 you have everything.
 
-Last updated: chunk 7 of 9 — invitations and sending complete.
+Last updated: chunk 8 of 9 — public RSVP and site complete.
 
 ---
 
@@ -30,13 +30,13 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 | 5. Guests | done | Table, filters, detail, households |
 | 6. Ranking | done | dnd-kit + virtual + cut line |
 | 7. Invitations | done | Events, send, chase cron |
-| 8. Public RSVP | not started | `/rsvp/[token]`, public site |
+| 8. Public RSVP | done | `/rsvp/[token]`, public site |
 | 9. Export + polish | not started | CSV for the caterer, final tests |
 
 ### Verified, not just written
 
 ```bash
-./scripts/verify-migrations.sh   # 49 SQL assertions, throwaway PG cluster
+./scripts/verify-migrations.sh   # 52 SQL assertions, throwaway PG cluster
 npm test                         # 38 unit tests (ranking, tier, tokens, timezone)
 npm run typecheck                # clean
 npm run build                    # clean
@@ -154,13 +154,9 @@ before trusting it.
 
 ## Next chunk
 
-**Chunk 8: the public RSVP flow.** `/rsvp/[token]` — no login, per guest, per
-event, with the custom questions. Plus the throttle on token lookup, the plus-one
-flow that creates a real guest record, and the thin public site at `/w`.
-
-This is the security-sensitive chunk. The token resolves to exactly one
-household via the service role, and every read and write after that must be
-constrained to it — RLS is not helping on that path by design.
+**Chunk 9: exports and finishing.** CSV the caterer can actually read
+(dietary and allergies by household), a guest-list export, and a final pass
+over the "done when" checklist in the spec.
 
 Note: `tierFor` in `src/lib/tier.ts` deliberately duplicates the CASE
 expression in `v_households`, because during an optimistic drag the server's

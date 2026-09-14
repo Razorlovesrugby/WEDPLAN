@@ -137,8 +137,46 @@ begin
     when insufficient_privilege then
       raise notice '  ok  anon has no privilege on weddings';
   end;
+
+  -- The invitations table holds token hashes. If anon could read it, the
+  -- throttle and the hashing would both be beside the point.
+  begin
+    perform count(*) from public.invitations;
+    raise exception 'FAIL — anon could query invitations';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok  anon has no privilege on invitations';
+  end;
 end;
 $$;
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 5b. The throttle table is service-role only, including for collaborators
+-- ---------------------------------------------------------------------------
+-- It has no RLS policy at all, deliberately. A signed-in collaborator has no
+-- reason to read it, and it is the one table with no wedding to scope it to.
+begin;
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+do $$
+begin
+  begin
+    perform count(*) from public.rsvp_token_attempts;
+    raise exception 'FAIL — a collaborator could read the throttle table';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok  throttle table is unreachable by collaborators';
+  end;
+end;
+$$;
+rollback;
+
+begin;
+set local role service_role;
+insert into public.rsvp_token_attempts (ip_hash, succeeded) values ('deadbeef', false);
+select pg_temp.expect((select count(*) from public.rsvp_token_attempts), 1,
+  'service role can record a failed token attempt');
 rollback;
 
 -- ---------------------------------------------------------------------------
