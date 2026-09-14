@@ -4,7 +4,7 @@
 session picking this up, read this file and `docs/wedding-platform-spec.md` and
 you have everything.
 
-Last updated: chunk 3 of 9 — core library complete.
+Last updated: chunk 4 of 9 — auth and dashboard complete.
 
 ---
 
@@ -26,7 +26,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 | 1. Scaffold | done | Next.js 15 App Router, TS strict, Tailwind, CI |
 | 2. Database | done | 16 tables, RLS, views, seed, 49 SQL assertions |
 | 3. Core lib | done | Fractional ranking, tokens, env, Supabase clients |
-| 4. Auth + shell | not started | Magic link, layout, dashboard |
+| 4. Auth + shell | done | Magic link, layout, dashboard |
 | 5. Guests | not started | Table, filters, detail, households |
 | 6. Ranking | not started | dnd-kit + virtual + cut line |
 | 7. Invitations | not started | Events, send, QR, chase cron |
@@ -39,6 +39,7 @@ Branch: `claude/wedding-platform-brd-8154h7`. All work goes here.
 ./scripts/verify-migrations.sh   # 49 SQL assertions, throwaway PG cluster
 npm test                         # 17 unit tests (fractional ranking)
 npm run typecheck                # clean
+npm run build                    # clean
 ```
 
 `scripts/verify-migrations.sh` needs the PostgreSQL server binaries and must
@@ -130,9 +131,7 @@ below, but (1) and (2) decide whether the schedule is real:
 
 ## Next chunk
 
-**Chunk 4: auth and app shell.** Magic-link login at `/login`, the
-`/auth/callback` route, the planner layout with navigation, and the dashboard
-at `/` reading `v_wedding_stats` — every number linking through to a filtered
-list, as the spec requires.
-
-Then chunk 5 (guests) is the biggest single piece of UI in V1.
+**Chunk 5: guests.** The biggest single piece of UI in V1 — the table at
+`/guests` with filters and saved views, guest detail, household detail, and
+the server actions behind them. Filters are URL state, so a filtered list is
+a link you can send to your partner.
