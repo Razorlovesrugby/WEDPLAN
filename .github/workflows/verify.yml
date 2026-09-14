@@ -1,0 +1,33 @@
+name: verify
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The runner ships PostgreSQL but does not start it; verify-migrations.sh
+      # builds its own throwaway cluster, so no service container is needed.
+      - name: Apply migrations and run the SQL suite
+        run: ./scripts/verify-migrations.sh
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-placeholder
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
