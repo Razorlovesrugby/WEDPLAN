@@ -15,6 +15,9 @@ jobs:
       - name: Apply migrations and run the SQL suite
         run: ./scripts/verify-migrations.sh
 
+      - name: Verify the bootstrap script on a clean database
+        run: ./scripts/verify-bootstrap.sh
+
   app:
     runs-on: ubuntu-latest
     steps:
