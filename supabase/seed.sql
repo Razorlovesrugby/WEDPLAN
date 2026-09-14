@@ -31,7 +31,7 @@ insert into public.weddings
   (id, name, wedding_date, timezone, base_currency, capacity, cut_rank, tier_b_rank, rsvp_lock_at)
 values
   ('11111111-1111-4111-8111-111111111111', 'Alex & Sam', '2027-06-12', 'Europe/London',
-   'GBP', 90, 'a5', 'a7', '2027-04-30 23:59:00+01')
+   'GBP', 90, 'a6', 'a8', '2027-04-30 23:59:00+01')
 on conflict (id) do nothing;
 
 insert into public.collaborators (wedding_id, user_id, role) values
@@ -56,19 +56,19 @@ insert into public.tags (id, wedding_id, name, colour) values
   ('fa555555-5555-4555-8555-555555555555', '11111111-1111-4111-8111-111111111111', 'VIP',     '#8c2f4a')
 on conflict (id) do nothing;
 
--- Households, ranked. Ranks are base-62 fractional indexes; 'a0' sorts first.
--- The cut line sits at 'a5', so a0–a5 are tier A, a6–a7 tier B, the rest C.
+-- Households, ranked. Ranks are base-62 fractional indexes; 'a1' sorts first.
+-- The cut line sits at 'a6', so a0–a5 are tier A, a6–a7 tier B, the rest C.
 insert into public.households (id, wedding_id, display_name, address, rank) values
-  ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'The Okonkwo family',  '14 Elm Row, Bath',      'a0'),
-  ('d0000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Priya & Dev Raman',   '8 Hill St, Bristol',    'a1'),
-  ('d0000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'Grandma Reid',        'Rose Cottage, Wells',   'a2'),
-  ('d0000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'Tom Whitfield',       '2 Quay View, Bath',     'a3'),
-  ('d0000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'The Nakamuras',       '31 Acre Lane, London',  'a4'),
-  ('d0000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'Ciara & Joe Byrne',   '5 Strand Rd, Dublin',   'a5'),
-  ('d0000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'Marcus Bell',         '77 Fore St, Exeter',    'a6'),
-  ('d0000000-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'The Ferreira family', '19 Park Way, Leeds',    'a7'),
-  ('d0000000-0000-4000-8000-000000000009', '11111111-1111-4111-8111-111111111111', 'Hannah Lu',           '4 Mill Rd, Cambridge',  'a8'),
-  ('d0000000-0000-4000-8000-00000000000a', '11111111-1111-4111-8111-111111111111', 'Old rugby lot',       'c/o The Crown, Bath',   'a9')
+  ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'The Okonkwo family',  '14 Elm Row, Bath',      'a1'),
+  ('d0000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Priya & Dev Raman',   '8 Hill St, Bristol',    'a2'),
+  ('d0000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'Grandma Reid',        'Rose Cottage, Wells',   'a3'),
+  ('d0000000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'Tom Whitfield',       '2 Quay View, Bath',     'a4'),
+  ('d0000000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'The Nakamuras',       '31 Acre Lane, London',  'a5'),
+  ('d0000000-0000-4000-8000-000000000006', '11111111-1111-4111-8111-111111111111', 'Ciara & Joe Byrne',   '5 Strand Rd, Dublin',   'a6'),
+  ('d0000000-0000-4000-8000-000000000007', '11111111-1111-4111-8111-111111111111', 'Marcus Bell',         '77 Fore St, Exeter',    'a7'),
+  ('d0000000-0000-4000-8000-000000000008', '11111111-1111-4111-8111-111111111111', 'The Ferreira family', '19 Park Way, Leeds',    'a8'),
+  ('d0000000-0000-4000-8000-000000000009', '11111111-1111-4111-8111-111111111111', 'Hannah Lu',           '4 Mill Rd, Cambridge',  'a9'),
+  ('d0000000-0000-4000-8000-00000000000a', '11111111-1111-4111-8111-111111111111', 'Old rugby lot',       'c/o The Crown, Bath',   'b1')
 on conflict (id) do nothing;
 
 insert into public.guests
@@ -131,7 +131,7 @@ on conflict (wedding_id, block_key) do nothing;
 -- Wedding 2 — the one nobody in wedding 1 may ever see
 -- ---------------------------------------------------------------------------
 insert into public.weddings (id, name, wedding_date, capacity, cut_rank)
-values ('22222222-2222-4222-8222-222222222222', 'Other Couple', '2027-09-04', 60, 'a1')
+values ('22222222-2222-4222-8222-222222222222', 'Other Couple', '2027-09-04', 60, 'a2')
 on conflict (id) do nothing;
 
 insert into public.collaborators (wedding_id, user_id, role) values
@@ -139,7 +139,7 @@ insert into public.collaborators (wedding_id, user_id, role) values
 on conflict do nothing;
 
 insert into public.households (id, wedding_id, display_name, rank) values
-  ('d0000000-0000-4000-8000-0000000000ff', '22222222-2222-4222-8222-222222222222', 'Secret household', 'a0')
+  ('d0000000-0000-4000-8000-0000000000ff', '22222222-2222-4222-8222-222222222222', 'Secret household', 'a1')
 on conflict (id) do nothing;
 
 insert into public.guests (id, wedding_id, household_id, first_name, last_name) values

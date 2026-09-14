@@ -60,8 +60,15 @@ create table public.weddings (
   timezone        text not null default 'Europe/London',
   base_currency   char(3) not null default 'GBP',
   capacity        integer check (capacity is null or capacity > 0),
-  cut_rank        text,
-  tier_b_rank     text,
+  -- COLLATE "C" is not decoration. Fractional ranks are compared in two
+  -- places: here, and in JavaScript on the ranking screen. JavaScript
+  -- compares UTF-16 code units, so 'B' < 'a'. A Supabase project defaults to
+  -- en_US.UTF-8, where collation is alphabetical-then-case and 'a' < 'B' —
+  -- the opposite. Left unpinned, the cut line would disagree with the order
+  -- the user dragged, intermittently, only for ranks that straddle a case
+  -- boundary. C collation is byte order, which is what the client does.
+  cut_rank        text collate "C",
+  tier_b_rank     text collate "C",
   rsvp_lock_at    timestamptz,
   invite_send_on  date,
   created_at      timestamptz not null default now(),
@@ -118,7 +125,7 @@ create table public.households (
   wedding_id       uuid not null references public.weddings (id) on delete cascade,
   display_name     text not null,
   address          text,
-  rank             text not null,
+  rank             text collate "C" not null,
   reminders_muted  boolean not null default false,
   notes            text,
   created_at       timestamptz not null default now(),

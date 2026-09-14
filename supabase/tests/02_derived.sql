@@ -33,21 +33,32 @@ begin;
 select set_config('request.jwt.claim.sub', :alex, true);
 set local role authenticated;
 
--- Seed cut lines: cut_rank = 'a5', tier_b_rank = 'a7'.
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a0'), 'A', 'a0 is tier A');
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a5'), 'A', 'a5 is tier A (on the line)');
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a6'), 'B', 'a6 is tier B');
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a7'), 'B', 'a7 is tier B');
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a8'), 'C', 'a8 is tier C');
+-- The ranking screen compares ranks in JavaScript (UTF-16 code units) and
+-- Postgres compares them here. They must agree, which they only do under C
+-- collation. If this assertion fails, drag order and the cut line have
+-- silently diverged.
+select pg_temp.expect_text(
+  (select collation_name from information_schema.columns
+    where table_schema = 'public' and table_name = 'households' and column_name = 'rank'),
+  'C', 'households.rank is pinned to C collation');
+select pg_temp.expect_text((select ('B' < 'a' collate "C")::text), 'true',
+  'C collation puts uppercase before lowercase, as JavaScript does');
+
+-- Seed cut lines: cut_rank = 'a6', tier_b_rank = 'a8'.
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a1'), 'A', 'a0 is tier A');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a6'), 'A', 'a5 is tier A (on the line)');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a7'), 'B', 'a6 is tier B');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a8'), 'B', 'a7 is tier B');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a9'), 'C', 'a8 is tier C');
 
 -- Infants do not occupy a seat; children do.
-select pg_temp.expect_num((select head_count from public.v_households where rank = 'a0'), 4, 'Okonkwo head_count is 4');
-select pg_temp.expect_num((select seat_count from public.v_households where rank = 'a0'), 3, 'Okonkwo seat_count is 3 (infant on a lap)');
+select pg_temp.expect_num((select head_count from public.v_households where rank = 'a1'), 4, 'Okonkwo head_count is 4');
+select pg_temp.expect_num((select seat_count from public.v_households where rank = 'a1'), 3, 'Okonkwo seat_count is 3 (infant on a lap)');
 
 -- Running seat total down the ranked list is what the cut line is drawn against.
-select pg_temp.expect_num((select seats_cumulative from public.v_households where rank = 'a0'),  3, 'cumulative at a0 is 3');
-select pg_temp.expect_num((select seats_cumulative from public.v_households where rank = 'a5'), 11, 'cumulative at a5 is 11');
-select pg_temp.expect_num((select seats_cumulative from public.v_households where rank = 'a9'), 17, 'cumulative at a9 is 17');
+select pg_temp.expect_num((select seats_cumulative from public.v_households where rank = 'a1'),  3, 'cumulative at a0 is 3');
+select pg_temp.expect_num((select seats_cumulative from public.v_households where rank = 'a6'), 11, 'cumulative at a5 is 11');
+select pg_temp.expect_num((select seats_cumulative from public.v_households where rank = 'b1'), 17, 'cumulative at a9 is 17');
 
 -- Dashboard numbers
 select pg_temp.expect_num((select household_count      from public.v_wedding_stats), 10, 'stats: 10 households');
@@ -64,14 +75,14 @@ rollback;
 -- ---------------------------------------------------------------------------
 begin;
 set local role service_role;
-update public.weddings set cut_rank = 'a2', tier_b_rank = 'a4'
+update public.weddings set cut_rank = 'a3', tier_b_rank = 'a5'
 where id = '11111111-1111-4111-8111-111111111111';
 
 select set_config('request.jwt.claim.sub', :alex, true);
 set local role authenticated;
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a2'), 'A', 'after move: a2 is tier A');
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a3'), 'B', 'after move: a3 dropped to tier B');
-select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a5'), 'C', 'after move: a5 dropped to tier C');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a3'), 'A', 'after move: a2 is tier A');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a4'), 'B', 'after move: a3 dropped to tier B');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a6'), 'C', 'after move: a5 dropped to tier C');
 select pg_temp.expect_num((select above_cut_households from public.v_wedding_stats), 3, 'after move: 3 households above the cut');
 rollback;
 
@@ -85,7 +96,7 @@ begin
   -- Two households cannot share a rank, or the order is non-deterministic.
   begin
     insert into public.households (wedding_id, display_name, rank)
-    values ('11111111-1111-4111-8111-111111111111', 'Duplicate rank', 'a0');
+    values ('11111111-1111-4111-8111-111111111111', 'Duplicate rank', 'a1');
     raise exception 'FAIL — duplicate rank accepted';
   exception when unique_violation then
     raise notice '  ok  duplicate rank rejected';
