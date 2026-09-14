@@ -1,6 +1,11 @@
 /**
  * Database types.
  *
+ * Written as type aliases, never interfaces. supabase-js constrains each Row
+ * to `Record<string, unknown>`; a TypeScript interface has no implicit index
+ * signature and quietly fails that constraint, at which point every query in
+ * the app resolves to `never` and casts hide it. Type aliases do satisfy it.
+ *
  * Hand-maintained to match supabase/migrations. Once a Supabase project
  * exists, `npm run db:types` regenerates this file from the live schema and
  * that generated version becomes the source of truth — until then this keeps
@@ -12,9 +17,19 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-/** Row minus the columns the database fills in, which become optional. */
-type Insertable<Row, Generated extends keyof Row> = Omit<Row, Generated> &
-  Partial<Pick<Row, Generated>>;
+/** Columns the caller may omit because the database supplies a null. */
+type NullableKeys<Row> = {
+  [K in keyof Row]-?: null extends Row[K] ? K : never;
+}[keyof Row];
+
+/**
+ * Row minus what the database fills in. Two sources of "optional": columns
+ * with a DEFAULT (named per table below) and columns that accept null
+ * (derived). Miss either and every insert in the app demands columns nobody
+ * should have to supply.
+ */
+type Insertable<Row, Generated extends keyof Row> = Omit<Row, Generated | NullableKeys<Row>> &
+  Partial<Pick<Row, (Generated | NullableKeys<Row>) & keyof Row>>;
 
 type Table<Row, Generated extends keyof Row> = {
   Row: Row;
@@ -48,7 +63,7 @@ export type HouseholdTier = "A" | "B" | "C";
 // ---------------------------------------------------------------------------
 // Rows
 // ---------------------------------------------------------------------------
-export interface WeddingRow {
+export type WeddingRow = {
   id: string;
   name: string;
   wedding_date: string | null;
@@ -65,7 +80,7 @@ export interface WeddingRow {
   updated_at: string;
 }
 
-export interface CollaboratorRow {
+export type CollaboratorRow = {
   id: string;
   wedding_id: string;
   user_id: string;
@@ -73,7 +88,7 @@ export interface CollaboratorRow {
   created_at: string;
 }
 
-export interface EventRow {
+export type EventRow = {
   id: string;
   wedding_id: string;
   name: string;
@@ -87,7 +102,7 @@ export interface EventRow {
   updated_at: string;
 }
 
-export interface HouseholdRow {
+export type HouseholdRow = {
   id: string;
   wedding_id: string;
   display_name: string;
@@ -100,7 +115,7 @@ export interface HouseholdRow {
   deleted_at: string | null;
 }
 
-export interface GuestRow {
+export type GuestRow = {
   id: string;
   wedding_id: string;
   household_id: string;
@@ -122,7 +137,7 @@ export interface GuestRow {
   deleted_at: string | null;
 }
 
-export interface TagRow {
+export type TagRow = {
   id: string;
   wedding_id: string;
   name: string;
@@ -130,14 +145,14 @@ export interface TagRow {
   created_at: string;
 }
 
-export interface GuestTagRow {
+export type GuestTagRow = {
   wedding_id: string;
   guest_id: string;
   tag_id: string;
   created_at: string;
 }
 
-export interface InvitationRow {
+export type InvitationRow = {
   id: string;
   wedding_id: string;
   household_id: string;
@@ -151,13 +166,13 @@ export interface InvitationRow {
   deleted_at: string | null;
 }
 
-export interface InvitationEventRow {
+export type InvitationEventRow = {
   wedding_id: string;
   invitation_id: string;
   event_id: string;
 }
 
-export interface RsvpRow {
+export type RsvpRow = {
   id: string;
   wedding_id: string;
   guest_id: string;
@@ -168,7 +183,7 @@ export interface RsvpRow {
   updated_at: string;
 }
 
-export interface RsvpQuestionRow {
+export type RsvpQuestionRow = {
   id: string;
   wedding_id: string;
   label: string;
@@ -183,7 +198,7 @@ export interface RsvpQuestionRow {
   updated_at: string;
 }
 
-export interface RsvpAnswerRow {
+export type RsvpAnswerRow = {
   id: string;
   wedding_id: string;
   question_id: string;
@@ -193,7 +208,7 @@ export interface RsvpAnswerRow {
   answered_at: string;
 }
 
-export interface MessageLogRow {
+export type MessageLogRow = {
   id: string;
   wedding_id: string;
   household_id: string | null;
@@ -208,7 +223,7 @@ export interface MessageLogRow {
   created_at: string;
 }
 
-export interface SiteContentRow {
+export type SiteContentRow = {
   id: string;
   wedding_id: string;
   block_key: string;
@@ -218,7 +233,7 @@ export interface SiteContentRow {
   updated_at: string;
 }
 
-export interface SavedViewRow {
+export type SavedViewRow = {
   id: string;
   wedding_id: string;
   user_id: string;
@@ -230,7 +245,7 @@ export interface SavedViewRow {
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
-export interface HouseholdView {
+export type HouseholdView = {
   id: string;
   wedding_id: string;
   display_name: string;
@@ -252,7 +267,7 @@ export interface HouseholdView {
   tier: HouseholdTier;
 }
 
-export interface HouseholdRsvpView {
+export type HouseholdRsvpView = {
   household_id: string;
   wedding_id: string;
   invitation_id: string | null;
@@ -267,7 +282,7 @@ export interface HouseholdRsvpView {
   response_state: "none" | "partial" | "complete";
 }
 
-export interface WeddingStatsView {
+export type WeddingStatsView = {
   wedding_id: string;
   capacity: number | null;
   household_count: number;
@@ -291,24 +306,29 @@ export interface WeddingStatsView {
 // ---------------------------------------------------------------------------
 type Timestamps = "created_at" | "updated_at";
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
-      weddings: Table<WeddingRow, "id" | Timestamps>;
-      collaborators: Table<CollaboratorRow, "id" | "created_at">;
-      events: Table<EventRow, "id" | Timestamps>;
-      households: Table<HouseholdRow, "id" | Timestamps>;
-      guests: Table<GuestRow, "id" | Timestamps>;
-      tags: Table<TagRow, "id" | "created_at">;
+      // The second parameter lists columns with a database DEFAULT. Nullable
+      // columns are inferred, so they are not repeated here.
+      weddings: Table<WeddingRow, "id" | Timestamps | "timezone" | "base_currency">;
+      collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
+      events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
+      households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted">;
+      guests: Table<GuestRow, "id" | Timestamps | "age_band" | "is_plus_one" | "sort_order">;
+      tags: Table<TagRow, "id" | "created_at" | "colour">;
       guest_tags: Table<GuestTagRow, "created_at">;
-      invitations: Table<InvitationRow, "id" | Timestamps>;
+      invitations: Table<InvitationRow, "id" | Timestamps | "channel">;
       invitation_events: Table<InvitationEventRow, never>;
-      rsvps: Table<RsvpRow, "id" | Timestamps>;
-      rsvp_questions: Table<RsvpQuestionRow, "id" | Timestamps>;
-      rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at">;
-      message_log: Table<MessageLogRow, "id" | "created_at">;
-      site_content: Table<SiteContentRow, "id" | "updated_at">;
-      saved_views: Table<SavedViewRow, "id" | "created_at">;
+      rsvps: Table<RsvpRow, "id" | Timestamps | "status">;
+      rsvp_questions: Table<
+        RsvpQuestionRow,
+        "id" | Timestamps | "type" | "scope" | "required" | "options" | "sort_order" | "active"
+      >;
+      rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at" | "value">;
+      message_log: Table<MessageLogRow, "id" | "created_at" | "channel" | "status">;
+      site_content: Table<SiteContentRow, "id" | "updated_at" | "payload" | "sort_order" | "visible">;
+      saved_views: Table<SavedViewRow, "id" | "created_at" | "filters">;
     };
     Views: {
       v_households: View<HouseholdView>;
