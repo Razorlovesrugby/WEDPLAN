@@ -3,10 +3,40 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: end of session 1. V1 feature-complete against the amended spec,
-**never run against a real database**.
+Last updated: session 2. V1 feature-complete against the amended spec. The
+migrations have now been applied to a real project — see **Live project**
+below before trusting anything in section 2.
 
-Branch: `claude/wedding-platform-brd-8154h7`.
+Branch: `claude/hand-off-reading-60efdu`. Session 1's branch was merged to
+`main` in PR #1; work from `main`.
+
+---
+
+## 0. Live project
+
+| | |
+| --- | --- |
+| **Project ref** | `lsgbwxisqqazahgkibmj` |
+| **URL** | `https://lsgbwxisqqazahgkibmj.supabase.co` |
+| **Migrations** | `0001`, `0002`, `0003` reported applied |
+| **Bootstrap** | assumed run — unconfirmed |
+
+**Recorded on the planner's word, not verified by the session that wrote this
+line.** The Supabase connector in that session was scoped to a different
+organisation and got `You do not have permission to perform this action` for
+this ref, so no check query has ever been run against it. Before relying on
+it, run the three checks in `supabase/migrations/README.md` — 16 tables, zero
+rows without RLS, 3 views — and replace this block with what they actually
+returned.
+
+> **`arm15lite_PROD` (`dgpplqzsukifcvddoxcd`) is not this project.** It is an
+> unrelated production database for a rugby club app — 29 tables, thousands of
+> live rows, 62 migrations of its own. It shares the account and, depending on
+> connector scope, may be the *only* project a session can see, which makes it
+> exactly the wrong thing to reach for when the wedding project looks absent.
+> Never apply these migrations to it. If `list_projects` does not return
+> `lsgbwxisqqazahgkibmj`, the connector is scoped to the wrong organisation —
+> that is a permissions problem to fix, not an empty account.
 
 ---
 
@@ -67,9 +97,13 @@ Supabase CLI. Neither may run as root (`initdb` refuses). CI runs all five.
 
 Read this before trusting the green checks above.
 
-- **Nothing has run against a real Supabase project.** No project exists. The
-  migrations have only ever been applied to throwaway local clusters through a
-  shim that fakes `auth.users`, `auth.uid()` and the three roles.
+- **The migrations are reported applied, but nothing has been verified
+  there.** See section 0. Every green check in section 1 still comes from
+  throwaway local clusters running through a shim that fakes `auth.users`,
+  `auth.uid()` and the three roles. A shim is not Supabase Auth: it is exactly
+  where a policy that depends on real `auth.uid()` behaviour would pass
+  locally and fail live. Treat the live schema as unexercised until someone
+  signs in and loads a page.
 - **No UI has been opened in a browser.** It type-checks and builds; nobody has
   clicked it. Expect the first hour of real use to find layout and empty-state
   problems.
@@ -152,10 +186,12 @@ after it assumes a live database.
 
 ### Session 2 — Get it running for real
 
-1. Create the Supabase project.
-2. Apply `0001`, `0002`, `0003` in the SQL editor
-   (`supabase/migrations/README.md` has the steps and the checks).
+1. ~~Create the Supabase project.~~ Done — `lsgbwxisqqazahgkibmj`.
+2. ~~Apply `0001`, `0002`, `0003` in the SQL editor.~~ Reported done; the
+   checks in `supabase/migrations/README.md` have not been read back.
 3. Invite both users under Authentication → Users, then run `bootstrap.sql`.
+   Status unconfirmed. The app shows nothing without a wedding row and a
+   collaborator row, so if `/` renders empty or loops, check this first.
 4. Set `NEXT_PUBLIC_*`, `SUPABASE_SERVICE_ROLE_KEY` and `INVITE_TOKEN_PEPPER`
    (`openssl rand -hex 32`), and deploy to Vercel.
 5. Walk the spec's own "done when" end to end: add a household, rank it above
@@ -276,10 +312,11 @@ it fail on purpose once and check that it says so.
 
 ## 8. Conventions
 
-- **Migrations are append-only once applied anywhere.** They were edited in
-  place during the build because nothing had ever run them for real. That stops
-  the moment you run `0001` against a real project. Add `0004_…`, never edit
-  `0001_…`.
+- **Migrations are append-only. That rule is now live.** They were edited in
+  place during the build because nothing had ever run them for real. `0001`
+  has now been applied to a real project, so `0001`–`0003` are frozen: editing
+  one changes what a fresh database gets while leaving the live one untouched,
+  and the two silently diverge. Add `0004_…`, never edit `0001_…`.
 - **Every write is a server action** in `src/server/actions/`, returning
   `ActionResult` rather than throwing for expected problems.
 - **Every read is in `src/server/queries/`**, wrapped in `cache()` so a layout
