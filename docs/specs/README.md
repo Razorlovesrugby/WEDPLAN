@@ -33,7 +33,7 @@ renumbered to spec 2, is unchanged in substance.
 | 1 | [Lists, with an auto-synced timeline](01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens), verified locally. Not yet applied to the live project or opened in a browser. | V1 only |
 | 2 | [Reminders](02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles), verified locally. Same live/browser caveat as spec 1. | Spec 1 shipped first |
 | 3 | [Settings, Calendar view, Mobile](03-settings-calendar-mobile.md) | Built end to end (schema, settings/cut-line/list-appearance actions, `/settings`, `/calendar`, mobile nav, touch-drag fallbacks), verified locally. Same live/browser caveat as specs 1 and 2. | Specs 1 and 2 shipped first |
-| 4 | [Household editing and moving guests between households](04-household-management.md) | Built end to end (`moveGuest`/`moveGuests` actions, `HouseholdPicker`, wired into the household page, guest page, and guests-table bulk bar). No schema change. Same live/browser caveat as specs 1–3. | V1 only |
+| 4 | [Household editing and moving guests between households](04-household-management.md) | Built (`moveGuest`/`moveGuests` actions, `HouseholdPicker`, wired into the household page, guest page, and guests-table bulk bar), in **PR #16, open and unmerged**, but built before the planner had read the spec — see `docs/HANDOFF.md` session 11. Do not merge or extend until the planner has read this spec and said to proceed. | V1 only |
 
 ## Recommended build order
 
