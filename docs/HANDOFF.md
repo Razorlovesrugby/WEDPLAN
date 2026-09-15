@@ -5,27 +5,28 @@ needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
 Last updated: end of session 6.
 
-**V1's code is complete. V1 is not done. Session 6 is the first session with
-real live use, and every screen tried so far except the two simplest has had
-a bug in it.** The planner logged into the deployed app for real, with a
-real password, and imported a real guest list through `/guests/import`. That
-part worked cleanly. The next screen — `/guests/rank` — has needed two
-separate fixes in a row, both invisible to every automated check (typecheck,
-130 unit tests, production build) because both are runtime rendering/
-interaction bugs, not type or logic errors:
+**V1's code is complete. V1 is not done. Session 6 found two real UI bugs in
+`/guests/rank` and fixed both in code — but as of this update, THIS BRANCH
+HAS NEVER SUCCESSFULLY DEPLOYED, so neither fix has been confirmed live.**
+Read "THE ACTUAL BLOCKER" below before anything else in this document; an
+earlier version of this file called that blocker resolved, and it was not —
+that was a bad inference by a session, corrected below.
 
-1. The list rendered completely blank — heading and capacity control showed,
-   but no rows and no error. Fixed, commit `ba9bb73`.
-2. Once rows were visible, dragging one did nothing — no movement, no error.
-   Fixed, commit `52dd4d3`.
+What's confirmed vs. not:
 
-Both bugs were in `src/components/rank/rank-list.tsx`, both in how the
-`@tanstack/react-virtual` virtualizer and `@dnd-kit` interact. Fix #1 is
-confirmed live — the planner saw rows render, which is how fix #2's bug was
-found in the first place. **Fix #2 is not yet confirmed live** — read "What
-session 6 did" below for the technical detail, and treat drag-and-drop as
-unverified until the planner confirms a drag actually reorders a row and it
-survives a reload.
+1. **`/guests/rank` rendered completely blank** — heading and capacity
+   control showed, but no rows and no error. Fixed in code, commit `ba9bb73`.
+   **Never confirmed live** (see blocker).
+2. **Dragging a row did nothing** — no movement, no error. Fixed in code,
+   commit `52dd4d3`. **Never confirmed live** (see blocker).
+
+Both fixes are in `src/components/rank/rank-list.tsx`, both in how the
+`@tanstack/react-virtual` virtualizer and `@dnd-kit` interact. Typecheck, all
+130 unit tests, and `npm run build` with placeholder env vars all pass for
+both — none of which would have caught either bug, and none of which prove
+anything about Vercel's actual deployment, which is the thing that has
+actually been tested here and has actually failed, every time, on every
+commit pushed this session including a docs-only one.
 
 Branch: `claude/guest-import-continuation-gvj9rj`, from `main`. Not yet
 merged. Sessions 1–5's branches were merged in PRs #1–#5.
@@ -56,18 +57,15 @@ so `scripts/verify-live.mjs` still cannot be run from inside a session.
    value (`contain: "layout paint"` — layout/paint containment is kept for
    the virtualizer's perf benefit; only `size` was the problem). Commit
    `ba9bb73`.
-3. **Found a second live-only bug directly on top of the first: the branch's
-   Vercel Preview deployment could not build at all**, failing at
-   "Collecting page data" with `NEXT_PUBLIC_SUPABASE_URL: Required`. Not a
-   code bug — `src/lib/env.ts` validates `clientEnv` at module load
-   deliberately, so a misconfigured deployment fails loudly instead of
-   shipping broken. This was a Vercel project-settings gap (the two
-   `NEXT_PUBLIC_*` values, and likely others, were missing for the Preview
-   environment scope specifically — see git history on this file for the
-   full diagnosis and fix steps this session wrote up in the moment, no
-   longer needed here now that it is resolved). **Now resolved** — the
-   planner got a Preview build live, which is how finding #2 below was
-   found at all.
+3. **Discovered the branch's Vercel Preview deployment cannot build at all**,
+   failing at "Collecting page data" with `NEXT_PUBLIC_SUPABASE_URL:
+   Required`. Not a code bug — `src/lib/env.ts` validates `clientEnv` at
+   module load deliberately, so a misconfigured deployment fails loudly
+   instead of shipping broken. **Still failing as of this update** — see
+   "THE ACTUAL BLOCKER" below. An earlier revision of this file marked this
+   resolved; it was not, and how the planner then saw enough of
+   `/guests/rank` to report the drag bug in finding #4 is genuinely unclear
+   — see the open question in that section.
 4. **Found and fixed live-use finding #2: dragging a row did nothing.**
    Root cause, same file — `DndContext` used the `restrictToParentElement`
    modifier, which dnd-kit implements as `useRect(activeNode.parentElement)`:
@@ -87,14 +85,13 @@ vars) pass after both fixes. Neither check would have caught either bug —
 both are runtime rendering/interaction problems, exactly the gap section 2
 has warned about since session 3.
 
-## RESOLVED this session: the branch's Vercel build failing on every attempt
+## THE ACTUAL BLOCKER: this branch's Vercel build has never succeeded
 
-**Fixed by the planner in Vercel's project settings, not by a session.**
-Kept here because the same class of failure will recur on any other branch
-or environment where the same variables aren't scoped correctly — recognise
-the shape of the log below and go straight to Vercel settings, not into the
-code. Every build of `claude/guest-import-continuation-gvj9rj` failed
-identically, at the same step, regardless of what the code changes:
+**Status as of the last confirmed attempt: still failing, on commit
+`bb268e6` — a docs-only commit (this file), which failed identically to the
+code commits before it.** So this is not a per-commit fluke and not
+something any code change fixes. Every build of
+`claude/guest-import-continuation-gvj9rj` has failed at the same step:
 
 ```
 Collecting page data ...
@@ -110,37 +107,51 @@ Error: Command "npm run build" exited with 1
 **This is not a code bug. It is deliberate, working as designed** — see
 `src/lib/env.ts`: `clientEnv` is validated at module load specifically so a
 misconfigured deployment fails loudly at build time instead of shipping
-silently broken. The fix is entirely in Vercel's project settings, not in
-this repository:
+silently broken. The fix is entirely in Vercel's project settings, and
+**no session can do it**: a coding session has no Vercel login, no API
+token, and no CLI available in its environment — there is no tool it can
+call. This is not a to-do a session skipped; it is outside what a session
+can reach at all, the same way sending real email or clicking a live
+Supabase dashboard is. Only the planner, in the Vercel dashboard, can fix
+it:
 
 1. Open the Vercel project → **Settings → Environment Variables**.
-2. Get the real values from the Supabase dashboard for project
-   `lsgbwxisqqazahgkibmj` → **Settings → API**: the Project URL and the
+2. `NEXT_PUBLIC_SUPABASE_URL` is known without looking it up — it's just the
+   project ref as a URL: `https://lsgbwxisqqazahgkibmj.supabase.co`.
+3. `NEXT_PUBLIC_SUPABASE_ANON_KEY` has to come from the Supabase dashboard —
+   no session's Supabase connector can reach this project (section 0), so
+   this value has never been available to a session either. Supabase
+   dashboard → project `lsgbwxisqqazahgkibmj` → **Settings → API** → the
    `anon` `public` key.
-3. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (and,
-   while there, confirm `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_TOKEN_PEPPER`
-   and `CRON_SECRET` are set too — the build log above only shows the first
-   failure; more may be missing behind it). Generate `INVITE_TOKEN_PEPPER`
-   and `CRON_SECRET` with `openssl rand -hex 32` if they don't already exist
-   — **but never regenerate them if they're already set**: rotating
-   `INVITE_TOKEN_PEPPER` invalidates every invitation token already issued.
-4. **Check which environment scope the variables are set for.** Vercel
-   scopes env vars to Production / Preview / Development independently. A
-   branch push like this one builds as a **Preview** deployment — if the
-   variables are only ticked for Production (likely, if a working Production
-   deploy is what the planner logged into earlier), Preview builds will fail
-   exactly like this one keeps doing. Tick Preview too, or every branch
-   session hits this same wall.
-5. Redeploy. Build should go green in ~30s per the log above (compile alone
-   took 10s; the whole thing failed within 20s of starting).
+4. Add both. While there, confirm `SUPABASE_SERVICE_ROLE_KEY`,
+   `INVITE_TOKEN_PEPPER` and `CRON_SECRET` are set too — the build log above
+   only shows the *first* missing value; more may be missing behind it.
+   Generate `INVITE_TOKEN_PEPPER` / `CRON_SECRET` with
+   `openssl rand -hex 32` only if they don't already exist — **never
+   regenerate an existing `INVITE_TOKEN_PEPPER`**, it invalidates every
+   invitation token already issued.
+5. **Check the environment scope each variable is set for.** Vercel scopes
+   variables to Production / Preview / Development independently. A branch
+   push like this one builds as a **Preview** deployment. If the planner
+   has a working Production site (from `main`) that they've already logged
+   into and imported guests on, the likeliest explanation for this exact
+   failure is that the variables are ticked for Production only — tick
+   Preview too, or every future branch hits this identical wall on its
+   first push.
+6. Redeploy. Compiling alone takes ~10s in the logs above; the whole build
+   fails within 20s of starting when these are missing, so it should go
+   green just as fast once they're set.
 
-This explained an apparent contradiction earlier in the session: the planner
-had successfully logged in and imported guests before this was fixed,
-because that used a *different*, already-working deployment (most likely
-Production, built from `main`) — this branch's own Preview builds had never
-gone live until the variables above were added for the Preview scope. Once
-they were, the blank-list fix (`ba9bb73`) became visible, which is what led
-straight to finding the drag-and-drop bug (`52dd4d3`) above.
+**Open question this raises, unresolved:** the planner reported trying to
+drag a row on `/guests/rank` and it not working, which implies they saw
+rows rendered — but every Preview build for this branch, including the one
+carrying the blank-list fix, has failed before deploying. Either they were
+looking at a different deployment (Production, from `main` — which still
+has the *unfixed* blank-list bug too, since that fix has only ever landed on
+this unmerged branch), or a Preview build succeeded at some point this
+session that wasn't captured in a pasted log. Worth asking the planner
+directly which URL they were on when they saw the rows, once the Preview
+build is actually green — don't assume either explanation.
 
 ---
 
@@ -295,11 +306,13 @@ Read this before trusting anything above.
   first screens tried is the important finding, not the specific bugs.**
   Session 6: password sign-in worked first try; live CSV import worked
   cleanly; `/guests/rank` needed two separate fixes in a row (blank list,
-  then dead drag-and-drop — both above) before it was even worth judging.
-  The second fix (`52dd4d3`) has not yet been confirmed live — **that is the
-  single most useful thing the planner can check next**: open `/guests/rank`
-  and confirm a drag actually moves a row and the new order survives a
-  reload. Read every remaining unopened screen — the question builder, the
+  then dead drag-and-drop — both above), and **neither fix has actually been
+  confirmed live**, because this branch's Vercel Preview build has never
+  gone green (see "THE ACTUAL BLOCKER"). **That build going green is the
+  single most useful thing to happen next** — until it does, `/guests/rank`
+  cannot be judged at all. Once it's live: confirm a drag actually moves a
+  row and the new order survives a reload. Read every remaining unopened
+  screen — the question builder, the
   print sheet, the invitations flow, the public RSVP page and `/w` — with
   this ratio in mind, not with the assumption that "it type-checks and
   builds" means it renders or behaves correctly. Neither check can catch a
@@ -412,12 +425,13 @@ scheduling problem to route around; it is the shape of the work now.
 
 ### The one remaining session — get it running for real
 
-**0. Confirm drag-and-drop on `/guests/rank` actually works now (commit
-`52dd4d3`), then keep going through the rest of that screen** — the cut
-line buttons, the capacity control, the waitlist suggestions box — none of
-which have been touched by a live click yet either. (The Vercel Preview
-build issue from earlier this session is resolved — see the "RESOLVED"
-section above only if it recurs on another branch.)
+**0. Get this branch's Vercel Preview build to go green — see "THE ACTUAL
+BLOCKER" near the top.** It needs `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` (and likely others) set for the **Preview**
+environment scope in Vercel's project settings — this cannot be done by a
+session, only by the planner in the Vercel dashboard. Nothing below,
+including confirming the two rank-list fixes already in code
+(`ba9bb73`, `52dd4d3`), can be verified until this is green.
 
 1. **Verify what is actually there.** Run the three checks in
    `supabase/migrations/README.md` (16 tables; zero rows without RLS; 3 views),
