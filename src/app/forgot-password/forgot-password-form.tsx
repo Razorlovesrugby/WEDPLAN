@@ -1,16 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/browser";
+import { absoluteUrl } from "@/lib/env";
 
-type State = { status: "idle" | "sending" | "error"; message?: string };
+type State = { status: "idle" | "sending" | "sent" | "error"; message?: string };
 
-export function LoginForm({ next }: { next?: string }) {
-  const router = useRouter();
+export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [state, setState] = useState<State>({ status: "idle" });
 
   async function onSubmit(formEvent: React.FormEvent<HTMLFormElement>) {
@@ -18,18 +15,29 @@ export function LoginForm({ next }: { next?: string }) {
     setState({ status: "sending" });
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: absoluteUrl("/auth/callback?next=/reset-password"),
     });
 
     if (error) {
       setState({ status: "error", message: error.message });
       return;
     }
+    setState({ status: "sent" });
+  }
 
-    router.replace(next ?? "/");
-    router.refresh();
+  if (state.status === "sent") {
+    return (
+      <div className="card mt-8 p-4">
+        <p className="text-sm">
+          Check <strong>{email}</strong> for a link to set a new password.
+        </p>
+        <p className="mt-2 text-xs text-muted">
+          It expires in an hour. If nothing arrives, check spam — then check that this address is
+          one of the two on the wedding.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -48,31 +56,13 @@ export function LoginForm({ next }: { next?: string }) {
         />
       </label>
 
-      <label className="block">
-        <span className="mb-1 block text-sm font-medium">Password</span>
-        <input
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="field"
-        />
-      </label>
-
       {state.status === "error" ? (
         <p className="text-sm text-red-700">{state.message}</p>
       ) : null}
 
       <button type="submit" className="btn-primary w-full" disabled={state.status === "sending"}>
-        {state.status === "sending" ? "Signing in…" : "Sign in"}
+        {state.status === "sending" ? "Sending…" : "Send reset link"}
       </button>
-
-      <p className="text-right text-xs">
-        <Link href="/forgot-password" className="text-muted underline">
-          Forgot password?
-        </Link>
-      </p>
     </form>
   );
 }

@@ -3,8 +3,8 @@ import { clientEnv } from "@/lib/env";
 import type { Database } from "@/lib/types/database";
 
 /**
- * Supabase client for the browser. Used only for auth (sending the magic
- * link) and, later, realtime. All data access happens on the server, so the
+ * Supabase client for the browser. Used only for auth (signing in, password
+ * reset) and, later, realtime. All data access happens on the server, so the
  * anon key in the bundle has no table privileges at all — see the RLS
  * migration, which revokes them outright.
  */

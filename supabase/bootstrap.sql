@@ -13,11 +13,13 @@
 -- BEFORE YOU RUN THIS
 -- ---------------------------------------------------------------------------
 -- Both people must already exist as users, because sign-up is disabled and
--- the magic link only signs in accounts that exist. In the dashboard:
+-- sign-in is by email and password. In the dashboard:
 --
---     Authentication → Users → Add user → Send invitation
+--     Authentication → Users → Add user
 --
--- Do that for both addresses, then come back here.
+-- Set a password for each user there directly (or tick "Auto Confirm User"
+-- and use the app's own /forgot-password flow afterwards to set one by
+-- email). Do that for both addresses, then come back here.
 --
 -- ---------------------------------------------------------------------------
 -- EDIT THESE FOUR VALUES, then run the whole file.
