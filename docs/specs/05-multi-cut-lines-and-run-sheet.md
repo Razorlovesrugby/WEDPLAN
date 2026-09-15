@@ -1,10 +1,10 @@
 # Feature spec: Multi-cut guest lines, and a day-of run sheet
 
-**Status: proposed. Two unrelated features in one file, at the planner's
-request — see below. Neither has been built. Per `docs/specs/README.md`,
-nothing beyond schema gets built until each part's Open Questions section
-has answers; the two parts have separate Open Questions and can be answered
-and built independently of each other.**
+**Status: decided, not yet built. Two unrelated features in one file, at
+the planner's request — see below. Amended 2026-09-15: every question in
+A6 and B6 now has an answer, recorded there as decisions rather than open
+questions. Per `docs/specs/README.md`, that clears the one thing blocking
+the build — nothing else in this file changed as a result.**
 
 **Depends on:** V1 only, for both parts. Neither reads or writes vendors,
 budget, or Gmail. Part B reads `events` (V1) and, optionally, sits next to
@@ -135,14 +135,15 @@ the UI more than the schema:
   it's the only one left.
 - `src/components/rank/rank-list.tsx` — tier colour swatch
   (`tierColour`/`TIER_STYLE` in `guests-table.tsx` too) moves from a 3-way
-  ternary on `"A"|"B"|"C"` to indexing a fixed palette array by
-  `tier_position`, cycling if there are more lines than swatch colours
-  (open question A6.4).
+  ternary on `"A"|"B"|"C"` to indexing a fixed 8-colour palette by
+  `tier_position` (A6, decisions 1 and 4) — the cap and the palette size
+  are the same number, so no cycling logic is needed.
 - `src/lib/filters.ts` — `tier: z.enum(["A","B","C"])` becomes a plain
   string, validated against the wedding's actual configured labels at
   query time rather than a compile-time enum.
 - `tailwind.config.ts`'s `tierA`/`tierB`/`tierC` tokens are replaced by an
-  ordered palette (`tierColors: string[]`) sized to the chosen cap (A6.4).
+  ordered 8-colour palette (`tierColors: string[]`), fixed per position,
+  not planner-choosable (A6, decision 4).
 - `src/server/actions/rank.ts` — `setCutLine(householdId, which: "a"|"b")`
   becomes `setCutLine(householdId, lineId: string)`, reading and writing a
   `cut_lines` row by id instead of a fixed `which` branch. New actions:
@@ -159,33 +160,26 @@ the UI more than the schema:
 | `/guests/rank` | Same picker inline, plus every tier badge/colour now reads N possible tiers instead of 3; the "suggest next household when a seat frees up" logic keys off `tier_position !== 0` (i.e. "not already in the top tier") rather than `tier !== "A"` |
 | `/guests`, `/guests/[id]`, `/households/[id]`, export CSV | Tier badge renders whatever label + palette colour the household's `tier_position` resolves to; filter dropdown is populated from the wedding's actual configured labels, not a fixed list |
 
-## A6. Open questions
+## A6. Decided (2026-09-15)
 
-1. **Cap on the number of cut lines?** Unbounded is simplest to build but a
-   palette needs a finite size (A6.4) and an unbounded reorder list gets
-   unwieldy in the UI. Suggest a soft cap (e.g. 8) enforced at the action
-   layer, generous enough for "four invitation waves" with room to spare.
-2. **Can two adjacent lines share a `boundary_rank`** (a zero-width tier —
-   "Definitely" and "Would love" both end at the exact same household)?
-   Simplest answer: allowed, the tier is just empty until the planner drags
-   something into it. No schema constraint needed either way.
-3. **Deleting a line that has households sitting in the tier below it** —
-   do those households move up into the tier above the deleted line, or
-   does the tier below simply absorb them by inheriting the deleted line's
-   old boundary? The latter needs no data change (removing the row alone
-   does it, since tier is fully derived) — recommend that, and note it
-   explicitly on the confirm dialog ("removing this line merges its tier
-   into the one below").
-4. **Colour palette size and assignment** — fixed list of N preset colours
-   cycling by position (simplest, matches today's fixed `tierA/B/C`
-   tokens), or planner-choosable per line? Recommend fixed palette sized to
-   the cap from A6.1, planner choice is a nice-to-have, not core to the
-   feature.
-5. **Does `weddings.capacity` / the dashboard's "over/under capacity"
-   messaging need to say anything about lines beyond the first**, e.g. "42
-   in tier A, 18 more in tier B if 5 decline"? Out of scope for this pass
-   unless wanted — the existing dashboard only ever reasoned about tier A
-   vs. capacity.
+1. **Cap on the number of cut lines: 8.** Enforced at the action layer
+   (`addCutLine` refuses past 8 rows for a wedding). Sized to match the
+   colour palette in decision 4 exactly, so there's no cycling case to
+   handle — every possible line has its own colour.
+2. **Two adjacent lines may share a `boundary_rank`** (a zero-width tier).
+   No schema constraint. The tier sits empty until the planner drags a
+   household into it.
+3. **Deleting a line that has households sitting in the tier below it:**
+   the tier below simply absorbs them — the line is removed and nothing
+   about any household changes, since tier is fully derived. The confirm
+   dialog states this plainly: "removing this line merges its tier into
+   the one below."
+4. **Colour palette: fixed, 8 colours, assigned by `tier_position`.** Not
+   planner-choosable. Same visual system as today's `tierA/B/C` tokens,
+   just extended to 8 and indexed by position instead of by name.
+5. **`weddings.capacity` / dashboard "over/under capacity" messaging stays
+   scoped to the top tier only**, same as today. No "N more available in
+   tier B if some decline" messaging in this pass.
 
 ## A7. Test plan
 
@@ -201,7 +195,7 @@ the UI more than the schema:
 - Browser pass: configure 4 cut lines on a seeded wedding, drag a household
   across every line, confirm colours/badges update on `/guests/rank`,
   `/guests`, and the household/guest detail pages without a manual refresh;
-  delete a middle line and confirm the merge behaviour from A6.3; confirm
+  delete a middle line and confirm the merge behaviour from A6 decision 3; confirm
   `/settings` refuses to remove the last remaining line.
 
 ---
@@ -225,9 +219,10 @@ seating, no printed pack, no vendor table — those still don't exist).
 ## B2. Scope
 
 **In:**
-- One run sheet per `events` row (an event already models "which day/
-  occasion" — rehearsal dinner, ceremony, reception each get their own if
-  the wedding has more than one).
+- One run sheet per `events` row, and a chain never crosses between
+  events (B6, decision 1) — an event already models "which day/occasion";
+  rehearsal dinner, ceremony, reception each get their own independent
+  schedule if the wedding has more than one.
 - Items with a title, location, free-text owner ("best man," "DJ,"
   "venue coordinator" — no FK, see below), a track (`guests | couple |
   vendors | other`, for filtering a busy day down to one thread), and a
@@ -240,9 +235,12 @@ seating, no printed pack, no vendor table — those still don't exist).
 - A non-blocking warning when a chain's computed time would run past the
   next pinned item, same "warn, never hard-block" rule V3 specifies for
   seating constraints — the planner is allowed to be behind schedule on
-  paper.
-- `guest_visible` flag per item, schema only (see B6.3 — publishing to
-  `/w` is explicitly out of scope for the wiring in this pass).
+  paper. Surfaced two ways at once (B6, decision 2): a marker on the
+  conflicting item itself, and a summary count at the top of the page.
+- `guest_visible` flag per item, schema only — publishing to `/w` is
+  explicitly out of scope for the wiring in this pass (B6, decision 3).
+- An unpinned item with no predecessor yet is allowed to save, shown as
+  "time TBD" until the planner sets one (B6, decision 5).
 
 **Out, explicitly:**
 - No vendor table, no vendor FK on `owner` — that doesn't exist until
@@ -273,20 +271,24 @@ run_sheet_items   id, wedding_id, event_id, title, notes, location, owner,
 ```
 
 - `predecessor_id` is null for a pinned item (it's its own anchor) and
-  required for an unpinned one — enforced at the action layer, same
-  pattern as spec 1's "one level of sub-items" rule
-  (`list_items.parent_item_id`), not a check constraint, since "is this
-  item's chain well-formed" needs to see the whole graph, not just one row.
+  **may also be null for an unpinned one** — an unpinned item with no
+  predecessor yet has no computed time at all (B6, decision 5: allowed,
+  rendered as "time TBD" rather than rejected at save). Nothing else about
+  the row is invalid in that state; the planner fills in a predecessor or
+  a pin whenever they decide where it sits.
 - **`v_run_sheet_items`** (view, `security_invoker = true` per the existing
   convention) computes `starts_at` / `ends_at` for every item with a
-  recursive CTE: pinned items use `pinned_at` directly; an unpinned item's
-  `starts_at` is its predecessor's computed `ends_at` plus `offset_minutes`,
-  and `ends_at = starts_at + duration_minutes`. This is "derived, not
-  stored," the same rule `tier` and `seats_cumulative` already follow in
-  `v_households` — move a pinned anchor, nothing downstream needs a write.
-  The view also emits a `conflict` boolean per item: true when its computed
-  `ends_at` runs past the next pinned item (by time, same event) that
-  sits after it in the chain.
+  recursive CTE: pinned items use `pinned_at` directly; an unpinned item
+  with a predecessor has `starts_at` = that predecessor's computed
+  `ends_at` plus `offset_minutes`, and `ends_at = starts_at +
+  duration_minutes`; an unpinned item with no predecessor gets `starts_at
+  = null`, `ends_at = null` (rendered as "time TBD" by the screen, not
+  computed by the view). This is "derived, not stored," the same rule
+  `tier` and `seats_cumulative` already follow in `v_households` — move a
+  pinned anchor, nothing downstream needs a write. The view also emits a
+  `conflict` boolean per item: true when its computed `ends_at` runs past
+  the next pinned item (by time, same event) that sits after it in the
+  chain.
 
 **Migration (new file, e.g. `0009_run_sheet.sql`):** create
 `run_sheet_items`, add to RLS `tenant_tables`, create `v_run_sheet_items`.
@@ -295,8 +297,9 @@ run_sheet_items   id, wedding_id, event_id, title, notes, location, owner,
 
 | Route | What it does |
 | --- | --- |
-| `/run-sheet` (or `/events/[id]/run-sheet` if the wedding has more than one event with items — B6.1) | Chronological list of items for the day, grouped by track or shown as parallel columns, computed times from `v_run_sheet_items`, conflict rows flagged |
-| Item editor (dialog, not a route) | Title/location/owner/track/duration; pin toggle switches between a time picker (pinned) and a predecessor + offset picker (unpinned); live-previews the computed start time as the form changes |
+| `/events/[id]/run-sheet` | Chronological list of that event's items, grouped by track or shown as parallel columns (B6, decision 4), computed times from `v_run_sheet_items`, conflict rows flagged both inline and in a page-level summary count |
+| `/run-sheet` | Redirects straight to `/events/[id]/run-sheet` when the wedding has exactly one event with items; otherwise a picker listing every event that has a run sheet |
+| Item editor (dialog, not a route) | Title/location/owner/track/duration; pin toggle switches between a time picker (pinned) and a predecessor + offset picker (unpinned, predecessor optional — leaving it unset saves the item as "time TBD"); live-previews the computed start time as the form changes |
 
 Reordering within an unpinned chain is "change the predecessor," not a
 drag — dragging a item to a new slot in the list re-points its
@@ -318,36 +321,26 @@ as spec 1's parent/sub-item handling).
 `src/server/queries/run-sheet.ts`: `listRunSheetItems(eventId)` reading
 `v_run_sheet_items`, ordered by computed `starts_at`.
 
-## B6. Open questions
+## B6. Decided (2026-09-15)
 
-1. **One run sheet per event, or one shared day-of schedule spanning
-   multiple events** (rehearsal dinner the night before, ceremony and
-   reception the day of), with `event_id` just a grouping tag rather than
-   a hard partition? Most weddings in this app are single-event so far
-   (`events` already supports many); recommend scoping predecessor chains
-   to stay within one event — a chain crossing midnight into a different
-   event is more confusion than it saves.
-2. **What does a conflict actually do in the UI** beyond the flag — a
-   banner on the item, a summary count at the top of the page, both?
-   Recommend both, non-blocking either way per B2.
-3. **`guest_visible` wiring to `/w`** — build the column now and leave the
-   public site untouched (current plan), or is publishing the guest-facing
-   schedule part of what "run sheet" means to the planner? If the latter,
-   this needs its own screens-section addition and touches `site_content`,
-   which is a meaningfully bigger scope than a planner-only tool.
-4. **Multiple independent chains on one event** (a "guests" track running
-   ceremony → drinks → speeches → cake in parallel with a "vendors" track
-   running photographer call time → band load-in → sound check, neither
-   depending on the other) — already possible today since `predecessor_id`
-   only needs *some* upstream item, it doesn't have to be same-track. Worth
-   confirming the UI actually makes two parallel chains legible (parallel
-   columns per track, per B4) rather than one interleaved list.
-5. **An unpinned item with no predecessor at all** (the planner adds one
-   before deciding what it follows) — reject at save time and require
-   either a pin or a predecessor before the item is created, or allow it
-   and show "time TBD" until one is set? Recommend the latter — matches
-   this app's general preference for permissive intermediate states (e.g.
-   a household with no rank neighbour) over blocking saves.
+1. **One run sheet per event.** `event_id` is a hard partition, not a
+   grouping tag — a predecessor chain never crosses between events. A
+   rehearsal dinner and the wedding day get two independent schedules.
+2. **A conflict shows both ways**: a marker on the specific item whose
+   computed time runs past a pinned anchor, and a summary count at the top
+   of the run sheet page. Both non-blocking, per B2.
+3. **`guest_visible` is schema-only in this pass.** The column exists and
+   is set from the item editor, but nothing reads it yet — no wiring into
+   `/w`. Publishing the guest-facing schedule is a separate, larger scope
+   (touches `site_content`) left for a later spec if wanted.
+4. **Multiple independent chains per event are supported**, and the screen
+   renders them as parallel columns by track (`guests | couple | vendors |
+   other`) rather than one interleaved list, so two tracks running at the
+   same time stay legible.
+5. **An unpinned item with no predecessor is allowed to save**, rendered
+   as "time TBD" until the planner sets a pin or a predecessor. Matches
+   this app's general preference for permissive intermediate states over
+   blocking saves.
 
 ## B7. Test plan
 
