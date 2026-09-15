@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Magic-link landing route. Exchanges the one-time code for a session cookie.
+ * Auth landing route, used by password-reset links. Exchanges the one-time
+ * code for a session cookie.
  *
  * `next` is validated as a same-origin path before being used: an open
  * redirect on the auth callback is how a phishing link borrows your domain's

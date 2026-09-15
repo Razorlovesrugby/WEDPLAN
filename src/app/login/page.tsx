@@ -13,15 +13,13 @@ export default async function LoginPage({
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
       <h1 className="font-serif text-3xl">Wedding</h1>
-      <p className="mt-2 text-sm text-muted">
-        Sign in with your email. We&rsquo;ll send a link — there is no password to forget.
-      </p>
+      <p className="mt-2 text-sm text-muted">Sign in with your email and password.</p>
 
       {error ? (
         <p className="mt-6 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error === "expired"
-            ? "That link has expired. Request a new one below."
-            : "That link could not be used. Request a new one below."}
+            ? "That link has expired. Request a new one."
+            : "That link could not be used. Request a new one."}
         </p>
       ) : null}
 

@@ -3,7 +3,7 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: end of session 3.
+Last updated: end of session 4.
 
 **V1's code is complete. V1 is not done.** Every screen the spec asks for is
 built, type-checked, unit-tested and building cleanly. None of it has ever
@@ -68,7 +68,8 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 
 | Route | What it does |
 | --- | --- |
-| `/login`, `/auth/callback` | Magic link, sign-up disabled |
+| `/login` | Email + password, sign-up disabled |
+| `/forgot-password`, `/reset-password`, `/auth/callback` | Password reset, by email link |
 | `/` | Dashboard; every number links to the list behind it |
 | `/guests` | Table, URL-backed filters, inline edit, bulk tagging, CSV export |
 | `/guests/import` | CSV import: mapping, dedupe, per-row review |
@@ -89,10 +90,10 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 
 ```bash
 npm run typecheck                 # clean
-npm test                          # 119 unit tests
+npm test                          # 125 unit tests
 ./scripts/verify-migrations.sh    # 52 SQL assertions, throwaway PG cluster
 ./scripts/verify-bootstrap.sh     # bootstrap on a clean database
-npm run build                     # clean, 20 routes
+npm run build                     # clean, 22 routes
 ```
 
 All five were run at the end of session 3 and all five passed.
@@ -163,8 +164,10 @@ Read this before trusting anything above.
   one rendered pixel behind them.
 - **No email has been sent.** Without `RESEND_API_KEY` the sender logs instead,
   by design. The templates have never met a real inbox or a spam filter.
-- **The magic-link flow has never completed**, because that needs a live
-  Supabase Auth instance.
+- **The password sign-in and reset flow has never completed**, because that
+  needs a live Supabase Auth instance. (Session 4 replaced the original
+  magic-link sign-in with email + password after the built-in mailer's
+  2-email/hour rate limit made testing impractical; see section 3b.)
 - **Nothing has been printed.** `/invitations/print` is laid out for A4 with
   `@media print` rules no printer has seen. Print one page before committing a
   stationery run to it.
@@ -187,7 +190,7 @@ Read this before trusting anything above.
 | **Deleting an event** | Cascades to its RSVPs, with a confirmation | The alternative is orphaned answers to an event that is not happening. |
 | **Numeric ages on import** | under 2 infant, under 18 child, else adult | `Age` is a mapped header and half the files that have it hold a number. Matches the seat rule above. |
 
-### 3b. Deviations, including one reversal
+### 3b. Deviations, including two reversals
 
 - **Tokens are stored encrypted as well as hashed.** The amended spec said
   store only `token_hash`. That was a dead end for the product: the planner
@@ -197,6 +200,18 @@ Read this before trusting anything above.
   under a key derived from the same environment pepper). The security property
   is unchanged — the key is never in the database — but this is a real reversal
   and remains the deviation most worth scrutiny.
+
+- **Sign-in is email + password, not a magic link.** Sessions 1–3 built
+  passwordless sign-in on `supabase.auth.signInWithOtp`. First live testing in
+  session 4 hit Supabase's default mailer rate limit — 2 emails/hour, shared
+  across every OTP request — which made even the basic "sign in, click
+  around" loop impractical before custom SMTP was configured. Replaced with
+  `signInWithPassword` plus a `/forgot-password` → `/reset-password` recovery
+  flow (still email-based, but a one-time setup step rather than every sign-in).
+  `bootstrap.sql`'s instructions were updated to match: a password is set for
+  each user in Authentication → Users, or left unset and picked up later via
+  `/forgot-password`. Not yet exercised against the live project — see
+  section 2.
 
 - **The plus-one mechanism differs.** The spec says the flow "creates a real
   guest record from the supplied name, not a placeholder". What is built
@@ -242,8 +257,10 @@ scheduling problem to route around; it is the shape of the work now.
    `supabase/migrations/README.md` (16 tables; zero rows without RLS; 3 views),
    or `node scripts/verify-live.mjs`, which does those and more. Until this
    happens, section 0 is hearsay.
-2. **Invite both users** under Authentication → Users. Sign-up is disabled and
-   the magic link only signs in accounts that already exist.
+2. **Add both users, with a password,** under Authentication → Users. Sign-up
+   is disabled and sign-in is by email and password, so each account must
+   exist first — set a password there directly, or leave it unset and use the
+   app's own `/forgot-password` flow afterwards to set one by email.
 3. **Run `bootstrap.sql`** with its seven values edited. Status unconfirmed —
    if `/` renders empty or loops, this is the first thing to check, because
    `weddings` has no insert policy and the app shows nothing without a wedding

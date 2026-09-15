@@ -4,7 +4,7 @@ import { clientEnv } from "@/lib/env";
 import type { CookieToSet } from "./cookies";
 
 /** Paths reachable without a session. Everything else requires one. */
-const PUBLIC_PREFIXES = ["/login", "/auth", "/rsvp", "/w", "/api/cron"];
+const PUBLIC_PREFIXES = ["/login", "/forgot-password", "/auth", "/rsvp", "/w", "/api/cron"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -50,7 +50,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    // Come back to where they were aiming once the magic link lands.
+    // Come back to where they were aiming once they've signed in.
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
