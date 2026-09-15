@@ -33,6 +33,7 @@ renumbered to spec 2, is unchanged in substance.
 | 1 | [Lists, with an auto-synced timeline](01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens), verified locally. Not yet applied to the live project or opened in a browser. | V1 only |
 | 2 | [Reminders](02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles), verified locally. Same live/browser caveat as spec 1. | Spec 1 shipped first |
 | 3 | [Settings, Calendar view, Mobile](03-settings-calendar-mobile.md) | Built end to end (schema, settings/cut-line/list-appearance actions, `/settings`, `/calendar`, mobile nav, touch-drag fallbacks), verified locally. Same live/browser caveat as specs 1 and 2. | Specs 1 and 2 shipped first |
+| 4 | [Household editing and moving guests between households](04-household-management.md) | Built end to end (`moveGuest`/`moveGuests` actions, `HouseholdPicker`, wired into the household page, guest page, and guests-table bulk bar). No schema change. Same live/browser caveat as specs 1–3. | V1 only |
 
 ## Recommended build order
 
@@ -50,6 +51,13 @@ reminders' spec literally reads from the view spec 1 creates
 Spec 3 is last, and within it, settings and calendar should ship before the
 mobile pass — the mobile pass touches every screen the first two specs add,
 so building it first would mean redoing it once those screens exist.
+
+**Spec 4 sits outside this ordering entirely.** Specs 1–3 are a rebase on
+top of the shipped V1 MVP and deliberately never touch `guests` or
+`households` (see "What's shared across both", below). Spec 4 is the
+opposite: it's V1's own guest-list surface, unrelated to lists, timeline,
+reminders, settings, calendar or mobile, and has no dependency on — or from
+— any of specs 1–3. It can be built before, after, or interleaved with them.
 
 ## What's shared across both
 

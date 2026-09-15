@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GuestForm } from "@/components/guests/guest-form";
 import { HouseholdForm } from "@/components/guests/household-form";
+import { HouseholdPicker } from "@/components/guests/household-picker";
 import { AnswerList } from "@/components/questions/answer-list";
-import { getHousehold } from "@/server/queries/guests";
+import { getHousehold, listHouseholds } from "@/server/queries/guests";
+import { moveGuest, moveGuests } from "@/server/actions/guests";
 import { getHouseholdAnswers } from "@/server/queries/questions";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName, pluralise } from "@/lib/format";
@@ -11,13 +13,16 @@ import { formatRelative, guestName, pluralise } from "@/lib/format";
 export default async function HouseholdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [{ household, guests, invitation, summary }, events, answers] = await Promise.all([
+  const [{ household, guests, invitation, summary }, events, answers, households] = await Promise.all([
     getHousehold(wedding.id, id),
     getEvents(wedding.id),
     getHouseholdAnswers(wedding.id, id),
+    listHouseholds(wedding.id),
   ]);
 
   if (!household) notFound();
+
+  const guestIds = guests.map((g) => g.id);
 
   const invitedEventIds = new Set(
     ((invitation?.invitation_events ?? []) as { event_id: string }[]).map((e) => e.event_id),
@@ -45,19 +50,37 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
           <HouseholdForm household={household} />
 
           <section>
-            <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
-              Members
-            </h2>
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Members</h2>
+              {guests.length > 0 ? (
+                <HouseholdPicker
+                  households={households}
+                  excludeIds={[household.id]}
+                  label="Move all members…"
+                  move={(targetHouseholdId) => moveGuests(guestIds, targetHouseholdId)}
+                />
+              ) : null}
+            </div>
             <ul className="card divide-y divide-line">
               {guests.map((guest) => (
                 <li key={guest.id} className="flex items-baseline justify-between gap-3 px-4 py-2">
-                  <Link href={`/guests/${guest.id}`} className="text-sm hover:underline">
-                    {guestName(guest)}
+                  <div>
+                    <Link href={`/guests/${guest.id}`} className="text-sm hover:underline">
+                      {guestName(guest)}
+                    </Link>
                     {guest.age_band !== "adult" ? (
                       <span className="ml-1.5 text-xs text-muted">({guest.age_band})</span>
                     ) : null}
-                  </Link>
-                  <span className="text-xs text-muted">{guest.dietary || guest.email || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted">{guest.dietary || guest.email || "—"}</span>
+                    <HouseholdPicker
+                      households={households}
+                      excludeIds={[household.id]}
+                      label="Move"
+                      move={(targetHouseholdId) => moveGuest(guest.id, targetHouseholdId)}
+                    />
+                  </div>
                 </li>
               ))}
               {guests.length === 0 ? (

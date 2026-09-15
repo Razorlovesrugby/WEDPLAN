@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GuestForm } from "@/components/guests/guest-form";
+import { HouseholdPicker } from "@/components/guests/household-picker";
 import { AnswerList } from "@/components/questions/answer-list";
-import { getGuest } from "@/server/queries/guests";
+import { getGuest, listHouseholds } from "@/server/queries/guests";
+import { moveGuest } from "@/server/actions/guests";
 import { getGuestAnswers } from "@/server/queries/questions";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName } from "@/lib/format";
@@ -11,10 +13,11 @@ import type { RsvpStatus } from "@/lib/types/database";
 export default async function GuestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [guest, events, answers] = await Promise.all([
+  const [guest, events, answers, households] = await Promise.all([
     getGuest(wedding.id, id),
     getEvents(wedding.id),
     getGuestAnswers(wedding.id, id),
+    listHouseholds(wedding.id),
   ]);
 
   if (!guest) notFound();
@@ -40,7 +43,18 @@ export default async function GuestPage({ params }: { params: Promise<{ id: stri
         ) : null}
       </nav>
 
-      <h1 className="font-serif text-2xl">{guestName(guest)}</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="font-serif text-2xl">{guestName(guest)}</h1>
+        <span className="text-sm text-muted">
+          {household ? <>In {household.display_name}. </> : null}
+          <HouseholdPicker
+            households={households}
+            excludeIds={household ? [household.id] : []}
+            label="Move to a different household…"
+            move={(targetHouseholdId) => moveGuest(guest.id, targetHouseholdId)}
+          />
+        </span>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[2fr,1fr]">
         <GuestForm guest={guest} householdId={guest.household_id} />
