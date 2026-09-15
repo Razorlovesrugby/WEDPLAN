@@ -8,7 +8,10 @@ export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   const wedding = await requireWedding();
-  const [stats, tasks] = await Promise.all([getWeddingStats(wedding.id), getTimelineSummary(wedding.id)]);
+  const [stats, tasks] = await Promise.all([
+    getWeddingStats(wedding.id),
+    getTimelineSummary(wedding.id, wedding.reminder_window_days),
+  ]);
 
   if (!stats) {
     return <p className="text-sm text-muted">No data yet. Add your first household to begin.</p>;

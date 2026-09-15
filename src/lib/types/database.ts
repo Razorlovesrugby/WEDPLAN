@@ -178,6 +178,8 @@ export type WeddingRow = {
   tier_b_rank: string | null;
   rsvp_lock_at: string | null;
   invite_send_on: string | null;
+  /** Digest urgency window in days — "overdue + due within this many days". Send day/time stays vercel.json's fixed cron. */
+  reminder_window_days: number;
   created_at: string;
   updated_at: string;
 }
@@ -514,7 +516,7 @@ export type Database = {
     Tables: {
       // The second parameter lists columns with a database DEFAULT. Nullable
       // columns are inferred, so they are not repeated here.
-      weddings: Table<WeddingRow, "id" | Timestamps | "timezone" | "base_currency">;
+      weddings: Table<WeddingRow, "id" | Timestamps | "timezone" | "base_currency" | "reminder_window_days">;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
       events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted">;

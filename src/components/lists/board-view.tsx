@@ -30,11 +30,14 @@ export function BoardView({ items: initialItems }: { items: ItemWithList[] }) {
     return map;
   }, [items]);
 
-  function onDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over) return;
-    const itemId = String(active.id);
-    const nextStatus = String(over.id) as ListItemStatus;
+  /**
+   * Shared by drag-between-columns and the "Move to…" select — the
+   * touch-friendly fallback (spec 03 section 7, decision 6). Board status
+   * isn't an adjacent-swap surface (there's no "next to where it is now"
+   * between three named columns), so this is a destination picker rather
+   * than up/down buttons.
+   */
+  function moveTo(itemId: string, nextStatus: ListItemStatus) {
     const item = items.find((i) => i.id === itemId);
     if (!item || item.status === nextStatus) return;
 
@@ -53,6 +56,12 @@ export function BoardView({ items: initialItems }: { items: ItemWithList[] }) {
     });
   }
 
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    moveTo(String(active.id), String(over.id) as ListItemStatus);
+  }
+
   return (
     <div className="space-y-3">
       {error ? (
@@ -62,7 +71,13 @@ export function BoardView({ items: initialItems }: { items: ItemWithList[] }) {
       <DndContext onDragEnd={onDragEnd}>
         <div className="grid gap-3 sm:grid-cols-3">
           {COLUMNS.map((column) => (
-            <BoardColumn key={column.status} status={column.status} label={column.label} items={byStatus.get(column.status) ?? []} />
+            <BoardColumn
+              key={column.status}
+              status={column.status}
+              label={column.label}
+              items={byStatus.get(column.status) ?? []}
+              onMoveTo={moveTo}
+            />
           ))}
         </div>
       </DndContext>
@@ -74,10 +89,12 @@ function BoardColumn({
   status,
   label,
   items,
+  onMoveTo,
 }: {
   status: ListItemStatus;
   label: string;
   items: ItemWithList[];
+  onMoveTo: (itemId: string, status: ListItemStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -91,34 +108,56 @@ function BoardColumn({
       </p>
       <div className="space-y-1.5">
         {items.map((item) => (
-          <BoardCard key={item.id} item={item} />
+          <BoardCard key={item.id} item={item} onMoveTo={onMoveTo} />
         ))}
       </div>
     </div>
   );
 }
 
-function BoardCard({ item }: { item: ItemWithList }) {
+function BoardCard({
+  item,
+  onMoveTo,
+}: {
+  item: ItemWithList;
+  onMoveTo: (itemId: string, status: ListItemStatus) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
 
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         borderLeftColor: item.lists?.color ?? "#8a8580",
       }}
-      className={`cursor-grab rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm active:cursor-grabbing
+      className={`rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}`}
     >
-      <p className="truncate font-medium">{item.title}</p>
-      <p className="truncate text-muted">
-        {item.lists?.title}
-        {item.due_date ? ` · ${item.due_date}` : ""}
-        {item.flagged ? " · ⚑" : ""}
-      </p>
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+        <p className="truncate font-medium">{item.title}</p>
+        <p className="truncate text-muted">
+          {item.lists?.title}
+          {item.due_date ? ` · ${item.due_date}` : ""}
+          {item.flagged ? " · ⚑" : ""}
+        </p>
+      </div>
+      {/* Touch-friendly "move to…" fallback for drag-between-columns
+          (spec 03 section 7, decision 6) — a destination picker, not
+          adjacent-swap buttons, since there's no "next" column. */}
+      <select
+        value={item.status}
+        aria-label={`Move "${item.title}" to a different column`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onChange={(e) => onMoveTo(item.id, e.target.value as ListItemStatus)}
+        className="mt-1 w-full rounded border border-line bg-white px-1 py-0.5 text-[11px] text-muted"
+      >
+        {COLUMNS.map((c) => (
+          <option key={c.status} value={c.status}>
+            {c.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

@@ -48,7 +48,7 @@ async function run(request: NextRequest) {
 
   const { data: weddings, error: weddingError } = await supabase
     .from("weddings")
-    .select("id, name, wedding_date, timezone, rsvp_lock_at");
+    .select("id, name, wedding_date, timezone, rsvp_lock_at, reminder_window_days");
   if (weddingError) {
     return NextResponse.json({ error: weddingError.message }, { status: 500 });
   }
@@ -189,7 +189,7 @@ async function run(request: NextRequest) {
  */
 async function sendDigests(
   supabase: ReturnType<typeof createAdminClient>,
-  weddings: { id: string; name: string }[],
+  weddings: { id: string; name: string; reminder_window_days: number }[],
   today: string,
 ): Promise<{ sent: number; skipped: number }> {
   let sent = 0;
@@ -215,7 +215,7 @@ async function sendDigests(
         done: row.status === "done",
       }));
 
-    const digest = buildDigest(items, today);
+    const digest = buildDigest(items, today, wedding.reminder_window_days);
     if (!hasAnythingToReport(digest)) continue; // nothing to chase this week — see spec 02, section 7.
 
     const { data: collaborators } = await supabase

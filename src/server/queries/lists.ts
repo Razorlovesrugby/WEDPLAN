@@ -226,19 +226,21 @@ export const getTimelineItems = cache(async (weddingId: string): Promise<Timelin
  * digest cron uses, so the two can never disagree about what counts as
  * overdue. See src/app/api/cron/reminders/route.ts for the email side.
  */
-export const getTimelineSummary = cache(async (weddingId: string): Promise<DigestContent> => {
-  const items = await getTimelineItems(weddingId);
-  const digestItems: DigestItem[] = items.map((item) => ({
-    id: item.id,
-    title: item.title,
-    due_date: item.due_date,
-    list_title: item.list_title,
-    list_color: item.list_color,
-    snoozed_until: item.snoozed_until,
-    done: item.status === "done",
-  }));
-  return buildDigest(digestItems);
-});
+export const getTimelineSummary = cache(
+  async (weddingId: string, windowDays = 7): Promise<DigestContent> => {
+    const items = await getTimelineItems(weddingId);
+    const digestItems: DigestItem[] = items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      due_date: item.due_date,
+      list_title: item.list_title,
+      list_color: item.list_color,
+      snoozed_until: item.snoozed_until,
+      done: item.status === "done",
+    }));
+    return buildDigest(digestItems, undefined, windowDays);
+  },
+);
 
 export const getBoardItems = cache(
   async (weddingId: string, listId?: string): Promise<ListItemWithList[]> => {

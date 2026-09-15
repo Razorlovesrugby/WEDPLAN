@@ -57,6 +57,7 @@ export function ListsSidebar({ lists }: { lists: ListRow[] }) {
                   style={{ backgroundColor: list.color ?? "#8a8580" }}
                   aria-hidden
                 />
+                {list.icon ? <span aria-hidden>{list.icon}</span> : null}
                 <span className="truncate">{list.title}</span>
               </Link>
             );
