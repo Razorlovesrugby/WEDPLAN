@@ -3,8 +3,33 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 7 — rebase toward a Lists + Timeline system and
-reminders, one spec per feature.
+Last updated: session 8 — Lists + Timeline built end to end (schema through
+all five screens), against spec 1's answered open questions.
+
+## Session 8: Lists + Timeline built, not yet seen live. Read this first.
+
+**Everything in spec 1 (`docs/specs/01-lists-and-timeline.md`) is built:**
+`0005_lists_status_assignment.sql`, the restructured timeline template,
+`scripts/seed-templates.mjs`, `src/lib/lists/generate.ts` (29 unit tests),
+every query and action, and all five screens (`/lists`, `/lists/[id]`,
+`/timeline`, `/board`, `/setup/plan`). `verify-migrations.sh` (70
+assertions), `verify-bootstrap.sh`, `typecheck`, `npm test` (159 tests) and
+`npm run build` are all green. Full detail, including what's deliberately
+simplified (reordering renumbers rather than using a fractional index,
+drag-to-reorder is one section at a time, timeline drag snaps to a bucket
+not a pixel-exact date, assignment is labelled by role not name), is in
+spec 1's status block — read that before touching this feature further.
+
+**What session 8 could NOT do, for the same reason every prior session
+couldn't:** no live Supabase project was reachable (section 0's
+organisation-scoping gap is unchanged), so **none of this migration has
+been applied to a real project and none of these five screens has been
+opened in a browser.** That is the single most important thing for the next
+session to do — not polish, not more features. `docs/HANDOFF.md` section 6
+has two real bugs from `/guests/rank` that passed every automated check and
+only showed up on screen; the three drag surfaces this session added
+(list reordering, timeline rescheduling, board status) are exactly that
+class of risk and have never been watched work.
 
 ## Session 7: the build direction changed, and so did the process. Read this first.
 
@@ -25,7 +50,7 @@ questions — lives in **[`docs/specs/`](specs/)**, not inline in this file:
 
 | Spec | Status |
 | --- | --- |
-| [`docs/specs/01-lists-and-timeline.md`](specs/01-lists-and-timeline.md) | Schema landed (`0004_lists.sql`), verified + smoke-tested. Open questions unanswered — no application code yet. |
+| [`docs/specs/01-lists-and-timeline.md`](specs/01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens) and verified locally. Not yet applied to the live project or opened in a browser — see session 8 above. |
 | [`docs/specs/02-reminders.md`](specs/02-reminders.md) | Spec only. Depends on spec 1 shipping first. |
 
 **This spec structure went through two revisions in one session, both
@@ -210,8 +235,10 @@ build is actually green — don't assume either explanation.
 **The full plan moved out of this file and into one spec per feature.** See
 the table near the top of this document, or go straight to
 [`docs/specs/README.md`](specs/README.md) for the index and build order.
-Schema is `0004_lists.sql` — one migration, because it's one feature (lists
-and the timeline that reads them are the same table family, not two).
+Schema is `0004_lists.sql` + `0005_lists_status_assignment.sql` — two
+migrations for one feature: 0004 shipped the core shape, 0005 added what
+answering the open questions required (board status, sub-items, recurrence,
+assignment). Both are one feature's migrations, not two features sharing one.
 
 Kept here, because it doesn't belong in any one feature's spec:
 
@@ -225,10 +252,11 @@ Kept here, because it doesn't belong in any one feature's spec:
   engine, semantic search). Nothing in `docs/specs/` depends on any of
   that, and nothing there should grow to need it without the planner
   asking again.
-- **Nothing beyond schema exists yet.** `0004_lists.sql` is landed,
-  verified, and smoke-tested (see section 1). No seed loader, server
-  action, query or screen exists — spec 1's own open questions gate that
-  work.
+- **Spec 1 is built end to end as of session 8** — schema, generation
+  logic, queries/actions, all five screens. See session 8's note above and
+  spec 1's own status block for what's simplified and what's still
+  unverified (nothing has run against the live project or in a browser).
+  Reminders (spec 2) is still spec-only and depends on this.
 
 ### Parked, not cancelled: invitations, vendors, budget, AI
 
@@ -249,7 +277,7 @@ then, lists/timeline work should not touch `invitations`, `rsvp_*`, or
 | **Project ref** | `lsgbwxisqqazahgkibmj` |
 | **URL** | `https://lsgbwxisqqazahgkibmj.supabase.co` |
 | **Organisation** | unknown — see open question 6 |
-| **Migrations** | `0001`, `0002`, `0003` reported applied |
+| **Migrations** | `0001`, `0002`, `0003` reported applied; `0004` and `0005` written and verified locally, neither yet applied here |
 | **Bootstrap** | assumed run — unconfirmed |
 
 **Recorded on the planner's word. No session has ever verified it.** The
@@ -285,6 +313,7 @@ first wedding. Full instructions in `supabase/migrations/README.md`.
 | 2 | `0002_row_level_security.sql` | `is_collaborator()`, policies, grants |
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` |
 | 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` — [spec](specs/01-lists-and-timeline.md) |
+| 5 | `0005_lists_status_assignment.sql` | Board status, one-level sub-items, recurrence, assignment — [spec](specs/01-lists-and-timeline.md) |
 | — | `bootstrap.sql` | Your wedding, both collaborators, starting events and questions |
 
 Tenancy is enforced by composite foreign keys on `(parent_id, wedding_id)`, not
@@ -308,6 +337,11 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/invitations/print` | QR sheet for stationery, in ranking order |
 | `/rsvp/[token]` | Public RSVP — no login, throttled, per guest per event |
 | `/w` | Public site, thin and noindex |
+| `/lists` | Sidebar of lists + smart views (Today, Scheduled, Flagged, All, Assigned to me) |
+| `/lists/[id]` | One list: sections, inline add/edit/tick/flag/date/assign, sub-items, drag reorder (within a section) |
+| `/timeline` | Every dated item, chronological, week/month/quarter zoom, drag-to-reschedule (snaps to the zoom's bucket) |
+| `/board` | Kanban — Not started / In progress / Done, drag between columns |
+| `/setup/plan` | Preview + generate the 175-task timeline template; real empty state with no wedding date |
 | `/setup` | Explains the bootstrap step when no wedding is attached |
 | `/api/cron/reminders` | Weekly chase of non-responders only |
 | `/api/export/[kind]` | Guest, household and catering CSV |
@@ -316,36 +350,39 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 ### Checks
 
 ```bash
-npm run typecheck                 # not re-run this session, see below
-npm test                          # not re-run this session, see below
-./scripts/verify-migrations.sh    # 52 SQL assertions, throwaway PG cluster — reconfirmed, session 7
-./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 7
-npm run build                     # not re-run this session, see below
+npm run typecheck                 # clean — reconfirmed, session 8
+npm test                          # 159 tests passing — reconfirmed, session 8
+./scripts/verify-migrations.sh    # 70 SQL assertions, throwaway PG cluster — reconfirmed, session 8
+./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 8
+npm run build                     # reconfirmed, session 8
 ```
 
-**Session 7 re-ran the two SQL scripts against `0004_lists.sql` and both are
-green** — 52 assertions in `verify-migrations.sh` (unchanged count; the new
-tables have no tenancy/derived-view tests of their own yet, see the note
-below), and `verify-bootstrap.sh` still creates one wedding and both
-collaborators cleanly with it applied. A manual smoke test also confirmed
-`v_timeline_items` actually filters on `due_date` (spec 1, section 7) —
-inserted one dated and one undated `list_items` row in the same list, only
-the dated one came back from the view. **`npm run typecheck`, `npm test`
-and `npm run build` were NOT run this session — `node_modules` is not
-installed in this container.** Nothing in `0004_lists.sql` touches
-TypeScript, so there's no specific reason to expect a regression, but this is
-exactly the kind of gap section 6 warns about: an unrun check is not a
-passing check. Run all three for real before trusting this line, and
-definitely before opening a PR.
+**Session 8 ran all five checks against `0004_lists.sql` +
+`0005_lists_status_assignment.sql`, and every one is green:**
+`verify-migrations.sh` — 70 assertions (up from 52; section 9 of
+`supabase/tests/01_tenancy.sql` is new — see below, that gap is now closed).
+`verify-bootstrap.sh` still creates one wedding and both collaborators
+cleanly. `npm run typecheck` is clean across the whole app. `npm test` is
+159 tests passing (29 of them new, `src/lib/lists/generate.test.ts`).
+`npm run build` succeeds and lists every new route (`/lists`, `/lists/[id]`,
+`/timeline`, `/board`, `/setup/plan`) in its output. `node_modules` had to
+be installed fresh (`npm install`) — a prior session's container didn't
+have it; this one does, until the container recycles.
 
-**Worth adding, not yet done:** the three new tenant tables (`lists`,
-`list_sections`, `list_items`) have RLS wired the same way as everything
-else, but no assertions of their own in `supabase/tests/01_tenancy.sql` —
-the 52-assertion count above is unchanged from before they landed because
-nothing new is being checked yet, not because there was nothing to check.
-Add a cross-wedding isolation test for at least `list_items` before
-trusting the RLS policy in production, the same way every other tenant
-table has one.
+**What none of that proves:** none of these five checks opens a browser.
+`v_timeline_items`' `due_date` filter was smoke-tested directly in session 7
+and is exercised again by the new RLS assertions, but the three drag
+interactions this session added — list reordering, timeline
+drag-to-reschedule, board drag-between-columns — have never been watched
+actually move anything. See session 8's note near the top of this file.
+
+**Closed this session:** the three tenant tables from 0004 (`lists`,
+`list_sections`, `list_items`) now have their own cross-wedding isolation
+assertions in `supabase/tests/01_tenancy.sql` section 9, plus
+`list_templates`' read-all/write-none policy, the composite FK, one-level
+sub-item nesting (0005's trigger), and the parent-status auto-derivation
+trigger. A prior version of this file flagged the missing tenancy
+assertions as "worth adding, not yet done" — done now.
 
 `npm run build` needs the three `NEXT_PUBLIC_*` variables set or it fails at
 "Collecting page data" — the env validation is deliberate. Placeholders are

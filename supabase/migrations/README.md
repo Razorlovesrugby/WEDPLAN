@@ -9,6 +9,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 2 | `0002_row_level_security.sql` | `is_collaborator()`, RLS policies, grants | 1 |
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` | 1, 2 |
 | 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` | 1, 2, 3 |
+| 5 | `0005_lists_status_assignment.sql` | Board status, one level of sub-items, recurrence, assignment | 1, 2, 3, 4 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
@@ -22,7 +23,7 @@ In the Supabase dashboard → **SQL Editor**:
 
 1. Open `0001_core_schema.sql`, copy the whole file, paste, **Run**.
 2. Repeat for `0002_row_level_security.sql`, then `0003_derived_views.sql`,
-   then `0004_lists.sql`.
+   then `0004_lists.sql`, then `0005_lists_status_assignment.sql`.
 3. Open `../bootstrap.sql`, edit the four values at the top, paste, **Run**.
 
 Run them one file at a time and read the result before moving on. Each script
@@ -50,6 +51,18 @@ After `0004`: 4 more base tables (`list_templates`, `lists`,
 `list_sections`, `list_items`) and a fourth view, `v_timeline_items`. Still
 zero rows from the RLS query above — `list_templates` is reference data
 with a read-only policy, not an exception to "every table has RLS."
+
+After `0005`: same 20 tables and 4 views — it only adds columns, a new enum
+(`list_item_status`), constraints, indexes and triggers to `list_items`, and
+replaces `v_timeline_items` (views carry no data, so redefining one is
+additive the same way a new column is). Run
+`select count(*) from public.list_items where status is null` afterwards;
+expect `0`.
+
+**If you generated `list_templates` content before running `0005`, run
+`node scripts/seed-templates.mjs` again afterwards** — it upserts on `key`,
+so re-running it is always safe and picks up the restructured
+`task-timeline.json` payload.
 
 After the bootstrap, signing in with your email should show an empty dashboard
 rather than a redirect loop.

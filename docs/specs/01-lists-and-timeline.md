@@ -1,13 +1,75 @@
 # Feature spec: Lists, with an auto-synced timeline
 
-**Status: schema landed (`supabase/migrations/0004_lists.sql`), verified
-against `verify-migrations.sh`, `verify-bootstrap.sh`, and a manual smoke
-test of the timeline view's filter behaviour (below). No server action,
-query, screen, or seed loader exists yet. Open questions (section 10) are
-now answered — several answers expand scope beyond the original schema
-(board view, sub-item nesting, recurrence, assignment) and require schema
-changes before `0004_lists.sql` is final. See section 10 for the decisions
-and section 5a for the resulting schema deltas.**
+**Status: built end to end and verified locally — schema (`0004_lists.sql` +
+`0005_lists_status_assignment.sql`), seed data restructuring, generation
+logic, server queries/actions, and all five screens from section 6. Not yet
+applied to the live project (nobody has run these migrations against
+`lsgbwxisqqazahgkibmj` — see `docs/HANDOFF.md` section 0) and not yet opened
+in a browser — see the caveats at the end of this status block and in
+`docs/HANDOFF.md`'s "Active work" section.**
+
+**What's actually done, this pass:**
+- `supabase/migrations/0005_lists_status_assignment.sql` — every schema delta
+  from section 5a: `status`, `parent_item_id` (with a database trigger
+  enforcing one level of nesting), `repeat_rule`, `recurrence_parent_id`,
+  `assigned_to`, and the parent-status auto-derivation trigger described
+  there. `v_timeline_items` replaced (not edited — 0004 stays frozen) to
+  surface the three new columns.
+- `supabase/templates/task-timeline.json` restructured into the same
+  `{source, templates: {key: {label, sections, item_count}}}` shape
+  `checklists.json` already used, with `offset_days`/`note` per item —
+  build order step 3.
+- `scripts/seed-templates.mjs` — loads decor, stationery and the timeline
+  template into `list_templates`; registry and photography stay in
+  `checklists.json` but are deliberately not loaded (open question 1).
+- `src/lib/lists/generate.ts` — offset-to-date generation (with an explicit
+  `overdue_on_import` flag rather than clamping the date itself),
+  recurrence (`computeNextDueDate`, `shouldSpawnNext`, `spawnNextOccurrence`),
+  and natural-language quick-add parsing. 29 unit tests in
+  `generate.test.ts`, covering every case in section 8's test plan for this
+  layer.
+- `src/server/queries/lists.ts` and `src/server/actions/lists.ts` — every
+  query and action listed in section 7, including status transitions,
+  sub-items, assignment, recurrence spawning on completion, and NL
+  quick-add.
+- All five screens: `/lists`, `/lists/[id]`, `/timeline`, `/board`,
+  `/setup/plan` (with a real empty state for the unset wedding date).
+- A cross-wedding RLS test section (`supabase/tests/01_tenancy.sql` section
+  9) covering `lists`/`list_sections`/`list_items` isolation,
+  `list_templates`' read-all/write-none policy, the composite FK, one-level
+  nesting, and the parent-status auto-derivation trigger.
+- `verify-migrations.sh` (70 assertions), `verify-bootstrap.sh`,
+  `npm run typecheck`, `npm test` (159 tests) and `npm run build` all pass.
+
+**What's genuinely simplified or deferred, so nobody re-discovers these as bugs:**
+- **Reordering renumbers, it doesn't use a fractional index.**
+  `list_items.sort_order` is a plain integer (0004, frozen), not a
+  fractional string like `households.rank` — so a drag-drop renumbers the
+  whole section it happens in (`reorderItems` in `src/server/actions/lists.ts`)
+  rather than computing one midpoint. Cheap at this app's scale; would need
+  revisiting if lists ever got as large as the guest list.
+- **Drag-to-reorder is scoped to one section at a time.** Dragging an item
+  to a *different* section isn't built — only within the section it started
+  in. Moving sections is possible via `updateItem`'s `section_id` field, just
+  not through drag yet.
+- **`/timeline`'s "drag-to-reschedule" snaps to a bucket, not a pixel-exact
+  date.** Week zoom buckets by day (exact), but month zoom buckets by week
+  and quarter zoom by month — dropping an item into a bucket sets its
+  `due_date` to that bucket's start date, not to wherever the pointer let go
+  within it.
+- **Assignment is by role, not by name.** `assigned_to` is real
+  (`auth.users.id`), but the UI labels the picker "You" / "Owner" / "Partner"
+  rather than an email or display name — `auth.users` lives outside the
+  `public` schema PostgREST exposes, and this app has never had a profile
+  table. `getCollaborators` in `src/server/queries/wedding.ts` is the new
+  query this leans on.
+- **Never opened in a browser.** Everything above is typecheck-clean,
+  unit-tested where it's pure logic, and RLS-tested against a throwaway
+  cluster — none of which catches a rendering or drag-interaction bug, the
+  exact gap `docs/HANDOFF.md` section 6 has flagged since session 3, and the
+  exact class of bug section 6's own `/guests/rank` story is about. The
+  three drag surfaces here (list reordering, timeline rescheduling, board
+  status) are the most exposed to it and the least excusable to skip.
 
 This spec replaces the earlier separate "Checklists" and "Task timeline"
 specs. They were two features joined by a manual "turn this checklist item
@@ -241,22 +303,24 @@ actually be opened in a browser, not just checked.
   back. Confirms the auto-sync mechanism works before any application code
   is built on top of it.
 
-**Not yet built:**
-- `src/server/queries/lists.ts` — list all lists with progress, read one
-  list with sections/items, the four smart-view queries, the timeline
-  query.
-- `src/server/actions/lists.ts` — create/rename/archive a list,
-  instantiate a template, add/edit/reorder/tick/flag/date/assign a section
-  or item, add/remove a sub-item, change status (list and board), set or
-  clear a repeat rule.
-- `src/lib/lists/generate.ts` — pure offset-to-date logic for the timeline
-  template: given a wedding date and the template's items, compute
-  insert/update rows, clamp anything landing before today into an explicit
-  overdue-on-import state. Unit-tested directly before it's wired into a
-  server action, per the `lib/` convention in `docs/HANDOFF.md` section 8.
-- `scripts/seed-templates.mjs` — load `supabase/templates/checklists.json`
-  and a restructured `task-timeline.json` into `list_templates`, upsert on
-  `key`.
+**Built this pass — see the status block at the top for what's simplified:**
+- `src/server/queries/lists.ts` — lists, one list's sections/items, all
+  five smart views (today/scheduled/flagged/all/mine), the timeline query
+  (`v_timeline_items`), the board query, and a read-only timeline-template
+  preview shared with `/setup/plan`.
+- `src/server/actions/lists.ts` — create/update/archive a list, instantiate
+  a checklist template, generate the timeline template (idempotent, upserts
+  on `(wedding_id, template_key)`), add/rename/remove a section,
+  add/quick-add/update/tick/flag/date/priority/assign an item, add a
+  sub-item (one level, enforced by 0005's trigger), set/clear a repeat rule,
+  reorder, delete.
+- `src/lib/lists/generate.ts` — offset-to-date generation (returns an
+  `overdue_on_import` flag rather than clamping the date), recurrence, and
+  NL quick-add parsing. Unit-tested directly, per the `lib/` convention in
+  `docs/HANDOFF.md` section 8.
+- `scripts/seed-templates.mjs` — loads `checklists.json`'s decor and
+  stationery templates and the restructured `task-timeline.json` into
+  `list_templates`, upsert on `key`.
 
 ## 8. Test plan
 
@@ -287,33 +351,40 @@ actually be opened in a browser, not just checked.
   its status (and `done_at` where relevant) updates; add a sub-item and
   confirm it's scoped to its parent.
 
-## 9. Build order for the next session
+## 9. Build order
 
 1. ~~`0004_lists.sql`~~ — done, verified (section 7).
-2. `0005_lists_status_assignment.sql` (name indicative) — the schema
-   deltas from section 5a: `status`, `parent_item_id`, `repeat_rule`,
-   `recurrence_parent_id`, `assigned_to`. Re-run `verify-migrations.sh` /
-   `verify-bootstrap.sh`.
-3. Restructure `supabase/templates/task-timeline.json` so its 175 tasks load
-   as one `list_templates` payload (title, bucket, offset_days, note per
-   item) rather than a separate task-template shape — same JSON shape
-   `checklists.json` already uses, just with `offset_days` present per item.
-   Exclude the registry template from `scripts/seed-templates.mjs`'s load
-   list per open question 1 — leave its entry in `checklists.json` rather
-   than deleting 147 items of content, since it may be wanted again for a
-   future US-facing variant; it just never reaches `list_templates`.
-4. `scripts/seed-templates.mjs`.
-5. `src/lib/lists/generate.ts` + unit tests, including recurrence
-   (open question 6) — needs its repeat-rule shape settled first.
-6. `src/server/queries/lists.ts`, `src/server/actions/lists.ts` — covering
-   status transitions, sub-items, assignment, and NL quick-add parsing
-   (open question 4).
-7. `/lists`, `/lists/[id]`, `/timeline` (drag-to-reschedule, zoom),
-   `/board`, `/setup/plan` (real empty state for no wedding date).
-8. Cross-wedding RLS test for `list_items`.
-9. Full check pass (`typecheck`, `npm test`, `verify-migrations.sh`,
-   `verify-bootstrap.sh`, `npm run build`) and a real browser pass before
-   calling any of it done.
+2. ~~`0005_lists_status_assignment.sql`~~ — done. Schema deltas from section
+   5a: `status`, `parent_item_id` (plus a one-level-nesting trigger and the
+   parent-status auto-derivation trigger), `repeat_rule`,
+   `recurrence_parent_id`, `assigned_to`. `verify-migrations.sh` (70
+   assertions) and `verify-bootstrap.sh` both green with it applied.
+3. ~~Restructure `supabase/templates/task-timeline.json`~~ — done. Registry
+   stays in `checklists.json` unloaded, per open question 1; photography
+   stays too, for the same "kept for a possible future variant" reason,
+   also unloaded.
+4. ~~`scripts/seed-templates.mjs`~~ — done. Not yet run against a live
+   project — needs `NEXT_PUBLIC_SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY`, which no session has had for this project
+   (see `docs/HANDOFF.md` section 0).
+5. ~~`src/lib/lists/generate.ts` + unit tests~~ — done, including
+   recurrence (open question 6). 29 tests.
+6. ~~`src/server/queries/lists.ts`, `src/server/actions/lists.ts`~~ — done,
+   covering status transitions, sub-items, assignment, and NL quick-add
+   parsing (open question 4).
+7. ~~`/lists`, `/lists/[id]`, `/timeline`, `/board`, `/setup/plan`~~ — done.
+   See the status block at the top for where drag-to-reschedule and
+   drag-to-reorder are simplified.
+8. ~~Cross-wedding RLS test for `list_items`~~ — done, plus `lists`,
+   `list_sections`, `list_templates`, the composite FK, one-level nesting,
+   and the parent-status trigger (`supabase/tests/01_tenancy.sql` section 9).
+9. ~~Full check pass~~ — `typecheck`, `npm test` (159 tests),
+   `verify-migrations.sh`, `verify-bootstrap.sh`, `npm run build` all green.
+   **Not done: a real browser pass.** No live Supabase project was reachable
+   from this session (same gap as every prior session — see
+   `docs/HANDOFF.md` section 0), so nothing above has been watched actually
+   render or drag. That is the next thing to do with this branch, not an
+   afterthought — see the status block's last bullet.
 
 ## 10. Open questions — answered
 

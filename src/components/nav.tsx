@@ -10,6 +10,9 @@ const LINKS = [
   { href: "/events", label: "Events" },
   { href: "/invitations", label: "Invitations" },
   { href: "/questions", label: "Questions" },
+  { href: "/lists", label: "Lists" },
+  { href: "/timeline", label: "Timeline" },
+  { href: "/board", label: "Board" },
 ] as const;
 
 export function Nav() {
