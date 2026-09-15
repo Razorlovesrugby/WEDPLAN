@@ -3,8 +3,49 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 9 — Reminders built end to end (spec 2), on top of
-session 8's Lists + Timeline.
+Last updated: session 10 — spec 3 (Settings, Calendar view, Mobile) drafted
+and its four top-level scope questions answered by the planner; nothing
+built. Session 9's Reminders (spec 2), on top of session 8's Lists +
+Timeline, is still the most recent built work.
+
+## Session 10: spec 3 drafted — settings, calendar view, mobile. Nothing built yet.
+
+**Planning only, no code or schema touched.** The planner asked for three
+things not covered by any existing spec: a settings screen for values that
+are currently drag-only, hardcoded, or SQL-only; a calendar view of the
+timeline and reminders; and a real mobile pass (responsive layout plus a
+touch-friendly alternative to the app's drag interactions). Recurring
+checklist items were also asked about — already built, in spec 1's
+`repeat_rule` / `recurrence_parent_id` (0005), nothing to add there.
+
+`docs/specs/03-settings-calendar-mobile.md` is the result. Four scope
+questions were put to the planner directly and answered: settings covers
+all four value groups (cut lines/capacity/timezone, reminder
+cadence/window, list color/icon, wedding date/RSVP lock date); `/calendar`
+is a new screen additive to `/timeline`, not a replacement; it gets
+drag-to-reschedule like `/timeline` already has; the mobile pass is full —
+every screen, plus a touch-friendly alternative to every existing drag
+surface, not scoped down to a subset.
+
+Writing the data model surfaced one real gap worth flagging here directly:
+**reminder cadence has nowhere to live today.** The digest's day/time is
+the `vercel.json` cron schedule (fixed at deploy time, not editable by any
+session) and the urgency window is a literal `7` in code — neither is a
+stored value a settings screen could read or write. The spec proposes two
+new typed columns on `weddings` and, more importantly, flags that a
+session changing "which day" cannot actually move when Vercel's cron
+fires — see the spec's open question 2 for the two ways to handle that
+honestly rather than shipping a setting that looks live but silently does
+nothing.
+
+**Six smaller questions are still open** in the spec's section 7 (cadence
+storage shape, the cron/settings reconciliation above, cut-line editing UI,
+color palette vs. free picker, mobile nav pattern, touch-drag fallback
+pattern). Per `docs/specs/README.md`'s process, nothing beyond this
+document gets built until those are answered too — the next session's job
+is either getting those answers or, if the planner answers them first,
+building schema (proposed as `0007_settings.sql`) against spec 1 and 2's
+existing pattern.
 
 ## Session 9: Reminders built — the digest, not just the schema. Read this first.
 
@@ -99,6 +140,7 @@ questions — lives in **[`docs/specs/`](specs/)**, not inline in this file:
 | --- | --- |
 | [`docs/specs/01-lists-and-timeline.md`](specs/01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens) and verified locally. Not yet applied to the live project or opened in a browser — see session 8 above. |
 | [`docs/specs/02-reminders.md`](specs/02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles) and verified locally. Same live/browser caveat as spec 1 — see session 9 above. |
+| [`docs/specs/03-settings-calendar-mobile.md`](specs/03-settings-calendar-mobile.md) | Proposed, session 10 — not built. Four scope questions (settings covers all four value groups; `/calendar` is additive, not a replacement for `/timeline`; calendar gets drag-to-reschedule; the mobile pass is full, including touch-friendly alternatives to every drag surface) answered directly by the planner. Smaller open questions remain in the spec's section 7 — nothing beyond the document exists yet. |
 
 **This spec structure went through two revisions in one session, both
 recorded in `docs/specs/README.md`:** first a 3-way split (checklists /

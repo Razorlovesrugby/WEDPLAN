@@ -32,12 +32,13 @@ renumbered to spec 2, is unchanged in substance.
 | --- | --- | --- | --- |
 | 1 | [Lists, with an auto-synced timeline](01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens), verified locally. Not yet applied to the live project or opened in a browser. | V1 only |
 | 2 | [Reminders](02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles), verified locally. Same live/browser caveat as spec 1. | Spec 1 shipped first |
+| 3 | [Settings, Calendar view, Mobile](03-settings-calendar-mobile.md) | Proposed. Four scope questions answered by the planner directly; section 7's remaining questions (cadence storage shape, cron/settings reconciliation, cut-line UI, color palette, mobile nav pattern, touch-drag fallback) are not. Nothing beyond this document exists. | Specs 1 and 2 shipped first |
 
 ## Recommended build order
 
-**Lists & timeline → reminders.**
+**Lists & timeline → reminders → settings/calendar/mobile.**
 
-Reminders is last because there's nothing to remind about until list items
+Reminders is second because there's nothing to remind about until list items
 have due dates, and it reuses the existing `/api/cron/reminders`
 infrastructure — building it second means extending working code instead of
 guessing at the shape in advance.
@@ -45,6 +46,10 @@ guessing at the shape in advance.
 This order is a near-constraint this time, not just a recommendation:
 reminders' spec literally reads from the view spec 1 creates
 (`v_timeline_items`).
+
+Spec 3 is last, and within it, settings and calendar should ship before the
+mobile pass — the mobile pass touches every screen the first two specs add,
+so building it first would mean redoing it once those screens exist.
 
 ## What's shared across both
 
