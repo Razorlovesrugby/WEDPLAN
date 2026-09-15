@@ -3,8 +3,11 @@
 **Status: schema landed (`supabase/migrations/0004_lists.sql`), verified
 against `verify-migrations.sh`, `verify-bootstrap.sh`, and a manual smoke
 test of the timeline view's filter behaviour (below). No server action,
-query, screen, or seed loader exists yet. Open questions below are
-unanswered — nothing past schema gets built until they are.**
+query, screen, or seed loader exists yet. Open questions (section 10) are
+now answered — several answers expand scope beyond the original schema
+(board view, sub-item nesting, recurrence, assignment) and require schema
+changes before `0004_lists.sql` is final. See section 10 for the decisions
+and section 5a for the resulting schema deltas.**
 
 This spec replaces the earlier separate "Checklists" and "Task timeline"
 specs. They were two features joined by a manual "turn this checklist item
@@ -79,30 +82,41 @@ real `due_date`, written onto ordinary `list_items` rows in an ordinary
 - `list_sections` for grouping within a list (the seed data already needs
   this — e.g. "Ceremony decor" vs. "Reception decor" within one Decor list).
 - `list_items`: title, notes, qty, url, due date, flag, priority, done
-  state, free reordering.
+  state (now three states — see section 5a), assignment (`assigned_to`),
+  free reordering, and one level of sub-items (see section 5a).
 - Smart views computed from `list_items`, not stored: **Today** (due today,
   not done), **Scheduled** (any due date, not done), **Flagged**, **All**
-  (every item, every list). Exact set confirmed in open questions.
+  (every item, every list), plus a per-person filter driven by
+  `assigned_to` (open question 8).
+- User-selectable sort within a list/smart view — due date, priority, or
+  manual order — defaulting to due date (open question 9).
 - The timeline screen: every dated item across every list, chronological,
-  grouped/coloured by originating list.
-- Seed data: the four checklist templates
-  (`supabase/templates/checklists.json`) and the date-offset timeline
-  template (`supabase/templates/task-timeline.json`, restructured to load
-  as one more `list_templates` row rather than a separate task-template
-  table — see section 8, build order).
+  grouped/coloured by originating list, with week/month/quarter zoom and
+  drag-to-reschedule (open question 3).
+- A board (Kanban) view over the same `list_items`, grouped by status —
+  Not started / In progress / Done (open question 2).
+- Natural-language quick-add ("tomorrow", "next Friday") parsed from the
+  title field into a real `due_date` (open question 4).
+- Recurring items with a repeat rule (open question 6).
+- Seed data: decor and stationery checklist templates plus the date-offset
+  timeline template (`supabase/templates/task-timeline.json`, restructured
+  to load as one more `list_templates` row rather than a separate
+  task-template table — see section 8, build order). The registry/gift-list
+  template is dropped (open question 1) — US-shaped, doesn't fit a UK
+  wedding.
 - Idempotent generation for the timeline template specifically: pick it,
   preview computed dates against the actual wedding date, generate. Safe to
-  re-run after the date changes.
+  re-run after the date changes. Wedding date isn't set yet (open question
+  7), so `/setup/plan` must ship a real empty state, not just an edge case.
 
 **Out, explicitly, this pass:**
 - No vendor or budget link on any item — those tables don't exist until V2.
 - No `task_dependencies` / ordering-between-items table. Nothing in the
   seed data has a real dependency edge to model.
-- No board (Kanban) view unless open question 2 says yes.
-- No natural-language quick-add ("tomorrow", "next Friday") unless open
-  question 4 says yes — v1 assumes a real date picker.
-- No nesting below one level of sections unless open question 5 says yes.
-- No recurring items unless open question 6 says yes.
+- Registry/gift-list template dropped, not just deprioritised (open
+  question 1).
+- Nesting stops at one level of sub-items — no grandchildren (open
+  question 5).
 
 ## 5. Data model — landed in `0004_lists.sql`
 
@@ -141,6 +155,36 @@ v_timeline_items -- view: every list_items row with a due_date, joined to
   writable by nobody through the API. `lists` / `list_sections` /
   `list_items` follow the standard tenant policy
   (`is_collaborator(wedding_id)`).
+
+## 5a. Schema deltas required by section 10's answers
+
+`0004_lists.sql` as landed does not yet cover these — a follow-up migration
+is needed before the build order in section 9 can proceed past step 3:
+
+- **Status beyond done/not-done** (open question 2): board view needs
+  "in progress" as a distinct state from "not started" and "done". Add a
+  `status` column (`not_started | in_progress | done`) rather than
+  inferring it from `done_at`; keep `done_at` as the completion timestamp,
+  set when `status` transitions to `done`.
+- **One level of sub-items** (open question 5): `list_items` gets a
+  self-referencing nullable `parent_item_id`. Constrain to one level (a
+  row with a non-null `parent_item_id` cannot itself be a parent) at the
+  application layer or via a check/trigger — schema doesn't need a second
+  table.
+- **Recurrence** (open question 6): a `repeat_rule` (jsonb or a simple
+  enum + interval) on `list_items`, plus the generation logic that spawns
+  the next occurrence when one is completed. Needs its own design pass on
+  the repeat rule shape before it's built — not fully specified yet.
+- **Assignment** (open question 8): `assigned_to uuid` on `list_items`,
+  referencing the collaborator/user, nullable (unassigned = shared pool).
+  Smart views gain an "assigned to me" filter.
+- **Sort preference** (open question 9): no schema change — `priority`
+  and `sort_order` already exist; the due-date/priority/manual toggle is a
+  query-time `ORDER BY` choice, persisted client-side (or per-list) rather
+  than in the database.
+
+None of this invalidates the `v_timeline_items` view or the core
+list/section/item shape — these are additive columns.
 
 ## 6. Screens
 
@@ -207,77 +251,66 @@ browser, not just checked.
 ## 9. Build order for the next session
 
 1. ~~`0004_lists.sql`~~ — done, verified (section 7).
-2. Restructure `supabase/templates/task-timeline.json` so its 175 tasks load
+2. `0005_lists_status_assignment.sql` (name indicative) — the schema
+   deltas from section 5a: `status`, `parent_item_id`, `repeat_rule`,
+   `assigned_to`. Drop the registry template from the seed set here or in
+   step 4. Re-run `verify-migrations.sh` / `verify-bootstrap.sh`.
+3. Restructure `supabase/templates/task-timeline.json` so its 175 tasks load
    as one `list_templates` payload (title, bucket, offset_days, note per
    item) rather than a separate task-template shape — same JSON shape
    `checklists.json` already uses, just with `offset_days` present per item.
-3. `scripts/seed-templates.mjs`.
-4. `src/lib/lists/generate.ts` + unit tests.
-5. `src/server/queries/lists.ts`, `src/server/actions/lists.ts`.
-6. `/lists`, `/lists/[id]`, `/timeline`, `/setup/plan`.
-7. Cross-wedding RLS test for `list_items`.
-8. Full check pass (`typecheck`, `npm test`, `verify-migrations.sh`,
+   Remove the registry template from `checklists.json` (or the loader) per
+   open question 1.
+4. `scripts/seed-templates.mjs`.
+5. `src/lib/lists/generate.ts` + unit tests, including recurrence
+   (open question 6) — needs its repeat-rule shape settled first.
+6. `src/server/queries/lists.ts`, `src/server/actions/lists.ts` — covering
+   status transitions, sub-items, assignment, and NL quick-add parsing
+   (open question 4).
+7. `/lists`, `/lists/[id]`, `/timeline` (drag-to-reschedule, zoom),
+   `/board`, `/setup/plan` (real empty state for no wedding date).
+8. Cross-wedding RLS test for `list_items`.
+9. Full check pass (`typecheck`, `npm test`, `verify-migrations.sh`,
    `verify-bootstrap.sh`, `npm run build`) and a real browser pass before
    calling any of it done.
 
-## 10. Open questions
+## 10. Open questions — answered
 
-**1. Which seed templates ship as starting points?** The registry/gift-list
-template (147 items) is the most US-shaped of the four — it assumes US
-registry platforms with US bank payouts, which don't map to a UK wedding.
-Ship all four (decor, stationery, registry, timeline) as-is, drop or
-re-label registry, or something else? Given "maximum flexibility, I can add
-any new list" is the actual requirement, templates are optional starting
-points rather than a fixed menu — but the seed data still needs a decision
-on what ships pre-loaded vs. what you'd rather build from blank.
+**1. Which seed templates ship as starting points?** Decided: drop the
+registry/gift-list template (US-shaped, doesn't map to a UK wedding). Ship
+decor, stationery, and the timeline template only.
 
-**2. Board (Kanban) view, alongside the timeline?** You described the
-persona as a heavy Jira/Trello user specifically, not just Apple Reminders.
-Jira and Trello are board-first tools. Do you want a status-grouped board
-(e.g. Not started / In progress / Done) as a second view over the same
-`list_items`, or is List + Timeline the complete set for this pass? This
-also decides whether `list_items` needs a third state beyond
-done/not-done — right now "done" is just `done_at is not null`, with no
-"in progress."
+**2. Board (Kanban) view, alongside the timeline?** Decided: yes. A
+status-grouped board (Not started / In progress / Done) ships as a second
+view over `list_items`. Requires the `status` column in section 5a —
+"done" is no longer just `done_at is not null`.
 
 **3. Timeline interaction — drag to reschedule, and what zoom levels?**
-Jira's timeline lets you drag a bar to change its dates. Do you want the
-same here (drag an item horizontally to change its `due_date`), or is the
-timeline read-mostly with dates edited from the list view? And should it
-zoom (week / month / quarter), given the seed data spans over a year
-(-391 to -1 days)?
+Decided: yes to both. Dragging an item on the timeline updates its
+`due_date`; the timeline supports week / month / quarter zoom, given the
+seed data spans over a year (-391 to -1 days).
 
-**4. Natural-language quick add?** Apple Reminders and Things both parse
-"tomorrow," "next Friday," "in 2 weeks" typed straight into the title field
-into a real due date. Real engineering effort (a date-parsing library, or
-hand-rolled parsing) versus a plain date picker. Worth it for v1, or a
-second-pass polish item?
+**4. Natural-language quick add?** Decided: yes, build it for v1 — parse
+phrases like "tomorrow," "next Friday," "in 2 weeks" typed into the title
+field into a real `due_date`, rather than shipping only a plain date
+picker.
 
-**5. Nesting beyond one level of sections?** Newer Apple Reminders supports
-sub-items under an item. The seed data only ever needs one level (list →
-section → item). Do you want true nesting (an item can have child items),
-or is section-level grouping enough?
+**5. Nesting beyond one level of sections?** Decided: yes, true nesting —
+an item can have child sub-items (one level deep, not arbitrary depth; see
+`parent_item_id` in section 5a).
 
-**6. Recurring items?** Apple Reminders supports repeat rules. A wedding is
-a bounded, one-time project, so this is likely low value (a possible
-exception: "check in with the caterer every 2 weeks"). Worth building, or
-skip entirely?
+**6. Recurring items?** Decided: yes, build it. Needs its own design pass
+on the repeat-rule shape (section 5a) before implementation.
 
-**7. Is the wedding date set?** Needed to produce real due dates when
-generating the timeline template. If not set yet, the feature still ships
-(empty state on `/setup/plan`), but worth knowing whether this is currently
-blocked on that decision.
+**7. Is the wedding date set?** No, not set yet. `/setup/plan` must ship a
+real empty state for the unset-date case, not just handle it as an edge
+case.
 
-**8. Assignment between the two of you, or fully shared?** `list_items`
-records `done_by` (who ticked it), but nothing records who an item is
-*for* before it's done. Do you want an `assigned_to` field and per-person
-filtered views, or does everything stay a single shared pool for both
-collaborators? (The earlier AI-native planning pass argued explicitly
-against assignment-nagging between two people marrying each other — worth
-deciding deliberately either way.)
+**8. Assignment between the two of you, or fully shared?** Decided: add
+`assigned_to` and per-person filtered views (e.g. "assigned to me"),
+rather than a fully shared pool.
 
-**9. Priority levels — how many, and shown how?** The schema has
-`priority smallint` (0 = none, ascending) already, matching Apple
-Reminders' three-level `!`/`!!`/`!!!` scheme. Confirm three levels is
-right, and whether smart views should sort by priority, due date, or
-manual order by default.
+**9. Priority levels — how many, and shown how?** Confirmed: three levels
+(matching Apple Reminders' `!`/`!!`/`!!!`), keeping `priority smallint` as
+already landed. Sort is user-selectable — due date, priority, or manual
+order — defaulting to due date when a list/smart view is first opened.
