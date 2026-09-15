@@ -36,3 +36,50 @@
     @apply rounded-lg border border-line bg-white;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Print
+   ---------------------------------------------------------------------------
+   Only /invitations/print is designed to be printed, but the rules are global
+   because the planner shell (nav, buttons) is what has to disappear, and that
+   lives outside the page. `.no-print` opts anything else out.
+
+   `break-inside: avoid` on a card is the one rule that is not cosmetic: a QR
+   code split across a page break is a card that has to be reprinted, and it
+   is not obvious on screen that it happened.
+--------------------------------------------------------------------------- */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .no-print,
+  nav[aria-label="Main"],
+  header,
+  footer {
+    display: none !important;
+  }
+
+  .print-sheet {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8mm;
+  }
+
+  .print-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px dashed #d6d3d1;
+  }
+
+  /* Browsers drop backgrounds and light greys by default, which turns the
+     muted link text under each code into something unreadable on paper. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

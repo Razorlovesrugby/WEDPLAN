@@ -37,6 +37,9 @@ export default async function GuestsPage({
           <Link href={`/api/export/catering${query}`} className="btn" prefetch={false}>
             Catering numbers
           </Link>
+          <Link href="/guests/import" className="btn">
+            Import CSV
+          </Link>
           <Link href="/households/new" className="btn-primary">
             Add household
           </Link>

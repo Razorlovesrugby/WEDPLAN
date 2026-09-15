@@ -207,6 +207,18 @@ export function InvitationsTable({
                           Copy link
                         </button>
 
+                        {/* A plain link, not a fetch: the browser renders the
+                            PNG in a tab, which is what "save this one for the
+                            stationer" actually needs. */}
+                        <a
+                          href={`/api/qr/${row.invitationId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn px-2 py-1 text-xs"
+                        >
+                          QR
+                        </a>
+
                         <button
                           type="button"
                           className="btn px-2 py-1 text-xs"
