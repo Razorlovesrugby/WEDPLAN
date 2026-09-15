@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { setStatus } from "@/server/actions/lists";
 import type { ListItemStatus } from "@/lib/types/database";
@@ -20,8 +19,8 @@ const COLUMNS: { status: ListItemStatus; label: string }[] = [
  * database's auto-derivation (spec 1, section 5a) will overwrite it again
  * the next time one of its sub-items' completion changes.
  */
-export function BoardView({ items }: { items: ItemWithList[] }) {
-  const router = useRouter();
+export function BoardView({ items: initialItems }: { items: ItemWithList[] }) {
+  const [items, setItems] = useState(initialItems);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -39,10 +38,18 @@ export function BoardView({ items }: { items: ItemWithList[] }) {
     const item = items.find((i) => i.id === itemId);
     if (!item || item.status === nextStatus) return;
 
+    const previousStatus = item.status;
+    // optimistic — the card moves columns instantly, confirmed below
+    setItems((current) => current.map((i) => (i.id === itemId ? { ...i, status: nextStatus } : i)));
+
     startTransition(async () => {
       const result = await setStatus(itemId, nextStatus);
-      if (!result.ok) setError(result.error);
-      else router.refresh();
+      if (!result.ok) {
+        setItems((current) => current.map((i) => (i.id === itemId ? { ...i, status: previousStatus } : i)));
+        setError(result.error);
+      } else {
+        setError(null);
+      }
     });
   }
 

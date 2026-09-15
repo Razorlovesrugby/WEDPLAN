@@ -9,12 +9,18 @@ import type { CollaboratorRow, WeddingRow, WeddingStatsView } from "@/lib/types/
  * components can each ask for the current wedding and only one query runs.
  */
 
-export const getSessionUser = cache(async () => {
+/**
+ * getClaims() verifies the JWT locally against the project's cached JWKS
+ * instead of making a network round trip to the Auth server (falling back
+ * to getUser() automatically for older HS256 projects) — this runs on
+ * nearly every page and server action, so the network call was showing up
+ * as latency on every click.
+ */
+export const getSessionUser = cache(async (): Promise<{ id: string; email: string | null } | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data } = await supabase.auth.getClaims();
+  if (!data) return null;
+  return { id: data.claims.sub, email: data.claims.email ?? null };
 });
 
 /**

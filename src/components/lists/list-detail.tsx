@@ -182,7 +182,6 @@ function SectionGroup({
   collaborators: CollaboratorRow[];
   currentUserId?: string;
 }) {
-  const router = useRouter();
   const [order, setOrder] = useState(items.map((i) => i.id));
   const [, startTransition] = useTransition();
   const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
@@ -209,8 +208,8 @@ function SectionGroup({
     setOrder(reordered);
 
     startTransition(async () => {
-      const result = await reorderItems(reordered);
-      if (result.ok) router.refresh();
+      // Order is already reflected locally above; this just persists it.
+      await reorderItems(reordered);
     });
   }
 
