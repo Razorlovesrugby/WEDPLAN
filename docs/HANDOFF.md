@@ -3,10 +3,136 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 11 — spec 4 (household management) written, then
-built and a PR opened without the planner having read the spec first. The
-planner corrected this directly. Read that session's note before writing or
-building anything.
+Last updated: session 12 — spec 6 (budget management) built end to end, at
+the planner's direct instruction and explicitly ahead of spec 5. Read that
+session's note before touching budget, reminders, or the lists/timeline
+linking surface.
+
+## Session 12: Spec 6 (budget management) built, ahead of spec 5, on the planner's direct word
+
+**The planner asked directly: "read spec 6, i want this built before spec
+5."** That is exactly the kind of instruction section 11's process
+correction (below) says was missing for spec 4 — an explicit read-and-build
+request, not a session inferring permission from a spec existing. Spec 6
+was already fully decided (every question in its section 10 answered
+2026-09-15, before this session), so nothing here required answering a new
+question on the planner's behalf; this session built it end to end per the
+spec's own section 9 build order, in one pass rather than stopping partway.
+
+**What's built:**
+
+- `supabase/migrations/0010_budget.sql` — `budget_categories`,
+  `budget_items`, `consumption_components`, `payments`, `fx_rates`
+  (global reference data, same shape as `list_templates`), and section 7's
+  two join tables (`budget_item_tasks`, `budget_item_lists`). Views:
+  `v_budget_items`, `v_budget_summary`, `v_reminders_due` (the union spec 2
+  now reads instead of `v_timeline_items` directly), `v_budget_item_tasks`.
+  Two SQL helper functions carry the "which headcount" rule from section
+  10's decision 1 (`budget_wedding_has_rsvps`, `budget_guest_population`,
+  `budget_head_count`) — RSVP-confirmed once any RSVP exists for the
+  wedding, else invited (tier A), with a `p_force_invited` override
+  `/guests/rank`'s own figure always sets, regardless of RSVP data
+  elsewhere. `supabase/tests/03_budget.sql` adds 34 assertions: tenancy for
+  all six new tables, `v_budget_items`' four-basis computed-current math
+  (flat's contracted->quoted->estimated fallback, each per-unit basis, a
+  two-component consumption item with a wastage buffer, a non-base-currency
+  item's `_base` columns), `v_budget_summary`'s totals and per-head figures,
+  `v_reminders_due` surfacing exactly one unpaid+dated payment, and
+  `v_budget_item_tasks`' direct-link-wins-over-via-list dedup rule.
+- `src/lib/budget.ts` (`computeCurrent`, the consumption component math) and
+  `src/lib/fx.ts` (`resolveFxRate`'s cache/live/stale/manual ladder,
+  `convertAmount`) — pure, unit-tested (17 new tests), duplicating the SQL
+  views' logic on purpose per `tier.ts`'s established pattern, so a
+  client-side live preview never round-trips and can't silently drift from
+  what the server actually saves.
+- `src/server/queries/fx.ts`'s `getFxRate` — the cache-then-live-then-stale
+  ladder against `fx_rates`, calling `api.frankfurter.app` (no API key) on a
+  cache miss and writing the result back via the service-role client. This
+  is the app's first outbound third-party API call outside of email sending
+  — `src/lib/supabase/admin.ts`'s doc comment now lists it as the third
+  legitimate service-role use case, alongside the public RSVP flow and the
+  cron sender.
+- `src/server/actions/budget.ts` / `queries/budget.ts` — categories (delete
+  falls back to an auto-created "Uncategorised" category, section 10
+  decision 6), items (all five quantity bases), consumption components,
+  payments, and the contracting prompt (`confirmBudgetFollowUp` /
+  `dismissBudgetFollowUp`, lazily creating a wedding-level "Budget
+  follow-ups" list exactly like spec 1's other lazy lists).
+- `src/server/actions/budget-links.ts` / `queries/budget-links.ts` — section
+  7's manual many-to-many linking, plus `createLinkedTask` reusing spec 1's
+  existing `addItem` quick-add path (same "create the destination inline"
+  pattern spec 4's `HouseholdPicker` uses for a household).
+- `/budget` — categories as sections, the four-number table with variance,
+  a chronological payment list (not a month grid — `/calendar` already owns
+  that view of everything dated across the app), the wedding-level summary
+  and per-head figures, and each item's "Linked" popup (a native
+  `<dialog>`, not a route, per the spec's explicit decision against
+  `/budget/[id]`).
+- Dashboard "Budget" tile (committed/paid/outstanding, upcoming payment
+  count, per-seat figure) and `/guests/rank`'s own standing per-seat figure
+  — the latter deliberately does **not** read `v_budget_summary.per_head_seat`
+  (that figure switches to RSVP-confirmed counts once any RSVP exists);
+  `getPerSeatCostInvited` in `queries/budget.ts` recomputes the same total
+  with `src/lib/budget.ts`'s pure function against invited-only counts
+  instead, so the rank page's number can never quietly start using RSVP
+  data the spec says it must not.
+- `v_reminders_due` wired into `getTimelineSummary` (dashboard tiles) and
+  the cron's `sendDigests` — an unpaid, dated payment now surfaces in the
+  same "Overdue"/"Due this week" language and the same weekly email a
+  checklist item does. `digestEmail` renders a payment row as "payment
+  due"/"payment overdue" rather than "due"/"was due". `/timeline` itself is
+  unchanged — still `v_timeline_items` only.
+- Reverse badges: a linked list or list item shows a small "💰 label" badge
+  on `/lists/[id]` and `/timeline`, added as optional props on the existing
+  `ItemRow`/`TimelineView` components rather than new ones, so every other
+  caller of those components is unaffected. Clicking a badge navigates to
+  `/budget?item=<id>`, which auto-opens that line's popup. Clicking through
+  from the popup to a task sets `?highlight=<id>` on `/lists/[id]` or
+  `/timeline`, which scrolls to and highlights the row.
+
+**One interpretation worth flagging, since the spec didn't fully pin it
+down:** `v_budget_summary.per_head_adult`/`per_head_seat` sum
+`computed_current_base` across every line where `quantity_basis <> 'flat'`
+(every per-unit and consumption line, per section 2's own wording) and
+divide by the wedding's adult/seat count under the same RSVP/invited rule
+as everything else in that view. The spec names the numerator ("total of
+every per-unit and consumption line") but not this exactly; this is the
+most literal reading of section 2's sentence and is exercised directly by
+`supabase/tests/03_budget.sql`'s per-head assertions, so a future session
+changing the rule will see that suite fail rather than silently drift.
+
+**Two smaller build-time choices, both cheap to revisit:** the payment
+"calendar" on `/budget` is a chronological list, not a month grid — a
+second full calendar felt like duplicating `/calendar` (spec 3) rather than
+adding to it, and nothing in the spec's test plan exercises a grid
+specifically. And the reverse badge on `/lists/[id]`/`/timeline` covers
+individually-linked items and items that are members of a linked list (both
+via `v_budget_item_tasks`, which already dedupes the two), but there's no
+separate badge on a list's own header for "this whole list is linked" —
+the popup already shows that, and section 4's test plan doesn't ask for a
+list-header badge specifically.
+
+`npm run typecheck`, `npm test` (203 tests, 17 of them new — 10 in
+`budget.test.ts`, 7 in `fx.test.ts`), `./scripts/verify-migrations.sh` (104
+SQL assertions, 34 of them new), `./scripts/verify-bootstrap.sh`, and
+`npm run build` are all green.
+
+**Same caveat as every session since session 6, unchanged: nothing here has
+run against the live project or been opened in a browser.** This session
+adds the largest untested-live surface yet — a real outbound call to
+`api.frankfurter.app` has never actually happened (only the cache-miss
+branch's *logic* is unit-tested, with the live call mocked out); the
+`<dialog>`-based linking popup has never been seen open in a real browser;
+and the four-basis item editor, the consumption component editor, and the
+payment schedule have all only been read, not clicked through. Per section
+2's long-standing pattern (the two real `/guests/rank` bugs in session 6),
+that is exactly the class of thing automated checks here cannot catch.
+
+**Spec 5 (multi-cut lines, day-of run sheet) is unaffected and still
+unbuilt.** Nothing in this session touched `cut_rank`/`tier_b_rank`,
+`household_tier`, or `events`' run-sheet surface — spec 6 was written and
+built to have no dependency on spec 5 either direction, exactly as
+`docs/specs/README.md` already said before this session started.
 
 ## Session 11: Spec 4 written, then built and a PR opened before the planner read it — process correction, read this first.
 
@@ -497,7 +623,17 @@ first wedding. Full instructions in `supabase/migrations/README.md`.
 | 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` — [spec](specs/01-lists-and-timeline.md) |
 | 5 | `0005_lists_status_assignment.sql` | Board status, one-level sub-items, recurrence, assignment — [spec](specs/01-lists-and-timeline.md) |
 | 6 | `0006_reminders.sql` | `message_log.kind` gains `'digest'` — [spec](specs/02-reminders.md) |
+| 7 | `0007_settings.sql` | `weddings.reminder_window_days` — [spec](specs/03-settings-calendar-mobile.md) |
+| 10 | `0010_budget.sql` | Budget categories/items, consumption components, payments, `fx_rates`, section 7's linking tables, `v_budget_items`/`v_budget_summary`/`v_reminders_due`/`v_budget_item_tasks` — [spec](specs/06-budget-management.md) |
 | — | `bootstrap.sql` | Your wedding, both collaborators, starting events and questions |
+
+Numbers 8 and 9 are spec 5's (multi-cut lines, day-of run sheet) and don't
+exist yet — spec 6 was built first, at the planner's direct request, and
+its migration kept the number the spec itself already used
+(`0010_budget.sql`) rather than renumbering down. Whoever builds spec 5
+next adds `0008_multi_cut_lines.sql` and `0009_run_sheet.sql`, which apply
+between `0007` and `0010` in both file order and numeric order — no
+ordering hazard, and none of the three touch the same tables regardless.
 
 Tenancy is enforced by composite foreign keys on `(parent_id, wedding_id)`, not
 by triggers or by application code. `tier` is derived in a view, never stored.
@@ -525,6 +661,7 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/timeline` | Every dated item, chronological, week/month/quarter zoom, drag-to-reschedule (snaps to the zoom's bucket) |
 | `/calendar` | Month grid of the same dated items, color-coded, drag-to-reschedule, overdue/due-soon marked |
 | `/board` | Kanban — Not started / In progress / Done, drag between columns |
+| `/budget` | Categories, the four-number table (estimated/quoted/contracted/paid) with variance, per-unit and consumption costing, live FX conversion, a payment schedule, wedding-level totals and per-head figures, and a "Linked" popup per line for spec 6 section 7's task/list linking |
 | `/settings` | Wedding basics, cut lines & capacity, reminder window, list color/icon |
 | `/setup/plan` | Preview + generate the 175-task timeline template; real empty state with no wedding date |
 | `/setup` | Explains the bootstrap step when no wedding is attached |
@@ -535,12 +672,25 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 ### Checks
 
 ```bash
-npm run typecheck                 # clean — reconfirmed, session 10
-npm test                          # 181 tests passing — reconfirmed, session 10
-./scripts/verify-migrations.sh    # 70 SQL assertions, throwaway PG cluster — reconfirmed, session 10
-./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 10
-npm run build                     # reconfirmed, session 10
+npm run typecheck                 # clean — reconfirmed, session 12
+npm test                          # 203 tests passing — reconfirmed, session 12
+./scripts/verify-migrations.sh    # 104 SQL assertions, throwaway PG cluster — reconfirmed, session 12
+./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 12
+npm run build                     # reconfirmed, session 12
 ```
+
+**Session 12 ran all five checks against `0010_budget.sql` on top of
+session 10's migrations (session 11 built no schema — see its own note),
+and every one is green:** `verify-migrations.sh` is 104 assertions, up from
+70 (`supabase/tests/03_budget.sql` adds 34: tenancy for all six new tables,
+`v_budget_items`/`v_budget_summary`'s computed-value math across all five
+quantity bases and a non-base-currency line, `v_reminders_due`'s payment
+union, `v_budget_item_tasks`' dedup rule). `verify-bootstrap.sh` still
+creates one wedding and both collaborators cleanly. `npm run typecheck` is
+clean across the whole app. `npm test` is 203 tests passing (17 of them
+new — 10 in `src/lib/budget.test.ts`, 7 in `src/lib/fx.test.ts`). `npm run
+build` succeeds and lists `/budget` alongside every other route in its
+output.
 
 **Session 10 ran all five checks against `0007_settings.sql` on top of
 session 9's migrations, and every one is still green:**
@@ -582,8 +732,14 @@ reading `sendEmail()`'s existing dev-mode fallback). Session 10 adds a
 fourth and fifth unwatched drag surface (the calendar's drag-to-reschedule,
 plus every touch-drag fallback it and the other three surfaces gained —
 Move up/down buttons, a "Move to…" select, a tap-to-reveal date field) and
-a mobile nav that has never been opened at phone width. See session 10's,
-9's, and 8's notes near the top of this file.
+a mobile nav that has never been opened at phone width. Session 12 adds the
+largest untested-live surface yet: a real outbound call to
+`api.frankfurter.app` has never actually happened (only the cache-miss
+branch's logic is unit-tested, with the live call mocked), the `<dialog>`-
+based budget-links popup has never been opened in a real browser, and the
+item editor's basis picker, the consumption-component editor, and the
+payment schedule have all only been read, not clicked through. See session
+12's, 10's, 9's, and 8's notes near the top of this file.
 
 **Closed in session 8:** the three tenant tables from 0004 (`lists`,
 `list_sections`, `list_items`) now have their own cross-wedding isolation

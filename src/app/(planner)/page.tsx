@@ -2,16 +2,21 @@ import Link from "next/link";
 import { Stat } from "@/components/stat";
 import { requireWedding, getWeddingStats } from "@/server/queries/wedding";
 import { getTimelineSummary } from "@/server/queries/lists";
-import { daysUntil, formatDate, pluralise } from "@/lib/format";
+import { getBudgetSummary, getUpcomingPayments } from "@/server/queries/budget";
+import { daysUntil, formatDate, formatMoney, pluralise } from "@/lib/format";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   const wedding = await requireWedding();
-  const [stats, tasks] = await Promise.all([
+  const [stats, tasks, budget, payments] = await Promise.all([
     getWeddingStats(wedding.id),
     getTimelineSummary(wedding.id, wedding.reminder_window_days),
+    getBudgetSummary(wedding.id),
+    getUpcomingPayments(wedding.id),
   ]);
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingPaymentCount = payments.filter((p) => !p.paid_at && p.due_date && p.due_date >= today).length;
 
   if (!stats) {
     return <p className="text-sm text-muted">No data yet. Add your first household to begin.</p>;
@@ -54,6 +59,41 @@ export default async function DashboardPage() {
           />
         </div>
       </section>
+
+      {budget ? (
+        <section aria-labelledby="budget">
+          <h2 id="budget" className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+            Budget
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label="Committed"
+              value={formatMoney(budget.total_contracted, wedding.base_currency)}
+              href="/budget"
+              hint="contracted across every line"
+            />
+            <Stat
+              label="Paid"
+              value={formatMoney(budget.total_paid, wedding.base_currency)}
+              href="/budget"
+              hint={`${formatMoney(budget.total_outstanding, wedding.base_currency)} outstanding`}
+              tone={budget.total_outstanding > 0 ? "warn" : "good"}
+            />
+            <Stat
+              label="Upcoming payments"
+              value={upcomingPaymentCount}
+              href="/budget"
+              tone={upcomingPaymentCount > 0 ? "warn" : "neutral"}
+            />
+            <Stat
+              label="Per seat"
+              value={budget.per_head_seat !== null ? formatMoney(budget.per_head_seat, wedding.base_currency) : "—"}
+              href="/guests/rank"
+              hint="from every per-unit and consumption line"
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section aria-labelledby="responses">
         <h2 id="responses" className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">

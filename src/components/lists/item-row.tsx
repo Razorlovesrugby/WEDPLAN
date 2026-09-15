@@ -32,6 +32,8 @@ export function ItemRow({
   showListLabel = false,
   allowSubItems = false,
   dragHandle,
+  budgetLinks = [],
+  highlighted = false,
 }: {
   item: ItemWithList;
   subItems?: ListItemRow[];
@@ -40,6 +42,10 @@ export function ItemRow({
   showListLabel?: boolean;
   allowSubItems?: boolean;
   dragHandle?: ReactNode;
+  /** Budget lines this item is linked to, directly or via its list (spec 6, section 7) — the reverse badge. */
+  budgetLinks?: { id: string; label: string }[];
+  /** True when this is the `?highlight=` target from a budget popup's click-through. */
+  highlighted?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -148,7 +154,7 @@ export function ItemRow({
   }
 
   return (
-    <div className="py-2">
+    <div id={`list-item-${item.id}`} className={`py-2 ${highlighted ? "-mx-2 rounded bg-accent/10 px-2" : ""}`}>
       <div className="flex items-start gap-2">
         {dragHandle}
         <input
@@ -174,6 +180,16 @@ export function ItemRow({
                 {item.lists.title}
               </span>
             ) : null}
+            {budgetLinks.map((link) => (
+              <a
+                key={link.id}
+                href={`/budget?item=${link.id}`}
+                className="rounded bg-tierA/10 px-1.5 py-0.5 text-xs text-tierA hover:underline"
+                title={`Linked budget line: ${link.label}`}
+              >
+                💰 {link.label}
+              </a>
+            ))}
           </div>
 
           {item.notes ? <p className="mt-0.5 text-xs text-muted">{item.notes}</p> : null}

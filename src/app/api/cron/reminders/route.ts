@@ -197,9 +197,13 @@ async function sendDigests(
   const week = isoWeek(today);
 
   for (const wedding of weddings) {
+    // v_reminders_due (spec 6) unions in unpaid payments alongside dated
+    // list_items, so a deposit shows up in the same digest a checklist item
+    // does — see src/server/queries/lists.ts's getTimelineSummary for the
+    // dashboard-tile side of this same swap.
     const { data: rows } = await supabase
-      .from("v_timeline_items")
-      .select("id, title, due_date, list_title, list_color, snoozed_until, status")
+      .from("v_reminders_due")
+      .select("id, title, due_date, list_title, list_color, snoozed_until, status, source")
       .eq("wedding_id", wedding.id)
       .neq("status", "done");
 
@@ -213,6 +217,7 @@ async function sendDigests(
         list_color: row.list_color,
         snoozed_until: row.snoozed_until,
         done: row.status === "done",
+        source: row.source,
       }));
 
     const digest = buildDigest(items, today, wedding.reminder_window_days);

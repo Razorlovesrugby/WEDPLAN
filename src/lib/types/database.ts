@@ -140,6 +140,59 @@ type ListItemRelationships = [
   >,
 ];
 
+type BudgetItemRelationships = [
+  Rel<
+    "budget_items_category_id_wedding_id_fkey",
+    ["category_id", "wedding_id"],
+    "budget_categories",
+    ["id", "wedding_id"]
+  >,
+  Rel<"budget_items_event_id_wedding_id_fkey", ["event_id", "wedding_id"], "events", ["id", "wedding_id"]>,
+];
+
+type ConsumptionComponentRelationships = [
+  Rel<
+    "consumption_components_budget_item_id_wedding_id_fkey",
+    ["budget_item_id", "wedding_id"],
+    "budget_items",
+    ["id", "wedding_id"]
+  >,
+];
+
+type PaymentRelationships = [
+  Rel<
+    "payments_budget_item_id_wedding_id_fkey",
+    ["budget_item_id", "wedding_id"],
+    "budget_items",
+    ["id", "wedding_id"]
+  >,
+];
+
+type BudgetItemTaskRelationships = [
+  Rel<
+    "budget_item_tasks_budget_item_id_wedding_id_fkey",
+    ["budget_item_id", "wedding_id"],
+    "budget_items",
+    ["id", "wedding_id"]
+  >,
+  Rel<
+    "budget_item_tasks_list_item_id_wedding_id_fkey",
+    ["list_item_id", "wedding_id"],
+    "list_items",
+    ["id", "wedding_id"]
+  >,
+];
+
+type BudgetItemListRelationships = [
+  Rel<
+    "budget_item_lists_budget_item_id_wedding_id_fkey",
+    ["budget_item_id", "wedding_id"],
+    "budget_items",
+    ["id", "wedding_id"]
+  >,
+  Rel<"budget_item_lists_list_id_wedding_id_fkey", ["list_id", "wedding_id"], "lists", ["id", "wedding_id"]>,
+];
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -161,6 +214,9 @@ export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
 export type HouseholdTier = "A" | "B" | "C";
 export type ListKind = "checklist" | "timeline" | "generic";
 export type ListItemStatus = "not_started" | "in_progress" | "done";
+export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption";
+export type BudgetGuestBasis = "per_adult" | "per_seat";
+export type ReminderDueSource = "list_item" | "payment";
 
 // ---------------------------------------------------------------------------
 // Rows
@@ -424,6 +480,97 @@ export type ListItemRow = {
 }
 
 // ---------------------------------------------------------------------------
+// Budget (spec 6)
+// ---------------------------------------------------------------------------
+export type BudgetCategoryRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BudgetItemRow = {
+  id: string;
+  wedding_id: string;
+  category_id: string;
+  event_id: string | null;
+  label: string;
+  vendor_name: string | null;
+  currency: string;
+  /** Units of weddings.base_currency per 1 unit of `currency`. Null/1 when currency already matches base_currency. */
+  fx_rate: number | null;
+  quantity_basis: BudgetQuantityBasis;
+  /** Minor units. Null for `consumption` — component rows carry their own pricing. */
+  unit_price: number | null;
+  estimated: number | null;
+  quoted: number | null;
+  contracted: number | null;
+  contracted_task_created: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ConsumptionComponentRow = {
+  id: string;
+  wedding_id: string;
+  budget_item_id: string;
+  label: string;
+  guest_basis: BudgetGuestBasis;
+  servings_per_guest_per_hour: number;
+  duration_hours: number;
+  /** Minor units. */
+  price_per_serving: number;
+  /** e.g. 0.1 for a 10% buffer. */
+  wastage_buffer_pct: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PaymentRow = {
+  id: string;
+  wedding_id: string;
+  budget_item_id: string;
+  due_date: string | null;
+  /** Minor units. */
+  amount: number;
+  currency: string;
+  fx_rate: number | null;
+  paid_at: string | null;
+  reference: string | null;
+  paid_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Global reference data — no wedding_id. Readable by every collaborator, writable only by getFxRate's server-role lookup path. */
+export type FxRateRow = {
+  base_currency: string;
+  quote_currency: string;
+  rate: number;
+  as_of: string;
+  fetched_at: string;
+}
+
+export type BudgetItemTaskRow = {
+  wedding_id: string;
+  budget_item_id: string;
+  list_item_id: string;
+  created_at: string;
+}
+
+export type BudgetItemListRow = {
+  wedding_id: string;
+  budget_item_id: string;
+  list_id: string;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
 export type HouseholdView = {
@@ -506,6 +653,57 @@ export type TimelineItemView = {
   updated_at: string;
 }
 
+/** `v_budget_items` — every budget_items row plus computed/derived money columns. See spec 6, section 3. */
+export type BudgetItemView = BudgetItemRow & {
+  /** "The best number we currently have," in the row's own currency — never one of estimated/quoted/contracted stored as truth. */
+  computed_current: number;
+  computed_current_base: number;
+  /** sum(payments.amount) where paid_at is not null, in the item's own currency (assumes payments share the item's currency). */
+  paid: number;
+  /** Same sum, converted via each payment's own fx_rate — correct even if a payment's currency differs from the item's. */
+  paid_base: number;
+  outstanding_base: number;
+}
+
+/** `v_budget_summary` — one row per wedding, every total in weddings.base_currency. */
+export type BudgetSummaryView = {
+  wedding_id: string;
+  total_estimated: number;
+  total_quoted: number;
+  total_contracted: number;
+  total_paid: number;
+  total_outstanding: number;
+  per_head_adult: number | null;
+  per_head_seat: number | null;
+}
+
+/** `v_reminders_due` — spec 1's v_timeline_items unioned with unpaid payments. What the digest and dashboard tiles read; /timeline stays on v_timeline_items directly. */
+export type ReminderDueView = {
+  id: string;
+  wedding_id: string;
+  title: string;
+  due_date: string;
+  list_title: string;
+  list_color: string | null;
+  snoozed_until: string | null;
+  status: ListItemStatus;
+  source: ReminderDueSource;
+}
+
+/** `v_budget_item_tasks` — every list_item linked to a budget line, directly or via its list, deduplicated. See spec 6, section 7. */
+export type BudgetItemTaskView = {
+  budget_item_id: string;
+  list_item_id: string;
+  list_id: string;
+  list_title: string;
+  title: string;
+  notes: string | null;
+  due_date: string | null;
+  status: ListItemStatus;
+  done_at: string | null;
+  linked_via_list: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
@@ -553,14 +751,38 @@ export type Database = {
         | "repeat_rule",
         ListItemRelationships
       >;
+      budget_categories: Table<BudgetCategoryRow, "id" | Timestamps | "sort_order">;
+      budget_items: Table<
+        BudgetItemRow,
+        "id" | Timestamps | "quantity_basis" | "contracted_task_created",
+        BudgetItemRelationships
+      >;
+      consumption_components: Table<
+        ConsumptionComponentRow,
+        "id" | Timestamps | "wastage_buffer_pct" | "sort_order",
+        ConsumptionComponentRelationships
+      >;
+      payments: Table<PaymentRow, "id" | Timestamps, PaymentRelationships>;
+      fx_rates: Table<FxRateRow, "fetched_at">;
+      budget_item_tasks: Table<BudgetItemTaskRow, "created_at", BudgetItemTaskRelationships>;
+      budget_item_lists: Table<BudgetItemListRow, "created_at", BudgetItemListRelationships>;
     };
     Views: {
       v_households: View<HouseholdView>;
       v_household_rsvp: View<HouseholdRsvpView>;
       v_wedding_stats: View<WeddingStatsView>;
       v_timeline_items: View<TimelineItemView>;
+      v_budget_items: View<BudgetItemView>;
+      v_budget_summary: View<BudgetSummaryView>;
+      v_reminders_due: View<ReminderDueView>;
+      v_budget_item_tasks: View<BudgetItemTaskView>;
     };
-    Functions: Record<string, never>;
+    Functions: {
+      budget_guest_counts: {
+        Args: { p_wedding_id: string; p_event_id?: string | null; p_force_invited?: boolean };
+        Returns: { adult: number; child: number; seat: number }[];
+      };
+    };
     Enums: {
       collaborator_role: CollaboratorRole;
       age_band: AgeBand;
@@ -574,6 +796,8 @@ export type Database = {
       household_tier: HouseholdTier;
       list_kind: ListKind;
       list_item_status: ListItemStatus;
+      budget_quantity_basis: BudgetQuantityBasis;
+      budget_guest_basis: BudgetGuestBasis;
     };
     CompositeTypes: Record<string, never>;
   };
