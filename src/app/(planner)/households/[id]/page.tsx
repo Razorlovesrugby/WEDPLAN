@@ -2,16 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GuestForm } from "@/components/guests/guest-form";
 import { HouseholdForm } from "@/components/guests/household-form";
+import { AnswerList } from "@/components/questions/answer-list";
 import { getHousehold } from "@/server/queries/guests";
+import { getHouseholdAnswers } from "@/server/queries/questions";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName, pluralise } from "@/lib/format";
 
 export default async function HouseholdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [{ household, guests, invitation, summary }, events] = await Promise.all([
+  const [{ household, guests, invitation, summary }, events, answers] = await Promise.all([
     getHousehold(wedding.id, id),
     getEvents(wedding.id),
+    getHouseholdAnswers(wedding.id, id),
   ]);
 
   if (!household) notFound();
@@ -71,55 +74,64 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
           </section>
         </div>
 
-        <aside className="card h-fit space-y-3 p-4">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Invitation</h2>
+        <div className="space-y-5">
+          <aside className="card h-fit space-y-3 p-4">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Invitation</h2>
 
-          {invitation ? (
-            <>
-              <p className="text-sm">
-                {invitation.sent_at ? (
-                  <>Sent {formatRelative(invitation.sent_at)} by {invitation.channel}</>
-                ) : (
-                  <>Created, not yet sent</>
-                )}
-              </p>
-              <p className="text-sm text-muted">
-                {invitation.opened_at
-                  ? `Opened ${formatRelative(invitation.opened_at)}`
-                  : "Not opened yet"}
-              </p>
-              <div>
-                <h3 className="text-xs uppercase tracking-wide text-muted">Invited to</h3>
-                <ul className="mt-1 text-sm">
-                  {events
-                    .filter((event) => invitedEventIds.has(event.id))
-                    .map((event) => (
-                      <li key={event.id}>{event.name}</li>
-                    ))}
-                  {invitedEventIds.size === 0 ? <li className="text-muted">No events yet</li> : null}
-                </ul>
-              </div>
-              {summary ? (
+            {invitation ? (
+              <>
                 <p className="text-sm">
-                  {summary.rsvp_answered} of {summary.rsvp_total} answers in
-                  {summary.rsvp_yes > 0 ? ` · ${summary.rsvp_yes} yes` : null}
+                  {invitation.sent_at ? (
+                    <>Sent {formatRelative(invitation.sent_at)} by {invitation.channel}</>
+                  ) : (
+                    <>Created, not yet sent</>
+                  )}
                 </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-sm text-muted">
-              No invitation yet.{" "}
-              <Link href="/invitations" className="underline">
-                Create one
-              </Link>
-              .
-            </p>
-          )}
+                <p className="text-sm text-muted">
+                  {invitation.opened_at
+                    ? `Opened ${formatRelative(invitation.opened_at)}`
+                    : "Not opened yet"}
+                </p>
+                <div>
+                  <h3 className="text-xs uppercase tracking-wide text-muted">Invited to</h3>
+                  <ul className="mt-1 text-sm">
+                    {events
+                      .filter((event) => invitedEventIds.has(event.id))
+                      .map((event) => (
+                        <li key={event.id}>{event.name}</li>
+                      ))}
+                    {invitedEventIds.size === 0 ? <li className="text-muted">No events yet</li> : null}
+                  </ul>
+                </div>
+                {summary ? (
+                  <p className="text-sm">
+                    {summary.rsvp_answered} of {summary.rsvp_total} answers in
+                    {summary.rsvp_yes > 0 ? ` · ${summary.rsvp_yes} yes` : null}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted">
+                No invitation yet.{" "}
+                <Link href="/invitations" className="underline">
+                  Create one
+                </Link>
+                .
+              </p>
+            )}
 
-          <p className="border-t border-line pt-3 text-xs text-muted">
-            Reminders are {household.reminders_muted ? "muted" : "on"} for this household.
-          </p>
-        </aside>
+            <p className="border-t border-line pt-3 text-xs text-muted">
+              Reminders are {household.reminders_muted ? "muted" : "on"} for this household.
+            </p>
+          </aside>
+
+          <aside className="card h-fit p-4">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Answers</h2>
+            <div className="mt-3">
+              <AnswerList answers={answers} empty="No household questions answered yet." />
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );
