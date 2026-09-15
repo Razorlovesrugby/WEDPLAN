@@ -16,6 +16,10 @@ Next.js 15 (App Router) · Supabase (Postgres, Auth) · TypeScript · Tailwind
 - **Guest list.** Households are the invite unit, guests the headcount unit.
   Filter by tag, tier, RSVP state, age, or missing data; filters live in the URL
   so a filtered list is a link. Inline editing for the fields you touch most.
+  Move one guest, several selected at once, or a whole household's worth to
+  another household — with a search-as-you-type picker that can spin up the
+  destination household on the spot, so splitting or merging households
+  never loses RSVP history, tags, or notes.
 - **Ranked cut line.** Drag hundreds of households into an order, set the cut at
   venue capacity, and everything below becomes the waitlist automatically.
   Virtualised, so it stays usable well past 300 rows.

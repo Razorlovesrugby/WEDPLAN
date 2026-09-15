@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { InlineText } from "./inline-text";
-import { setGuestTags, updateGuest } from "@/server/actions/guests";
+import { HouseholdPicker } from "./household-picker";
+import { moveGuests, setGuestTags, updateGuest } from "@/server/actions/guests";
 import { guestName } from "@/lib/format";
 import type { GuestListItem } from "@/server/queries/guests";
-import type { EventRow, HouseholdTier, RsvpStatus, TagRow } from "@/lib/types/database";
+import type { EventRow, HouseholdTier, HouseholdView, RsvpStatus, TagRow } from "@/lib/types/database";
 
 const TIER_STYLE: Record<HouseholdTier, string> = {
   A: "bg-tierA/10 text-tierA",
@@ -32,10 +33,12 @@ export function GuestsTable({
   guests,
   tags,
   events,
+  households,
 }: {
   guests: GuestListItem[];
   tags: TagRow[];
   events: EventRow[];
+  households: HouseholdView[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTag, setBulkTag] = useState("");
@@ -70,6 +73,15 @@ export function GuestsTable({
     });
   }
 
+  async function moveSelection(targetHouseholdId: string) {
+    const result = await moveGuests([...selected], targetHouseholdId);
+    if (result.ok) {
+      setMessage(`Moved ${result.data.moved} ${result.data.moved === 1 ? "guest" : "guests"}`);
+      setSelected(new Set());
+    }
+    return result;
+  }
+
   if (guests.length === 0) {
     return (
       <p className="card p-8 text-center text-sm text-muted">
@@ -99,6 +111,9 @@ export function GuestsTable({
           <button type="button" className="btn" disabled={!bulkTag || pending} onClick={() => applyBulkTag("remove")}>
             Remove tag
           </button>
+          <span className="border-l border-line pl-2">
+            <HouseholdPicker households={households} label="Move to household…" move={moveSelection} />
+          </span>
           <button type="button" className="btn ml-auto" onClick={() => setSelected(new Set())}>
             Clear selection
           </button>

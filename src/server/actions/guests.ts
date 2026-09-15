@@ -224,6 +224,79 @@ export async function removeHousehold(householdId: string): Promise<ActionResult
 }
 
 // ---------------------------------------------------------------------------
+// Moving guests between households
+// ---------------------------------------------------------------------------
+
+/**
+ * Reassigns one or more guests to a different household. No schema change
+ * backs this — `guests.household_id` is the only thing that changes, and
+ * every derived number (head count, seats, tier, RSVP state) is already
+ * computed live from it in `v_households` and friends, so nothing else needs
+ * writing. The composite foreign key on `(household_id, wedding_id)` is what
+ * actually stops a guest landing in another wedding's household; the lookup
+ * below exists to turn that into a message instead of a raw constraint error.
+ *
+ * Deliberately does not touch `plus_one_for` (moving a +1 away from who they
+ * are the +1 of is left for the planner to notice, not decided for them) and
+ * does not delete a household a move happens to empty out.
+ */
+export async function moveGuests(
+  guestIds: string[],
+  targetHouseholdId: string,
+): Promise<ActionResult<{ moved: number }>> {
+  const wedding = await requireWedding();
+  const parsed = z
+    .object({
+      guestIds: z.array(z.string().uuid()).min(1).max(1000),
+      targetHouseholdId: z.string().uuid(),
+    })
+    .safeParse({ guestIds, targetHouseholdId });
+  if (!parsed.success) return fail("Nothing selected");
+
+  const supabase = await createClient();
+
+  const { data: target, error: targetError } = await supabase
+    .from("households")
+    .select("id")
+    .eq("id", parsed.data.targetHouseholdId)
+    .eq("wedding_id", wedding.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (targetError) return fail(targetError.message);
+  if (!target) return fail("That household could not be found");
+
+  const { data: origins } = await supabase
+    .from("guests")
+    .select("household_id")
+    .in("id", parsed.data.guestIds)
+    .eq("wedding_id", wedding.id);
+
+  const { data, error } = await supabase
+    .from("guests")
+    .update({ household_id: parsed.data.targetHouseholdId })
+    .in("id", parsed.data.guestIds)
+    .eq("wedding_id", wedding.id)
+    .select("id");
+
+  if (error) return fail(error.message);
+
+  revalidatePath("/guests");
+  revalidatePath("/guests/rank");
+  revalidatePath(`/households/${parsed.data.targetHouseholdId}`);
+  for (const origin of new Set((origins ?? []).map((g) => g.household_id))) {
+    revalidatePath(`/households/${origin}`);
+  }
+  for (const guestId of parsed.data.guestIds) revalidatePath(`/guests/${guestId}`);
+
+  return ok({ moved: data?.length ?? 0 });
+}
+
+export async function moveGuest(guestId: string, targetHouseholdId: string): Promise<ActionResult> {
+  const result = await moveGuests([guestId], targetHouseholdId);
+  return result.ok ? ok(undefined) : result;
+}
+
+// ---------------------------------------------------------------------------
 // Tags
 // ---------------------------------------------------------------------------
 
