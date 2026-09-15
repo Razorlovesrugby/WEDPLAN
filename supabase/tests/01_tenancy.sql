@@ -243,3 +243,169 @@ select pg_temp.expect((select count(*) from public.v_wedding_stats), 1,
 select pg_temp.expect((select count(*) from public.v_households), 10,
   'v_households is scoped to alex''s wedding');
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- 9. Lists + timeline (0004/0005) — the same boundary, on the newest tables
+-- ---------------------------------------------------------------------------
+-- No assertions existed for lists/list_sections/list_items before this —
+-- see docs/HANDOFF.md section 1's note that the 0004 assertion count was
+-- unchanged from before those tables landed. This closes that gap.
+begin;
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+
+select pg_temp.expect((select count(*) from public.lists), 1, 'alex sees 1 list');
+select pg_temp.expect((select count(*) from public.list_sections), 1, 'alex sees 1 section');
+select pg_temp.expect((select count(*) from public.list_items), 2, 'alex sees 2 items');
+select pg_temp.expect(
+  (select count(*) from public.v_timeline_items), 1,
+  'v_timeline_items shows only the one dated item, not the undated one');
+
+select pg_temp.expect(
+  (select count(*) from public.lists where wedding_id = :w2), 0,
+  'alex sees no lists from wedding 2');
+select pg_temp.expect(
+  (select count(*) from public.list_items where wedding_id = :w2), 0,
+  'alex sees no list items from wedding 2');
+
+do $$
+begin
+  begin
+    insert into public.lists (wedding_id, title)
+    values ('22222222-2222-4222-8222-222222222222', 'Gatecrasher list');
+    raise exception 'FAIL — insert into another wedding''s lists was allowed';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok  cross-wedding list insert blocked by RLS';
+  end;
+end;
+$$;
+rollback;
+
+begin;
+select set_config('request.jwt.claim.sub', :stranger, true);
+set local role authenticated;
+select pg_temp.expect((select count(*) from public.lists), 1, 'stranger sees only their list');
+select pg_temp.expect((select count(*) from public.list_items), 1, 'stranger sees only their item');
+select pg_temp.expect(
+  (select count(*) from public.list_items where wedding_id = :w1), 0,
+  'stranger sees nothing of wedding 1''s lists');
+rollback;
+
+-- list_templates: readable by every authenticated collaborator, writable by
+-- nobody through the API (0004) — reference data, not tenant data.
+begin;
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+do $$
+begin
+  begin
+    insert into public.list_templates (key, title) values ('rogue', 'Rogue template');
+    raise exception 'FAIL — a collaborator could write to list_templates';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok  list_templates is read-only to collaborators';
+  end;
+end;
+$$;
+rollback;
+
+begin;
+set local role anon;
+do $$
+begin
+  begin
+    perform count(*) from public.list_templates;
+    raise exception 'FAIL — anon could query list_templates';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok  anon has no privilege on list_templates';
+  end;
+  begin
+    perform count(*) from public.lists;
+    raise exception 'FAIL — anon could query lists';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok  anon has no privilege on lists';
+  end;
+end;
+$$;
+rollback;
+
+-- The composite foreign key stops what RLS cannot, same as section 6.
+begin;
+set local role service_role;
+do $$
+begin
+  begin
+    insert into public.list_items (wedding_id, list_id, title)
+    values ('11111111-1111-4111-8111-111111111111',   -- wedding 1
+            'b1111111-1111-4111-8111-0000000000ff',   -- list in wedding 2
+            'Impossible');
+    raise exception 'FAIL — list item attached to a list in another wedding';
+  exception
+    when foreign_key_violation then
+      raise notice '  ok  composite FK refused a cross-wedding list item';
+  end;
+end;
+$$;
+rollback;
+
+-- One level of sub-items, and the parent-status auto-derivation (0005).
+begin;
+set local role service_role;
+do $$
+declare
+  parent_id uuid;
+  child_a_id uuid;
+  child_b_id uuid;
+  parent_status public.list_item_status;
+begin
+  insert into public.list_items (wedding_id, list_id, title)
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Parent task')
+  returning id into parent_id;
+
+  -- Two children: "some but not all done" only shows up with more than one.
+  insert into public.list_items (wedding_id, list_id, parent_item_id, title)
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', parent_id, 'Child A')
+  returning id into child_a_id;
+  insert into public.list_items (wedding_id, list_id, parent_item_id, title)
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', parent_id, 'Child B')
+  returning id into child_b_id;
+
+  begin
+    insert into public.list_items (wedding_id, list_id, parent_item_id, title)
+    values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', child_a_id, 'Grandchild');
+    raise exception 'FAIL — a sub-item was allowed to have its own sub-item';
+  exception
+    when others then
+      if sqlerrm !~ 'one level of nesting' then
+        raise exception 'FAIL — wrong error blocked grandchild insert: %', sqlerrm;
+      end if;
+      raise notice '  ok  one level of nesting is enforced';
+  end;
+
+  update public.list_items set status = 'done', done_at = now() where id = child_a_id;
+  select status into parent_status from public.list_items where id = parent_id;
+  if parent_status <> 'in_progress' then
+    raise exception 'FAIL — parent did not auto-derive in_progress, got %', parent_status;
+  end if;
+  raise notice '  ok  parent auto-derives in_progress when some (not all) sub-items are done';
+
+  update public.list_items set status = 'done', done_at = now() where id = child_b_id;
+  select status into parent_status from public.list_items where id = parent_id;
+  if parent_status <> 'in_progress' then
+    raise exception 'FAIL — parent moved off in_progress once every sub-item was done, got %', parent_status;
+  end if;
+  raise notice '  ok  parent stays as last derived once every sub-item is done (no auto "done")';
+
+  update public.list_items set status = 'not_started', done_at = null where id = child_a_id;
+  update public.list_items set status = 'not_started', done_at = null where id = child_b_id;
+  select status into parent_status from public.list_items where id = parent_id;
+  if parent_status <> 'not_started' then
+    raise exception 'FAIL — parent did not fall back to not_started, got %', parent_status;
+  end if;
+  raise notice '  ok  parent falls back to not_started when no sub-item is done';
+end;
+$$;
+rollback;

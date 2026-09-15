@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { WeddingRow, WeddingStatsView } from "@/lib/types/database";
+import type { CollaboratorRow, WeddingRow, WeddingStatsView } from "@/lib/types/database";
 
 /**
  * `cache()` deduplicates within a single render pass, so a layout and three
@@ -66,6 +66,20 @@ export const getEvents = cache(async (weddingId: string) => {
     .order("starts_at", { ascending: true });
 
   if (error) throw new Error(`Could not load events: ${error.message}`);
+  return data ?? [];
+});
+
+/**
+ * Both collaborators. Used to label "assign to" pickers on the lists
+ * feature — by role (owner/partner), never by email: auth.users lives
+ * outside the `public` schema PostgREST exposes, and this app has never
+ * needed a profile table to display who's who before now.
+ */
+export const getCollaborators = cache(async (weddingId: string): Promise<CollaboratorRow[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("collaborators").select("*").eq("wedding_id", weddingId);
+
+  if (error) throw new Error(`Could not load collaborators: ${error.message}`);
   return data ?? [];
 });
 

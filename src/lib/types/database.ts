@@ -126,6 +126,20 @@ type InvitationEventRelationships = [
   >,
 ];
 
+type ListSectionRelationships = [
+  Rel<"list_sections_list_id_wedding_id_fkey", ["list_id", "wedding_id"], "lists", ["id", "wedding_id"]>,
+];
+
+type ListItemRelationships = [
+  Rel<"list_items_list_id_wedding_id_fkey", ["list_id", "wedding_id"], "lists", ["id", "wedding_id"], false>,
+  Rel<
+    "list_items_section_id_wedding_id_fkey",
+    ["section_id", "wedding_id"],
+    "list_sections",
+    ["id", "wedding_id"]
+  >,
+];
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -145,6 +159,8 @@ export type QuestionScope = "guest" | "household";
 export type MessageKind = "invitation" | "reminder" | "update" | "test";
 export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
 export type HouseholdTier = "A" | "B" | "C";
+export type ListKind = "checklist" | "timeline" | "generic";
+export type ListItemStatus = "not_started" | "in_progress" | "done";
 
 // ---------------------------------------------------------------------------
 // Rows
@@ -341,6 +357,70 @@ export type SavedViewRow = {
   created_at: string;
 }
 
+/** Global reference data — no wedding_id. Readable by every collaborator, writable by nobody through the API. */
+export type ListTemplateRow = {
+  id: string;
+  key: string;
+  title: string;
+  kind: ListKind;
+  sort_order: number;
+  payload: Json;
+  created_at: string;
+}
+
+export type ListRow = {
+  id: string;
+  wedding_id: string;
+  template_key: string | null;
+  title: string;
+  kind: ListKind;
+  color: string | null;
+  icon: string | null;
+  event_id: string | null;
+  sort_order: number;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ListSectionRow = {
+  id: string;
+  wedding_id: string;
+  list_id: string;
+  title: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export type ListItemRow = {
+  id: string;
+  wedding_id: string;
+  list_id: string;
+  section_id: string | null;
+  title: string;
+  notes: string | null;
+  qty: number | null;
+  url: string | null;
+  due_date: string | null;
+  done_at: string | null;
+  done_by: string | null;
+  flagged: boolean;
+  priority: number;
+  snoozed_until: string | null;
+  sort_order: number;
+  template_key: string | null;
+  offset_days: number | null;
+  generated_at: string | null;
+  status: ListItemStatus;
+  parent_item_id: string | null;
+  /** Shape: RepeatRule in src/lib/lists/generate.ts. Null when the item does not repeat. */
+  repeat_rule: Json;
+  recurrence_parent_id: string | null;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
@@ -400,6 +480,30 @@ export type WeddingStatsView = {
   seats_remaining: number | null;
 }
 
+/** `v_timeline_items` — every list_items row with a due_date, joined to its list. See spec 1, section 3. */
+export type TimelineItemView = {
+  id: string;
+  wedding_id: string;
+  list_id: string;
+  list_title: string;
+  list_color: string | null;
+  list_kind: ListKind;
+  event_id: string | null;
+  section_id: string | null;
+  parent_item_id: string | null;
+  title: string;
+  notes: string | null;
+  due_date: string;
+  done_at: string | null;
+  status: ListItemStatus;
+  flagged: boolean;
+  priority: number;
+  assigned_to: string | null;
+  snoozed_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
@@ -433,11 +537,26 @@ export type Database = {
       site_content: Table<SiteContentRow, "id" | "updated_at" | "payload" | "sort_order" | "visible">;
       saved_views: Table<SavedViewRow, "id" | "created_at" | "filters">;
       rsvp_token_attempts: Table<RsvpTokenAttemptRow, "id" | "succeeded" | "attempted_at">;
+      list_templates: Table<ListTemplateRow, "id" | "created_at" | "kind" | "sort_order" | "payload">;
+      lists: Table<ListRow, "id" | Timestamps | "kind" | "sort_order">;
+      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order", ListSectionRelationships>;
+      list_items: Table<
+        ListItemRow,
+        | "id"
+        | Timestamps
+        | "flagged"
+        | "priority"
+        | "sort_order"
+        | "status"
+        | "repeat_rule",
+        ListItemRelationships
+      >;
     };
     Views: {
       v_households: View<HouseholdView>;
       v_household_rsvp: View<HouseholdRsvpView>;
       v_wedding_stats: View<WeddingStatsView>;
+      v_timeline_items: View<TimelineItemView>;
     };
     Functions: Record<string, never>;
     Enums: {
@@ -451,6 +570,8 @@ export type Database = {
       message_kind: MessageKind;
       message_status: MessageStatus;
       household_tier: HouseholdTier;
+      list_kind: ListKind;
+      list_item_status: ListItemStatus;
     };
     CompositeTypes: Record<string, never>;
   };

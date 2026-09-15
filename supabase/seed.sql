@@ -116,6 +116,28 @@ insert into public.rsvp_questions (wedding_id, label, type, scope, required, sor
   ('11111111-1111-4111-8111-111111111111', 'Message to the couple',       'long_text',  'household', false, 6, '[]')
 on conflict do nothing;
 
+-- Lists + timeline (0004/0005). One list with a section and three items —
+-- one dated (on the timeline), one undated, one flagged with a sub-item —
+-- enough for both a smoke test of v_timeline_items and the RLS tests below.
+insert into public.lists (id, wedding_id, title, kind, color, sort_order) values
+  ('b1111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111',
+   'Decor', 'checklist', '#7c5c3e', 1)
+on conflict (id) do nothing;
+
+insert into public.list_sections (id, wedding_id, list_id, title, sort_order) values
+  ('b2111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111',
+   'b1111111-1111-4111-8111-111111111111', 'Ceremony decor', 1)
+on conflict (id) do nothing;
+
+insert into public.list_items (id, wedding_id, list_id, section_id, title, due_date, flagged, sort_order) values
+  ('b3111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111',
+   'b1111111-1111-4111-8111-111111111111', 'b2111111-1111-4111-8111-111111111111',
+   'Order the aisle runner', '2027-04-01', false, 1),
+  ('b3111111-1111-4111-8111-222222222222', '11111111-1111-4111-8111-111111111111',
+   'b1111111-1111-4111-8111-111111111111', 'b2111111-1111-4111-8111-111111111111',
+   'Confirm the florist', null, true, 2)
+on conflict (id) do nothing;
+
 insert into public.site_content (wedding_id, block_key, payload, sort_order) values
   ('11111111-1111-4111-8111-111111111111', 'hero',
    '{"headline":"Alex & Sam","date_label":"12 June 2027","location":"Bath, England"}', 1),
@@ -145,4 +167,14 @@ on conflict (id) do nothing;
 insert into public.guests (id, wedding_id, household_id, first_name, last_name) values
   ('9a000000-0000-4000-8000-0000000000ff', '22222222-2222-4222-8222-222222222222',
    'd0000000-0000-4000-8000-0000000000ff', 'Secret', 'Guest')
+on conflict (id) do nothing;
+
+insert into public.lists (id, wedding_id, title, kind) values
+  ('b1111111-1111-4111-8111-0000000000ff', '22222222-2222-4222-8222-222222222222',
+   'Secret list', 'generic')
+on conflict (id) do nothing;
+
+insert into public.list_items (id, wedding_id, list_id, title) values
+  ('b3111111-1111-4111-8111-0000000000ff', '22222222-2222-4222-8222-222222222222',
+   'b1111111-1111-4111-8111-0000000000ff', 'Secret task')
 on conflict (id) do nothing;
