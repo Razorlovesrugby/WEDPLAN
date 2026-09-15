@@ -1,4 +1,6 @@
 import "server-only";
+import { pluralise } from "@/lib/format";
+import type { DigestContent } from "@/lib/reminders/digest";
 
 /**
  * Message bodies.
@@ -100,6 +102,76 @@ export function reminderEmail(options: {
     is just as helpful as saying yes.</p>`);
 
   return { subject: `${weddingName} — a nudge about your RSVP`, text, html };
+}
+
+/**
+ * The weekly digest — the "chases you" half of spec 02, replacing the part
+ * of spreadsheet planning that can't chase anyone. Only sent when there's
+ * something to report (see `hasAnythingToReport` in
+ * src/lib/reminders/digest.ts) — an empty "nothing due" email every week is
+ * exactly the kind of message a recipient trains themselves to stop opening.
+ */
+export function digestEmail(options: { weddingName: string; url: string; digest: DigestContent }) {
+  const { weddingName, url, digest } = options;
+  const summary = `${pluralise(digest.overdueCount, "overdue", "overdue")}, ${pluralise(digest.dueSoonCount, "due this week", "due this week")}`;
+
+  const textGroups = digest.groups
+    .map((group) => {
+      const lines = [group.listTitle];
+      if (group.overdue.length > 0) {
+        lines.push("  Overdue:");
+        for (const item of group.overdue) lines.push(`    - ${item.title} (was due ${item.due_date})`);
+      }
+      if (group.dueSoon.length > 0) {
+        lines.push("  Due this week:");
+        for (const item of group.dueSoon) lines.push(`    - ${item.title} (due ${item.due_date})`);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n");
+
+  const text = [
+    `${weddingName} — this week's tasks`,
+    "",
+    summary + ".",
+    "",
+    textGroups,
+    "",
+    "Everything, and the full timeline:",
+    url,
+  ].join("\n");
+
+  const htmlGroups = digest.groups
+    .map((group) => {
+      const overdueHtml =
+        group.overdue.length > 0
+          ? `<p style="margin:8px 0 2px;font-size:13px;color:#b91c1c">Overdue</p>
+             <ul style="margin:0;padding-left:20px">
+               ${group.overdue.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(was due ${i.due_date})</span></li>`).join("")}
+             </ul>`
+          : "";
+      const dueSoonHtml =
+        group.dueSoon.length > 0
+          ? `<p style="margin:8px 0 2px;font-size:13px;color:#6b6560">Due this week</p>
+             <ul style="margin:0;padding-left:20px">
+               ${group.dueSoon.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(due ${i.due_date})</span></li>`).join("")}
+             </ul>`
+          : "";
+      return `<div style="margin:16px 0;padding-left:12px;border-left:3px solid ${escapeHtml(group.listColor ?? "#8a8580")}">
+        <p style="margin:0;font-weight:bold">${escapeHtml(group.listTitle)}</p>
+        ${overdueHtml}${dueSoonHtml}
+      </div>`;
+    })
+    .join("");
+
+  const html = layout(`
+    <p style="font-size:20px;margin:0 0 4px">${escapeHtml(weddingName)}</p>
+    <p style="color:#6b6560;margin:0 0 16px">This week's tasks</p>
+    <p><strong>${escapeHtml(summary)}.</strong></p>
+    ${htmlGroups}
+    ${button(url, "See the full timeline")}`);
+
+  return { subject: `${weddingName} — ${summary}`, text, html };
 }
 
 // The WhatsApp message lives in templates-client.ts: the planner copies it in

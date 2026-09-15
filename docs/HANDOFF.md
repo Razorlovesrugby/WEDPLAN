@@ -3,8 +3,55 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 8 — Lists + Timeline built end to end (schema through
-all five screens), against spec 1's answered open questions.
+Last updated: session 9 — Reminders built end to end (spec 2), on top of
+session 8's Lists + Timeline.
+
+## Session 9: Reminders built — the digest, not just the schema. Read this first.
+
+**Spec 2 (`docs/specs/02-reminders.md`) is built, not just scoped.** Its six
+open questions had never been answered by the planner directly, so this
+session answered them itself (cadence = the existing Tuesday 10:00 UTC
+cron, recipients = always both collaborators, email only, a 7-day urgency
+window, a one-line count before the itemised list, grouped by list — full
+reasoning in the spec's section 7) and built against those answers:
+
+- `0006_reminders.sql` — one enum value (`message_log.kind` gains
+  `'digest'`). Everything else this feature reads already existed from
+  spec 1.
+- `src/lib/reminders/digest.ts` — pure content logic (`buildDigest`,
+  `hasAnythingToReport`, `isoWeek` for the dedupe key), 12 unit tests.
+- `digestEmail()` in `src/lib/email/templates.ts` — grouped by list, a
+  one-line summary, same text-first/HTML-mirrors convention as the
+  existing invitation/reminder emails.
+- `/api/cron/reminders` extended, not duplicated: a second loop after the
+  existing RSVP-chase loop, reusing the same cron secret check, the same
+  `sendEmail`/dev-mode-fallback path, and the same `message_log` dedupe
+  mechanism (key: `digest:{wedding_id}:{isoWeek}:{recipient}`). Skips
+  entirely when a wedding has nothing overdue or due within 7 days —
+  see the spec's added decision on that.
+- Collaborator emails resolved via `supabase.auth.admin.getUserById()` on
+  the service-role client (the Admin API, not PostgREST) — no new profile
+  table, and not reachable from a signed-in collaborator's own browser
+  session, which is exactly why this lives in the cron route.
+- Dashboard tiles: a new "Tasks" section on `/` (Overdue, Due this week),
+  built from `getTimelineSummary` — the same `getTimelineItems` +
+  `buildDigest` pipeline the cron digest uses, so the dashboard and the
+  email can never disagree about what counts as overdue.
+
+`verify-migrations.sh` (still 70 assertions — 0006 adds no new tenant
+table, just an enum value already covered by `message_log`'s existing
+policy), `verify-bootstrap.sh`, `typecheck`, `npm test` (171 tests, 12 of
+them new) and `npm run build` are all green.
+
+**Same caveat as session 8, because it's the same root cause: nothing here
+has been applied to the live project or opened in a browser.** No real
+email has ever been sent by this app — the dev-mode fallback in
+`sendEmail()` (log instead of send when `RESEND_API_KEY` is unset) has
+never actually been exercised by a cron run, only relied upon by
+inspection. That is still the single most useful thing for the next
+session to unblock, ahead of any further feature work — see session 8's
+note below for the full context (the organisation-scoping gap in section 0
+is unchanged).
 
 ## Session 8: Lists + Timeline built, not yet seen live. Read this first.
 
@@ -51,7 +98,7 @@ questions — lives in **[`docs/specs/`](specs/)**, not inline in this file:
 | Spec | Status |
 | --- | --- |
 | [`docs/specs/01-lists-and-timeline.md`](specs/01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens) and verified locally. Not yet applied to the live project or opened in a browser — see session 8 above. |
-| [`docs/specs/02-reminders.md`](specs/02-reminders.md) | Spec only. Depends on spec 1 shipping first. |
+| [`docs/specs/02-reminders.md`](specs/02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles) and verified locally. Same live/browser caveat as spec 1 — see session 9 above. |
 
 **This spec structure went through two revisions in one session, both
 recorded in `docs/specs/README.md`:** first a 3-way split (checklists /
@@ -252,11 +299,13 @@ Kept here, because it doesn't belong in any one feature's spec:
   engine, semantic search). Nothing in `docs/specs/` depends on any of
   that, and nothing there should grow to need it without the planner
   asking again.
-- **Spec 1 is built end to end as of session 8** — schema, generation
-  logic, queries/actions, all five screens. See session 8's note above and
-  spec 1's own status block for what's simplified and what's still
-  unverified (nothing has run against the live project or in a browser).
-  Reminders (spec 2) is still spec-only and depends on this.
+- **Both specs are now built end to end** — spec 1 (session 8: schema,
+  generation logic, queries/actions, all five screens) and spec 2 (session
+  9: schema, digest logic, email template, extended cron, dashboard tiles).
+  See each session's note above, and each spec's own status block, for
+  what's simplified and what's still unverified — nothing in either has run
+  against the live project, in a browser, or (for spec 2) sent a real
+  email.
 
 ### Parked, not cancelled: invitations, vendors, budget, AI
 
@@ -314,6 +363,7 @@ first wedding. Full instructions in `supabase/migrations/README.md`.
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` |
 | 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` — [spec](specs/01-lists-and-timeline.md) |
 | 5 | `0005_lists_status_assignment.sql` | Board status, one-level sub-items, recurrence, assignment — [spec](specs/01-lists-and-timeline.md) |
+| 6 | `0006_reminders.sql` | `message_log.kind` gains `'digest'` — [spec](specs/02-reminders.md) |
 | — | `bootstrap.sql` | Your wedding, both collaborators, starting events and questions |
 
 Tenancy is enforced by composite foreign keys on `(parent_id, wedding_id)`, not
@@ -350,39 +400,49 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 ### Checks
 
 ```bash
-npm run typecheck                 # clean — reconfirmed, session 8
-npm test                          # 159 tests passing — reconfirmed, session 8
-./scripts/verify-migrations.sh    # 70 SQL assertions, throwaway PG cluster — reconfirmed, session 8
-./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 8
-npm run build                     # reconfirmed, session 8
+npm run typecheck                 # clean — reconfirmed, session 9
+npm test                          # 171 tests passing — reconfirmed, session 9
+./scripts/verify-migrations.sh    # 70 SQL assertions, throwaway PG cluster — reconfirmed, session 9
+./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 9
+npm run build                     # reconfirmed, session 9
 ```
 
-**Session 8 ran all five checks against `0004_lists.sql` +
-`0005_lists_status_assignment.sql`, and every one is green:**
-`verify-migrations.sh` — 70 assertions (up from 52; section 9 of
-`supabase/tests/01_tenancy.sql` is new — see below, that gap is now closed).
-`verify-bootstrap.sh` still creates one wedding and both collaborators
-cleanly. `npm run typecheck` is clean across the whole app. `npm test` is
-159 tests passing (29 of them new, `src/lib/lists/generate.test.ts`).
-`npm run build` succeeds and lists every new route (`/lists`, `/lists/[id]`,
-`/timeline`, `/board`, `/setup/plan`) in its output. `node_modules` had to
-be installed fresh (`npm install`) — a prior session's container didn't
-have it; this one does, until the container recycles.
+**Session 9 ran all five checks against `0006_reminders.sql` on top of
+session 8's migrations, and every one is still green:**
+`verify-migrations.sh` — still 70 assertions (0006 adds one enum value, no
+new tenant table, so nothing new to assert there). `verify-bootstrap.sh`
+still creates one wedding and both collaborators cleanly. `npm run
+typecheck` is clean across the whole app. `npm test` is 171 tests passing
+(12 of them new, `src/lib/reminders/digest.test.ts`). `npm run build`
+succeeds and lists every route including the extended `/api/cron/reminders`
+in its output.
 
-**What none of that proves:** none of these five checks opens a browser.
-`v_timeline_items`' `due_date` filter was smoke-tested directly in session 7
-and is exercised again by the new RLS assertions, but the three drag
-interactions this session added — list reordering, timeline
+**Session 8 ran the same five checks against `0004_lists.sql` +
+`0005_lists_status_assignment.sql`:** `verify-migrations.sh` — 70 assertions
+(up from 52; section 9 of `supabase/tests/01_tenancy.sql` is new — see
+below, that gap is now closed). `npm test` was 159 tests passing then (29
+of them new, `src/lib/lists/generate.test.ts`). `npm run build` listed
+every new route (`/lists`, `/lists/[id]`, `/timeline`, `/board`,
+`/setup/plan`). `node_modules` had to be installed fresh (`npm install`) —
+a prior session's container didn't have it.
+
+**What none of that proves:** none of these five checks opens a browser or
+sends a real email. `v_timeline_items`' `due_date` filter was smoke-tested
+directly in session 7 and is exercised again by the RLS assertions, but the
+three drag interactions session 8 added — list reordering, timeline
 drag-to-reschedule, board drag-between-columns — have never been watched
-actually move anything. See session 8's note near the top of this file.
+actually move anything, and session 9's digest has never actually been sent
+by a real cron invocation against a real inbox (only reasoned about by
+reading `sendEmail()`'s existing dev-mode fallback). See session 9's and
+session 8's notes near the top of this file.
 
-**Closed this session:** the three tenant tables from 0004 (`lists`,
+**Closed in session 8:** the three tenant tables from 0004 (`lists`,
 `list_sections`, `list_items`) now have their own cross-wedding isolation
 assertions in `supabase/tests/01_tenancy.sql` section 9, plus
 `list_templates`' read-all/write-none policy, the composite FK, one-level
 sub-item nesting (0005's trigger), and the parent-status auto-derivation
 trigger. A prior version of this file flagged the missing tenancy
-assertions as "worth adding, not yet done" — done now.
+assertions as "worth adding, not yet done" — done since session 8.
 
 `npm run build` needs the three `NEXT_PUBLIC_*` variables set or it fails at
 "Collecting page data" — the env validation is deliberate. Placeholders are

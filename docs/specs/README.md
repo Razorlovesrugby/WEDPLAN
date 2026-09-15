@@ -30,8 +30,8 @@ renumbered to spec 2, is unchanged in substance.
 
 | # | Feature | Status | Depends on |
 | --- | --- | --- | --- |
-| 1 | [Lists, with an auto-synced timeline](01-lists-and-timeline.md) | Schema landed (`0004_lists.sql`), verified + smoke-tested. **Open questions unanswered.** | V1 only |
-| 2 | [Reminders](02-reminders.md) | Spec only, no schema. **Open questions unanswered.** | Spec 1 must ship first |
+| 1 | [Lists, with an auto-synced timeline](01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens), verified locally. Not yet applied to the live project or opened in a browser. | V1 only |
+| 2 | [Reminders](02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles), verified locally. Same live/browser caveat as spec 1. | Spec 1 shipped first |
 
 ## Recommended build order
 
