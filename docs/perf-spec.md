@@ -77,6 +77,32 @@ or moves between sections), only that path refreshes.
   add sub-item, add section, archive) keep `router.refresh()` — those need
   real server data.
 
+## Round 2: navigation and search feedback
+
+After round 1, item-level edits are instant, but two things still made the
+app feel laggy:
+
+### C. No navigation loading state anywhere
+
+There was no `loading.tsx` in the app. Without one, Next.js shows nothing
+at all while a route's server component data resolves — the screen just
+sits frozen after a click. Added `src/app/(planner)/loading.tsx`: it wraps
+`{children}` of the planner layout in a Suspense boundary, so a lightweight
+skeleton appears immediately on any planner navigation (guests, lists,
+board, invitations, etc.) while the destination's data loads, instead of an
+unresponsive-looking pause. The header/nav aren't part of that boundary, so
+they stay put across navigations.
+
+### D. The guest search box re-queried on every keystroke
+
+`FilterBar`'s search input called `router.replace()` — a real navigation
+that re-runs `requireWedding()` + `listGuests()` + `getTags()` +
+`getEvents()` and re-renders the whole `/guests` page — directly from
+`onChange`, with no debounce. Typing a five-letter name fired five full
+round trips. Added a 300ms debounce before the search term updates the URL;
+the other filters (selects) are unchanged since picking a dropdown option
+is already a single discrete action, not a per-keystroke one.
+
 ## Out of scope (candidates for a follow-up increment)
 
 - Making add/delete/section mutations fully optimistic via `useOptimistic`
