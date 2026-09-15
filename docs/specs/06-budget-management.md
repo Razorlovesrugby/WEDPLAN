@@ -1,20 +1,26 @@
 # Feature spec: Budget management
 
-**Status: decided, not yet built. Amended 2026-09-15: every question in §9
-has an answer, recorded there as decisions. Three of those decisions
-(§9.3, §9.4, §9.5) moved real scope from "out" to "in" relative to the
-first draft — live FX conversion, a consumption-based costing calculator,
-and prompted task generation on contracting a line are all now part of
-this spec, not follow-ups. §2–§8 below reflect that expanded scope
-directly; nothing here is provisional.**
+**Status: decided, not yet built. Amended 2026-09-15 (two passes): every
+question in §10 has an answer, recorded there as decisions. Three of those
+decisions (§10.3, §10.4, §10.5) moved real scope from "out" to "in" relative
+to the first draft — live FX conversion, a consumption-based costing
+calculator, and prompted task generation on contracting a line are all now
+part of this spec, not follow-ups. A second pass added §7 — manual,
+many-to-many linking between budget lines and both individual tasks and
+whole lists, in both directions, per the planner's direct request. Nothing
+here is provisional.**
 
-**Depends on:** V1 (`weddings`, `households`, `guests`, `events`) plus, for
-the reminders sync (§6), spec 1 (lists/timeline) and spec 2 (reminders) —
-both already built. Does not depend on spec 5. Additionally now depends on
-a live external FX rate lookup (§3, §9.3) — the first outbound
-third-party API call this app makes outside of email sending, worth
-flagging since it's a new class of dependency (availability, latency,
-what happens when it's down) rather than just new schema.
+**Depends on:** V1 (`weddings`, `households`, `guests`, `events`) plus spec 1
+(lists/timeline) and spec 2 (reminders) — both already built. Spec 1 is now
+a harder dependency than before: §6's reminders sync only ever *read* spec
+1's `v_timeline_items`, but §7's linking takes real foreign keys against
+`lists` and `list_items`, and adds two small, additive deltas to spec 1's
+already-shipped `/lists/[id]` and `/timeline` screens (§7). Does not depend
+on spec 5. Additionally depends on a live external FX rate lookup (§3,
+§10.3) — the first outbound third-party API call this app makes outside of
+email sending, worth flagging since it's a new class of dependency
+(availability, latency, what happens when it's down) rather than just new
+schema.
 
 ## 1. What this replaces
 
@@ -65,10 +71,14 @@ rollup figure standing in for all of it.
   wedding's `base_currency` looks up a real exchange rate automatically
   and snapshots it onto that row, so summary totals convert to
   `base_currency` without the planner doing currency maths by hand. See §3
-  and §9.3 for the exact mechanism and its failure handling.
+  and §10.3 for the exact mechanism and its failure handling.
 - **Prompted follow-up tasks.** The first time a line's `contracted` value
   is set, the UI offers to add a checklist item to chase final numbers —
   opt-in per line, landing on a dedicated "Budget follow-ups" list. See §6.
+- **Manual linking between budget lines and tasks/lists, both directions.**
+  Click "Flowers" on `/budget`, see every task and list that's been linked
+  to it in a popup, click through to any of them; click a linked task on
+  `/lists` or `/timeline`, jump straight back to that budget line. See §7.
 - `/budget`: categories, the four-column table with variance, a payment
   calendar, and the per-head summary.
 - A "Budget" tile on the dashboard (`/`), matching how spec 2 added a
@@ -83,7 +93,7 @@ rollup figure standing in for all of it.
   later, this text field is the natural migration target for a real FK.
 - No payment *processing* — recording a payment here means "the planner
   says this happened," not moving money. No Stripe, no bank integration.
-- No cost basis for infants (§9.2 — always excluded from every per-head
+- No cost basis for infants (§10.2 — always excluded from every per-head
   and consumption calculation, matching `v_households.seat_count`'s
   existing exclusion; a planner who wants an infant-specific line uses a
   flat item).
@@ -166,7 +176,7 @@ fx_rates               base_currency, quote_currency, rate (numeric),
   `weddings.base_currency` per 1 unit of this row's own `currency`."
   Null/`1` when the row's currency already matches base currency. Set
   once, automatically, the moment a row is created or its currency
-  changes (§9.3) — an accounting-style snapshot, not a live-recomputed
+  changes (§10.3) — an accounting-style snapshot, not a live-recomputed
   value, so a summary total doesn't silently shift because the market
   moved between two page loads. Editable by the planner if they have a
   better number (e.g. their bank's actual rate on the day).
@@ -228,7 +238,7 @@ path, not by the tenant policy loop); create the views above.
 | --- | --- |
 | `/budget` | Categories as sections, each a table of items with the four numbers + live current (in `base_currency`) + variance; "Add category," "Add item" with the basis picker (flat / per-adult / per-child / per-seat / consumption) — a consumption item's editor adds/removes component rows (label, guest basis, rate, duration, price) with a live computed total per row and summed for the item; a non-base-currency item shows the looked-up rate inline with an override control; a payment calendar below, chronological, overdue highlighted the same way `/timeline` highlights overdue items |
 | `/` (dashboard) | New "Budget" tile: total committed vs. paid, upcoming payment count, per-head figure — same visual family as spec 2's "Tasks" tile |
-| `/guests/rank` | A small standing figure near the cut line: current per-seat cost, reading `v_budget_summary.per_head_seat` — the payoff feature, makes the cost of dragging one more household above the line visible while you're actually dragging it; always computed from **invited** counts (§9.1), never RSVP counts, regardless of what `/budget` and the dashboard are showing |
+| `/guests/rank` | A small standing figure near the cut line: current per-seat cost, reading `v_budget_summary.per_head_seat` — the payoff feature, makes the cost of dragging one more household above the line visible while you're actually dragging it; always computed from **invited** counts (§10.1), never RSVP counts, regardless of what `/budget` and the dashboard are showing |
 
 No `/budget/[id]` detail route — a category's items are a handful of rows
 each, not enough to need a drill-down; keep it one page, matching how
@@ -242,7 +252,7 @@ non-null value for the first time, not a separate screen.
 ## 5. Server actions & queries
 
 `src/server/actions/budget.ts`: `createBudgetCategory`,
-`renameBudgetCategory`, `deleteBudgetCategory` (§9.6 — allowed even with
+`renameBudgetCategory`, `deleteBudgetCategory` (§10.6 — allowed even with
 items still in it; any items move to an auto-created "Uncategorised"
 category for the wedding rather than blocking the delete),
 `createBudgetItem`, `updateBudgetItem` (this is what detects the
@@ -306,7 +316,107 @@ task; the checklist item created here is a completely ordinary
 `list_items` row afterward, with no ongoing link back to the budget line
 that spawned it.
 
-## 7. Test plan
+## 7. Linking budget lines to tasks and lists
+
+A budget line means little on its own once there's a real to-do list under
+it — "Flowers" isn't just £800, it's the notes from the florist meeting,
+the deposit due date, and "confirm order by March 1" sitting on some
+checklist. This section adds a manual link between a budget line and both
+individual tasks and whole lists, in both directions: click a budget line,
+see everything linked to it, click through to any of it; click a linked
+task, jump back to the budget line it belongs to.
+
+**In:**
+- A budget item can be manually linked to any number of individual
+  `list_items`, and a `list_item` can be linked to any number of budget
+  items — many-to-many, join table `budget_item_tasks` (§10.7: many-to-many,
+  manual, not derived).
+- A budget item can also be manually linked to whole `lists` — join table
+  `budget_item_lists`. Every item in a linked list counts as "about" that
+  budget line without linking each item one by one; a list can be linked to
+  more than one budget item (e.g. a "Reception" list relevant to both
+  Venue and Catering).
+- Clicking a line's label on `/budget` opens a **popup** (a dialog, not a
+  route — consistent with §4's decision against a `/budget/[id]` page)
+  showing every linked list (with an open/done count) and every
+  individually-linked task (title, due date, status, notes snippet), each
+  row clicking through to that item's existing screen (§10.8).
+- The reverse direction: `/lists/[id]` and `/timeline` show a small budget
+  badge on a linked list and on an individually-linked item; clicking it
+  opens `/budget` with that line's popup already open.
+- A "+ Create a new task and link it here" shortcut inside the popup —
+  same "create the destination inline rather than a separate trip" pattern
+  spec 4's `HouseholdPicker` already uses for creating a household mid-move.
+
+**Out, explicitly:**
+- No automatic linking. A list named "Flowers" and a budget category named
+  "Flowers" are not connected unless the planner links them — matches
+  "manually linked" directly; no name-matching heuristics.
+- No cascading effect from a link. Linking a task to a budget line changes
+  nothing about either row — no due date copied onto the budget line, no
+  amount copied onto the task. `v_budget_items` / `v_budget_summary` (§3)
+  are entirely unaffected by linking; a link is purely "these are related."
+- No link at the section level (only whole lists or individual items) — a
+  list is already the natural grouping unit; section-level linking is a
+  finer grain than asked for and is a natural later addition if it turns
+  out to matter.
+
+**Data model:**
+
+```
+budget_item_tasks   wedding_id, budget_item_id, list_item_id, created_at
+                     -- PK (budget_item_id, list_item_id)
+
+budget_item_lists   wedding_id, budget_item_id, list_id, created_at
+                     -- PK (budget_item_id, list_id)
+```
+
+- Same shape as this app's existing many-to-many join tables (`guest_tags`,
+  `invitation_events`) — composite FKs on `(budget_item_id, wedding_id)` →
+  `budget_items`, `(list_item_id, wedding_id)` → `list_items`,
+  `(list_id, wedding_id)` → `lists`.
+- **`v_budget_item_tasks`** (view, `security_invoker = true`) — every
+  `list_item` linked to a given budget line, whether directly
+  (`budget_item_tasks`) or via its list (`budget_item_lists`), deduplicated,
+  with a `linked_via_list` boolean so the popup can distinguish "part of
+  the Flowers checklist" from "linked individually." Columns:
+  `budget_item_id`, `list_item_id`, `list_id`, `list_title`, `title`,
+  `notes`, `due_date`, `status`, `done_at`, `linked_via_list`.
+- No change to `list_items` or `lists` themselves — the link lives entirely
+  in the two join tables, so nothing about spec 1's existing schema changes.
+
+**Migration:** extends `0010_budget.sql` (§3) with the two join tables
+(added to the RLS `tenant_tables` array) and `v_budget_item_tasks`.
+
+**Screens:**
+
+| Route | What's new |
+| --- | --- |
+| `/budget` | Each item's label opens the "Linked tasks" popup: linked lists (open/done counts, click through to `/lists/[id]`), individually-linked tasks (click through to `/lists/[id]` or `/timeline`, scrolled to and highlighted — §10.8), a "Link a list…" / "Link a task…" combobox (same type-to-filter, click-to-link pattern as spec 4's `HouseholdPicker`, plus the inline-create shortcut above), and an unlink control on every row |
+| `/lists/[id]`, `/timeline` | A linked list or list item shows a small budget badge (e.g. "💰 Flowers"); clicking it navigates to `/budget?item=<id>`, which opens that line's popup on load |
+
+Two small, additive deltas to spec 1's already-shipped screens make the
+click-through work: (a) `/lists/[id]` and `/timeline` read
+`v_budget_item_tasks` / `budget_item_lists` for the badge, and (b) both
+screens accept a `?highlight=<item id>` query param that scrolls to and
+briefly highlights the matching row. Neither changes anything about how
+those screens behave today.
+
+**Server actions & queries:**
+
+`src/server/actions/budget-links.ts`: `linkBudgetItemToTask(budgetItemId,
+listItemId)`, `unlinkBudgetItemFromTask(...)`, `linkBudgetItemToList(
+budgetItemId, listId)`, `unlinkBudgetItemFromList(...)`,
+`createLinkedTask(budgetItemId, listId, title)` (creates the `list_items`
+row via spec 1's existing quick-add path, then links it, in one action).
+
+`src/server/queries/budget-links.ts`: `getBudgetItemLinks(budgetItemId)` →
+`{ lists: [...with open/done counts], tasks: [...] }` for the popup;
+`getBudgetLinksForListItem(listItemId)` and `getBudgetLinksForList(listId)`
+→ budget item id/label pairs, feeding the reverse badges on `/lists` and
+`/timeline`.
+
+## 8. Test plan
 
 - Unit: a `src/lib/budget.ts` module for the per-unit and consumption
   computation (`computed_current` given a basis, unit price or component
@@ -341,8 +451,18 @@ that spawned it.
   confirm the prompt does not reappear; drag a household across the
   existing cut line on `/guests/rank` and confirm the per-seat figure
   updates live using invited counts specifically.
+- Browser pass, linking (§7): link a budget line to a whole list, confirm
+  every item in that list shows the badge and appears in the popup without
+  linking each one individually; link the same or a different budget line
+  directly to one item from an unrelated list, confirm it appears in the
+  popup marked "linked individually"; click through from the popup to
+  `/lists/[id]`, confirm the item is scrolled to and highlighted; click
+  that item's budget badge, confirm it lands back on `/budget` with the
+  same line's popup open; create a new task inline from the popup and
+  confirm it's linked immediately; unlink a list and confirm its items
+  disappear from the popup while the list itself is untouched.
 
-## 8. Build order
+## 9. Build order
 
 1. `0010_budget.sql` — tables (including `consumption_components` and
    `fx_rates`), RLS, the three views.
@@ -365,11 +485,17 @@ that spawned it.
 9. The contracting prompt: `contracted_task_created`,
    `confirmBudgetFollowUp` / `dismissBudgetFollowUp`, the "Budget
    follow-ups" list creation path.
-10. Dashboard "Budget" tile.
-11. `/guests/rank` per-seat figure, on invited counts.
-12. Full check pass + browser pass per §7.
+10. Linking (§7): `budget_item_tasks`, `budget_item_lists`,
+    `v_budget_item_tasks`; `src/server/actions/budget-links.ts`,
+    `src/server/queries/budget-links.ts`; the `/budget` popup (linked
+    lists, linked tasks, link/unlink pickers, inline create); the reverse
+    budget badge and `?highlight=` scroll-to on `/lists/[id]` and
+    `/timeline`.
+11. Dashboard "Budget" tile.
+12. `/guests/rank` per-seat figure, on invited counts.
+13. Full check pass + browser pass per §8.
 
-## 9. Decided (2026-09-15)
+## 10. Decided (2026-09-15)
 
 1. **Which headcount drives the per-head figures:** `/guests/rank`'s
    figure always uses **invited** (top cut tier) counts, since that's the
@@ -398,3 +524,11 @@ that spawned it.
 6. **Deleting a budget category with items in it is allowed** — items fall
    back to an auto-created "Uncategorised" category for the wedding rather
    than blocking the delete.
+7. **Budget-line-to-task and budget-line-to-list links are many-to-many
+   and manual, never automatic or derived** — a task can relate to several
+   budget lines, a budget line to several tasks and several whole lists.
+   See §7 for the two join tables and the exact linking mechanism.
+8. **Clicking through from a linked task lands on that task's existing
+   screen** (`/lists/[id]` or `/timeline`, scrolled to and highlighted),
+   not a second popup — reuses what's already built rather than a
+   parallel task-detail view.
