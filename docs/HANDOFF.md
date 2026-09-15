@@ -3,7 +3,7 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: end of session 4.
+Last updated: end of session 5.
 
 **V1's code is complete. V1 is not done.** Every screen the spec asks for is
 built, type-checked, unit-tested and building cleanly. None of it has ever
@@ -11,8 +11,21 @@ talked to the live database, been opened in a browser, sent an email, or been
 printed. The gap between those two sentences is the whole of the remaining
 work, and it cannot be closed from a coding session alone — see section 4.
 
-Branch: `claude/hand-off-reading-60efdu`, from `main`. Session 1's branch was
-merged in PR #1.
+Branch: `claude/hand-off-continuation-y82inh`, from `main`. Sessions 1–4's
+branches were merged in PRs #1–#4.
+
+**Session 5 could not verify the live project either.** This session's
+Supabase connector saw exactly one project, `arm15lite_PROD`
+(`dgpplqzsukifcvddoxcd`) — the same wrong-organisation scoping sessions 2 and
+3 hit, described in the warning box in section 0. No `.env.local` and no
+`NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` were present in this
+container either, so `scripts/verify-live.mjs` could not be run here.
+**Open question 6 is unchanged: find out which organisation actually owns
+`lsgbwxisqqazahgkibmj` and give a session's Supabase connector access to it.**
+Until then, every item in section 4's numbered list is still blocked exactly
+as written. This session instead did the next most valuable thing available
+without live access: closed the "answers view" gap from section 3c. See
+below.
 
 ---
 
@@ -73,7 +86,7 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/` | Dashboard; every number links to the list behind it |
 | `/guests` | Table, URL-backed filters, inline edit, bulk tagging, CSV export |
 | `/guests/import` | CSV import: mapping, dedupe, per-row review |
-| `/guests/[id]`, `/households/[id]`, `/households/new` | Detail and editing |
+| `/guests/[id]`, `/households/[id]`, `/households/new` | Detail and editing, each showing that guest's or household's RSVP answers |
 | `/guests/rank` | Drag ranking, virtualised, two cut lines, waitlist suggestions |
 | `/events` | Event CRUD in the venue's timezone |
 | `/questions` | RSVP question builder — type, scope, options, order |
@@ -90,13 +103,19 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 
 ```bash
 npm run typecheck                 # clean
-npm test                          # 125 unit tests
+npm test                          # 130 unit tests
 ./scripts/verify-migrations.sh    # 52 SQL assertions, throwaway PG cluster
 ./scripts/verify-bootstrap.sh     # bootstrap on a clean database
-npm run build                     # clean, 22 routes
+npm run build                     # clean, 21 routes
 ```
 
-All five were run at the end of session 3 and all five passed.
+The first, second and fifth were run at the end of session 5 and passed.
+**The two SQL scripts were not run this session** — this container has no
+`postgres`/`initdb` toolchain at all, not even as a permissions problem, so
+there was nothing to `su postgres` into. Session 5 touched no migration, so
+there is no reason to expect them to have changed state, but they have not
+been re-confirmed since session 3 and are worth running for real on any
+machine that has Postgres before trusting this line.
 
 `npm run build` needs the three `NEXT_PUBLIC_*` variables set or it fails at
 "Collecting page data" — the env validation is deliberate. Placeholders are
@@ -161,7 +180,7 @@ Read this before trusting anything above.
   clicked it. Expect the first hour of real use to find layout and empty-state
   problems. This applies double to session 3's work — the import wizard, the
   question builder and the print sheet have unit tests under the logic but not
-  one rendered pixel behind them.
+  one rendered pixel behind them — and now to session 5's answers view too.
 - **No email has been sent.** Without `RESEND_API_KEY` the sender logs instead,
   by design. The templates have never met a real inbox or a spam filter.
 - **The password sign-in and reset flow has never completed**, because that
@@ -232,7 +251,6 @@ Read this before trusting anything above.
 | **Saved views** | "Saved views" on `/guests` | Table, RLS policy and a per-collaborator privacy test exist. No UI. |
 | **Inline edit** | "Inline edit" on the guest table | Built for email and dietary only. Everything else is on the detail page. |
 | **Site content editing** | Structured blocks | Rendered, but editable only in SQL. |
-| **An answers view** | — | Not a spec item. Custom RSVP answers are written and never read back anywhere in the planner. A question you can ask and cannot read is half a feature. |
 
 ### 3d. Added beyond the spec
 
@@ -242,6 +260,21 @@ Read this before trusting anything above.
   single addition.
 - **`/setup`**, explaining the bootstrap step rather than a dead redirect.
 - **Three verification scripts and CI**, none of which the spec asked for.
+- **An answers view**, added session 5. Not a spec item, but flagged in every
+  prior handoff as the biggest self-inflicted gap: custom RSVP answers were
+  written by `rsvp.ts` and never read back anywhere in the planner. `/guests/[id]`
+  now shows that guest's own answers (scope `guest`); `/households/[id]` shows
+  the household's shared answers (scope `household`) once, not per member.
+  `src/server/queries/questions.ts` embeds `rsvp_questions` on `rsvp_answers`
+  through PostgREST — the new `RsvpAnswerRelationships` entry in
+  `src/lib/types/database.ts` is what keeps that typed instead of resolving to
+  `never` (see the trap in section 6, point 1). A deactivated question still
+  shows its past answers, deliberately: `removeQuestion` deactivates rather
+  than deletes for exactly this reason (section 5, point 9), and hiding the
+  label here would silently orphan the answer it guards. Formatting (booleans
+  as Yes/No, multi-select joined with commas) is `src/lib/answer-format.ts`,
+  unit-tested directly per the `lib/` convention in section 8. Not yet seen
+  rendered against real data — see section 2.
 
 ---
 

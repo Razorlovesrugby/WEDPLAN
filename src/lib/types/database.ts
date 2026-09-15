@@ -102,6 +102,15 @@ type InvitationRelationships = [
   >,
 ];
 
+type RsvpAnswerRelationships = [
+  Rel<
+    "rsvp_answers_question_id_wedding_id_fkey",
+    ["question_id", "wedding_id"],
+    "rsvp_questions",
+    ["id", "wedding_id"]
+  >,
+];
+
 type InvitationEventRelationships = [
   Rel<
     "invitation_events_invitation_id_wedding_id_fkey",
@@ -419,7 +428,7 @@ export type Database = {
         RsvpQuestionRow,
         "id" | Timestamps | "type" | "scope" | "required" | "options" | "sort_order" | "active"
       >;
-      rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at" | "value">;
+      rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at" | "value", RsvpAnswerRelationships>;
       message_log: Table<MessageLogRow, "id" | "created_at" | "channel" | "status">;
       site_content: Table<SiteContentRow, "id" | "updated_at" | "payload" | "sort_order" | "visible">;
       saved_views: Table<SavedViewRow, "id" | "created_at" | "filters">;
