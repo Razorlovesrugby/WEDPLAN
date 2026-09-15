@@ -13,9 +13,15 @@ function isPublic(pathname: string): boolean {
 /**
  * Refreshes the auth cookie on every request and gates the planner routes.
  *
- * getClaims() must be called here: it is what rotates an expiring session, and
+ * Calling the auth client here is what rotates an expiring session, and
  * middleware is the only place that can write the refreshed cookie back.
  * Removing it logs both collaborators out at unpredictable intervals.
+ *
+ * Uses getClaims() rather than getUser(): it verifies the JWT locally
+ * against the project's cached JWKS instead of making a network round trip
+ * to the Auth server on every single request (falling back to getUser()
+ * automatically for older HS256 projects), which is what was making every
+ * navigation and every server action pay for an extra network hop.
  */
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   let response = NextResponse.next({ request });
@@ -41,9 +47,8 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname } = request.nextUrl;
 

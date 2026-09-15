@@ -2,7 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
-import { assignItem, addSubItem, deleteItem, setDueDate, setPriority, setStatus, toggleFlag } from "@/server/actions/lists";
+import {
+  assignItem,
+  addSubItem,
+  deleteItem,
+  setDueDate as setDueDateAction,
+  setPriority as setPriorityAction,
+  setStatus,
+  toggleFlag,
+} from "@/server/actions/lists";
 import type { CollaboratorRow, ListItemRow } from "@/lib/types/database";
 
 export type ItemWithList = ListItemRow & {
@@ -37,6 +45,9 @@ export function ItemRow({
   const [, startTransition] = useTransition();
   const [checked, setChecked] = useState(item.status === "done");
   const [flagged, setFlagged] = useState(item.flagged);
+  const [priority, setPriority] = useState(item.priority);
+  const [dueDate, setDueDate] = useState(item.due_date);
+  const [assignedTo, setAssignedTo] = useState(item.assigned_to);
   const [addingSub, setAddingSub] = useState(false);
   const [subTitle, setSubTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -69,27 +80,47 @@ export function ItemRow({
   }
 
   function onDateChange(value: string) {
+    const next = value || null;
+    const previous = dueDate;
+    setDueDate(next); // optimistic — reflects instantly, confirmed below
     startTransition(async () => {
-      const result = await setDueDate(item.id, value || null);
-      if (!result.ok) setError(result.error);
-      else router.refresh();
+      const result = await setDueDateAction(item.id, next);
+      if (!result.ok) {
+        setDueDate(previous);
+        setError(result.error);
+      } else {
+        setError(null);
+      }
     });
   }
 
   function onPriorityClick() {
-    const next = (item.priority + 1) % 4;
+    const next = (priority + 1) % 4;
+    const previous = priority;
+    setPriority(next); // optimistic — reflects instantly, confirmed below
     startTransition(async () => {
-      const result = await setPriority(item.id, next);
-      if (!result.ok) setError(result.error);
-      else router.refresh();
+      const result = await setPriorityAction(item.id, next);
+      if (!result.ok) {
+        setPriority(previous);
+        setError(result.error);
+      } else {
+        setError(null);
+      }
     });
   }
 
   function onAssign(userId: string) {
+    const next = userId || null;
+    const previous = assignedTo;
+    setAssignedTo(next); // optimistic — reflects instantly, confirmed below
     startTransition(async () => {
-      const result = await assignItem(item.id, userId || null);
-      if (!result.ok) setError(result.error);
-      else router.refresh();
+      const result = await assignItem(item.id, next);
+      if (!result.ok) {
+        setAssignedTo(previous);
+        setError(result.error);
+      } else {
+        setError(null);
+      }
     });
   }
 
@@ -130,9 +161,9 @@ export function ItemRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`text-sm ${checked ? "text-muted line-through" : ""}`}>{item.title}</span>
-            {item.priority > 0 ? (
-              <span className="text-xs font-medium text-amber-700" title={`Priority ${item.priority}`}>
-                {"!".repeat(item.priority)}
+            {priority > 0 ? (
+              <span className="text-xs font-medium text-amber-700" title={`Priority ${priority}`}>
+                {"!".repeat(priority)}
               </span>
             ) : null}
             {showListLabel && item.lists ? (
@@ -150,7 +181,7 @@ export function ItemRow({
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
             <input
               type="date"
-              value={item.due_date ?? ""}
+              value={dueDate ?? ""}
               onChange={(e) => onDateChange(e.target.value)}
               aria-label={`Due date for "${item.title}"`}
               className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
@@ -174,7 +205,7 @@ export function ItemRow({
             </button>
             {collaborators.length > 0 ? (
               <select
-                value={item.assigned_to ?? ""}
+                value={assignedTo ?? ""}
                 onChange={(e) => onAssign(e.target.value)}
                 aria-label={`Assign "${item.title}"`}
                 className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
