@@ -32,7 +32,7 @@ renumbered to spec 2, is unchanged in substance.
 | --- | --- | --- | --- |
 | 1 | [Lists, with an auto-synced timeline](01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens), verified locally. Not yet applied to the live project or opened in a browser. | V1 only |
 | 2 | [Reminders](02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles), verified locally. Same live/browser caveat as spec 1. | Spec 1 shipped first |
-| 3 | [Settings, Calendar view, Mobile](03-settings-calendar-mobile.md) | Proposed. Four scope questions answered by the planner directly; section 7's remaining questions (cadence storage shape, cron/settings reconciliation, cut-line UI, color palette, mobile nav pattern, touch-drag fallback) are not. Nothing beyond this document exists. | Specs 1 and 2 shipped first |
+| 3 | [Settings, Calendar view, Mobile](03-settings-calendar-mobile.md) | Built end to end (schema, settings/cut-line/list-appearance actions, `/settings`, `/calendar`, mobile nav, touch-drag fallbacks), verified locally. Same live/browser caveat as specs 1 and 2. | Specs 1 and 2 shipped first |
 
 ## Recommended build order
 

@@ -116,6 +116,7 @@ export function ListDetail({
             style={{ backgroundColor: list.color ?? "#8a8580" }}
             aria-hidden
           />
+          {list.icon ? <span aria-hidden>{list.icon}</span> : null}
           <h1 className="font-serif text-2xl">{list.title}</h1>
         </div>
         <button type="button" className="btn" onClick={onArchive}>
@@ -194,13 +195,9 @@ function SectionGroup({
   const currentOrder = order.filter((id) => itemsById.has(id));
   for (const item of items) if (!currentOrder.includes(item.id)) currentOrder.push(item.id);
 
-  function onDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const from = currentOrder.indexOf(active.id as string);
-    const to = currentOrder.indexOf(over.id as string);
-    if (from < 0 || to < 0) return;
-
+  /** Shared by drag-and-drop and the Move up/down buttons — see rank-list.tsx for the same split. */
+  function applyMove(from: number, to: number) {
+    if (from < 0 || to < 0 || to >= currentOrder.length || from === to) return;
     const reordered = [...currentOrder];
     const [moved] = reordered.splice(from, 1);
     if (!moved) return;
@@ -211,6 +208,12 @@ function SectionGroup({
       // Order is already reflected locally above; this just persists it.
       await reorderItems(reordered);
     });
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    applyMove(currentOrder.indexOf(active.id as string), currentOrder.indexOf(over.id as string));
   }
 
   return (
@@ -224,7 +227,7 @@ function SectionGroup({
           onDragEnd={onDragEnd}
         >
           <SortableContext items={currentOrder} strategy={verticalListSortingStrategy}>
-            {currentOrder.map((id) => {
+            {currentOrder.map((id, index) => {
               const item = itemsById.get(id);
               if (!item) return null;
               return (
@@ -234,6 +237,8 @@ function SectionGroup({
                   subItems={subItemsByParent.get(id) ?? []}
                   collaborators={collaborators}
                   currentUserId={currentUserId}
+                  onMoveUp={index > 0 ? () => applyMove(index, index - 1) : undefined}
+                  onMoveDown={index < currentOrder.length - 1 ? () => applyMove(index, index + 1) : undefined}
                 />
               );
             })}
@@ -253,11 +258,15 @@ function SortableItem({
   subItems,
   collaborators,
   currentUserId,
+  onMoveUp,
+  onMoveDown,
 }: {
   item: ListItemRow;
   subItems: ListItemRow[];
   collaborators: CollaboratorRow[];
   currentUserId?: string;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
@@ -274,15 +283,38 @@ function SortableItem({
         currentUserId={currentUserId}
         allowSubItems
         dragHandle={
-          <button
-            type="button"
-            aria-label={`Reorder "${item.title}"`}
-            className="mt-1 shrink-0 cursor-grab px-0.5 text-muted hover:text-ink active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
-          >
-            ⠿
-          </button>
+          <div className="mt-1 flex shrink-0 flex-col items-center">
+            <button
+              type="button"
+              aria-label={`Reorder "${item.title}"`}
+              className="cursor-grab px-0.5 text-muted hover:text-ink active:cursor-grabbing"
+              {...attributes}
+              {...listeners}
+            >
+              ⠿
+            </button>
+            {/* Touch-friendly fallback for drag reorder (spec 03 section 7, decision 6). */}
+            <div className="mt-0.5 flex flex-col gap-0">
+              <button
+                type="button"
+                aria-label={`Move "${item.title}" up`}
+                disabled={!onMoveUp}
+                onClick={onMoveUp}
+                className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                aria-label={`Move "${item.title}" down`}
+                disabled={!onMoveDown}
+                onClick={onMoveDown}
+                className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+              >
+                ↓
+              </button>
+            </div>
+          </div>
         }
       />
     </div>

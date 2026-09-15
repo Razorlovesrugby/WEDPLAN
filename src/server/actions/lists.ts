@@ -12,6 +12,7 @@ import {
   type TemplateSection,
 } from "@/lib/lists/generate";
 import type { ListItemStatus, ListItemRow, ListKind } from "@/lib/types/database";
+import { LIST_COLOR_PALETTE } from "@/lib/list-colors";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -24,7 +25,10 @@ import { fail, ok, type ActionResult } from "./result";
 function revalidateLists(listId?: string) {
   revalidatePath("/lists");
   revalidatePath("/timeline");
+  revalidatePath("/calendar");
   revalidatePath("/board");
+  revalidatePath("/settings");
+  revalidatePath("/");
   if (listId) revalidatePath(`/lists/${listId}`);
 }
 
@@ -40,10 +44,17 @@ const optionalText = (max: number) =>
 // Lists
 // ---------------------------------------------------------------------------
 
+const listColorValues = LIST_COLOR_PALETTE.map((c) => c.value) as [string, ...string[]];
+
 const listFields = z.object({
   title: z.string().trim().min(1, "Give the list a name").max(120),
-  color: optionalText(20),
-  icon: optionalText(20),
+  // Picker-only, not a free color field — see docs/specs/03-settings-calendar-mobile.md
+  // section 7, decision 4, and src/lib/list-colors.ts.
+  color: z
+    .union([z.enum(listColorValues), z.literal("")])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "" ? null : v)),
+  icon: optionalText(4),
   event_id: z
     .union([z.string().uuid(), z.literal("")])
     .optional()

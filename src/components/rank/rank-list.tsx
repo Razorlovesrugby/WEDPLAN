@@ -90,13 +90,13 @@ export function RankList({
 
   const ids = useMemo(() => optimisticRows.map((row) => row.id), [optimisticRows]);
 
-  function onDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const from = optimisticRows.findIndex((r) => r.id === active.id);
-    const to = optimisticRows.findIndex((r) => r.id === over.id);
-    if (from < 0 || to < 0) return;
+  /**
+   * Shared by drag-and-drop and the Move up/down buttons (the touch-friendly
+   * fallback, spec 03 section 7 decision 6) — both are "put this row at
+   * index `to`", just reached differently.
+   */
+  function applyMove(from: number, to: number) {
+    if (from < 0 || to < 0 || to >= optimisticRows.length || from === to) return;
 
     const reordered = [...optimisticRows];
     const [moved] = reordered.splice(from, 1);
@@ -119,6 +119,15 @@ export function RankList({
         setError(result.error);
       }
     });
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const from = optimisticRows.findIndex((r) => r.id === active.id);
+    const to = optimisticRows.findIndex((r) => r.id === over.id);
+    applyMove(from, to);
   }
 
   function onSetCut(householdId: string, which: "a" | "b") {
@@ -175,6 +184,12 @@ export function RankList({
                       isCutLine={cutRank !== null && row.rank === cutRank}
                       isCapacityLine={virtualRow.index === capacityIndex - 1}
                       onSetCut={onSetCut}
+                      onMoveUp={virtualRow.index > 0 ? () => applyMove(virtualRow.index, virtualRow.index - 1) : undefined}
+                      onMoveDown={
+                        virtualRow.index < optimisticRows.length - 1
+                          ? () => applyMove(virtualRow.index, virtualRow.index + 1)
+                          : undefined
+                      }
                     />
                   </div>
                 );
@@ -200,6 +215,8 @@ function SortableRow({
   isCutLine,
   isCapacityLine,
   onSetCut,
+  onMoveUp,
+  onMoveDown,
 }: {
   row: Row;
   index: number;
@@ -208,6 +225,8 @@ function SortableRow({
   isCutLine: boolean;
   isCapacityLine: boolean;
   onSetCut: (id: string, which: "a" | "b") => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
@@ -233,24 +252,52 @@ function SortableRow({
         ⠿
       </button>
 
-      <span className="w-8 shrink-0 text-right tabular-nums text-xs text-muted">{index + 1}</span>
+      <span className="hidden w-8 shrink-0 text-right tabular-nums text-xs text-muted sm:inline">
+        {index + 1}
+      </span>
 
       <Link href={`/households/${row.id}`} className="flex-1 truncate hover:underline">
         {row.display_name}
       </Link>
 
-      <span className="w-20 shrink-0 text-right text-xs text-muted tabular-nums">
+      <span className="hidden w-20 shrink-0 text-right text-xs text-muted tabular-nums sm:inline">
         {row.seat_count} {row.seat_count === 1 ? "seat" : "seats"}
       </span>
-      <span className="w-16 shrink-0 text-right text-xs text-muted tabular-nums" title="Running total">
+      <span
+        className="hidden w-16 shrink-0 text-right text-xs text-muted tabular-nums sm:inline"
+        title="Running total"
+      >
         {seatsCumulative}
       </span>
       <span className={`w-4 shrink-0 text-center text-xs font-medium ${tierColour}`}>{tier}</span>
 
+      {/* Touch-friendly fallback for drag reorder (spec 03 section 7, decision 6) —
+          adjacent-swap buttons, always visible rather than hover-gated. */}
+      <div className="flex shrink-0 gap-0.5">
+        <button
+          type="button"
+          aria-label={`Move ${row.display_name} up`}
+          disabled={!onMoveUp}
+          onClick={onMoveUp}
+          className="rounded px-1 text-xs text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          aria-label={`Move ${row.display_name} down`}
+          disabled={!onMoveDown}
+          onClick={onMoveDown}
+          className="rounded px-1 text-xs text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+        >
+          ↓
+        </button>
+      </div>
+
       <button
         type="button"
         onClick={() => onSetCut(row.id, "a")}
-        className="shrink-0 rounded px-1.5 py-0.5 text-xs text-muted hover:bg-line/50 hover:text-ink"
+        className="hidden shrink-0 rounded px-1.5 py-0.5 text-xs text-muted hover:bg-line/50 hover:text-ink sm:inline"
         title="Put the cut line directly below this household"
       >
         cut here

@@ -3,49 +3,78 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 10 — spec 3 (Settings, Calendar view, Mobile) drafted
-and its four top-level scope questions answered by the planner; nothing
-built. Session 9's Reminders (spec 2), on top of session 8's Lists +
-Timeline, is still the most recent built work.
+Last updated: session 10 — spec 3 (Settings, Calendar view, Mobile) built
+end to end, on top of session 9's Reminders and session 8's Lists +
+Timeline.
 
-## Session 10: spec 3 drafted — settings, calendar view, mobile. Nothing built yet.
+## Session 10: Settings, Calendar view, and a real mobile pass — all three built. Read this first.
 
-**Planning only, no code or schema touched.** The planner asked for three
-things not covered by any existing spec: a settings screen for values that
-are currently drag-only, hardcoded, or SQL-only; a calendar view of the
-timeline and reminders; and a real mobile pass (responsive layout plus a
-touch-friendly alternative to the app's drag interactions). Recurring
-checklist items were also asked about — already built, in spec 1's
-`repeat_rule` / `recurrence_parent_id` (0005), nothing to add there.
+**Spec 3 (`docs/specs/03-settings-calendar-mobile.md`) is built, not just
+scoped.** The planner asked for three things no existing spec covered: a
+settings screen for values that were drag-only, hardcoded, or SQL-only; a
+calendar view of the timeline and reminders; and a real mobile pass
+(responsive layout plus a touch-friendly alternative to every drag
+interaction). Recurring checklist items were also asked about — already
+built, in spec 1's `repeat_rule` / `recurrence_parent_id` (0005), nothing
+to add there. Four top-level scope questions were put to the planner
+directly and answered (settings covers all four value groups; `/calendar`
+is additive to `/timeline`, not a replacement; it gets drag-to-reschedule;
+the mobile pass is full, not scoped down). Six smaller questions came up
+while writing the data model and were never answered directly either, so —
+same posture spec 02 took in its own session — this session picked the
+reading needing the fewest new decisions later, recorded each as
+"Decided" in the spec's section 7, and built against them:
 
-`docs/specs/03-settings-calendar-mobile.md` is the result. Four scope
-questions were put to the planner directly and answered: settings covers
-all four value groups (cut lines/capacity/timezone, reminder
-cadence/window, list color/icon, wedding date/RSVP lock date); `/calendar`
-is a new screen additive to `/timeline`, not a replacement; it gets
-drag-to-reschedule like `/timeline` already has; the mobile pass is full —
-every screen, plus a touch-friendly alternative to every existing drag
-surface, not scoped down to a subset.
+- `0007_settings.sql` — one column (`weddings.reminder_window_days`).
+  Deliberately **not** a `reminder_day_of_week` column: the digest's send
+  day is still `vercel.json`'s fixed cron schedule, which no session can
+  redeploy — a stored day that doesn't move the cron would be a setting
+  that looks live and silently does nothing. `/settings` says so in its
+  own copy rather than hiding the gap.
+- `src/server/actions/settings.ts` — `updateWeddingSettings()` for the
+  wedding-basics fields. Cut lines and capacity are **not** a new
+  action: `setCutLine()`/`setCapacity()` already existed
+  (`src/server/actions/rank.ts`, built for `/guests/rank`) and already do
+  the safe thing (`setCutLine` reads a household's own rank server-side,
+  never accepts one from the client) — `/settings` just reuses them.
+  List color/icon also turned out to already work through the existing
+  `updateList()`; `color` was tightened from free text to a fixed
+  8-swatch enum (`src/lib/list-colors.ts`) to make "picker only" true at
+  the validation layer, not just the UI.
+- `/settings` (`src/app/(planner)/settings/page.tsx` +
+  `src/components/settings/*`) — wedding basics, cut lines & capacity,
+  reminders, list appearance, all on one page.
+- `/calendar` (`src/app/(planner)/calendar/page.tsx` +
+  `src/components/lists/calendar-view.tsx`) — a month grid over the same
+  `v_timeline_items` `/timeline` already reads, using `buildDigest` for
+  the same overdue/due-soon marking the dashboard and email already use,
+  so the three can never disagree. `src/lib/calendar.ts` is the pure
+  month-grid date math, 10 unit tests.
+- Mobile nav: `src/components/nav.tsx` now collapses into a
+  hamburger/drawer below `sm:`, and gained links for the two new routes.
+- Touch-drag fallbacks on every existing drag surface, not just the new
+  calendar: Move up/down buttons on `/guests/rank`
+  (`src/components/rank/rank-list.tsx`) and list-section reordering
+  (`src/components/lists/list-detail.tsx`); a "Move to…" column `<select>`
+  on `/board` (`src/components/lists/board-view.tsx`); a tap-to-reveal
+  date field per calendar card (a permanently open date input doesn't fit
+  a day cell at phone width, so this reaches the same "destination
+  picker" principle through a toggle instead of an always-visible field).
+  `list_items`'/lists' `icon` column — which existed since spec 01 but had
+  never been rendered anywhere — now shows in the lists sidebar and list
+  detail header, so the settings field that edits it isn't a dead input.
 
-Writing the data model surfaced one real gap worth flagging here directly:
-**reminder cadence has nowhere to live today.** The digest's day/time is
-the `vercel.json` cron schedule (fixed at deploy time, not editable by any
-session) and the urgency window is a literal `7` in code — neither is a
-stored value a settings screen could read or write. The spec proposes two
-new typed columns on `weddings` and, more importantly, flags that a
-session changing "which day" cannot actually move when Vercel's cron
-fires — see the spec's open question 2 for the two ways to handle that
-honestly rather than shipping a setting that looks live but silently does
-nothing.
+`verify-migrations.sh` (still 70 assertions — 0007 adds one column to an
+existing tenant table, not a new one), `verify-bootstrap.sh`, `typecheck`,
+`npm test` (181 tests, 10 of them new) and `npm run build` are all green.
 
-**Six smaller questions are still open** in the spec's section 7 (cadence
-storage shape, the cron/settings reconciliation above, cut-line editing UI,
-color palette vs. free picker, mobile nav pattern, touch-drag fallback
-pattern). Per `docs/specs/README.md`'s process, nothing beyond this
-document gets built until those are answered too — the next session's job
-is either getting those answers or, if the planner answers them first,
-building schema (proposed as `0007_settings.sql`) against spec 1 and 2's
-existing pattern.
+**Same caveat as every session since session 6, because it's the same
+root cause: nothing here has been applied to the live project or opened
+in a browser.** The mobile pass and every touch-drag fallback in
+particular are exactly the class of thing that passed every automated
+check here and still needs someone to actually look — see the two real
+`/guests/rank` bugs session 6 found (section 2) for what that class of
+bug looks like. Nothing in this session has had that look yet.
 
 ## Session 9: Reminders built — the digest, not just the schema. Read this first.
 
@@ -140,7 +169,7 @@ questions — lives in **[`docs/specs/`](specs/)**, not inline in this file:
 | --- | --- |
 | [`docs/specs/01-lists-and-timeline.md`](specs/01-lists-and-timeline.md) | Built end to end (schema, generation logic, queries/actions, all 5 screens) and verified locally. Not yet applied to the live project or opened in a browser — see session 8 above. |
 | [`docs/specs/02-reminders.md`](specs/02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles) and verified locally. Same live/browser caveat as spec 1 — see session 9 above. |
-| [`docs/specs/03-settings-calendar-mobile.md`](specs/03-settings-calendar-mobile.md) | Proposed, session 10 — not built. Four scope questions (settings covers all four value groups; `/calendar` is additive, not a replacement for `/timeline`; calendar gets drag-to-reschedule; the mobile pass is full, including touch-friendly alternatives to every drag surface) answered directly by the planner. Smaller open questions remain in the spec's section 7 — nothing beyond the document exists yet. |
+| [`docs/specs/03-settings-calendar-mobile.md`](specs/03-settings-calendar-mobile.md) | Built end to end, session 10 (schema, settings/cut-line/list-appearance actions, `/settings`, `/calendar`, mobile nav, touch-drag fallbacks) and verified locally. Same live/browser caveat as specs 1 and 2 — see session 10 above. |
 
 **This spec structure went through two revisions in one session, both
 recorded in `docs/specs/README.md`:** first a 3-way split (checklists /
@@ -319,35 +348,39 @@ build is actually green — don't assume either explanation.
 
 ---
 
-## Active work: lists, timeline and reminders — see `docs/specs/`
+## Active work: lists, timeline, reminders, settings, calendar, mobile — see `docs/specs/`
 
 **The full plan moved out of this file and into one spec per feature.** See
 the table near the top of this document, or go straight to
 [`docs/specs/README.md`](specs/README.md) for the index and build order.
-Schema is `0004_lists.sql` + `0005_lists_status_assignment.sql` — two
-migrations for one feature: 0004 shipped the core shape, 0005 added what
-answering the open questions required (board status, sub-items, recurrence,
-assignment). Both are one feature's migrations, not two features sharing one.
+Schema is `0004_lists.sql` + `0005_lists_status_assignment.sql` (spec 1,
+two migrations for one feature: 0004 shipped the core shape, 0005 added
+what answering the open questions required — board status, sub-items,
+recurrence, assignment), `0006_reminders.sql` (spec 2, one enum value),
+and `0007_settings.sql` (spec 3, one column).
 
 Kept here, because it doesn't belong in any one feature's spec:
 
-- **Scope for the whole rebase:** neither lists/timeline nor reminders need
-  vendors, budget or Gmail — only `weddings`, `events` and the
-  collaborators already in place. That's why this can ship ahead of V2
-  rather than as part of it. Neither touches `guests`, `households`,
-  `invitations` or `rsvp_*` either — no guest-facing work is in scope.
+- **Scope for the whole rebase:** none of lists/timeline, reminders, or
+  settings/calendar/mobile need vendors, budget or Gmail — only
+  `weddings`, `events` and the collaborators already in place. That's why
+  this can ship ahead of V2 rather than as part of it. None of them touch
+  `guests`, `households`, `invitations` or `rsvp_*` either — no
+  guest-facing work is in scope.
 - **This is a narrower slice than the full AI-native product direction**
   floated in an earlier, unmerged planning pass (ingestion, a vigilance
   engine, semantic search). Nothing in `docs/specs/` depends on any of
   that, and nothing there should grow to need it without the planner
   asking again.
-- **Both specs are now built end to end** — spec 1 (session 8: schema,
-  generation logic, queries/actions, all five screens) and spec 2 (session
-  9: schema, digest logic, email template, extended cron, dashboard tiles).
-  See each session's note above, and each spec's own status block, for
-  what's simplified and what's still unverified — nothing in either has run
-  against the live project, in a browser, or (for spec 2) sent a real
-  email.
+- **All three specs are now built end to end** — spec 1 (session 8:
+  schema, generation logic, queries/actions, all five screens), spec 2
+  (session 9: schema, digest logic, email template, extended cron,
+  dashboard tiles), and spec 3 (session 10: schema, settings/cut-line/
+  list-appearance actions, `/settings`, `/calendar`, mobile nav,
+  touch-drag fallbacks). See each session's note above, and each spec's
+  own status block, for what's simplified and what's still unverified —
+  nothing in any of them has run against the live project, in a browser,
+  or (for spec 2) sent a real email.
 
 ### Parked, not cancelled: invitations, vendors, budget, AI
 
@@ -432,22 +465,34 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/lists` | Sidebar of lists + smart views (Today, Scheduled, Flagged, All, Assigned to me) |
 | `/lists/[id]` | One list: sections, inline add/edit/tick/flag/date/assign, sub-items, drag reorder (within a section) |
 | `/timeline` | Every dated item, chronological, week/month/quarter zoom, drag-to-reschedule (snaps to the zoom's bucket) |
+| `/calendar` | Month grid of the same dated items, color-coded, drag-to-reschedule, overdue/due-soon marked |
 | `/board` | Kanban — Not started / In progress / Done, drag between columns |
+| `/settings` | Wedding basics, cut lines & capacity, reminder window, list color/icon |
 | `/setup/plan` | Preview + generate the 175-task timeline template; real empty state with no wedding date |
 | `/setup` | Explains the bootstrap step when no wedding is attached |
-| `/api/cron/reminders` | Weekly chase of non-responders only |
+| `/api/cron/reminders` | Weekly chase of non-responders, plus the reminders digest (spec 2) |
 | `/api/export/[kind]` | Guest, household and catering CSV |
 | `/api/qr/[invitationId]` | One QR code, PNG or `?format=svg` |
 
 ### Checks
 
 ```bash
-npm run typecheck                 # clean — reconfirmed, session 9
-npm test                          # 171 tests passing — reconfirmed, session 9
-./scripts/verify-migrations.sh    # 70 SQL assertions, throwaway PG cluster — reconfirmed, session 9
-./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 9
-npm run build                     # reconfirmed, session 9
+npm run typecheck                 # clean — reconfirmed, session 10
+npm test                          # 181 tests passing — reconfirmed, session 10
+./scripts/verify-migrations.sh    # 70 SQL assertions, throwaway PG cluster — reconfirmed, session 10
+./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 10
+npm run build                     # reconfirmed, session 10
 ```
+
+**Session 10 ran all five checks against `0007_settings.sql` on top of
+session 9's migrations, and every one is still green:**
+`verify-migrations.sh` — still 70 assertions (0007 adds one column to an
+existing tenant table, no new tenant table, so nothing new to assert
+there). `verify-bootstrap.sh` still creates one wedding and both
+collaborators cleanly. `npm run typecheck` is clean across the whole app.
+`npm test` is 181 tests passing (10 of them new,
+`src/lib/calendar.test.ts`). `npm run build` succeeds and lists every
+route including the two new ones (`/settings`, `/calendar`) in its output.
 
 **Session 9 ran all five checks against `0006_reminders.sql` on top of
 session 8's migrations, and every one is still green:**
@@ -475,8 +520,12 @@ three drag interactions session 8 added — list reordering, timeline
 drag-to-reschedule, board drag-between-columns — have never been watched
 actually move anything, and session 9's digest has never actually been sent
 by a real cron invocation against a real inbox (only reasoned about by
-reading `sendEmail()`'s existing dev-mode fallback). See session 9's and
-session 8's notes near the top of this file.
+reading `sendEmail()`'s existing dev-mode fallback). Session 10 adds a
+fourth and fifth unwatched drag surface (the calendar's drag-to-reschedule,
+plus every touch-drag fallback it and the other three surfaces gained —
+Move up/down buttons, a "Move to…" select, a tap-to-reveal date field) and
+a mobile nav that has never been opened at phone width. See session 10's,
+9's, and 8's notes near the top of this file.
 
 **Closed in session 8:** the three tenant tables from 0004 (`lists`,
 `list_sections`, `list_items`) now have their own cross-wedding isolation
