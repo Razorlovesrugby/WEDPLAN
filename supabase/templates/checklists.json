@@ -1,0 +1,417 @@
+{
+ "source": "The Knot Wedding Planning Spreadsheet",
+ "templates": {
+  "decor": {
+   "label": "Decor",
+   "sections": [
+    {
+     "section": "Wedding Ceremony Decor Checklist",
+     "items": [
+      "Aisle Markers",
+      "Aisle Runner",
+      "Altar Decorations",
+      "Wedding Programs",
+      "Reserved Seating Signs",
+      "Welcome Sign",
+      "Ring Bearer Pillow",
+      "Vow Books",
+      "Ceremony Ritual Items",
+      "Flower Girl Basket"
+     ]
+    },
+    {
+     "section": "Wedding Reception Decor Checklist",
+     "items": [
+      "Card Box",
+      "Centerpieces",
+      "Dinner Tables",
+      "Chairs",
+      "Drinkware",
+      "Escort Cards",
+      "Lighting",
+      "Guest Book",
+      "Menus",
+      "Place Cards",
+      "Seating Chart",
+      "Table Linens",
+      "Table Numbers",
+      "Dinnerware",
+      "Cake Topper",
+      "Bathroom Baskets",
+      "Dance Floor",
+      "Favor Table",
+      "Gift Table",
+      "Send-Off Items",
+      "Tent"
+     ]
+    },
+    {
+     "section": "Cocktail Hour Wedding Decor Checklist",
+     "items": [
+      "Bar Sign",
+      "Lounge Seating",
+      "Welcome Sign",
+      "Candles or Mini Table Centerpieces",
+      "Cocktail Tables",
+      "Lawn Games"
+     ]
+    }
+   ],
+   "item_count": 37
+  },
+  "stationery": {
+   "label": "Invitation suite",
+   "sections": [
+    {
+     "section": "General",
+     "items": [
+      "Wedding Invitation",
+      "RSVP Card",
+      "Details Card",
+      "Outer Envelope",
+      "Addressed/Postmarked RSVP Envelope",
+      "Postage",
+      "Reception Card",
+      "Accommodations Card",
+      "Weekend Events Card",
+      "Directions Card",
+      "Inner Envelope",
+      "Address Label",
+      "Envelope Liner",
+      "Belly Band",
+      "Wax Seal"
+     ]
+    }
+   ],
+   "item_count": 15
+  },
+  "photography": {
+   "label": "Photography shot list",
+   "sections": [
+    {
+     "section": "General Pre-Wedding Shots",
+     "items": [
+      "Wedding invitation",
+      "Engagement ring(s)",
+      "Wedding bands"
+     ]
+    },
+    {
+     "section": "To-Be-Wed #1",
+     "items": [
+      "Wedding day outfit or wedding dress hanging on the wardrobe, on the bedpost or over a chair",
+      "Wedding party and guest of honor getting dressed and applying makeup (if you're going to be wearing makeup)",
+      "Parent or other guardian helping to-be-wed with one last detail, such as veil, shoes or zipping up outfit",
+      "Full-length shot of to-be-wed in outfit looking in mirror",
+      "Detail shot of clothing, shoes, accessories, and any other special items (something borrowed, something blue, etc)",
+      "Emotional shot of to-be-wed with parent/s and/or stepparent/s",
+      "Touching shot of to-be-wed with sibling/s",
+      "To-be-wed hugging honor attendant or close friend",
+      "To-be-wed with wedding party"
+     ]
+    },
+    {
+     "section": "To-Be-Wed #2",
+     "items": [
+      "To-be-wed getting ready with parent and pals (Psst: tying the tie is a classic)",
+      "Emotional shot of to-be-wed with parent/s and/or stepparent/s",
+      "Touching shot of to-be-wed with sibling/s",
+      "To-be-wed with arm around honor attendant (for example, the best man)",
+      "To-be-wed with wedding party",
+      "Wedding party putting final touches on outfit (boutonnieres or bowties, for example)"
+     ]
+    },
+    {
+     "section": "Both To-Be-Weds",
+     "items": [
+      "Emotional shots of each to-be-wed talking to/hugging parents and siblings before the ceremony",
+      "To-be-wed #1 ready to go",
+      "To-be-wed #2 ready to go",
+      "Each to-be-wed separately making their way to the ceremony (in a limo backseat, hailing a cab, walking down the street/hall/stairs)",
+      "First look (if the couple is going to do one)",
+      "Groom leaving for the ceremony"
+     ]
+    },
+    {
+     "section": "Ceremony Venue",
+     "items": [
+      "Outside the ceremony venue",
+      "Glimpses at focal points around the ceremony venue",
+      "Inside of the ceremony venue",
+      "Decorations (like aisle markers, floral arrangements and wedding signage)",
+      "Wedding altar"
+     ]
+    },
+    {
+     "section": "Wedding Ceremony Photo Ideas",
+     "items": [
+      "Guests entering the site",
+      "Ushers escorting guests to their seats",
+      "Ushers escorting parents to their seats (if applicable)",
+      "Close-up of to-be-wed #2 waiting for partner",
+      "Wedding party coming down the aisle",
+      "Flower girl and/or ring bearer coming down the aisle",
+      "Honor attendants coming down the aisle",
+      "Grandparents walking down the aisle (if applicable)",
+      "Wedding party waiting at the altar",
+      "To-be-wed #2 coming down the aisle (with or without parents)",
+      "To-be-wed #1 and Dad/escort/parents (if applicable) walking down the aisle",
+      "Close-up of to-be-wed #2 just before making entrance",
+      "Couple at the front (including the officiant)",
+      "Arch, altar or canopy from the back during ceremony",
+      "Wide shot of audience during ceremony, from couple's point of view",
+      "Faces of the couple as they exchange vows",
+      "Close-up of the couple's hands as they exchange wedding rings",
+      "The first kiss as a married couple",
+      "The couple's recessional",
+      "Couple outside ceremony site",
+      "Congrats shots: couple hugging, laughing, and crying with friends and family",
+      "Couple leaving ceremony site",
+      "Couple in limo backseat"
+     ]
+    },
+    {
+     "section": "Family & Wedding Party Photos",
+     "items": [
+      "Couple together for portrait",
+      "Couple looking at each other",
+      "Couple hugging or kissing",
+      "To-be-wed #1 with parents and/or stepparents",
+      "To-be-wed #1 with entire immediate family",
+      "To-be-wed #2 with parents and/or stepparents",
+      "To-be-wed #2 with entire immediate family",
+      "Couple with all parents",
+      "Couple with immediate family members from both sides",
+      "Couple with wedding party of to-be-wed #2",
+      "Couple with wedding party of to-be-wed #1",
+      "Couple with whole wedding party"
+     ]
+    },
+    {
+     "section": "Wedding Reception",
+     "items": [
+      "Shot from outside reception venue",
+      "Shot inside reception venue",
+      "Reception details such as place cards, guest book, centerpieces, decorations, table settings, favors table, and champagne glasses",
+      "Stationery flat lay",
+      "Couple arriving to reception",
+      "Receiving line moments",
+      "Couple at head table",
+      "Parents' table",
+      "Guests' tables",
+      "Close-up of friends and family making toasts",
+      "Couple sipping champagne",
+      "Couple's parents talking to each other during dinner",
+      "Couple chatting up the guests",
+      "Detail shot of food",
+      "Couple's first dance",
+      "Parents dancing",
+      "To-be-wed #1 and parent dancing (such as father-daughter dance)",
+      "To-be-wed #2 and parent dancing (such as mother-son dance)",
+      "Wedding party dancing",
+      "Grandparents dancing",
+      "Kids playing or dancing (if applicable)",
+      "Musicians or DJ doing their thing",
+      "Guests going nuts on the dance floor",
+      "Couple laughing with guests on dance floor",
+      "Wedding cake (or dessert) table",
+      "Cake cutting moment",
+      "Couple feeding each other cake",
+      "Couple leaving reception",
+      "Couple waving from vehicle",
+      "Rear of vehicle departing"
+     ]
+    }
+   ],
+   "item_count": 94
+  },
+  "registry": {
+   "label": "Registry / gift list",
+   "sections": [
+    {
+     "section": "Kitchen",
+     "items": [
+      "Air fryer",
+      "Bakeware and utensils",
+      "Bar tools",
+      "Blender",
+      "Can opener",
+      "Cheese grater",
+      "Cookware and utensils",
+      "Cooling racks",
+      "Cutting boards",
+      "Dish rack",
+      "Dish towels",
+      "Espresso machine",
+      "Food processor",
+      "Food storage containers",
+      "Ice tray",
+      "Measuring cups",
+      "Meat thermometer",
+      "Oil dispensers",
+      "Oven mitts",
+      "Pot holders",
+      "Pressure cooker",
+      "Salad spinner",
+      "Slow cooker",
+      "Spice rack",
+      "Stand mixer",
+      "Stand mixer attachments",
+      "Tea kettle",
+      "Toaster"
+     ]
+    },
+    {
+     "section": "Tabletop",
+     "items": [
+      "5-piece flatware sets (6 to 12)",
+      "Beer glasses",
+      "Butter dish and knife",
+      "Cake stand",
+      "Cereal or soup bowls (6 to 12)",
+      "Champagne flutes",
+      "Charcuterie board and cheese knives",
+      "Coasters",
+      "Coffee or tea mugs (6 to 8)",
+      "Creamer and sugar bowl set",
+      "Decanter",
+      "Dinner plates (6 to 12)",
+      "Espresso cups and saucers",
+      "Gravy boat",
+      "Highball glasses",
+      "Ice bucket with tongs",
+      "Juice and water glasses (12)",
+      "Napkins and rings",
+      "Pitcher or carafe",
+      "Placemats",
+      "Red and white wine glasses",
+      "Rocks glasses",
+      "Salad bowl",
+      "Salad or dessert plates (6 to 12)",
+      "Salt and pepper shakers",
+      "Serving bowls and platters",
+      "Serving utensils",
+      "Soup tureen",
+      "Specialty cocktail glassware",
+      "Tablecloths",
+      "Trivets",
+      "Wine chiller"
+     ]
+    },
+    {
+     "section": "Bedding",
+     "items": [
+      "Bed skirts",
+      "Comforters or duvet inserts and covers",
+      "Decorative pillows",
+      "Fitted sheets",
+      "Flat sheets",
+      "Mattress covers",
+      "Mattress pads",
+      "Pillowcases",
+      "Pillow shams",
+      "Pillows",
+      "Quilts"
+     ]
+    },
+    {
+     "section": "Bath",
+     "items": [
+      "Bath mat or rug",
+      "Bath sheets",
+      "Bath towels (6 minimum)",
+      "Garbage can",
+      "Hamper",
+      "Hand towels (6 minimum)",
+      "Miscellaneous storage and organizers",
+      "Shower curtain and liner",
+      "Shower curtain rings",
+      "Soap holder or dispenser",
+      "Toilet brush holder",
+      "Toothbrush holder",
+      "Washcloths (6 minimum)"
+     ]
+    },
+    {
+     "section": "Indoor Living",
+     "items": [
+      "Accent chair",
+      "Air purifier",
+      "Bar cart",
+      "Bookshelf",
+      "Candles and candle holders",
+      "Clock",
+      "Closet organizers",
+      "Coffee table",
+      "Curtains",
+      "Dining chairs",
+      "Doormat",
+      "Entertainment console",
+      "Floor lamps",
+      "Humidifier",
+      "Indoor planters",
+      "Iron and ironing board",
+      "Kitchen table",
+      "Mirrors",
+      "Ottoman",
+      "Picture frames",
+      "Rugs",
+      "Runners",
+      "Side tables",
+      "Smart home gadgets",
+      "Sofa",
+      "Steamer",
+      "Storage baskets",
+      "Table lamps",
+      "Throw blankets",
+      "Throw pillows",
+      "Vacuum",
+      "Vases",
+      "Wall art",
+      "Wall hooks or coat racks"
+     ]
+    },
+    {
+     "section": "Outdoor Living",
+     "items": [
+      "Decorative lighting",
+      "Firepit",
+      "Garden tools",
+      "Grill and barbeque tools",
+      "Lawn games",
+      "Lounge chairs or chaises",
+      "Outdoor planters",
+      "Outdoor rug",
+      "Outdoor speaker",
+      "Outdoor storage",
+      "Patio table and chairs",
+      "Patio umbrella",
+      "Pizza oven",
+      "Wheeled cooler"
+     ]
+    },
+    {
+     "section": "Lifestyle",
+     "items": [
+      "Camera",
+      "Camping gear",
+      "Carry-on luggage",
+      "Cash funds",
+      "Charity registry",
+      "Checked luggage",
+      "Experience gifts",
+      "Garment bags",
+      "Gift cards",
+      "Luggage tags",
+      "Pet gear",
+      "Toiletry bags",
+      "Tool kit",
+      "Travel totes or duffel bags",
+      "Backpacks"
+     ]
+    }
+   ],
+   "item_count": 147
+  }
+ }
+}

@@ -8,6 +8,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 1 | `0001_core_schema.sql` | Extensions, enums, 16 tables, indexes, constraints | — |
 | 2 | `0002_row_level_security.sql` | `is_collaborator()`, RLS policies, grants | 1 |
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` | 1, 2 |
+| 4 | `0004_checklists_and_tasks.sql` | Checklists, checklist templates, tasks, task templates | 1, 2 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
