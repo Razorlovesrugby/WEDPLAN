@@ -34,6 +34,8 @@ renumbered to spec 2, is unchanged in substance.
 | 2 | [Reminders](02-reminders.md) | Built end to end (schema, digest logic, email template, extended cron, dashboard tiles), verified locally. Same live/browser caveat as spec 1. | Spec 1 shipped first |
 | 3 | [Settings, Calendar view, Mobile](03-settings-calendar-mobile.md) | Built end to end (schema, settings/cut-line/list-appearance actions, `/settings`, `/calendar`, mobile nav, touch-drag fallbacks), verified locally. Same live/browser caveat as specs 1 and 2. | Specs 1 and 2 shipped first |
 | 4 | [Household editing and moving guests between households](04-household-management.md) | Built (`moveGuest`/`moveGuests` actions, `HouseholdPicker`, wired into the household page, guest page, and guests-table bulk bar), in **PR #16, open and unmerged**, but built before the planner had read the spec — see `docs/HANDOFF.md` session 11. Do not merge or extend until the planner has read this spec and said to proceed. | V1 only |
+| 5 | [Multi-cut guest lines, and a day-of run sheet](05-multi-cut-lines-and-run-sheet.md) | Decided, nothing built. Two independent parts (A: generalise the fixed A/B cut lines to any number of planner-named lines, capped at 8; B: a pinned/predecessor day-of schedule, one run sheet per event). Every question in A6 and B6 answered 2026-09-15 — clear to build per each part's own build order. | V1 only |
+| 6 | [Budget management](06-budget-management.md) | Decided, nothing built. Categories/items on the platform spec's four-number model; a per-unit and consumption-based costing mechanism covering food/alcohol pricing; live FX conversion; a live per-head figure on the ranking screen; a payment-due sync into the existing reminders digest; a prompted follow-up task on contracting a line; manual many-to-many linking between budget lines and both tasks and whole lists, in both directions (§7), with two small additive deltas to spec 1's already-shipped `/lists/[id]` and `/timeline` screens. Every question in §10 answered 2026-09-15 — clear to build per §9's build order. | V1 only; its reminders sync and linking additionally depend on specs 1 and 2, already shipped |
 
 ## Recommended build order
 
@@ -58,6 +60,16 @@ top of the shipped V1 MVP and deliberately never touch `guests` or
 opposite: it's V1's own guest-list surface, unrelated to lists, timeline,
 reminders, settings, calendar or mobile, and has no dependency on — or from
 — any of specs 1–3. It can be built before, after, or interleaved with them.
+
+**Spec 5 splits the same way spec 4 does.** Part A (multi-cut lines) is
+V1's own guest-list surface again — same independence as spec 4, can be
+built any time relative to specs 1–3 or spec 6. Part B (the run sheet) is
+new schema and screens with no dependency on anything else either; it
+reads `events` (V1) and nothing more.
+
+**Spec 6 is the one exception** — it depends on specs 1 and 2 for its
+reminders sync (§5/§6 of that spec), so it should ship after those two,
+though it has no dependency on spec 3, 4, or 5.
 
 ## What's shared across both
 
