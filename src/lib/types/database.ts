@@ -156,7 +156,7 @@ export type QuestionType =
   | "multi_select"
   | "number";
 export type QuestionScope = "guest" | "household";
-export type MessageKind = "invitation" | "reminder" | "update" | "test";
+export type MessageKind = "invitation" | "reminder" | "update" | "test" | "digest";
 export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
 export type HouseholdTier = "A" | "B" | "C";
 export type ListKind = "checklist" | "timeline" | "generic";

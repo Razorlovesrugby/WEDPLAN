@@ -10,6 +10,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` | 1, 2 |
 | 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` | 1, 2, 3 |
 | 5 | `0005_lists_status_assignment.sql` | Board status, one level of sub-items, recurrence, assignment | 1, 2, 3, 4 |
+| 6 | `0006_reminders.sql` | `message_log.kind` gains `'digest'` | 1 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
@@ -23,7 +24,8 @@ In the Supabase dashboard → **SQL Editor**:
 
 1. Open `0001_core_schema.sql`, copy the whole file, paste, **Run**.
 2. Repeat for `0002_row_level_security.sql`, then `0003_derived_views.sql`,
-   then `0004_lists.sql`, then `0005_lists_status_assignment.sql`.
+   then `0004_lists.sql`, then `0005_lists_status_assignment.sql`, then
+   `0006_reminders.sql`.
 3. Open `../bootstrap.sql`, edit the four values at the top, paste, **Run**.
 
 Run them one file at a time and read the result before moving on. Each script
@@ -63,6 +65,10 @@ expect `0`.
 `node scripts/seed-templates.mjs` again afterwards** — it upserts on `key`,
 so re-running it is always safe and picks up the restructured
 `task-timeline.json` payload.
+
+After `0006`: one new enum value, nothing else — same 20 tables, same 4
+views. `select enum_range(null::public.message_kind)` should include
+`digest`.
 
 After the bootstrap, signing in with your email should show an empty dashboard
 rather than a redirect loop.

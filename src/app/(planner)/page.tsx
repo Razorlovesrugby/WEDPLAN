@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { Stat } from "@/components/stat";
 import { requireWedding, getWeddingStats } from "@/server/queries/wedding";
+import { getTimelineSummary } from "@/server/queries/lists";
 import { daysUntil, formatDate, pluralise } from "@/lib/format";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   const wedding = await requireWedding();
-  const stats = await getWeddingStats(wedding.id);
+  const [stats, tasks] = await Promise.all([getWeddingStats(wedding.id), getTimelineSummary(wedding.id)]);
 
   if (!stats) {
     return <p className="text-sm text-muted">No data yet. Add your first household to begin.</p>;
@@ -27,6 +28,28 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-muted">
           Every number here is a link. If it looks wrong, click it and see the list behind it.
         </p>
+      </section>
+
+      <section aria-labelledby="tasks">
+        <h2 id="tasks" className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+          Tasks
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Stat
+            label="Overdue"
+            value={tasks.overdueCount}
+            href="/timeline"
+            hint={tasks.overdueCount > 0 ? "past their due date" : "nothing overdue"}
+            tone={tasks.overdueCount > 0 ? "bad" : "good"}
+          />
+          <Stat
+            label="Due this week"
+            value={tasks.dueSoonCount}
+            href="/timeline"
+            hint="across every list"
+            tone={tasks.dueSoonCount > 0 ? "warn" : "neutral"}
+          />
+        </div>
       </section>
 
       <section aria-labelledby="responses">

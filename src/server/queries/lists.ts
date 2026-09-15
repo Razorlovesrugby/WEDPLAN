@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { generateTimelineItems, todayIso, type GeneratedListItem, type TemplateSection } from "@/lib/lists/generate";
+import { buildDigest, type DigestContent, type DigestItem } from "@/lib/reminders/digest";
 import type {
   ListItemRow,
   ListRow,
@@ -217,6 +218,26 @@ export const getTimelineItems = cache(async (weddingId: string): Promise<Timelin
     .order("due_date", { ascending: true });
   if (error) throw new Error(`Could not load the timeline: ${error.message}`);
   return data ?? [];
+});
+
+/**
+ * "Overdue" / "due this week" for the dashboard tiles (spec 02, section 4)
+ * — built from the same `getTimelineItems` + `buildDigest` the weekly
+ * digest cron uses, so the two can never disagree about what counts as
+ * overdue. See src/app/api/cron/reminders/route.ts for the email side.
+ */
+export const getTimelineSummary = cache(async (weddingId: string): Promise<DigestContent> => {
+  const items = await getTimelineItems(weddingId);
+  const digestItems: DigestItem[] = items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    due_date: item.due_date,
+    list_title: item.list_title,
+    list_color: item.list_color,
+    snoozed_until: item.snoozed_until,
+    done: item.status === "done",
+  }));
+  return buildDigest(digestItems);
 });
 
 export const getBoardItems = cache(
