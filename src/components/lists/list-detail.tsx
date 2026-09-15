@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
   KeyboardSensor,
@@ -38,18 +38,28 @@ export function ListDetail({
   items,
   collaborators,
   currentUserId,
+  budgetLinksByItem = {},
 }: {
   list: ListRow;
   sections: ListSectionRow[];
   items: ListItemRow[];
   collaborators: CollaboratorRow[];
   currentUserId?: string;
+  /** Budget lines linked to each item, keyed by list_item_id — spec 6, section 7's reverse badge. */
+  budgetLinksByItem?: Record<string, { id: string; label: string }[]>;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get("highlight");
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [sectionTitle, setSectionTitle] = useState("");
+
+  useEffect(() => {
+    if (!highlightId) return;
+    document.getElementById(`list-item-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId]);
 
   const topLevel = useMemo(() => items.filter((i) => !i.parent_item_id), [items]);
   const subItemsByParent = useMemo(() => {
@@ -138,6 +148,8 @@ export function ListDetail({
             subItemsByParent={subItemsByParent}
             collaborators={collaborators}
             currentUserId={currentUserId}
+            budgetLinksByItem={budgetLinksByItem}
+            highlightId={highlightId}
           />
         ))}
       </div>
@@ -175,6 +187,8 @@ function SectionGroup({
   subItemsByParent,
   collaborators,
   currentUserId,
+  budgetLinksByItem,
+  highlightId,
 }: {
   listId: string;
   section: ListSectionRow | null;
@@ -182,6 +196,8 @@ function SectionGroup({
   subItemsByParent: Map<string, ListItemRow[]>;
   collaborators: CollaboratorRow[];
   currentUserId?: string;
+  budgetLinksByItem: Record<string, { id: string; label: string }[]>;
+  highlightId: string | null;
 }) {
   const [order, setOrder] = useState(items.map((i) => i.id));
   const [, startTransition] = useTransition();
@@ -237,6 +253,8 @@ function SectionGroup({
                   subItems={subItemsByParent.get(id) ?? []}
                   collaborators={collaborators}
                   currentUserId={currentUserId}
+                  budgetLinks={budgetLinksByItem[id] ?? []}
+                  highlighted={id === highlightId}
                   onMoveUp={index > 0 ? () => applyMove(index, index - 1) : undefined}
                   onMoveDown={index < currentOrder.length - 1 ? () => applyMove(index, index + 1) : undefined}
                 />
@@ -258,6 +276,8 @@ function SortableItem({
   subItems,
   collaborators,
   currentUserId,
+  budgetLinks,
+  highlighted,
   onMoveUp,
   onMoveDown,
 }: {
@@ -265,6 +285,8 @@ function SortableItem({
   subItems: ListItemRow[];
   collaborators: CollaboratorRow[];
   currentUserId?: string;
+  budgetLinks: { id: string; label: string }[];
+  highlighted: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
@@ -281,6 +303,8 @@ function SortableItem({
         subItems={subItems}
         collaborators={collaborators}
         currentUserId={currentUserId}
+        budgetLinks={budgetLinks}
+        highlighted={highlighted}
         allowSubItems
         dragHandle={
           <div className="mt-1 flex shrink-0 flex-col items-center">

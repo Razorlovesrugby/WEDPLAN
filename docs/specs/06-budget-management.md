@@ -1,6 +1,13 @@
 # Feature spec: Budget management
 
-**Status: decided, not yet built. Amended 2026-09-15 (two passes): every
+**Status: built end to end, session 12 (2026-09-15), ahead of spec 5 at the
+planner's direct request.** Schema (`0010_budget.sql`), `src/lib/budget.ts`
++ `src/lib/fx.ts` (pure computation, unit-tested), `getFxRate`, every server
+action/query, `/budget`, the dashboard "Budget" tile, the `/guests/rank`
+per-seat figure, the reminders-digest sync onto `v_reminders_due`, and the
+budget-line <-> task/list linking from section 7. See
+`docs/HANDOFF.md`'s session 12 note for what's simplified and what's still
+unverified. Amended 2026-09-15 (two passes, before this session): every
 question in §10 has an answer, recorded there as decisions. Three of those
 decisions (§10.3, §10.4, §10.5) moved real scope from "out" to "in" relative
 to the first draft — live FX conversion, a consumption-based costing

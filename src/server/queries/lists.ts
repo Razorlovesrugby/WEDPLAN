@@ -221,15 +221,26 @@ export const getTimelineItems = cache(async (weddingId: string): Promise<Timelin
 });
 
 /**
- * "Overdue" / "due this week" for the dashboard tiles (spec 02, section 4)
- * — built from the same `getTimelineItems` + `buildDigest` the weekly
- * digest cron uses, so the two can never disagree about what counts as
- * overdue. See src/app/api/cron/reminders/route.ts for the email side.
+ * "Overdue" / "due this week" for the dashboard tiles — built from the same
+ * `v_reminders_due` + `buildDigest` the weekly digest cron uses, so the
+ * dashboard, the digest email, and the "Budget" tile's payment count can
+ * never disagree about what counts as overdue. See
+ * src/app/api/cron/reminders/route.ts for the email side. Reads
+ * `v_reminders_due` (spec 6, section 3), not `v_timeline_items` directly —
+ * that view unions in unpaid payments, so a due deposit shows up here the
+ * same way an overdue checklist item does. `/timeline` itself is
+ * unaffected: it still reads `getTimelineItems` above, list-items-only.
  */
 export const getTimelineSummary = cache(
   async (weddingId: string, windowDays = 7): Promise<DigestContent> => {
-    const items = await getTimelineItems(weddingId);
-    const digestItems: DigestItem[] = items.map((item) => ({
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("v_reminders_due")
+      .select("*")
+      .eq("wedding_id", weddingId);
+    if (error) throw new Error(`Could not load what's due: ${error.message}`);
+
+    const digestItems: DigestItem[] = (data ?? []).map((item) => ({
       id: item.id,
       title: item.title,
       due_date: item.due_date,
@@ -237,6 +248,7 @@ export const getTimelineSummary = cache(
       list_color: item.list_color,
       snoozed_until: item.snoozed_until,
       done: item.status === "done",
+      source: item.source,
     }));
     return buildDigest(digestItems, undefined, windowDays);
   },

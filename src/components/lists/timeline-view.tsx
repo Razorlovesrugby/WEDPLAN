@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
 import type { TimelineItemView } from "@/lib/types/database";
@@ -24,11 +24,25 @@ function mondayOf(date: Date): Date {
 }
 
 /** Every dated item across every list, chronological, grouped/coloured by list (spec 1, section 6). */
-export function TimelineView({ items }: { items: TimelineItemView[] }) {
+export function TimelineView({
+  items,
+  budgetLinksByItem = {},
+}: {
+  items: TimelineItemView[];
+  /** Budget lines linked to each item, keyed by list_item_id — spec 6, section 7's reverse badge. */
+  budgetLinksByItem?: Record<string, { id: string; label: string }[]>;
+}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get("highlight");
   const [zoom, setZoom] = useState<Zoom>("month");
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!highlightId) return;
+    document.getElementById(`timeline-item-${highlightId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId]);
 
   const buckets = useMemo(() => bucketize(items, zoom), [items, zoom]);
 
@@ -78,7 +92,7 @@ export function TimelineView({ items }: { items: TimelineItemView[] }) {
         <DndContext onDragEnd={onDragEnd}>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {buckets.map((bucket) => (
-              <TimelineColumn key={bucket.key} bucket={bucket} />
+              <TimelineColumn key={bucket.key} bucket={bucket} budgetLinksByItem={budgetLinksByItem} highlightId={highlightId} />
             ))}
           </div>
         </DndContext>
@@ -120,7 +134,15 @@ function bucketize(items: TimelineItemView[], zoom: Zoom): Bucket[] {
   return [...map.values()].sort((a, b) => (a.anchorDate < b.anchorDate ? -1 : 1));
 }
 
-function TimelineColumn({ bucket }: { bucket: Bucket }) {
+function TimelineColumn({
+  bucket,
+  budgetLinksByItem,
+  highlightId,
+}: {
+  bucket: Bucket;
+  budgetLinksByItem: Record<string, { id: string; label: string }[]>;
+  highlightId: string | null;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: bucket.anchorDate });
 
   return (
@@ -133,18 +155,32 @@ function TimelineColumn({ bucket }: { bucket: Bucket }) {
       </p>
       <div className="space-y-1.5">
         {bucket.items.map((item) => (
-          <TimelineCard key={item.id} item={item} />
+          <TimelineCard
+            key={item.id}
+            item={item}
+            budgetLinks={budgetLinksByItem[item.id] ?? []}
+            highlighted={item.id === highlightId}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function TimelineCard({ item }: { item: TimelineItemView }) {
+function TimelineCard({
+  item,
+  budgetLinks,
+  highlighted,
+}: {
+  item: TimelineItemView;
+  budgetLinks: { id: string; label: string }[];
+  highlighted: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
 
   return (
     <div
+      id={`timeline-item-${item.id}`}
       ref={setNodeRef}
       {...attributes}
       {...listeners}
@@ -154,7 +190,8 @@ function TimelineCard({ item }: { item: TimelineItemView }) {
       }}
       className={`cursor-grab rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm active:cursor-grabbing
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}
-        ${item.status === "done" ? "line-through opacity-60" : ""}`}
+        ${item.status === "done" ? "line-through opacity-60" : ""}
+        ${highlighted ? "ring-2 ring-accent" : ""}`}
     >
       <p className="truncate font-medium">{item.title}</p>
       <p className="truncate text-muted">
@@ -162,6 +199,20 @@ function TimelineCard({ item }: { item: TimelineItemView }) {
         {item.flagged ? " · ⚑" : ""}
         {item.priority > 0 ? ` · ${"!".repeat(item.priority)}` : ""}
       </p>
+      {budgetLinks.length > 0 ? (
+        <p className="mt-0.5 truncate">
+          {budgetLinks.map((link) => (
+            <a
+              key={link.id}
+              href={`/budget?item=${link.id}`}
+              className="rounded bg-tierA/10 px-1 py-0.5 text-tierA hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              💰 {link.label}
+            </a>
+          ))}
+        </p>
+      ) : null}
     </div>
   );
 }

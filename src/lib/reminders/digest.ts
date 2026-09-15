@@ -19,6 +19,13 @@ export type DigestItem = {
   list_color: string | null;
   snoozed_until: string | null;
   done: boolean;
+  /**
+   * "list_item" (the default) or "payment" — spec 6's v_reminders_due unions
+   * unpaid payments into the same digest a checklist item already renders
+   * in. Only affects wording (digestEmail says "payment due" rather than
+   * "overdue task"); bucketing and sorting are identical either way.
+   */
+  source?: "list_item" | "payment";
 };
 
 export type DigestListGroup = {

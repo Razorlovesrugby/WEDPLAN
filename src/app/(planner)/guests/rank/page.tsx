@@ -3,17 +3,19 @@ import { CapacityControl } from "@/components/rank/capacity-control";
 import { RankList } from "@/components/rank/rank-list";
 import { listHouseholds } from "@/server/queries/guests";
 import { getWeddingStats, requireWedding } from "@/server/queries/wedding";
+import { getPerSeatCostInvited } from "@/server/queries/budget";
 import { ranksNeedRebalance } from "@/server/actions/rank";
-import { pluralise } from "@/lib/format";
+import { formatMoney, pluralise } from "@/lib/format";
 
 export const metadata = { title: "Ranking" };
 
 export default async function RankPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered] = await Promise.all([
+  const [households, stats, rebalanceOffered, perSeatCost] = await Promise.all([
     listHouseholds(wedding.id),
     getWeddingStats(wedding.id),
     ranksNeedRebalance(),
+    getPerSeatCostInvited(wedding.id),
   ]);
 
   const aboveCutSeats = stats?.above_cut_seats ?? 0;
@@ -53,6 +55,16 @@ export default async function RankPage() {
         aboveCutSeats={aboveCutSeats}
         rebalanceOffered={rebalanceOffered}
       />
+
+      {perSeatCost !== null ? (
+        <p className="text-sm text-muted">
+          Each seat above the line currently costs about{" "}
+          <Link href="/budget" className="font-medium text-ink hover:underline">
+            {formatMoney(perSeatCost, wedding.base_currency)}
+          </Link>{" "}
+          — from every per-unit and consumption budget line, on invited counts.
+        </p>
+      ) : null}
 
       {households.length === 0 ? (
         <p className="card p-8 text-center text-sm text-muted">

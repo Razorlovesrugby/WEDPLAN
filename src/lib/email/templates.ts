@@ -115,16 +115,21 @@ export function digestEmail(options: { weddingName: string; url: string; digest:
   const { weddingName, url, digest } = options;
   const summary = `${pluralise(digest.overdueCount, "overdue", "overdue")}, ${pluralise(digest.dueSoonCount, "due this week", "due this week")}`;
 
+  // A payment reads "payment due" rather than "overdue task" — spec 6,
+  // section 6: it's money owed on a date, not a checklist item to tick off.
+  const label = (item: { source?: "list_item" | "payment" }, overdue: boolean) =>
+    item.source === "payment" ? (overdue ? "payment overdue" : "payment due") : overdue ? "was due" : "due";
+
   const textGroups = digest.groups
     .map((group) => {
       const lines = [group.listTitle];
       if (group.overdue.length > 0) {
         lines.push("  Overdue:");
-        for (const item of group.overdue) lines.push(`    - ${item.title} (was due ${item.due_date})`);
+        for (const item of group.overdue) lines.push(`    - ${item.title} (${label(item, true)} ${item.due_date})`);
       }
       if (group.dueSoon.length > 0) {
         lines.push("  Due this week:");
-        for (const item of group.dueSoon) lines.push(`    - ${item.title} (due ${item.due_date})`);
+        for (const item of group.dueSoon) lines.push(`    - ${item.title} (${label(item, false)} ${item.due_date})`);
       }
       return lines.join("\n");
     })
@@ -147,14 +152,14 @@ export function digestEmail(options: { weddingName: string; url: string; digest:
         group.overdue.length > 0
           ? `<p style="margin:8px 0 2px;font-size:13px;color:#b91c1c">Overdue</p>
              <ul style="margin:0;padding-left:20px">
-               ${group.overdue.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(was due ${i.due_date})</span></li>`).join("")}
+               ${group.overdue.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(${label(i, true)} ${i.due_date})</span></li>`).join("")}
              </ul>`
           : "";
       const dueSoonHtml =
         group.dueSoon.length > 0
           ? `<p style="margin:8px 0 2px;font-size:13px;color:#6b6560">Due this week</p>
              <ul style="margin:0;padding-left:20px">
-               ${group.dueSoon.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(due ${i.due_date})</span></li>`).join("")}
+               ${group.dueSoon.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(${label(i, false)} ${i.due_date})</span></li>`).join("")}
              </ul>`
           : "";
       return `<div style="margin:16px 0;padding-left:12px;border-left:3px solid ${escapeHtml(group.listColor ?? "#8a8580")}">
