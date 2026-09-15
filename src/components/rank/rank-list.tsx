@@ -148,7 +148,7 @@ export function RankList({
           <div
             ref={scrollRef}
             className="card max-h-[70vh] overflow-auto"
-            style={{ contain: "strict" }}
+            style={{ contain: "layout paint" }}
           >
             <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
               {items.map((virtualRow) => {
