@@ -6,17 +6,26 @@ needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 Last updated: end of session 6.
 
 **V1's code is complete. V1 is not done. Session 6 is the first session with
-real live use — and it found a live-only bug the moment it looked.** The
-planner logged into the deployed app for real, with a real password, and
-imported a real guest list through `/guests/import`. That part worked
-cleanly. The very next step — `/guests/rank` — rendered its heading and
-capacity control but a completely blank list, no error anywhere. That is
-exactly the class of bug section 2 predicted ("no UI has been opened in a
-browser... expect the first hour of real use to find layout problems") and
-it is now fixed — see "What session 6 did" below. **But the fix could not be
-verified live**, because the branch's Vercel deployment is failing to build.
-That failure is the most important thing in this update; read it before
-anything else.
+real live use, and every screen tried so far except the two simplest has had
+a bug in it.** The planner logged into the deployed app for real, with a
+real password, and imported a real guest list through `/guests/import`. That
+part worked cleanly. The next screen — `/guests/rank` — has needed two
+separate fixes in a row, both invisible to every automated check (typecheck,
+130 unit tests, production build) because both are runtime rendering/
+interaction bugs, not type or logic errors:
+
+1. The list rendered completely blank — heading and capacity control showed,
+   but no rows and no error. Fixed, commit `ba9bb73`.
+2. Once rows were visible, dragging one did nothing — no movement, no error.
+   Fixed, commit `52dd4d3`.
+
+Both bugs were in `src/components/rank/rank-list.tsx`, both in how the
+`@tanstack/react-virtual` virtualizer and `@dnd-kit` interact. Fix #1 is
+confirmed live — the planner saw rows render, which is how fix #2's bug was
+found in the first place. **Fix #2 is not yet confirmed live** — read "What
+session 6 did" below for the technical detail, and treat drag-and-drop as
+unverified until the planner confirms a drag actually reorders a row and it
+survives a reload.
 
 Branch: `claude/guest-import-continuation-gvj9rj`, from `main`. Not yet
 merged. Sessions 1–5's branches were merged in PRs #1–#5.
@@ -35,27 +44,57 @@ so `scripts/verify-live.mjs` still cannot be run from inside a session.
 1. **Confirmed live, by the planner directly (not by a session):** password
    sign-in works, and CSV import against a real guest list works — both were
    open questions in every prior handoff (section 2) and are now answered.
-2. **Found and fixed a real bug**, live-use finding #1: `/guests/rank`
-   rendered blank. Root cause in `src/components/rank/rank-list.tsx` — the
-   virtualised list's scroll container had `contain: "strict"` (which
-   includes CSS *size* containment: the element must size itself without
-   regard to its contents) but only a Tailwind `max-h-[70vh]` — a maximum,
-   not a definite height. With no definite height anywhere else, the browser
-   collapsed the container to zero height. The virtualizer had no space to
-   place rows in, so nothing rendered — no console error, because nothing
-   crashed; there was simply nowhere to draw. Fixed by dropping `size` from
-   the containment value (`contain: "layout paint"` — layout/paint
-   containment is kept for the virtualizer's perf benefit; only `size` was
-   the problem). Commit `ba9bb73`. Typecheck, all 130 unit tests, and
-   `npm run build` (with placeholder env vars) all pass with the fix.
-3. **Found a second, more serious problem while trying to verify #2 live:
-   this branch's Vercel deployment cannot build at all.** See immediately
-   below — this is now the actual blocker, not the rank bug.
+2. **Found and fixed live-use finding #1: `/guests/rank` rendered blank.**
+   Root cause in `src/components/rank/rank-list.tsx` — the virtualised
+   list's scroll container had `contain: "strict"` (which includes CSS
+   *size* containment: the element must size itself without regard to its
+   contents) but only a Tailwind `max-h-[70vh]` — a maximum, not a definite
+   height. With no definite height anywhere else, the browser collapsed the
+   container to zero height. The virtualizer had no space to place rows in,
+   so nothing rendered — no console error, because nothing crashed; there
+   was simply nowhere to draw. Fixed by dropping `size` from the containment
+   value (`contain: "layout paint"` — layout/paint containment is kept for
+   the virtualizer's perf benefit; only `size` was the problem). Commit
+   `ba9bb73`.
+3. **Found a second live-only bug directly on top of the first: the branch's
+   Vercel Preview deployment could not build at all**, failing at
+   "Collecting page data" with `NEXT_PUBLIC_SUPABASE_URL: Required`. Not a
+   code bug — `src/lib/env.ts` validates `clientEnv` at module load
+   deliberately, so a misconfigured deployment fails loudly instead of
+   shipping broken. This was a Vercel project-settings gap (the two
+   `NEXT_PUBLIC_*` values, and likely others, were missing for the Preview
+   environment scope specifically — see git history on this file for the
+   full diagnosis and fix steps this session wrote up in the moment, no
+   longer needed here now that it is resolved). **Now resolved** — the
+   planner got a Preview build live, which is how finding #2 below was
+   found at all.
+4. **Found and fixed live-use finding #2: dragging a row did nothing.**
+   Root cause, same file — `DndContext` used the `restrictToParentElement`
+   modifier, which dnd-kit implements as `useRect(activeNode.parentElement)`:
+   it clamps the dragged element to the bounds of its actual DOM parent, not
+   the scrollable list. Because the virtualizer wraps each row in its own
+   individually absolutely-positioned div (one div per row, sized to exactly
+   `ROW_HEIGHT`), that "parent" was a box exactly the row's own size — zero
+   room to move, so every drag was clamped back to where it started. Fixed
+   by dropping the modifier; `restrictToVerticalAxis` alone (which doesn't
+   depend on any container rect — it just zeroes the horizontal component of
+   the transform) still keeps drags vertical-only. Commit `52dd4d3`.
+   **Not yet confirmed live** — this was diagnosed from the dnd-kit source
+   in `node_modules`, not watched fixed in a browser.
 
-## THE CURRENT BLOCKER: this branch's Vercel build fails on every attempt
+Typecheck, all 130 unit tests, and `npm run build` (with placeholder env
+vars) pass after both fixes. Neither check would have caught either bug —
+both are runtime rendering/interaction problems, exactly the gap section 2
+has warned about since session 3.
 
-Every build of `claude/guest-import-continuation-gvj9rj` fails identically,
-at the same step, regardless of what the code changes:
+## RESOLVED this session: the branch's Vercel build failing on every attempt
+
+**Fixed by the planner in Vercel's project settings, not by a session.**
+Kept here because the same class of failure will recur on any other branch
+or environment where the same variables aren't scoped correctly — recognise
+the shape of the log below and go straight to Vercel settings, not into the
+code. Every build of `claude/guest-import-continuation-gvj9rj` failed
+identically, at the same step, regardless of what the code changes:
 
 ```
 Collecting page data ...
@@ -95,19 +134,13 @@ this repository:
 5. Redeploy. Build should go green in ~30s per the log above (compile alone
    took 10s; the whole thing failed within 20s of starting).
 
-**This also explains an apparent contradiction worth noting explicitly:**
-the planner successfully logged in and imported guests, but this branch's
-rank-list fix has never actually gone live for them to test, because this
-branch's builds have been failing before deployment. The site they used for
-login/import is a *different*, already-working deployment (most likely
-Production, built from `main`). Once the env vars above are fixed for
-Preview, redeploying this branch will make the rank fix (and everything else
-on it) actually reachable for the first time.
-
-**Until this is fixed, no further live verification is possible on this
-branch — not the rank fix, not anything in section 4's checklist.** This is
-the single highest-priority item for the next session or the planner
-themselves.
+This explained an apparent contradiction earlier in the session: the planner
+had successfully logged in and imported guests before this was fixed,
+because that used a *different*, already-working deployment (most likely
+Production, built from `main`) — this branch's own Preview builds had never
+gone live until the variables above were added for the Preview scope. Once
+they were, the blank-list fix (`ba9bb73`) became visible, which is what led
+straight to finding the drag-and-drop bug (`52dd4d3`) above.
 
 ---
 
@@ -259,16 +292,19 @@ Read this before trusting anything above.
   where a policy depending on real `auth.uid()` behaviour passes locally and
   fails live.
 - **Most of the UI is still unopened in a browser — but the pattern of the
-  first two screens tried is the important finding, not the specific bug.**
+  first screens tried is the important finding, not the specific bugs.**
   Session 6: password sign-in worked first try; live CSV import worked
-  cleanly; `/guests/rank` was blank with no error (now fixed in code, not yet
-  verified live — see the blocker section above). Two for three screens
-  worked, one didn't, and the one that didn't failed silently. Read every
-  remaining unopened screen — the question builder, the print sheet, the
-  invitations flow, the public RSVP page and `/w` — with that ratio in mind,
-  not with the assumption that "it type-checks and builds" means it renders
-  correctly. `npm run build` cannot catch a CSS containment bug; nothing
-  short of opening the page can.
+  cleanly; `/guests/rank` needed two separate fixes in a row (blank list,
+  then dead drag-and-drop — both above) before it was even worth judging.
+  The second fix (`52dd4d3`) has not yet been confirmed live — **that is the
+  single most useful thing the planner can check next**: open `/guests/rank`
+  and confirm a drag actually moves a row and the new order survives a
+  reload. Read every remaining unopened screen — the question builder, the
+  print sheet, the invitations flow, the public RSVP page and `/w` — with
+  this ratio in mind, not with the assumption that "it type-checks and
+  builds" means it renders or behaves correctly. Neither check can catch a
+  CSS containment bug or a modifier clamping a drag to nothing; only opening
+  the page and trying the interaction can.
 - **No email has been sent.** Without `RESEND_API_KEY` the sender logs instead,
   by design. The templates have never met a real inbox or a spam filter.
 - **Password sign-in now confirmed working live**, first try, session 6. The
@@ -376,9 +412,12 @@ scheduling problem to route around; it is the shape of the work now.
 
 ### The one remaining session — get it running for real
 
-**0. Fix the Vercel Preview build first — see the blocker section near the
-top of this document.** Nothing else below can be tested on this branch
-until `claude/guest-import-continuation-gvj9rj` deploys successfully.
+**0. Confirm drag-and-drop on `/guests/rank` actually works now (commit
+`52dd4d3`), then keep going through the rest of that screen** — the cut
+line buttons, the capacity control, the waitlist suggestions box — none of
+which have been touched by a live click yet either. (The Vercel Preview
+build issue from earlier this session is resolved — see the "RESOLVED"
+section above only if it recurs on another branch.)
 
 1. **Verify what is actually there.** Run the three checks in
    `supabase/migrations/README.md` (16 tables; zero rows without RLS; 3 views),
