@@ -3,39 +3,44 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 7 — rebase toward checklists, timeline and reminders,
-now run as one spec per feature.
+Last updated: session 7 — rebase toward a Lists + Timeline system and
+reminders, one spec per feature.
 
 ## Session 7: the build direction changed, and so did the process. Read this first.
 
 **The planner made the call directly, not from a spec session: invitations
 are done for now, and the product needs to work more like the spreadsheet
-it is replacing before it sends another one.** The active work is now
-**checklists, a date-generated task timeline, and reminders** — no vendors,
-no budget, no AI, no further invitation work.
+it is replacing before it sends another one.** Then, same session, a second
+and more specific direction: build it like **Apple Reminders (freeform
+lists, any item can carry a due date) fused with a Jira-style timeline that
+auto-syncs** — set a date on anything, anywhere, and it appears on the
+timeline with no manual step. No vendors, no budget, no AI, no further
+invitation or guest-facing work.
 
 **Process change, also this session: each feature gets its own spec
 document with its own open questions, and nothing beyond schema is built
 until the planner has answered that feature's questions.** The full plan for
 each feature — data model, screens, dependencies, build order, open
-questions — now lives in **[`docs/specs/`](specs/)**, not inline in this
-file:
+questions — lives in **[`docs/specs/`](specs/)**, not inline in this file:
 
 | Spec | Status |
 | --- | --- |
-| [`docs/specs/01-checklists.md`](specs/01-checklists.md) | Schema landed (`0004`). Open questions unanswered — no application code yet. |
-| [`docs/specs/02-task-timeline.md`](specs/02-task-timeline.md) | Schema landed (`0005`). Open questions unanswered — no application code yet. |
-| [`docs/specs/03-reminders.md`](specs/03-reminders.md) | Spec only. Depends on 02 shipping first. |
+| [`docs/specs/01-lists-and-timeline.md`](specs/01-lists-and-timeline.md) | Schema landed (`0004_lists.sql`), verified + smoke-tested. Open questions unanswered — no application code yet. |
+| [`docs/specs/02-reminders.md`](specs/02-reminders.md) | Spec only. Depends on spec 1 shipping first. |
 
-**Why schema exists before questions were answered, this one time:** the
-prior session (before this process existed) had already landed a single
-combined migration covering both checklists and tasks. Splitting it into
-`0004_checklists.sql` and `0005_task_timeline.sql` — one per feature, so a
-feature can ship without pulling the other's tables in — was corrective
-work to fit the new process, not a jump ahead of it. Both are re-verified
-clean (`verify-migrations.sh`, `verify-bootstrap.sh`) with the split. No
-server action, query, screen, or seed loader exists for either feature yet,
-and none should until each spec's open questions are answered.
+**This spec structure went through two revisions in one session, both
+recorded in `docs/specs/README.md`:** first a 3-way split (checklists /
+task timeline / reminders) with checklists and tasks as separate tables
+joined by a manual link; then, once the planner's actual model (one
+integrated system, not two features bolted together) was clear, merged
+into the single "Lists, with an auto-synced timeline" spec above. The
+schema was rewritten to match each time — `0004_checklists.sql` and
+`0005_task_timeline.sql` no longer exist; `0004_lists.sql` replaces both.
+Re-verified clean (`verify-migrations.sh`, `verify-bootstrap.sh`) at each
+step, plus a manual smoke test confirming the auto-sync view actually
+filters on `due_date` correctly (spec 1, section 7). No server action,
+query, screen, or seed loader exists yet, and none should until spec 1's
+open questions are answered.
 
 **This does not mean V1 is being thrown away.** Everything below about the
 guest list, ranking and RSVP system is accurate and unchanged; it is just
@@ -200,28 +205,30 @@ build is actually green — don't assume either explanation.
 
 ---
 
-## Active work: checklists, timeline and reminders — see `docs/specs/`
+## Active work: lists, timeline and reminders — see `docs/specs/`
 
 **The full plan moved out of this file and into one spec per feature.** See
 the table near the top of this document, or go straight to
-[`docs/specs/README.md`](specs/README.md) for the index, the build order,
-and how the schema splits across `0004` and `0005`.
+[`docs/specs/README.md`](specs/README.md) for the index and build order.
+Schema is `0004_lists.sql` — one migration, because it's one feature (lists
+and the timeline that reads them are the same table family, not two).
 
 Kept here, because it doesn't belong in any one feature's spec:
 
-- **Scope for the whole rebase:** none of checklists, the task timeline or
-  reminders need vendors, budget or Gmail — only `weddings`, `events` and
-  the collaborators already in place. That's why this can ship ahead of V2
-  rather than as part of it.
+- **Scope for the whole rebase:** neither lists/timeline nor reminders need
+  vendors, budget or Gmail — only `weddings`, `events` and the
+  collaborators already in place. That's why this can ship ahead of V2
+  rather than as part of it. Neither touches `guests`, `households`,
+  `invitations` or `rsvp_*` either — no guest-facing work is in scope.
 - **This is a narrower slice than the full AI-native product direction**
   floated in an earlier, unmerged planning pass (ingestion, a vigilance
   engine, semantic search). Nothing in `docs/specs/` depends on any of
   that, and nothing there should grow to need it without the planner
   asking again.
-- **Nothing beyond schema exists yet.** `0004` and `0005` are landed and
-  verified (see section 1). No seed loader, server action, query or screen
-  exists for either feature — each spec's own open questions gate that
-  work, per feature, individually.
+- **Nothing beyond schema exists yet.** `0004_lists.sql` is landed,
+  verified, and smoke-tested (see section 1). No seed loader, server
+  action, query or screen exists — spec 1's own open questions gate that
+  work.
 
 ### Parked, not cancelled: invitations, vendors, budget, AI
 
@@ -230,7 +237,7 @@ list — the Vercel Preview build that's never gone green, live Supabase
 verification, the sending domain, printing. **All of it is still accurate
 and still has to happen before a real invitation goes out.** It's parked,
 not fixed. Pick it back up when invitations are back on the roadmap. Until
-then, checklists/timeline work should not touch `invitations`, `rsvp_*`, or
+then, lists/timeline work should not touch `invitations`, `rsvp_*`, or
 `message_log`'s existing `invitation` / `reminder` kinds.
 
 ---
@@ -277,8 +284,7 @@ first wedding. Full instructions in `supabase/migrations/README.md`.
 | 1 | `0001_core_schema.sql` | 16 tables, enums, indexes, constraints |
 | 2 | `0002_row_level_security.sql` | `is_collaborator()`, policies, grants |
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` |
-| 4 | `0004_checklists.sql` | Checklist templates, checklists, sections, items — [spec](specs/01-checklists.md) |
-| 5 | `0005_task_timeline.sql` | Task templates, tasks, adds `checklist_items.task_id` — [spec](specs/02-task-timeline.md) |
+| 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` — [spec](specs/01-lists-and-timeline.md) |
 | — | `bootstrap.sql` | Your wedding, both collaborators, starting events and questions |
 
 Tenancy is enforced by composite foreign keys on `(parent_id, wedding_id)`, not
@@ -317,26 +323,29 @@ npm test                          # not re-run this session, see below
 npm run build                     # not re-run this session, see below
 ```
 
-**Session 7 re-ran the two SQL scripts against `0004` and `0005` and both are
+**Session 7 re-ran the two SQL scripts against `0004_lists.sql` and both are
 green** — 52 assertions in `verify-migrations.sh` (unchanged count; the new
 tables have no tenancy/derived-view tests of their own yet, see the note
 below), and `verify-bootstrap.sh` still creates one wedding and both
-collaborators cleanly with both migrations applied. **`npm run typecheck`,
-`npm test` and `npm run build` were NOT run this session — `node_modules` is
-not installed in this container.** Nothing in `0004`/`0005` touches
+collaborators cleanly with it applied. A manual smoke test also confirmed
+`v_timeline_items` actually filters on `due_date` (spec 1, section 7) —
+inserted one dated and one undated `list_items` row in the same list, only
+the dated one came back from the view. **`npm run typecheck`, `npm test`
+and `npm run build` were NOT run this session — `node_modules` is not
+installed in this container.** Nothing in `0004_lists.sql` touches
 TypeScript, so there's no specific reason to expect a regression, but this is
 exactly the kind of gap section 6 warns about: an unrun check is not a
 passing check. Run all three for real before trusting this line, and
 definitely before opening a PR.
 
-**Worth adding, not yet done:** the four new tenant tables (`checklists`,
-`checklist_sections`, `checklist_items` in `0004`, `tasks` in `0005`) have
-RLS wired the same way as everything else, but no assertions of their own in
-`supabase/tests/01_tenancy.sql` — the 52-assertion count above is unchanged
-from before they landed because nothing new is being checked yet, not
-because there was nothing to check. Add a cross-wedding isolation test for
-at least `tasks` before trusting the RLS policy in production, the same way
-every other tenant table has one.
+**Worth adding, not yet done:** the three new tenant tables (`lists`,
+`list_sections`, `list_items`) have RLS wired the same way as everything
+else, but no assertions of their own in `supabase/tests/01_tenancy.sql` —
+the 52-assertion count above is unchanged from before they landed because
+nothing new is being checked yet, not because there was nothing to check.
+Add a cross-wedding isolation test for at least `list_items` before
+trusting the RLS policy in production, the same way every other tenant
+table has one.
 
 `npm run build` needs the three `NEXT_PUBLIC_*` variables set or it fails at
 "Collecting page data" — the env validation is deliberate. Placeholders are
@@ -514,7 +523,7 @@ Read this before trusting anything above.
 
 ## 4. What is left, and who can do it
 
-**Parked as of session 7 — see "Active work: checklists, timeline and
+**Parked as of session 7 — see "Active work: lists, timeline and
 reminders" above.** Everything below is still true and still has to happen
 before a real invitation goes out; it's just not what the next session
 should pick up first. Kept in full rather than deleted, because none of it
@@ -567,10 +576,10 @@ and practically broken.
 ### Then
 
 **This "then" is itself parked.** It used to point straight at V2. As of
-session 7 it instead points at "Active work: checklists, timeline and
+session 7 it instead points at "Active work: lists, timeline and
 reminders" near the top of this file — that work is next, ahead of V2,
-and needs none of the live-verification steps above. Once checklists and
-the task timeline are built and this section's items are actually done,
+and needs none of the live-verification steps above. Once the lists/timeline
+system and reminders are built and this section's items are actually done,
 resume here: whatever the first real invitation use exposes, then the 3c
 leftovers (saved views, inline edit on more fields), then V2 —
 `docs/wedding-platform-spec.md` has the full plan. Before starting V2,
@@ -620,7 +629,7 @@ collaborator does goes through `src/lib/supabase/server.ts`.
 `pg_trgm` and builds `guests_name_trgm_idx` for exactly this.
 `src/lib/import/trigram.ts` reimplements pg_trgm's algorithm in memory instead,
 because reaching the index means a similarity RPC, an RPC means a new
-migration, and `0001`–`0005` are frozen — an import that cannot run until somebody pastes SQL
+migration, and `0001`–`0004` are frozen — an import that cannot run until somebody pastes SQL
 into a dashboard is an import nobody uses. A few hundred names against a few
 hundred is milliseconds, behind a preview screen. **If the list ever runs to
 thousands, or a second wedding shares the database, move it to the index** —
@@ -723,7 +732,7 @@ exists".
 
 - **Migrations are append-only. That rule is now live.** They were edited in
   place during the build because nothing had ever run them for real. `0001` has
-  now been applied to a real project, so `0001`–`0005` are frozen: editing one
+  now been applied to a real project, so `0001`–`0004` are frozen: editing one
   changes what a fresh database gets while leaving the live one untouched, and
   the two silently diverge. Add the next numbered migration, never edit an
   applied one. **One feature, one migration** — see `docs/specs/` — so a

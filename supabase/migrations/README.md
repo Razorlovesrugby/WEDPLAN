@@ -8,8 +8,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 1 | `0001_core_schema.sql` | Extensions, enums, 16 tables, indexes, constraints | — |
 | 2 | `0002_row_level_security.sql` | `is_collaborator()`, RLS policies, grants | 1 |
 | 3 | `0003_derived_views.sql` | `v_households`, `v_household_rsvp`, `v_wedding_stats` | 1, 2 |
-| 4 | `0004_checklists.sql` | Checklist templates, checklists, sections, items | 1, 2 |
-| 5 | `0005_task_timeline.sql` | Task templates, tasks, adds `checklist_items.task_id` | 1, 2, 4 |
+| 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` | 1, 2, 3 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
@@ -22,16 +21,17 @@ with a collaborator row.
 In the Supabase dashboard → **SQL Editor**:
 
 1. Open `0001_core_schema.sql`, copy the whole file, paste, **Run**.
-2. Repeat for `0002_row_level_security.sql`, then `0003_derived_views.sql`.
+2. Repeat for `0002_row_level_security.sql`, then `0003_derived_views.sql`,
+   then `0004_lists.sql`.
 3. Open `../bootstrap.sql`, edit the four values at the top, paste, **Run**.
 
 Run them one file at a time and read the result before moving on. Each script
-is written to fail loudly rather than half-apply, so if step 2 errors, do not
-run step 3 — fix step 2 first.
+is written to fail loudly rather than half-apply, so if a step errors, do not
+run the next one — fix that step first.
 
 ### What "success" looks like
 
-After step 3:
+After `0003` (before `0004`, if you're checking incrementally):
 
 ```sql
 -- 16 tables
@@ -45,6 +45,11 @@ select tablename from pg_tables
 -- three views
 select table_name from information_schema.views where table_schema = 'public';
 ```
+
+After `0004`: 4 more base tables (`list_templates`, `lists`,
+`list_sections`, `list_items`) and a fourth view, `v_timeline_items`. Still
+zero rows from the RLS query above — `list_templates` is reference data
+with a read-only policy, not an exception to "every table has RLS."
 
 After the bootstrap, signing in with your email should show an empty dashboard
 rather than a redirect loop.
@@ -69,8 +74,9 @@ these three.
 ## Rules from here on
 
 **Once these have been applied to a real project, migrations are append-only.**
-Add `0004_…`, never edit `0001_…`. Editing an applied migration means the
-database and the repository disagree, and nothing will tell you.
+Add the next numbered migration, never edit one already applied. Editing an
+applied migration means the database and the repository disagree, and
+nothing will tell you.
 
 They were edited in place during the build because nothing had ever run them for
 real. That stops the moment you run step 1 above.
