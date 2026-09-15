@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import type { EventRow, TagRow } from "@/lib/types/database";
 
 const RSVP_OPTIONS = [
@@ -34,12 +34,21 @@ export function FilterBar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const searchDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => () => clearTimeout(searchDebounce.current), []);
 
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
     else params.delete(key);
     startTransition(() => router.replace(`/guests?${params.toString()}`, { scroll: false }));
+  }
+
+  // Typing a name shouldn't re-query on every keystroke — wait for a pause.
+  function setSearch(value: string) {
+    clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => setParam("q", value), 300);
   }
 
   const current = (key: string) => searchParams.get(key) ?? "";
@@ -52,7 +61,7 @@ export function FilterBar({
           type="search"
           defaultValue={current("q")}
           placeholder="Name, email, household"
-          onChange={(e) => setParam("q", e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="field"
         />
       </label>
@@ -131,7 +140,10 @@ export function FilterBar({
         <button
           type="button"
           className="btn"
-          onClick={() => startTransition(() => router.replace("/guests", { scroll: false }))}
+          onClick={() => {
+            clearTimeout(searchDebounce.current);
+            startTransition(() => router.replace("/guests", { scroll: false }));
+          }}
         >
           Clear {activeCount}
         </button>
