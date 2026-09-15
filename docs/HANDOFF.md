@@ -3,29 +3,111 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: end of session 5.
+Last updated: end of session 6.
 
-**V1's code is complete. V1 is not done.** Every screen the spec asks for is
-built, type-checked, unit-tested and building cleanly. None of it has ever
-talked to the live database, been opened in a browser, sent an email, or been
-printed. The gap between those two sentences is the whole of the remaining
-work, and it cannot be closed from a coding session alone — see section 4.
+**V1's code is complete. V1 is not done. Session 6 is the first session with
+real live use — and it found a live-only bug the moment it looked.** The
+planner logged into the deployed app for real, with a real password, and
+imported a real guest list through `/guests/import`. That part worked
+cleanly. The very next step — `/guests/rank` — rendered its heading and
+capacity control but a completely blank list, no error anywhere. That is
+exactly the class of bug section 2 predicted ("no UI has been opened in a
+browser... expect the first hour of real use to find layout problems") and
+it is now fixed — see "What session 6 did" below. **But the fix could not be
+verified live**, because the branch's Vercel deployment is failing to build.
+That failure is the most important thing in this update; read it before
+anything else.
 
-Branch: `claude/hand-off-continuation-y82inh`, from `main`. Sessions 1–4's
-branches were merged in PRs #1–#4.
+Branch: `claude/guest-import-continuation-gvj9rj`, from `main`. Not yet
+merged. Sessions 1–5's branches were merged in PRs #1–#5.
 
-**Session 5 could not verify the live project either.** This session's
-Supabase connector saw exactly one project, `arm15lite_PROD`
-(`dgpplqzsukifcvddoxcd`) — the same wrong-organisation scoping sessions 2 and
-3 hit, described in the warning box in section 0. No `.env.local` and no
-`NEXT_PUBLIC_SUPABASE_*` / `SUPABASE_SERVICE_ROLE_KEY` were present in this
-container either, so `scripts/verify-live.mjs` could not be run here.
+**Session 6 could not verify the live project either — same organisation
+scoping gap as every prior session.** This session's Supabase connector saw
+exactly one project, `arm15lite_PROD` (`dgpplqzsukifcvddoxcd`) — described in
+the warning box in section 0. No `.env.local` and no `NEXT_PUBLIC_SUPABASE_*`
+/ `SUPABASE_SERVICE_ROLE_KEY` were present in this container either,
+so `scripts/verify-live.mjs` still cannot be run from inside a session.
 **Open question 6 is unchanged: find out which organisation actually owns
 `lsgbwxisqqazahgkibmj` and give a session's Supabase connector access to it.**
-Until then, every item in section 4's numbered list is still blocked exactly
-as written. This session instead did the next most valuable thing available
-without live access: closed the "answers view" gap from section 3c. See
-below.
+
+## What session 6 did
+
+1. **Confirmed live, by the planner directly (not by a session):** password
+   sign-in works, and CSV import against a real guest list works — both were
+   open questions in every prior handoff (section 2) and are now answered.
+2. **Found and fixed a real bug**, live-use finding #1: `/guests/rank`
+   rendered blank. Root cause in `src/components/rank/rank-list.tsx` — the
+   virtualised list's scroll container had `contain: "strict"` (which
+   includes CSS *size* containment: the element must size itself without
+   regard to its contents) but only a Tailwind `max-h-[70vh]` — a maximum,
+   not a definite height. With no definite height anywhere else, the browser
+   collapsed the container to zero height. The virtualizer had no space to
+   place rows in, so nothing rendered — no console error, because nothing
+   crashed; there was simply nowhere to draw. Fixed by dropping `size` from
+   the containment value (`contain: "layout paint"` — layout/paint
+   containment is kept for the virtualizer's perf benefit; only `size` was
+   the problem). Commit `ba9bb73`. Typecheck, all 130 unit tests, and
+   `npm run build` (with placeholder env vars) all pass with the fix.
+3. **Found a second, more serious problem while trying to verify #2 live:
+   this branch's Vercel deployment cannot build at all.** See immediately
+   below — this is now the actual blocker, not the rank bug.
+
+## THE CURRENT BLOCKER: this branch's Vercel build fails on every attempt
+
+Every build of `claude/guest-import-continuation-gvj9rj` fails identically,
+at the same step, regardless of what the code changes:
+
+```
+Collecting page data ...
+Error: Invalid client environment:
+  NEXT_PUBLIC_SUPABASE_URL: Required
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: Required
+
+See .env.example.
+    at .next/server/app/api/export/[kind]/route.js
+Error: Command "npm run build" exited with 1
+```
+
+**This is not a code bug. It is deliberate, working as designed** — see
+`src/lib/env.ts`: `clientEnv` is validated at module load specifically so a
+misconfigured deployment fails loudly at build time instead of shipping
+silently broken. The fix is entirely in Vercel's project settings, not in
+this repository:
+
+1. Open the Vercel project → **Settings → Environment Variables**.
+2. Get the real values from the Supabase dashboard for project
+   `lsgbwxisqqazahgkibmj` → **Settings → API**: the Project URL and the
+   `anon` `public` key.
+3. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (and,
+   while there, confirm `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_TOKEN_PEPPER`
+   and `CRON_SECRET` are set too — the build log above only shows the first
+   failure; more may be missing behind it). Generate `INVITE_TOKEN_PEPPER`
+   and `CRON_SECRET` with `openssl rand -hex 32` if they don't already exist
+   — **but never regenerate them if they're already set**: rotating
+   `INVITE_TOKEN_PEPPER` invalidates every invitation token already issued.
+4. **Check which environment scope the variables are set for.** Vercel
+   scopes env vars to Production / Preview / Development independently. A
+   branch push like this one builds as a **Preview** deployment — if the
+   variables are only ticked for Production (likely, if a working Production
+   deploy is what the planner logged into earlier), Preview builds will fail
+   exactly like this one keeps doing. Tick Preview too, or every branch
+   session hits this same wall.
+5. Redeploy. Build should go green in ~30s per the log above (compile alone
+   took 10s; the whole thing failed within 20s of starting).
+
+**This also explains an apparent contradiction worth noting explicitly:**
+the planner successfully logged in and imported guests, but this branch's
+rank-list fix has never actually gone live for them to test, because this
+branch's builds have been failing before deployment. The site they used for
+login/import is a *different*, already-working deployment (most likely
+Production, built from `main`). Once the env vars above are fixed for
+Preview, redeploying this branch will make the rank fix (and everything else
+on it) actually reachable for the first time.
+
+**Until this is fixed, no further live verification is possible on this
+branch — not the rank fix, not anything in section 4's checklist.** This is
+the single highest-priority item for the next session or the planner
+themselves.
 
 ---
 
@@ -176,23 +258,31 @@ Read this before trusting anything above.
   clusters running through a shim. A shim is not Supabase Auth: it is exactly
   where a policy depending on real `auth.uid()` behaviour passes locally and
   fails live.
-- **No UI has been opened in a browser.** It type-checks and builds; nobody has
-  clicked it. Expect the first hour of real use to find layout and empty-state
-  problems. This applies double to session 3's work — the import wizard, the
-  question builder and the print sheet have unit tests under the logic but not
-  one rendered pixel behind them — and now to session 5's answers view too.
+- **Most of the UI is still unopened in a browser — but the pattern of the
+  first two screens tried is the important finding, not the specific bug.**
+  Session 6: password sign-in worked first try; live CSV import worked
+  cleanly; `/guests/rank` was blank with no error (now fixed in code, not yet
+  verified live — see the blocker section above). Two for three screens
+  worked, one didn't, and the one that didn't failed silently. Read every
+  remaining unopened screen — the question builder, the print sheet, the
+  invitations flow, the public RSVP page and `/w` — with that ratio in mind,
+  not with the assumption that "it type-checks and builds" means it renders
+  correctly. `npm run build` cannot catch a CSS containment bug; nothing
+  short of opening the page can.
 - **No email has been sent.** Without `RESEND_API_KEY` the sender logs instead,
   by design. The templates have never met a real inbox or a spam filter.
-- **The password sign-in and reset flow has never completed**, because that
-  needs a live Supabase Auth instance. (Session 4 replaced the original
-  magic-link sign-in with email + password after the built-in mailer's
-  2-email/hour rate limit made testing impractical; see section 3b.)
+- **Password sign-in now confirmed working live**, first try, session 6. The
+  `/forgot-password` → `/reset-password` recovery half of the flow is still
+  unconfirmed — only sign-in with an already-set password has been exercised.
 - **Nothing has been printed.** `/invitations/print` is laid out for A4 with
   `@media print` rules no printer has seen. Print one page before committing a
   stationery run to it.
-- **The CSV import has never seen a real export.** Its parser and dedupe are
-  unit-tested against handwritten cases, not against whatever Google Contacts
-  or a mother-in-law's spreadsheet actually produces.
+- **The CSV import now confirmed working against a real guest list**, session
+  6, planner-reported as clean. Worth noting for whoever tests next: "clean"
+  here means the planner didn't report a problem, not that every column,
+  every dedupe edge case, and every age-band boundary was individually
+  checked — the ranking bug above was also invisible until someone looked
+  directly at its screen.
 
 ---
 
@@ -285,6 +375,10 @@ record.** A coding session can prepare it and cannot finish it. That is not a
 scheduling problem to route around; it is the shape of the work now.
 
 ### The one remaining session — get it running for real
+
+**0. Fix the Vercel Preview build first — see the blocker section near the
+top of this document.** Nothing else below can be tested on this branch
+until `claude/guest-import-continuation-gvj9rj` deploys successfully.
 
 1. **Verify what is actually there.** Run the three checks in
    `supabase/migrations/README.md` (16 tables; zero rows without RLS; 3 views),
