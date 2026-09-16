@@ -10,6 +10,7 @@ import {
   getLists,
   getScheduledItems,
   getTodayItems,
+  type ListItemWithList,
 } from "@/server/queries/lists";
 import { getCollaborators, getSessionUser, requireWedding } from "@/server/queries/wedding";
 
@@ -35,14 +36,13 @@ export default async function ListsPage({
   const view: View = (VIEWS as readonly string[]).includes(rawView ?? "") ? (rawView as View) : "today";
 
   const wedding = await requireWedding();
-  const [lists, templates, collaborators, user] = await Promise.all([
-    getLists(wedding.id),
-    getListTemplates(),
-    getCollaborators(wedding.id),
-    getSessionUser(),
-  ]);
 
-  const items = await (async () => {
+  // Only the "mine" view needs the signed-in user before it can query, so
+  // the items fetch is kicked off alongside the rest rather than after it —
+  // four of the five views were paying a full serial round trip for a
+  // dependency they never had.
+  const userPromise = getSessionUser();
+  const itemsPromise: Promise<ListItemWithList[] | null> = (() => {
     switch (view) {
       case "today":
         return getTodayItems(wedding.id);
@@ -53,10 +53,21 @@ export default async function ListsPage({
       case "all":
         return getAllItems(wedding.id);
       case "mine":
-        if (!user) notFound();
-        return getAssignedToMeItems(wedding.id, user.id);
+        return userPromise.then((u) => (u ? getAssignedToMeItems(wedding.id, u.id) : null));
     }
   })();
+
+  const [lists, templates, collaborators, user, items] = await Promise.all([
+    getLists(wedding.id),
+    getListTemplates(),
+    getCollaborators(wedding.id),
+    userPromise,
+    itemsPromise,
+  ]);
+
+  // "Assigned to me" is meaningless without a session; every other view has
+  // already resolved to a real (possibly empty) list by here.
+  if (items === null) notFound();
 
   return (
     <div className="flex flex-col gap-6 sm:flex-row">

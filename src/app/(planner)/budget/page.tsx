@@ -6,7 +6,7 @@ import {
   listBudgetItems,
   listConsumptionComponents,
 } from "@/server/queries/budget";
-import { getBudgetItemLinks } from "@/server/queries/budget-links";
+import { getBudgetItemLinksForItems, noBudgetItemLinks } from "@/server/queries/budget-links";
 import { getFxRate } from "@/server/queries/fx";
 import { getAllItems, getLists } from "@/server/queries/lists";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
@@ -40,25 +40,32 @@ export default async function BudgetPage({
   // Guest counts, one lookup per distinct event scope actually used by an
   // item (plus the whole-wedding "no event" scope) — not one per item.
   const eventIds = [...new Set(items.map((i) => i.event_id).filter((id): id is string => id !== null))];
-  const countsByScope = new Map(
-    await Promise.all(
-      [null, ...eventIds].map(
-        async (eventId) => [eventId, await getGuestCounts(wedding.id, eventId)] as const,
-      ),
-    ),
-  );
 
   // FX state, one lookup per distinct foreign currency in use — cached in
   // fx_rates, so this is at most one external call per currency per day
   // across the whole app, not per item and not per page load.
   const foreignCurrencies = [...new Set(items.filter((i) => i.currency !== wedding.base_currency).map((i) => i.currency))];
-  const fxByCurrency = new Map(
-    await Promise.all(foreignCurrencies.map(async (currency) => [currency, await getFxRate(currency, wedding.id)] as const)),
-  );
 
-  const linksByItem = new Map(
-    await Promise.all(items.map(async (item) => [item.id, await getBudgetItemLinks(wedding.id, item.id)] as const)),
-  );
+  // All three need `items` first, but none of them needs either of the other
+  // two — so they go out as one concurrent batch. They used to be three
+  // separate `await`s, which made the page wait for counts, then rates, then
+  // links, end to end, on top of the `Promise.all` above.
+  const [countsEntries, fxEntries, linksByItem] = await Promise.all([
+    Promise.all(
+      [null, ...eventIds].map(async (eventId) => [eventId, await getGuestCounts(wedding.id, eventId)] as const),
+    ),
+    Promise.all(
+      foreignCurrencies.map(
+        async (currency) => [currency, await getFxRate(currency, wedding.id, wedding.base_currency)] as const,
+      ),
+    ),
+    getBudgetItemLinksForItems(
+      wedding.id,
+      items.map((i) => i.id),
+    ),
+  ]);
+  const countsByScope = new Map(countsEntries);
+  const fxByCurrency = new Map(fxEntries);
 
   const componentsByItem = new Map<string, typeof components>();
   for (const c of components) {
@@ -136,7 +143,7 @@ export default async function BudgetPage({
                         payments={paymentsByItem.get(item.id) ?? []}
                         lists={lists}
                         allTasks={allTasks}
-                        links={linksByItem.get(item.id) ?? { lists: [], tasks: [] }}
+                        links={linksByItem.get(item.id) ?? noBudgetItemLinks()}
                         timezone={wedding.timezone}
                         counts={countsByScope.get(item.event_id) ?? { adult: 0, child: 0, seat: 0 }}
                         fxState={item.currency !== wedding.base_currency ? (fxByCurrency.get(item.currency) ?? null) : null}
