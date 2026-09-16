@@ -1,13 +1,21 @@
 # Feature spec: Moodboards, publicly shareable
 
-**Status: proposed, not built. Nothing here exists yet — no migration, no
-bucket, no screen, no action.** Per `docs/specs/README.md` this is a proposal
-plus a list of decisions only the planner can make; §12 is that list. As with
-spec 8, **nothing in this spec should be built — schema included — until §12
-has answers**, because question 1 (do images live in Supabase Storage, or are
-they links to somebody else's server) decides the shape of
-`moodboard_items` and whether this feature has an infrastructure step in it
-at all.
+**Status: BUILT, session 17 (2026-09-16), on the planner's direct word.** The
+planner asked for the Chrome clipper and the Pinterest API and said they were
+creating a Pinterest account, which settled §12's scope questions; the rest
+were built to this file's own recommendations, listed in `docs/HANDOFF.md`
+session 17 so nobody re-derives them. `0013_moodboards.sql`, `v_moodboards`,
+`src/lib/moodboards.ts`, `src/lib/supabase/storage.ts`,
+`src/server/{queries,actions,moodboards}/`, `/moodboards`,
+`/moodboards/[id]`, `/m/[token]`, the `/w` and `/rsvp/[token]` sections, and
+`scripts/ensure-bucket.mjs`.
+
+**One answer here was later reversed:** §12.3 recommended no server-side URL
+fetching this pass. Spec 9.1 reverses it — the clipper cannot work without it
+— and confines it to `src/lib/net/fetch-image.ts`.
+
+**Not verified against anything real:** no Supabase project, no bucket, no
+browser. See `docs/HANDOFF.md` session 17.
 
 **Depends on:** V1 only (`weddings`, `events`, and the public RSVP path this
 reuses the token pattern from). It does not depend on specs 1–8, does not

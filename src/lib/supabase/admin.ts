@@ -7,7 +7,7 @@ import type { Database } from "@/lib/types/database";
  * Service-role client. BYPASSES ROW LEVEL SECURITY ENTIRELY.
  *
  * Every call site is responsible for its own scoping, because the database
- * will not do it here. There are exactly three legitimate reasons to reach
+ * will not do it here. There are exactly five legitimate reasons to reach
  * for this:
  *
  *   1. The public RSVP flow. A household arrives holding a token and must
@@ -23,6 +23,21 @@ import type { Database } from "@/lib/types/database";
  *      has no write grant on it at all (0010_budget.sql's RLS), the same
  *      "writable by nobody through the API but the lookup path itself" shape
  *      list_templates already uses.
+ *
+ *   4. Moodboard storage — src/lib/supabase/storage.ts. The bucket is
+ *      private and carries NO policies on storage.objects at all (spec 9,
+ *      section 3), which is what keeps storage out of every migration and
+ *      keeps verify-migrations.sh working against bare PostgreSQL. So every
+ *      object is signed, uploaded and deleted by this client. Its scoping is
+ *      that object paths are DERIVED from ids the server has already checked
+ *      — storageObjectPath() in src/lib/moodboards.ts takes uuids and
+ *      nothing else, and no action anywhere accepts a path from a client.
+ *
+ *   5. The moodboard share and clip-token paths —
+ *      src/server/moodboards/resolve.ts and /api/clip. Same shape as (1): an
+ *      unauthenticated caller arrives holding a token, and scoping comes from
+ *      resolving that token to exactly one board or one wedding and
+ *      constraining every subsequent query to it.
  *
  * Anything a logged-in collaborator does must go through
  * lib/supabase/server.ts instead, so that RLS remains the thing enforcing

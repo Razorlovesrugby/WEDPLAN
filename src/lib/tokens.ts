@@ -117,3 +117,21 @@ export function decryptToken(payload: string): string | null {
 export function invitationUrl(token: string): string {
   return absoluteUrl(`/rsvp/${token}`);
 }
+
+// ---------------------------------------------------------------------------
+// Moodboard shares and clip tokens
+// ---------------------------------------------------------------------------
+// Both reuse everything above — the same 32 bytes, the same hash-at-rest, the
+// same encrypted copy so a link can be re-read without reissuing it. Three
+// kinds of credential, one piece of machinery.
+//
+// ONE CONSEQUENCE, written down because it stops being obvious the moment it
+// is not: INVITE_TOKEN_PEPPER now peppers all three. Rotating it invalidates
+// every outstanding share link and every installed clipper as well as every
+// outstanding invitation. Rotation was always break-glass; it is now slightly
+// more glass.
+
+/** The link a photographer or a guest follows to see a board. */
+export function moodboardShareUrl(token: string): string {
+  return absoluteUrl(`/m/${token}`);
+}

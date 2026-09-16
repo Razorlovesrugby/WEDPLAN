@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Moodboard clipper</title>
+    <style>
+      body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; width: 360px; color: #1c1917; }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      label { display: block; margin-bottom: 10px; }
+      span { display: block; color: #78716c; font-size: 12px; margin-bottom: 2px; }
+      input, select { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d6d3d1; border-radius: 4px; }
+      button { padding: 6px 12px; border: 1px solid #d6d3d1; background: #fff; border-radius: 4px; cursor: pointer; }
+      button.primary { background: #1c1917; color: #fff; border-color: #1c1917; }
+      .row { display: flex; gap: 8px; margin-top: 8px; }
+      .status { margin-top: 10px; font-size: 12px; }
+      .error { color: #b91c1c; }
+      .ok { color: #15803d; }
+    </style>
+  </head>
+  <body>
+    <h1>Moodboard clipper</h1>
+
+    <label>
+      <span>Your wedplan address</span>
+      <input id="origin" type="url" placeholder="https://yourwedding.vercel.app" />
+    </label>
+
+    <label>
+      <span>Clip token — create one in Settings</span>
+      <input id="token" type="password" placeholder="paste it here" />
+    </label>
+
+    <label>
+      <span>Default board</span>
+      <select id="board"><option value="">First board</option></select>
+    </label>
+
+    <div class="row">
+      <button id="save" class="primary">Save &amp; connect</button>
+      <button id="flush">Retry queued</button>
+    </div>
+
+    <p class="status" id="status"></p>
+
+    <script src="options.js"></script>
+  </body>
+</html>

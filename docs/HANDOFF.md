@@ -3,13 +3,94 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 16 — `docs/specs/09-moodboards.md` and
+Last updated: session 17 — specs 9 and 9.1 built end to end: moodboards with
+public share links, the Chrome clipper, and the Pinterest import. Read session
+17's "what has NOT been verified" list before trusting any of it; in
+particular no storage bucket, no browser, no loaded extension and no Pinterest
+call has ever existed. Session 16's note, below, recorded when this was still
+two specs — `docs/specs/09-moodboards.md` and
 `docs/specs/09.1-pinterest-import-and-clipper.md` written. **Specs only:
 nothing was built, and nothing should be** until their open questions are
 answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 17: Specs 9 and 9.1 BUILT — moodboards, the clipper, Pinterest import
+
+**The planner said to build both halves and went to register a Pinterest
+account**, so this session built what sessions 16's two specs proposed. Unlike
+session 11's correction, this was asked for directly.
+
+**Answers taken as given, because they were the specs' own recommendations and
+the planner's "I want it to have a chrome and the API to Pinterest" settled
+the scope question.** Recorded here so nobody re-derives them:
+
+- Spec 9 §12.1/.2 — uploads into a **private** Supabase Storage bucket, not
+  pasted URLs, not a public bucket.
+- Spec 9 §12.4 — both inline channels built (`/w` and `/rsvp/[token]`).
+- Spec 9 §12.5 — private notes per item, per share. Built.
+- Spec 9 §12.12 / 9.1 §12.5 — no default expiry; canvas columns provisioned,
+  no canvas screen.
+- Spec 9.1 §12.8 — **spec 9 §12.3 is reversed**: the server does now fetch
+  URLs, in exactly one module, because the clipper cannot work otherwise.
+
+**What exists now:**
+
+- `0013_moodboards.sql`, `0014_moodboard_clipper.sql`, `v_moodboards`,
+  seed data on both weddings, and `supabase/tests/05_moodboards.sql`
+  (39 assertions; 167 total).
+- `src/lib/moodboards.ts`, `src/lib/net/is-private-address.ts`,
+  `src/lib/net/fetch-image.ts`, `src/lib/pinterest.ts`, with 67 new unit
+  tests (287 total).
+- `/moodboards`, `/moodboards/[id]`, `/moodboards/[id]/import`, `/m/[token]`,
+  sections on `/w` and `/rsvp/[token]`, two cards on `/settings`, a Nav entry.
+- `POST /api/clip`, `GET /api/clip/boards`, `GET /api/proxy-image`,
+  `/api/pinterest/callback`.
+- `extension/` — the Chrome MV3 clipper, with its own README.
+- `scripts/ensure-bucket.mjs`, `[storage]` in `supabase/config.toml`.
+
+**Three things found while building that the specs did not predict:**
+
+1. **Node skips DNS entirely for IP literals.** `net.connect` checks
+   `isIP(host)` and never calls the `lookup` function, so
+   `https://169.254.169.254/` would have walked straight past the only
+   address check in `fetch-image.ts`. Literals are now checked separately,
+   and there is a test for each.
+2. **`m.*` broke `create or replace view`** — see section 6's new trap entry.
+3. **`absoluteUrl("")` returns a trailing slash**, which would have produced
+   `https://site//m/<token>` in every share link. The action now returns the
+   finished URL; the browser never assembles a credential-bearing one.
+
+**Deliberate deviation from spec 9.1 §8:** `moodboards.layout` ships in 0014
+as an `alter table` rather than in 0013, keeping "one feature, one migration"
+exact — 0013 is spec 9, 0014 is spec 9.1.
+
+**What has NOT been verified, and it is a longer list than usual:**
+
+- **Nothing has touched a real Supabase project**, so the bucket has never
+  been created, an object has never been uploaded, and a signed URL has never
+  been fetched. Every storage call is written against the API, not against a
+  running one. `scripts/ensure-bucket.mjs` has never run.
+- **No browser has opened any of this.** Same caveat as every session since 6,
+  but heavier here: this feature is almost entirely visual.
+- **The Chrome extension has never been loaded.** There is no harness for one;
+  `extension/README.md` has the by-hand pass, including the "sleep the laptop,
+  check the menu is still there" case that MV3 makes likely.
+- **No Pinterest call has ever been made.** No developer app existed when this
+  was written. Spec 9.1 §4's warnings are still warnings: the access tier, the
+  HTTPS-only redirect URI, and token lifetimes all need confirming against the
+  live docs, and every payload assumption in `src/lib/pinterest.ts` is
+  defensive precisely because none of it has been seen.
+- **The CORS question in spec 9.1 §3c is still open.** Whether Pinterest's CDN
+  lets the browser read an image into a canvas decides whether the import uses
+  the direct path or `/api/proxy-image`. Both are built; which one runs is
+  unknown until a real pin is imported.
+
+`npm run typecheck`, `npm test` (287), `./scripts/verify-migrations.sh` (167),
+`./scripts/verify-bootstrap.sh` and `npm run build` are all green. The new SQL
+suite was deliberately broken once and confirmed to exit non-zero — per
+section 6's rule about harnesses that cannot fail.
 
 ## Session 16: Specs 9 and 9.1 written — moodboards, plus Pinterest import and a clipper
 
@@ -1395,9 +1476,20 @@ embed resolves to `never` — which compiles fine and loses all type safety. Add
 an embed, add its relationship.
 
 **6. The service role client is a loaded gun.** `src/lib/supabase/admin.ts`
-bypasses RLS. Two legitimate callers: the public RSVP path (scoped by resolving
-a token to one household) and the cron sender. Everything a signed-in
+bypasses RLS. Five legitimate callers, each of which scopes itself because the
+database will not: the public RSVP path (a token resolved to one household),
+the cron sender, `getFxRate()`, moodboard storage, and the moodboard share and
+clip-token paths (a token resolved to one board or one wedding). That file
+lists all five with the reason each is allowed. Everything a signed-in
 collaborator does goes through `src/lib/supabase/server.ts`.
+
+**6b. Storage has no policies, so a path IS the tenancy check.** The
+moodboards bucket is private and carries no RLS on `storage.objects` at all —
+deliberately, because that is what keeps storage out of every migration and
+keeps `verify-migrations.sh` working against bare PostgreSQL. What is left is
+`storageObjectPath()` in `src/lib/moodboards.ts`, which takes uuids and throws
+on anything else. No action, route or extension payload may supply a path, a
+filename or an extension. Its unit tests are not decoration.
 
 **7. Import dedupe runs in JavaScript, and that is a decision.** `0001` enables
 `pg_trgm` and builds `guests_name_trgm_idx` for exactly this.
@@ -1446,6 +1538,21 @@ error anywhere. A unit test caught it before it ran on real data. Every value
 parser in `src/lib/import/columns.ts` now matches exactly. **When parsing what
 a human typed into a spreadsheet, exact beats clever: the wrong guess looks
 right.**
+
+**Two Supabase-managed objects that a migration must not touch.**
+`storage.objects` (0013) and the `supabase_realtime` publication (0014) do not
+exist on the bare PostgreSQL cluster `verify-migrations.sh` builds. The first
+is handled by having no storage policies at all; the second by wrapping the
+`alter publication` in an `if exists` guard, so it no-ops locally and works on
+a real project. **Expect a third.** The rule: if Supabase creates the object,
+a migration in this repo cannot assume it.
+
+**`m.*` in a view is a trap for `create or replace view`.** `v_moodboards` was
+first written as `select m.*, …`, which expands at definition time — so when
+0014 added `moodboards.layout`, the new column landed in the MIDDLE of the
+view's column list and the replace failed with "cannot change name of view
+column". Views in this repo list their columns explicitly, and a later
+migration appends at the END. This cost a build; it is in 0013's comments too.
 
 **Harnesses that cannot fail.** `verify-migrations.sh` briefly contained
 `grep -E 'FAIL|ERROR' <<<"$out" && exit 1`, which returns non-zero whenever

@@ -62,6 +62,11 @@ const serverSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   EMAIL_REPLY_TO: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  // Pinterest. Both optional: the app must boot and every other feature must
+  // work with them unset, the same treatment RESEND_API_KEY gets. Without
+  // them, /settings shows "not configured" instead of a Connect button.
+  PINTEREST_APP_ID: z.string().optional(),
+  PINTEREST_APP_SECRET: z.string().optional(),
 });
 
 function explain(error: z.ZodError, scope: string): never {
