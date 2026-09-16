@@ -34,16 +34,23 @@ export const getLists = cache(async (weddingId: string): Promise<ListRow[]> => {
   return data ?? [];
 });
 
-/** Non-archived list ids, for scoping a query over list_items to "every active list". */
+/**
+ * Non-archived list ids, for scoping a query over list_items to "every
+ * active list".
+ *
+ * Derived from `getLists` rather than issuing its own `select id` — same
+ * wedding, same `archived_at is null` filter, so the same set. Every smart
+ * view below awaits this *before* it can build its own query, which made it
+ * a strict serial round trip in front of each one; and because it was a
+ * bare async function rather than a cached one, rendering a page that shows
+ * two views (or `/budget`, which calls `getLists` and `getAllItems`) paid
+ * for it again each time. Going through the cached `getLists` collapses all
+ * of that to a single `lists` query per render — usually one the page has
+ * already made for its sidebar.
+ */
 async function getActiveListIds(weddingId: string): Promise<string[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("lists")
-    .select("id")
-    .eq("wedding_id", weddingId)
-    .is("archived_at", null);
-  if (error) throw new Error(`Could not load lists: ${error.message}`);
-  return (data ?? []).map((row) => row.id);
+  const lists = await getLists(weddingId);
+  return lists.map((row) => row.id);
 }
 
 export const getListDetail = cache(

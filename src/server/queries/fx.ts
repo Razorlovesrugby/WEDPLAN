@@ -24,7 +24,12 @@ async function fetchLiveRate(base: string, quote: string): Promise<number | null
   try {
     const res = await fetch(
       `https://api.frankfurter.app/latest?amount=1&from=${encodeURIComponent(base)}&to=${encodeURIComponent(quote)}`,
-      { signal: AbortSignal.timeout(5000) },
+      // 2.5s, not 5s: this runs inside a `/budget` render on the first load
+      // of the day for a currency, so the ceiling here is a ceiling on how
+      // long the whole page can sit blank. The ladder below already falls
+      // through to yesterday's cached rate, so a slow API costs a slightly
+      // stale number rather than a five-second stare at a skeleton.
+      { signal: AbortSignal.timeout(2500) },
     );
     if (!res.ok) return null;
     const json = (await res.json()) as { rates?: Record<string, number> };
@@ -50,15 +55,29 @@ async function fetchLiveRate(base: string, quote: string): Promise<number | null
  * returns { rate: null, source: "manual_required" }, and the caller stores
  * fx_rate = null with a visible "rate not available, enter manually" state.
  */
-export async function getFxRate(currency: string, weddingId: string): Promise<FxRateResult> {
+export async function getFxRate(
+  currency: string,
+  weddingId: string,
+  /**
+   * The wedding's base currency, when the caller already has it. `/budget`
+   * does — it loaded the wedding to render the page at all — and passing it
+   * skips a `weddings` round trip per foreign currency on every render.
+   * Omit it and this falls back to looking it up, as it always did.
+   */
+  knownBaseCurrency?: string,
+): Promise<FxRateResult> {
   const supabase = await createClient();
-  const { data: wedding, error: weddingError } = await supabase
-    .from("weddings")
-    .select("base_currency")
-    .eq("id", weddingId)
-    .maybeSingle();
-  if (weddingError) throw new Error(`Could not load the wedding's base currency: ${weddingError.message}`);
-  const baseCurrency = wedding?.base_currency ?? "GBP";
+
+  let baseCurrency = knownBaseCurrency;
+  if (baseCurrency === undefined) {
+    const { data: wedding, error: weddingError } = await supabase
+      .from("weddings")
+      .select("base_currency")
+      .eq("id", weddingId)
+      .maybeSingle();
+    if (weddingError) throw new Error(`Could not load the wedding's base currency: ${weddingError.message}`);
+    baseCurrency = wedding?.base_currency ?? "GBP";
+  }
 
   if (currency === baseCurrency) return { rate: 1, source: "same_currency" };
 

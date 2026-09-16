@@ -1,18 +1,25 @@
 import { Suspense } from "react";
 import { TimelineView } from "@/components/lists/timeline-view";
-import { getTimelineItems } from "@/server/queries/lists";
-import { getBudgetLinksForListItems } from "@/server/queries/budget-links";
+import { getLists, getTimelineItems } from "@/server/queries/lists";
+import { getBudgetLinksForLists } from "@/server/queries/budget-links";
 import { requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Timeline" };
 
 export default async function TimelinePage() {
   const wedding = await requireWedding();
-  const items = await getTimelineItems(wedding.id);
-  const budgetLinksMap = await getBudgetLinksForListItems(
-    wedding.id,
-    items.map((i) => i.id),
-  );
+
+  // `v_timeline_items` is already scoped to non-archived lists, and so is
+  // `getLists`, so the budget badges can be fetched by list alongside the
+  // items rather than waiting for them to come back first.
+  const lists = await getLists(wedding.id);
+  const [items, budgetLinksMap] = await Promise.all([
+    getTimelineItems(wedding.id),
+    getBudgetLinksForLists(
+      wedding.id,
+      lists.map((l) => l.id),
+    ),
+  ]);
   const budgetLinksByItem = Object.fromEntries(budgetLinksMap);
 
   return (
