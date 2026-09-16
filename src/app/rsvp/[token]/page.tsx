@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -83,6 +84,12 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
       <p className="mt-10 text-xs text-muted">
         This link is yours — there&rsquo;s no account to create. Please don&rsquo;t forward it;
         everyone else has their own.
+      </p>
+
+      <p className="mt-2 text-xs text-muted">
+        <Link className="underline hover:text-accent" href="/privacy">
+          What happens to what you enter here
+        </Link>
       </p>
     </main>
   );
