@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate, formatDateTime } from "@/lib/format";
 import type { Json } from "@/lib/types/database";
@@ -152,6 +153,12 @@ export default async function PublicSitePage() {
           find it, message us and we&rsquo;ll send it again.
         </p>
       </section>
+
+      <footer className="border-t border-line py-8 text-center">
+        <Link className="text-sm text-muted underline hover:text-accent" href="/privacy">
+          Privacy
+        </Link>
+      </footer>
     </main>
   );
 }

@@ -4,7 +4,15 @@ import { clientEnv } from "@/lib/env";
 import type { CookieToSet } from "./cookies";
 
 /** Paths reachable without a session. Everything else requires one. */
-const PUBLIC_PREFIXES = ["/login", "/forgot-password", "/auth", "/rsvp", "/w", "/api/cron"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/forgot-password",
+  "/auth",
+  "/rsvp",
+  "/w",
+  "/privacy",
+  "/api/cron",
+];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
