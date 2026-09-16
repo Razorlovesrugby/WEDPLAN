@@ -10,6 +10,23 @@ import type {
   PinterestAccountRow,
 } from "@/lib/types/database";
 
+/**
+ * "relation does not exist" — the migration has not been applied on this
+ * deployment yet.
+ *
+ * That is a deployment state, not a bug, and it must not take down a page
+ * that worked before this feature shipped: /settings carries two moodboard
+ * cards next to the cut-line and list-appearance editors, and a throw here
+ * would black out all four. So the reads below degrade to empty and
+ * /api/health is what says the schema is behind.
+ *
+ * Only 42P01 is swallowed. Every other error still throws, because every
+ * other error is a real one.
+ */
+function isMissingTable(error: { code?: string } | null): boolean {
+  return error?.code === "42P01";
+}
+
 /** An item with its images already signed, which is the only form a page can render. */
 export type SignedItem = MoodboardItemRow & {
   displayUrl: string | null;
@@ -25,6 +42,7 @@ export const listMoodboards = cache(async (weddingId: string): Promise<Moodboard
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
+  if (isMissingTable(error)) return [];
   if (error) throw new Error(`Could not load moodboards: ${error.message}`);
   return data ?? [];
 });
@@ -39,6 +57,7 @@ export const listArchivedMoodboards = cache(async (weddingId: string) => {
     .not("archived_at", "is", null)
     .order("archived_at", { ascending: false });
 
+  if (isMissingTable(error)) return [];
   if (error) throw new Error(`Could not load archived moodboards: ${error.message}`);
   return data ?? [];
 });
@@ -138,6 +157,7 @@ export const listClipTokens = cache(async (weddingId: string): Promise<Moodboard
     .eq("wedding_id", weddingId)
     .order("created_at", { ascending: true });
 
+  if (isMissingTable(error)) return [];
   if (error) throw new Error(`Could not load clip tokens: ${error.message}`);
   return data ?? [];
 });
@@ -150,6 +170,7 @@ export const getPinterestAccount = cache(async (weddingId: string): Promise<Pint
     .eq("wedding_id", weddingId)
     .maybeSingle();
 
+  if (isMissingTable(error)) return null;
   if (error) throw new Error(`Could not load the Pinterest connection: ${error.message}`);
   return data;
 });

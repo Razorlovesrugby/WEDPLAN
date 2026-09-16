@@ -1,14 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env";
+import { isPublicPath } from "@/lib/public-paths";
 import type { CookieToSet } from "./cookies";
-
-/** Paths reachable without a session. Everything else requires one. */
-const PUBLIC_PREFIXES = ["/login", "/forgot-password", "/auth", "/rsvp", "/w", "/api/cron"];
-
-function isPublic(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
 
 /**
  * Refreshes the auth cookie on every request and gates the planner routes.
@@ -47,12 +41,31 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   );
 
-  const { data } = await supabase.auth.getClaims();
-  const user = data?.claims ?? null;
+  // If the auth call fails, treat the request as signed out rather than
+  // letting middleware throw.
+  //
+  // This is not defensive padding. Middleware runs on EVERY request, so an
+  // unhandled throw here takes the entire site down with "a server-side
+  // exception has occurred" — the public site, the RSVP pages and the login
+  // screen included, with nothing on screen to say why. The realistic causes
+  // are all environmental: Supabase env vars that are absent or placeholder
+  // (a build succeeds with either, because it only checks their shape), a
+  // paused project, or a network blip.
+  //
+  // Failing closed-but-visible is the right trade: planner routes bounce to
+  // /login, the public pages still render, and /api/health says what is
+  // actually wrong.
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getClaims();
+    user = data?.claims ?? null;
+  } catch (error) {
+    console.error("[middleware] auth check failed; treating as signed out:", error);
+  }
 
   const { pathname } = request.nextUrl;
 
-  if (!user && !isPublic(pathname)) {
+  if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     // Come back to where they were aiming once they've signed in.

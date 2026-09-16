@@ -3,7 +3,13 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 17 — specs 9 and 9.1 built end to end: moodboards with
+Last updated: session 18 — a reported deployment 500. Two real bugs from
+session 17 fixed (`/m` and `/api/clip` were gated by middleware, so share
+links and the clipper could never have worked), middleware made fail-safe,
+and `GET /api/health` added — **open that first** on any future deployment
+problem. The cause of the 500 itself is still unconfirmed: this session could
+reach neither the deployment nor the database. Session 17, below — specs 9
+and 9.1 built end to end: moodboards with
 public share links, the Chrome clipper, and the Pinterest import. Read session
 17's "what has NOT been verified" list before trusting any of it; in
 particular no storage bucket, no browser, no loaded extension and no Pinterest
@@ -15,6 +21,67 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 18: the deployment 500s — two real bugs found, and a way to see the cause
+
+**The planner reported "Application error: a server-side exception has
+occurred" on a Vercel deployment.** This session could reach neither the
+deployment (the agent network policy answers 403 to that host) nor the live
+database (the Supabase connector is scoped to another organisation —
+`list_projects` shows only `arm15lite_PROD`, and asking for
+`lsgbwxisqqazahgkibmj` by id returns "You do not have permission", which is
+section 6's "empty tool result read as an empty world" trap saying *permission*,
+not *absence*). So the cause was not confirmed. What follows is what reading
+the code found, plus the instrumentation to settle it in one URL.
+
+**Two genuine bugs, both introduced in session 17, both found by reading
+`src/lib/supabase/middleware.ts`:**
+
+1. **`/m` was not in `PUBLIC_PREFIXES`.** Middleware gates everything not on
+   that list, so every moodboard share link redirected its recipient to
+   `/login`. The entire point of the feature — send a photographer a link that
+   needs no account — did not work.
+2. **`/api/clip` was not either.** The extension's POST would have followed a
+   redirect and received the login page's HTML.
+
+Both were invisible to every check that passes: typecheck, unit tests, SQL
+assertions and `next build` all go green with a feature that is unreachable.
+The list now lives in `src/lib/public-paths.ts` with its own test file,
+including the case that stops `/m` making `/moodboards` public.
+
+**The most likely cause of the 500 itself, unconfirmed:** middleware calls
+`supabase.auth.getClaims()` on *every* request, and an unhandled throw there
+takes the whole site down — public site, RSVP pages and login screen included.
+The realistic triggers are all environmental: Supabase env vars absent or
+placeholder, a paused project, a network blip. **A build succeeds with
+placeholder values**, because `src/lib/env.ts` validates their shape and not
+whether they point anywhere, so a green deploy proves nothing about runtime.
+That call is now wrapped: a failure logs and is treated as signed out, so
+planner routes bounce to `/login` and the public pages still render.
+
+**New: `GET /api/health`.** Booleans for whether each env var is set (never a
+value, no hosts, no keys), whether the database is reachable, which migrations
+are applied — probed one table each, reading `42P01` as "not run" — and
+whether the storage bucket exists. It is public, because a login page nobody
+can reach is exactly when it is needed. **This is the first thing to open on
+the next deployment problem.**
+
+**Also:** `src/app/error.tsx` and `global-error.tsx` replace Next's blank
+"see the server logs" with the error digest (the id in the log line) and a
+link to `/api/health`. They never render `error.message` — a page that shows
+internals to whoever visits shows them to a stranger holding a share link.
+
+**And:** the moodboard reads used by `/settings` now treat `42P01` as empty
+rather than throwing. `0013`/`0014` have never been applied to a live
+database, so without this the two new cards would black out the cut-line and
+list-appearance editors next to them on a page that worked before.
+
+`npm run typecheck`, `npm test` (294), `./scripts/verify-migrations.sh` (167)
+and `npm run build` are green.
+
+**Still unknown, and only the planner can close it:** whether the deployment's
+environment variables point at a real Supabase project, and whether any
+migration has ever been applied to it. `/api/health` answers both.
 
 ## Session 17: Specs 9 and 9.1 BUILT — moodboards, the clipper, Pinterest import
 
