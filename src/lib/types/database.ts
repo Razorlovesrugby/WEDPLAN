@@ -183,6 +183,16 @@ type BudgetItemTaskRelationships = [
   >,
 ];
 
+type RunSheetItemRelationships = [
+  Rel<"run_sheet_items_event_id_wedding_id_fkey", ["event_id", "wedding_id"], "events", ["id", "wedding_id"]>,
+  Rel<
+    "run_sheet_items_predecessor_id_wedding_id_fkey",
+    ["predecessor_id", "wedding_id"],
+    "run_sheet_items",
+    ["id", "wedding_id"]
+  >,
+];
+
 type BudgetItemListRelationships = [
   Rel<
     "budget_item_lists_budget_item_id_wedding_id_fkey",
@@ -211,12 +221,12 @@ export type QuestionType =
 export type QuestionScope = "guest" | "household";
 export type MessageKind = "invitation" | "reminder" | "update" | "test" | "digest";
 export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
-export type HouseholdTier = "A" | "B" | "C";
 export type ListKind = "checklist" | "timeline" | "generic";
 export type ListItemStatus = "not_started" | "in_progress" | "done";
 export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption" | "manual";
 export type BudgetGuestBasis = "per_adult" | "per_seat";
 export type ReminderDueSource = "list_item" | "payment";
+export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
 
 // ---------------------------------------------------------------------------
 // Rows
@@ -228,10 +238,6 @@ export type WeddingRow = {
   timezone: string;
   base_currency: string;
   capacity: number | null;
-  /** Rank of the last household above the A/B cut line. */
-  cut_rank: string | null;
-  /** Rank of the last household above the B/C line; null means one waitlist. */
-  tier_b_rank: string | null;
   rsvp_lock_at: string | null;
   invite_send_on: string | null;
   /** Digest urgency window in days — "overdue + due within this many days". Send day/time stays vercel.json's fixed cron. */
@@ -273,6 +279,19 @@ export type HouseholdRow = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+/** Spec 5, part A. Replaces weddings.cut_rank/tier_b_rank — "how many lines" is now data. */
+export type CutLineRow = {
+  id: string;
+  wedding_id: string;
+  label: string;
+  /** 0-indexed, top to bottom. Position 0 counts toward capacity. */
+  position: number;
+  /** Rank of the last household in this tier. Null on the last line by position — "no lower bound." */
+  boundary_rank: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type GuestRow = {
@@ -573,6 +592,33 @@ export type BudgetItemListRow = {
 }
 
 // ---------------------------------------------------------------------------
+// Run sheet (spec 5, part B)
+// ---------------------------------------------------------------------------
+export type RunSheetItemRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  title: string;
+  notes: string | null;
+  location: string | null;
+  /** Free text — no vendor FK exists yet. */
+  owner: string | null;
+  track: RunSheetTrack;
+  pinned: boolean;
+  /** Set iff pinned. */
+  pinned_at: string | null;
+  duration_minutes: number;
+  /** Null for a pinned item, or an unpinned one with no predecessor yet ("time TBD"). */
+  predecessor_id: string | null;
+  offset_minutes: number;
+  /** Schema-only in this pass — nothing reads it yet. */
+  guest_visible: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
 export type HouseholdView = {
@@ -593,8 +639,10 @@ export type HouseholdView = {
   seat_count: number;
   /** Running seat total down the ranked list — what the cut line is drawn against. */
   seats_cumulative: number;
-  /** Derived from rank against the wedding's cut lines. Never stored. */
-  tier: HouseholdTier;
+  /** The cut_lines.label this household falls under. Derived, never stored. */
+  tier: string;
+  /** 0-indexed position of that cut line. 0 = the top tier, the one that counts toward capacity. */
+  tier_position: number;
 }
 
 export type HouseholdRsvpView = {
@@ -706,6 +754,15 @@ export type BudgetItemTaskView = {
   linked_via_list: boolean;
 }
 
+/** `v_run_sheet_items` — every run_sheet_items row plus computed starts_at/ends_at/conflict. See spec 5, part B, section 3. */
+export type RunSheetItemView = RunSheetItemRow & {
+  /** Null when this item is unpinned with no (resolvable) predecessor — "time TBD". */
+  starts_at: string | null;
+  ends_at: string | null;
+  /** True when this item's computed end runs past the next pinned anchor in the same event. Non-blocking. */
+  conflict: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
@@ -720,6 +777,7 @@ export type Database = {
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
       events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted">;
+      cut_lines: Table<CutLineRow, "id" | Timestamps>;
       guests: Table<
         GuestRow,
         "id" | Timestamps | "age_band" | "is_plus_one" | "sort_order",
@@ -768,6 +826,18 @@ export type Database = {
       fx_rates: Table<FxRateRow, "fetched_at">;
       budget_item_tasks: Table<BudgetItemTaskRow, "created_at", BudgetItemTaskRelationships>;
       budget_item_lists: Table<BudgetItemListRow, "created_at", BudgetItemListRelationships>;
+      run_sheet_items: Table<
+        RunSheetItemRow,
+        | "id"
+        | Timestamps
+        | "track"
+        | "pinned"
+        | "duration_minutes"
+        | "offset_minutes"
+        | "guest_visible"
+        | "sort_order",
+        RunSheetItemRelationships
+      >;
     };
     Views: {
       v_households: View<HouseholdView>;
@@ -778,6 +848,7 @@ export type Database = {
       v_budget_summary: View<BudgetSummaryView>;
       v_reminders_due: View<ReminderDueView>;
       v_budget_item_tasks: View<BudgetItemTaskView>;
+      v_run_sheet_items: View<RunSheetItemView>;
     };
     Functions: {
       budget_guest_counts: {
@@ -795,11 +866,11 @@ export type Database = {
       question_scope: QuestionScope;
       message_kind: MessageKind;
       message_status: MessageStatus;
-      household_tier: HouseholdTier;
       list_kind: ListKind;
       list_item_status: ListItemStatus;
       budget_quantity_basis: BudgetQuantityBasis;
       budget_guest_basis: BudgetGuestBasis;
+      run_sheet_track: RunSheetTrack;
     };
     CompositeTypes: Record<string, never>;
   };

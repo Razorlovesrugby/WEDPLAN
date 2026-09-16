@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/guests", label: "Guests" },
   { href: "/guests/rank", label: "Ranking" },
   { href: "/events", label: "Events" },
+  { href: "/run-sheet", label: "Run sheet" },
   { href: "/invitations", label: "Invitations" },
   { href: "/questions", label: "Questions" },
   { href: "/lists", label: "Lists" },

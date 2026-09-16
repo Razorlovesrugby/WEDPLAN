@@ -14,7 +14,8 @@ export const guestFilterSchema = z.object({
   /** Free text over name and email. */
   q: z.string().trim().max(120).optional(),
   tag: z.string().uuid().optional(),
-  tier: z.enum(["A", "B", "C"]).optional(),
+  /** A cut_lines.label — validated against the wedding's actual configured labels at query time, not a compile-time enum (spec 5, part A). */
+  tier: z.string().trim().min(1).max(60).optional(),
   rsvp: z.enum(["yes", "no", "maybe", "pending"]).optional(),
   age: z.enum(["adult", "child", "infant"]).optional(),
   side: z.enum(["partner_a", "partner_b", "both", "other"]).optional(),

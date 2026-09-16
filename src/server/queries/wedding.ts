@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { CollaboratorRow, WeddingRow, WeddingStatsView } from "@/lib/types/database";
+import type { CollaboratorRow, CutLineRow, WeddingRow, WeddingStatsView } from "@/lib/types/database";
 
 /**
  * `cache()` deduplicates within a single render pass, so a layout and three
@@ -86,6 +86,19 @@ export const getCollaborators = cache(async (weddingId: string): Promise<Collabo
   const { data, error } = await supabase.from("collaborators").select("*").eq("wedding_id", weddingId);
 
   if (error) throw new Error(`Could not load collaborators: ${error.message}`);
+  return data ?? [];
+});
+
+/** Every cut line for the wedding, in position order. Spec 5, part A. */
+export const getCutLines = cache(async (weddingId: string): Promise<CutLineRow[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cut_lines")
+    .select("*")
+    .eq("wedding_id", weddingId)
+    .order("position", { ascending: true });
+
+  if (error) throw new Error(`Could not load cut lines: ${error.message}`);
   return data ?? [];
 });
 

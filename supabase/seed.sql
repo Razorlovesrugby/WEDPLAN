@@ -28,10 +28,18 @@ $$;
 -- Wedding 1 — the one under test
 -- ---------------------------------------------------------------------------
 insert into public.weddings
-  (id, name, wedding_date, timezone, base_currency, capacity, cut_rank, tier_b_rank, rsvp_lock_at)
+  (id, name, wedding_date, timezone, base_currency, capacity, rsvp_lock_at)
 values
   ('11111111-1111-4111-8111-111111111111', 'Alex & Sam', '2027-06-12', 'Europe/London',
-   'GBP', 90, 'a6', 'a8', '2027-04-30 23:59:00+01')
+   'GBP', 90, '2027-04-30 23:59:00+01')
+on conflict (id) do nothing;
+
+-- Cut lines (spec 5, part A) — same effective A/a6, B/a8, C split the fixed
+-- two-column version used to encode directly on `weddings`.
+insert into public.cut_lines (id, wedding_id, label, position, boundary_rank) values
+  ('c1111111-1111-4111-8111-000000000001', '11111111-1111-4111-8111-111111111111', 'A', 0, 'a6'),
+  ('c1111111-1111-4111-8111-000000000002', '11111111-1111-4111-8111-111111111111', 'B', 1, 'a8'),
+  ('c1111111-1111-4111-8111-000000000003', '11111111-1111-4111-8111-111111111111', 'C', 2, null)
 on conflict (id) do nothing;
 
 insert into public.collaborators (wedding_id, user_id, role) values
@@ -152,8 +160,13 @@ on conflict (wedding_id, block_key) do nothing;
 -- ---------------------------------------------------------------------------
 -- Wedding 2 — the one nobody in wedding 1 may ever see
 -- ---------------------------------------------------------------------------
-insert into public.weddings (id, name, wedding_date, capacity, cut_rank)
-values ('22222222-2222-4222-8222-222222222222', 'Other Couple', '2027-09-04', 60, 'a2')
+insert into public.weddings (id, name, wedding_date, capacity)
+values ('22222222-2222-4222-8222-222222222222', 'Other Couple', '2027-09-04', 60)
+on conflict (id) do nothing;
+
+insert into public.cut_lines (id, wedding_id, label, position, boundary_rank) values
+  ('c2222222-2222-4222-8222-000000000001', '22222222-2222-4222-8222-222222222222', 'A', 0, 'a2'),
+  ('c2222222-2222-4222-8222-000000000002', '22222222-2222-4222-8222-222222222222', 'B', 1, null)
 on conflict (id) do nothing;
 
 insert into public.collaborators (wedding_id, user_id, role) values

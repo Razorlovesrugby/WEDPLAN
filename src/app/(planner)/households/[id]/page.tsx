@@ -9,6 +9,7 @@ import { moveGuest, moveGuests } from "@/server/actions/guests";
 import { getHouseholdAnswers } from "@/server/queries/questions";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName, pluralise } from "@/lib/format";
+import { tierTextClass } from "@/lib/tier-colors";
 
 export default async function HouseholdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,7 +40,8 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl">{household.display_name}</h1>
         <span className="text-sm text-muted">
-          Tier {household.tier} · {pluralise(household.head_count, "person", "people")} ·{" "}
+          Tier <span className={`font-medium ${tierTextClass(household.tier_position)}`}>{household.tier}</span> ·{" "}
+          {pluralise(household.head_count, "person", "people")} ·{" "}
           {pluralise(household.seat_count, "seat")}
           {household.infant_count > 0 ? ` · ${household.infant_count} on laps` : null}
         </span>

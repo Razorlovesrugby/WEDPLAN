@@ -206,7 +206,7 @@ console.log("==> bootstrap");
 
 const { data: weddings, error: weddingError } = await admin
   .from("weddings")
-  .select("id, name, wedding_date, timezone, capacity, rsvp_lock_at, cut_rank, tier_b_rank");
+  .select("id, name, wedding_date, timezone, capacity, rsvp_lock_at");
 
 if (weddingError) {
   fail(`could not read weddings — ${weddingError.message}`);

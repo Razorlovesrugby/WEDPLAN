@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { CapacityControl } from "@/components/rank/capacity-control";
 import { RankList } from "@/components/rank/rank-list";
+import { CutLinePicker } from "@/components/settings/cut-line-picker";
 import { listHouseholds } from "@/server/queries/guests";
-import { getWeddingStats, requireWedding } from "@/server/queries/wedding";
+import { getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
 import { getPerSeatCostInvited } from "@/server/queries/budget";
 import { ranksNeedRebalance } from "@/server/actions/rank";
 import { formatMoney, pluralise } from "@/lib/format";
@@ -11,11 +12,12 @@ export const metadata = { title: "Ranking" };
 
 export default async function RankPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, perSeatCost] = await Promise.all([
+  const [households, stats, rebalanceOffered, perSeatCost, cutLines] = await Promise.all([
     listHouseholds(wedding.id),
     getWeddingStats(wedding.id),
     ranksNeedRebalance(),
     getPerSeatCostInvited(wedding.id),
+    getCutLines(wedding.id),
   ]);
 
   const aboveCutSeats = stats?.above_cut_seats ?? 0;
@@ -31,7 +33,7 @@ export default async function RankPage() {
   const suggestions =
     spare > 0
       ? households
-          .filter((h) => h.tier !== "A" && h.seat_count <= spare)
+          .filter((h) => h.tier_position !== 0 && h.seat_count <= spare)
           .slice(0, 5)
       : [];
 
@@ -75,12 +77,10 @@ export default async function RankPage() {
           .
         </p>
       ) : (
-        <RankList
-          households={households}
-          capacity={wedding.capacity}
-          cutRank={wedding.cut_rank}
-          tierBRank={wedding.tier_b_rank}
-        />
+        <>
+          <CutLinePicker households={households} cutLines={cutLines} />
+          <RankList households={households} capacity={wedding.capacity} cutLines={cutLines} />
+        </>
       )}
 
       {suggestions.length > 0 ? (
