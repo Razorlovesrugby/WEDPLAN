@@ -11,6 +11,7 @@ import {
   setStatus,
   toggleFlag,
 } from "@/server/actions/lists";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { CollaboratorRow, ListItemRow } from "@/lib/types/database";
 
 export type ItemWithList = ListItemRow & {
@@ -175,7 +176,7 @@ export function ItemRow({
             {showListLabel && item.lists ? (
               <span
                 className="rounded px-1.5 py-0.5 text-xs text-white"
-                style={{ backgroundColor: item.lists.color ?? "#8a8580" }}
+                style={{ backgroundColor: item.lists.color ?? DEFAULT_LIST_COLOR }}
               >
                 {item.lists.title}
               </span>

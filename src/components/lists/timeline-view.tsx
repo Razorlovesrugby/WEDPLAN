@@ -2,8 +2,18 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { TaskPreviewPopup } from "./task-preview-popup";
 import type { TimelineItemView } from "@/lib/types/database";
 
 type Zoom = "week" | "month" | "quarter";
@@ -23,21 +33,32 @@ function mondayOf(date: Date): Date {
   return d;
 }
 
-/** Every dated item across every list, chronological, grouped/coloured by list (spec 1, section 6). */
+/**
+ * Every dated item across every list, chronological, grouped/coloured by
+ * list (spec 1, section 6). Clicking a card (rather than dragging it) opens
+ * a read-only preview with a click-through to the task's real location on
+ * /lists/[id] — same pattern as BudgetLinksPopup (spec 6). A distance
+ * activation constraint on the pointer sensor keeps a plain click from
+ * being swallowed as a zero-distance drag.
+ */
 export function TimelineView({
   items,
   budgetLinksByItem = {},
+  timezone,
 }: {
   items: TimelineItemView[];
   /** Budget lines linked to each item, keyed by list_item_id — spec 6, section 7's reverse badge. */
   budgetLinksByItem?: Record<string, { id: string; label: string }[]>;
+  timezone: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightId = searchParams.get("highlight");
   const [zoom, setZoom] = useState<Zoom>("month");
   const [error, setError] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<TimelineItemView | null>(null);
   const [, startTransition] = useTransition();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
     if (!highlightId) return;
@@ -89,14 +110,22 @@ export function TimelineView({
           Nothing on the timeline yet. Set a due date on any item, anywhere, and it appears here.
         </p>
       ) : (
-        <DndContext onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {buckets.map((bucket) => (
-              <TimelineColumn key={bucket.key} bucket={bucket} budgetLinksByItem={budgetLinksByItem} highlightId={highlightId} />
+              <TimelineColumn
+                key={bucket.key}
+                bucket={bucket}
+                budgetLinksByItem={budgetLinksByItem}
+                highlightId={highlightId}
+                onPreview={setPreviewItem}
+              />
             ))}
           </div>
         </DndContext>
       )}
+
+      <TaskPreviewPopup item={previewItem} timezone={timezone} open={previewItem !== null} onClose={() => setPreviewItem(null)} />
     </div>
   );
 }
@@ -138,10 +167,12 @@ function TimelineColumn({
   bucket,
   budgetLinksByItem,
   highlightId,
+  onPreview,
 }: {
   bucket: Bucket;
   budgetLinksByItem: Record<string, { id: string; label: string }[]>;
   highlightId: string | null;
+  onPreview: (item: TimelineItemView) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: bucket.anchorDate });
 
@@ -160,6 +191,7 @@ function TimelineColumn({
             item={item}
             budgetLinks={budgetLinksByItem[item.id] ?? []}
             highlighted={item.id === highlightId}
+            onPreview={onPreview}
           />
         ))}
       </div>
@@ -171,10 +203,12 @@ function TimelineCard({
   item,
   budgetLinks,
   highlighted,
+  onPreview,
 }: {
   item: TimelineItemView;
   budgetLinks: { id: string; label: string }[];
   highlighted: boolean;
+  onPreview: (item: TimelineItemView) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
 
@@ -184,9 +218,10 @@ function TimelineCard({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      onClick={() => onPreview(item)}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.list_color ?? "#8a8580",
+        borderLeftColor: item.list_color ?? DEFAULT_LIST_COLOR,
       }}
       className={`cursor-grab rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm active:cursor-grabbing
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}

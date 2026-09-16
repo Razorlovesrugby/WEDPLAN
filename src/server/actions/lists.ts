@@ -358,6 +358,7 @@ export async function addItem(
   if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
 
   const supabase = await createClient();
+  const user = await getSessionUser();
   const { data: last } = await supabase
     .from("list_items")
     .select("sort_order")
@@ -367,9 +368,19 @@ export async function addItem(
     .limit(1)
     .maybeSingle();
 
+  // Auto-assigned to whoever's creating it (spec 7) — every creation path
+  // (quick-add, the full item form, a budget line's linked task) goes
+  // through this one function, so this is the single place that needs it.
+  // Still freely reassignable afterward via assignItem.
   const { data, error } = await supabase
     .from("list_items")
-    .insert({ ...parsed.data, wedding_id: wedding.id, list_id: listId, sort_order: (last?.sort_order ?? 0) + 1 })
+    .insert({
+      ...parsed.data,
+      wedding_id: wedding.id,
+      list_id: listId,
+      assigned_to: user?.id ?? null,
+      sort_order: (last?.sort_order ?? 0) + 1,
+    })
     .select("id")
     .single();
   if (error) return fail(error.message);

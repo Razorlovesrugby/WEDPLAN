@@ -1,5 +1,6 @@
 import "server-only";
 import { pluralise } from "@/lib/format";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { DigestContent } from "@/lib/reminders/digest";
 
 /**
@@ -162,7 +163,7 @@ export function digestEmail(options: { weddingName: string; url: string; digest:
                ${group.dueSoon.map((i) => `<li>${escapeHtml(i.title)} <span style="color:#6b6560">(${label(i, false)} ${i.due_date})</span></li>`).join("")}
              </ul>`
           : "";
-      return `<div style="margin:16px 0;padding-left:12px;border-left:3px solid ${escapeHtml(group.listColor ?? "#8a8580")}">
+      return `<div style="margin:16px 0;padding-left:12px;border-left:3px solid ${escapeHtml(group.listColor ?? DEFAULT_LIST_COLOR)}">
         <p style="margin:0;font-weight:bold">${escapeHtml(group.listTitle)}</p>
         ${overdueHtml}${dueSoonHtml}
       </div>`;
