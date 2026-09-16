@@ -1,3 +1,4 @@
+import { sortCompletedLast } from "@/lib/lists/sort";
 import { ItemRow, type ItemWithList } from "./item-row";
 import type { CollaboratorRow } from "@/lib/types/database";
 
@@ -29,9 +30,13 @@ export function SmartView({
     return <p className="card p-6 text-sm text-muted">{EMPTY_COPY[view]}</p>;
   }
 
+  // Sinks done items to the bottom (spec 10) — a no-op for "today",
+  // "scheduled", and "mine", which already exclude done items at the query.
+  const orderedItems = sortCompletedLast(items, (item) => item.status === "done");
+
   return (
     <div className="card divide-y divide-line/60 px-3">
-      {items.map((item) => (
+      {orderedItems.map((item) => (
         <ItemRow
           key={item.id}
           item={item}
