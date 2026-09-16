@@ -3,11 +3,104 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 15 — spec 7 built end to end, all four parts (cooler
-list colors, auto-assign on task creation, a highlighted "today" on
-`/calendar`, and click-to-preview task cards on `/calendar`/`/timeline`).
-No schema change; nothing here touches `cut_lines`, `v_households`, or
-`run_sheet_items` — read session 14's note below before touching those.
+Last updated: session 16 — `docs/specs/09-moodboards.md` and
+`docs/specs/09.1-pinterest-import-and-clipper.md` written. **Specs only:
+nothing was built, and nothing should be** until their open questions are
+answered (see session 11's note below, and §6's "Writing a spec is not
+permission to build it"). 9.1 additionally needs a Pinterest developer app
+that only the planner can register. Session 15's work — spec 7, built end to
+end — is unchanged and is described below these entries.
+
+## Session 16: Specs 9 and 9.1 written — moodboards, plus Pinterest import and a clipper
+
+**The planner asked for a spec, and this session wrote one and stopped.**
+`docs/specs/09-moodboards.md`: titled grids of images that can be handed to
+one audience over a link that needs no account — the photographer for the
+photo vibes, the guests for the dress code. Nothing is built. No migration,
+no bucket, no screen, no action. Its §12 has twelve questions and question 1
+changes the schema, so per `docs/specs/README.md` even the migration waits.
+
+**The one thing to know before reading it:** this is the first feature in the
+project that needs **Supabase Storage**. Spec 8 §2 refused file uploads on
+the grounds that no bucket is configured and configuring one is its own piece
+of work; §3 of spec 9 is that work. The shape proposed there, so it is not
+re-derived from scratch next session:
+
+- **One private bucket, no storage RLS policies at all.** Every object is
+  written, signed and deleted by the service role from code that has already
+  established the caller's wedding. That keeps `storage.objects` out of every
+  migration, which is what lets `scripts/verify-migrations.sh` keep applying
+  the whole set to a bare PostgreSQL cluster whose shim provides `auth` and
+  nothing else.
+- **That makes a third legitimate caller of the service role client.** §5
+  rule 6 below, and `README.md`, both currently say there are exactly two.
+  Those sentences get updated in the same change if this is built, and the
+  new caller carries the same obligation: **object paths are derived from ids
+  the server has checked, never accepted from a client.**
+- **The bucket is created by an idempotent script**, not a migration, next to
+  `verify-bootstrap.sh` — plus `[storage] enabled = true` in
+  `supabase/config.toml` for local dev.
+- **Share links reuse `src/lib/tokens.ts` unchanged** (32 random bytes,
+  hashed at rest with the pepper, encrypted so the link can be re-copied) and
+  reuse `rsvp_token_attempts` for throttling, which needs no schema change
+  because it deliberately holds no wedding and no token. The consequence is
+  that `INVITE_TOKEN_PEPPER` would then pepper two things, so rotating it
+  invalidates share links as well as invitations — §12.8 of the spec asks the
+  planner to confirm that, and `.env.example` gets a line about it.
+- **Sharing is one table with three channels** — a tokenised `/m/{token}`
+  link, inline on `/w`, and inline inside `/rsvp/{token}` — because the guest
+  asking "what do I wear" is already standing on the RSVP page.
+
+**Numbering collision, flagged rather than resolved:** specs 8 and 9 both
+claim `0013_*.sql` and `supabase/tests/05_*.sql`. Neither is built. Whichever
+is built first takes the numbers; the other renumbers.
+
+**No code changed this session.** `docs/specs/09-moodboards.md` is new,
+`docs/specs/README.md` gained its row and a build-order note, and this file
+gained this entry. Every check that was green at the end of session 15 is
+untouched and still green by construction — nothing outside `docs/` was
+edited.
+
+**Late in the same session, the planner supplied a second, separately written
+technical spec** — a standalone prototype: Express, socket.io, SQLite/Lowdb,
+an unauthenticated `POST /api/clip`, a hardcoded `PINTEREST_ACCESS_TOKEN`, and
+an HTML5 canvas with x/y coordinates — and asked whether it could be built in
+as well. It can, and `docs/specs/09.1-pinterest-import-and-clipper.md` is the
+translation. §1 of that file is a line-by-line accounting of what was adopted
+and what was replaced, so nobody re-litigates it:
+
+- **Express, socket.io and SQLite are all replaced**, not out of preference:
+  Vercel's functions have no process for a socket to stay open against, and a
+  second datastore beside Supabase is two sources of truth and an instant
+  breach of §5 rule 1 below. Live updates become Supabase Realtime, used as a
+  *nudge* that triggers `router.refresh()` — the new row is not renderable in
+  the browser anyway, because spec 9's bucket is private and signing is a
+  server capability.
+- **The unauthenticated clip endpoint is the one hard rejection.** As
+  specified it is an open write into a metered bucket *and* an SSRF proxy.
+  It gets a per-device clip token (hashed at rest, same machinery as
+  invitations, bearer header like `/api/cron/reminders`), and every
+  server-side URL fetch goes through one audited module whose address checks
+  run at connect time — hostname string matching is not a control.
+- **That reverses spec 9's §12.3 recommendation** ("no server-side fetching
+  this pass"). The clipper cannot work without it, so the question gets
+  answered properly instead of avoided. Spec 9.1 §12.8 asks the planner to
+  confirm the reversal.
+- **The canvas is deferred but paid for**: `layout` plus nullable
+  `x/y/scale/z_index` ship in the migration, nothing reads them, and a canvas
+  mode later is a screen rather than a migration on a populated table.
+- **Two more guarded-statement traps of the same family as spec 9 §3's**:
+  `alter publication supabase_realtime …` does not exist on the bare cluster
+  `verify-migrations.sh` builds, so it is wrapped in an `if exists` check.
+  That is now the second time a Supabase-managed object has had to be kept out
+  of a migration to protect that script. Expect a third.
+- **The Pinterest half is the only planned work whose schedule is not ours.**
+  It needs a developer app registered by the planner, at an access tier nobody
+  here can predict, and the spec's §4 is deliberately written as "verify all of
+  this against the current docs, my knowledge has a cutoff and their access
+  tiers have changed before". Build order 2–5 produces the whole clipper
+  without touching Pinterest, so that half can wait indefinitely.
+
 
 ## Session 15: Spec 7 built — list colors, auto-assign, today highlight, click-to-preview
 
