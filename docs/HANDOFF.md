@@ -3,10 +3,90 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 14 — spec 5 built end to end, both parts (multi-cut
-guest lines, and the day-of run sheet). Read that session's note before
-touching `cut_lines`, `v_households.tier`/`tier_position`, or
-`run_sheet_items`.
+Last updated: session 15 — spec 7 built end to end, all four parts (cooler
+list colors, auto-assign on task creation, a highlighted "today" on
+`/calendar`, and click-to-preview task cards on `/calendar`/`/timeline`).
+No schema change; nothing here touches `cut_lines`, `v_households`, or
+`run_sheet_items` — read session 14's note below before touching those.
+
+## Session 15: Spec 7 built — list colors, auto-assign, today highlight, click-to-preview
+
+**The planner asked for four small, independent UI/behavior fixes
+directly, each with an unambiguous answer** — `docs/specs/07-list-colors-task-assignment-calendar-today.md`
+records all four as already decided, so this session went straight to
+building, same as spec 6 and 5 before it. Part D (click-to-preview task
+cards) was a same-session follow-up request added after Parts A–C shipped,
+folded into the same spec rather than opened as a new one.
+
+**Part A — cooler list colors:** `src/lib/list-colors.ts`'s
+`LIST_COLOR_PALETTE` (spec 3's fixed 8-swatch set) replaced end to end —
+the old muted/beige-leaning set (Slate, Clay, Moss, Amber, Wine, Ink blue,
+Sage, Plum) is now Rose, Ruby, Cobalt, Sky, Fuchsia, Crimson, Violet, Teal,
+spanning pink/red/blue per the planner's direct request ("pinks, reds,
+blues, not beige"). `DEFAULT_LIST_COLOR` moved with it. Every hardcoded
+`"#8a8580"` fallback that had been duplicated as a literal instead of
+importing the constant — `item-row.tsx`, `lists-sidebar.tsx`,
+`timeline-view.tsx`, `list-detail.tsx`, `board-view.tsx`,
+`calendar-view.tsx`, and the reminder email template
+(`src/lib/email/templates.ts`) — now imports `DEFAULT_LIST_COLOR` instead,
+so an unset list's color is consistent everywhere it renders, not just in
+the settings picker. No migration and no backfill: existing `lists.color`
+rows keep whatever hex they already have, only the picker's offered set and
+the unset-fallback changed.
+
+**Part B — auto-assign on task creation:** `assigned_to` has existed since
+spec 1, but nothing set it at creation. Every creation path (quick-add, the
+full add-item form, a task spun off a budget line) already funnels through
+one function, `addItem` in `src/server/actions/lists.ts` — that function
+now reads the session user and sets `assigned_to` to whoever is creating
+the item. Still freely reassignable afterward through the existing
+`assignItem` action, unchanged.
+
+**Part C — a highlighted "today" on `/calendar`:** `CalendarDay` in
+`src/components/lists/calendar-view.tsx` already tracked `isToday` but only
+showed it as a slightly bolder digit. Today's cell now gets a soft accent
+background wash, an inset accent ring around the whole cell, and the date
+number sits in a solid accent-filled circle badge. Purely additive styling
+on the same cell — no change to the urgency rings (overdue/due-soon) or
+drag-drop.
+
+**Part D — click-to-preview task cards (same-session follow-up):**
+`/budget` already had click-a-line → dialog → click-through
+(`BudgetLinksPopup`, spec 6). Task cards on `/calendar` and `/timeline` had
+no equivalent — the whole card only carried dnd-kit's drag listeners, so
+there was no way to see a task's details without dragging it or hunting for
+its list. New shared component `src/components/lists/task-preview-popup.tsx`
+(`TaskPreviewPopup`) gives both screens the same flow: click a card's title
+(`/calendar`) or the card itself (`/timeline`, excluding its own 💰
+budget-link badge, which already stops propagation) opens a read-only
+dialog — title, list (dot + name), status, due date, flag/priority, notes —
+plus an "Open task →" link to `/lists/[list_id]?highlight=[item_id]`, the
+same destination `BudgetLinksPopup`'s task links already use. Both
+`DndContext`s now pass a `PointerSensor` with a 4px distance
+`activationConstraint` (matching `list-detail.tsx`'s existing sortable
+DndContext) so a plain click isn't swallowed as a zero-distance drag. Both
+`CalendarView` and `TimelineView` now take a required `timezone` prop for
+the popup's due-date formatting, threaded from `wedding.timezone` in
+`/calendar/page.tsx` and `/timeline/page.tsx`.
+
+**No board-view (`/board`) equivalent** — that screen's whole interaction
+is drag-between-columns, wasn't asked for, and can follow the same pattern
+later if wanted. No editing inside the preview popup — status, date,
+assignment, and notes stay editable only on `/lists/[id]` and `/board`.
+
+`npm run typecheck`, `npm test` (220 tests, unchanged pass count — none of
+these four changes touch logic covered by existing unit tests, and no new
+pure-logic module needed its own), `./scripts/verify-migrations.sh` (128
+assertions, unchanged — no schema in this spec), `./scripts/verify-bootstrap.sh`,
+and `npm run build` are all green, reconfirmed this session against the
+built code.
+
+**Same live/browser caveat as every session since session 6:** none of
+this has been applied to the live Supabase project or clicked through in a
+real browser — no live project is reachable from this session. The new
+color palette, the auto-assign behavior, the today highlight, and the
+click-to-preview popup on both `/calendar` and `/timeline` have all only
+been read, not watched working on screen.
 
 ## Session 14: Spec 5 built — multi-cut guest lines, and the day-of run sheet
 
@@ -850,12 +930,23 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 ### Checks
 
 ```bash
-npm run typecheck                 # clean — reconfirmed, session 13
-npm test                          # 206 tests passing — reconfirmed, session 13
-./scripts/verify-migrations.sh    # 106 SQL assertions, throwaway PG cluster — reconfirmed, session 13
-./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 13
-npm run build                     # reconfirmed, session 13
+npm run typecheck                 # clean — reconfirmed, session 15
+npm test                          # 220 tests passing — reconfirmed, session 15
+./scripts/verify-migrations.sh    # 128 SQL assertions, throwaway PG cluster — reconfirmed, session 15
+./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 15
+npm run build                     # reconfirmed, session 15
 ```
+
+**Session 15 ran all five checks against spec 7's build (no schema change,
+so the same migrations as session 14), and every one is green:**
+`verify-migrations.sh` is still 128 assertions — spec 7 added no table, no
+column, and no view, so nothing new to assert there. `verify-bootstrap.sh`
+still creates one wedding and both collaborators cleanly. `npm run
+typecheck` is clean across the whole app. `npm test` is 220 tests passing,
+same count as before this session — none of spec 7's four parts touch
+logic covered by existing unit tests. `npm run build` succeeds and lists
+every route, including `/calendar` and `/timeline` at their new sizes for
+the click-to-preview popup, in its output.
 
 **Session 13 ran all five checks against `0011_budget_manual_quantity.sql`
 on top of session 12's migrations, and every one is green:**
