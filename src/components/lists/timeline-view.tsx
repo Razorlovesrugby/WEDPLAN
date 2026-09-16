@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { TimelineItemView } from "@/lib/types/database";
 
 type Zoom = "week" | "month" | "quarter";
@@ -186,7 +187,7 @@ function TimelineCard({
       {...listeners}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.list_color ?? "#8a8580",
+        borderLeftColor: item.list_color ?? DEFAULT_LIST_COLOR,
       }}
       className={`cursor-grab rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm active:cursor-grabbing
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}

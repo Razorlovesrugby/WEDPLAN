@@ -7,6 +7,7 @@ import { setDueDate } from "@/server/actions/lists";
 import { buildDigest, type DigestItem } from "@/lib/reminders/digest";
 import { monthLabel, monthWeeks, shiftMonth, monthStart } from "@/lib/calendar";
 import { todayIso } from "@/lib/lists/generate";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { TimelineItemView } from "@/lib/types/database";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -148,11 +149,17 @@ function CalendarDay({
     <div
       ref={setNodeRef}
       className={`min-h-24 space-y-1 p-1.5 sm:min-h-32 ${
-        isOver ? "bg-accent/10" : inMonth ? "bg-white" : "bg-paper"
+        isOver ? "bg-accent/10" : isToday ? "bg-accent/10 ring-1 ring-inset ring-accent" : inMonth ? "bg-white" : "bg-paper"
       }`}
     >
-      <p className={`text-right text-[11px] ${inMonth ? "text-muted" : "text-muted/50"} ${isToday ? "font-bold text-accent" : ""}`}>
-        {dayNumber}
+      <p className={`text-right text-[11px] ${inMonth ? "text-muted" : "text-muted/50"}`}>
+        {isToday ? (
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-accent font-bold text-white">
+            {dayNumber}
+          </span>
+        ) : (
+          dayNumber
+        )}
       </p>
       <div className="space-y-1">
         {items.map((item) => (
@@ -185,7 +192,7 @@ function CalendarCard({
       ref={setNodeRef}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.list_color ?? "#8a8580",
+        borderLeftColor: item.list_color ?? DEFAULT_LIST_COLOR,
       }}
       className={`rounded border border-l-4 bg-white px-1.5 py-1 text-[11px] shadow-sm
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}

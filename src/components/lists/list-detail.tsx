@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { addSection, archiveList, reorderItems } from "@/server/actions/lists";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import { ItemRow } from "./item-row";
 import { QuickAdd } from "./quick-add";
 import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow } from "@/lib/types/database";
@@ -123,7 +124,7 @@ export function ListDetail({
         <div className="flex items-center gap-2">
           <span
             className="h-3 w-3 shrink-0 rounded-full"
-            style={{ backgroundColor: list.color ?? "#8a8580" }}
+            style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
             aria-hidden
           />
           {list.icon ? <span aria-hidden>{list.icon}</span> : null}

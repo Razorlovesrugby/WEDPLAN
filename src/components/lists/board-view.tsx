@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { setStatus } from "@/server/actions/lists";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { ListItemStatus } from "@/lib/types/database";
 import type { ItemWithList } from "./item-row";
 
@@ -129,7 +130,7 @@ function BoardCard({
       ref={setNodeRef}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.lists?.color ?? "#8a8580",
+        borderLeftColor: item.lists?.color ?? DEFAULT_LIST_COLOR,
       }}
       className={`rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}`}

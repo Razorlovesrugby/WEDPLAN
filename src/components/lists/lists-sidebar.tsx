@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { ListRow } from "@/lib/types/database";
 
 const SMART_VIEWS = [
@@ -54,7 +55,7 @@ export function ListsSidebar({ lists }: { lists: ListRow[] }) {
               >
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: list.color ?? "#8a8580" }}
+                  style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
                   aria-hidden
                 />
                 {list.icon ? <span aria-hidden>{list.icon}</span> : null}
