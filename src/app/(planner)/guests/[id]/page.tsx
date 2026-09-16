@@ -51,7 +51,7 @@ export default async function GuestPage({ params }: { params: Promise<{ id: stri
             households={households}
             excludeIds={household ? [household.id] : []}
             label="Move to a different household…"
-            move={(targetHouseholdId) => moveGuest(guest.id, targetHouseholdId)}
+            move={moveGuest.bind(null, guest.id)}
           />
         </span>
       </div>

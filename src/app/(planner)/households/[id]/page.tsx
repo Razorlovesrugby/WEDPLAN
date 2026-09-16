@@ -59,7 +59,7 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
                   households={households}
                   excludeIds={[household.id]}
                   label="Move all members…"
-                  move={(targetHouseholdId) => moveGuests(guestIds, targetHouseholdId)}
+                  move={moveGuests.bind(null, guestIds)}
                 />
               ) : null}
             </div>
@@ -80,7 +80,7 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
                       households={households}
                       excludeIds={[household.id]}
                       label="Move"
-                      move={(targetHouseholdId) => moveGuest(guest.id, targetHouseholdId)}
+                      move={moveGuest.bind(null, guest.id)}
                     />
                   </div>
                 </li>
