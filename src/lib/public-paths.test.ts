@@ -27,8 +27,15 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/api/health")).toBe(true);
   });
 
-  it("keeps the public site and auth pages open", () => {
-    for (const path of ["/w", "/w/anything", "/login", "/forgot-password", "/auth/callback"]) {
+  it("keeps the public site, the privacy notice and the auth pages open", () => {
+    for (const path of [
+      "/w",
+      "/w/anything",
+      "/privacy",
+      "/login",
+      "/forgot-password",
+      "/auth/callback",
+    ]) {
       expect(isPublicPath(path), path).toBe(true);
     }
   });

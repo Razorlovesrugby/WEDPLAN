@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { WeddingBasicsForm } from "@/components/settings/wedding-basics-form";
 import { CutLinePicker } from "@/components/settings/cut-line-picker";
 import { ListAppearanceEditor } from "@/components/settings/list-appearance-editor";
@@ -70,6 +71,30 @@ export default async function SettingsPage() {
         tokens={clipTokens}
         boards={boards.map((board) => ({ id: board.id, title: board.title }))}
       />
+      {/* Not a setting — there is nothing here to change. It is here because
+          the privacy notice is a promise made in your name to your guests,
+          and the only other way to read it is to open an RSVP link. A new
+          tab, so checking the wording does not cost you the planner. */}
+      <section aria-labelledby="privacy" className="card space-y-2 p-4">
+        <h2 id="privacy" className="text-sm font-medium uppercase tracking-wide text-muted">
+          Privacy notice
+        </h2>
+        <p className="text-sm text-muted">
+          What guests are told about the details you hold on them — what is stored, who sees it,
+          and how long it is kept. Linked from the RSVP page and the public site.
+        </p>
+        <p className="text-sm">
+          <Link
+            className="underline hover:text-accent"
+            href="/privacy"
+            target="_blank"
+            rel="noopener"
+          >
+            Read the privacy notice
+            <span className="sr-only"> (opens in a new tab)</span>
+          </Link>
+        </p>
+      </section>
     </div>
   );
 }

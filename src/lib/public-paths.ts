@@ -14,7 +14,7 @@
  * Every entry here is a surface that scopes ITSELF, because middleware is no
  * longer doing it: an invitation token resolved to one household, a share
  * token resolved to one board, a clip token resolved to one wedding, a bearer
- * CRON_SECRET, or a page that is genuinely public.
+ * CRON_SECRET, or a page that is genuinely public (/w, /privacy).
  */
 export const PUBLIC_PREFIXES = [
   "/login",
@@ -23,6 +23,7 @@ export const PUBLIC_PREFIXES = [
   "/rsvp",
   "/w",
   "/m",
+  "/privacy",
   "/api/cron",
   "/api/clip",
   "/api/health",
