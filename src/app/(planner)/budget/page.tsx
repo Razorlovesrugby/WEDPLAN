@@ -8,7 +8,7 @@ import {
 } from "@/server/queries/budget";
 import { getBudgetItemLinks } from "@/server/queries/budget-links";
 import { getFxRate } from "@/server/queries/fx";
-import { getLists } from "@/server/queries/lists";
+import { getAllItems, getLists } from "@/server/queries/lists";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { CategoryHeader } from "@/components/budget/category-header";
 import { NewCategoryForm } from "@/components/budget/new-category-form";
@@ -26,7 +26,7 @@ export default async function BudgetPage({
 }) {
   const { item: openItemId } = await searchParams;
   const wedding = await requireWedding();
-  const [categories, items, components, payments, summary, events, lists] = await Promise.all([
+  const [categories, items, components, payments, summary, events, lists, allTasks] = await Promise.all([
     listBudgetCategories(wedding.id),
     listBudgetItems(wedding.id),
     listConsumptionComponents(wedding.id),
@@ -34,6 +34,7 @@ export default async function BudgetPage({
     getBudgetSummary(wedding.id),
     getEvents(wedding.id),
     getLists(wedding.id),
+    getAllItems(wedding.id),
   ]);
 
   // Guest counts, one lookup per distinct event scope actually used by an
@@ -134,6 +135,7 @@ export default async function BudgetPage({
                         components={componentsByItem.get(item.id) ?? []}
                         payments={paymentsByItem.get(item.id) ?? []}
                         lists={lists}
+                        allTasks={allTasks}
                         links={linksByItem.get(item.id) ?? { lists: [], tasks: [] }}
                         timezone={wedding.timezone}
                         counts={countsByScope.get(item.event_id) ?? { adult: 0, child: 0, seat: 0 }}

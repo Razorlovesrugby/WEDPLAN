@@ -15,7 +15,7 @@
  * needing to know the database's row types at all.
  */
 
-export type QuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption";
+export type QuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption" | "manual";
 export type GuestBasis = "per_adult" | "per_seat";
 
 /**
@@ -50,6 +50,8 @@ export type BudgetItemInput = {
   estimated: number | null;
   quoted: number | null;
   contracted: number | null;
+  /** Multiplier for `manual` (spec 6.1) — decimals allowed, defaults to 1 when null. Unused for every other basis. */
+  quantity?: number | null;
 };
 
 function countFor(basis: GuestBasis, counts: GuestCounts): number {
@@ -95,5 +97,7 @@ export function computeCurrent(
       return Math.round((item.unitPrice ?? 0) * counts.seat);
     case "consumption":
       return consumptionTotal(components, counts);
+    case "manual":
+      return Math.round((item.quantity ?? 1) * (item.unitPrice ?? 0));
   }
 }

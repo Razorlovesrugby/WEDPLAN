@@ -3,10 +3,92 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 12 — spec 6 (budget management) built end to end, at
-the planner's direct instruction and explicitly ahead of spec 5. Read that
-session's note before touching budget, reminders, or the lists/timeline
-linking surface.
+Last updated: session 13 — spec 6.1 (a manual quantity × unit price
+costing basis, and a "Link a task…" search completing spec 6's task/list
+linking) written and built in the same session, at the planner's direct
+word. Read that session's note before touching budget item bases or the
+linking popup.
+
+## Session 13: Spec 6.1 written, decided, and built — quantity × unit price, and the existing-task-link gap closed
+
+**The planner asked for a quick spec ("6.1") covering two things: a
+quantity-and-unit-price costing option, and the ability to link a budget
+line to a task that already exists.** This session wrote
+`docs/specs/06.1-budget-quantity-and-task-linking.md` first, without
+building anything from it — same rule session 11 established. That spec
+immediately flagged that the second ask wasn't actually new: spec 6,
+section 7 already specified a "Link a task…" combobox alongside "Link a
+list…", and session 12's build only shipped the list search and the
+create-new-task shortcut, never the existing-task search. That half needed
+no new decision, just finishing.
+
+**The planner then asked to build 6.1.** The quantity/unit-price half
+still had four genuine open questions (spec 6.1, section 4) that this
+session did **not** answer on its own — per the same rule spec 4's session
+11 correction established, and unlike sessions 8–10's earlier
+self-answering habit. They were put to the planner directly and answered
+before anything beyond the already-written spec was touched:
+
+1. Basis name: **`manual`**.
+2. Quantity type: **decimals allowed** (covers "2.5 hours", not just whole
+   counts).
+3. Default when blank: **1** — enforced at the action layer, not a
+   database default, so the column stays nullable and meaningful only for
+   its own basis, matching `unit_price`'s existing convention.
+4. Per-head inclusion: **excluded** — a `manual` line does not count
+   toward `v_budget_summary.per_head_adult`/`per_head_seat` or
+   `/guests/rank`'s standing figure, same treatment `flat` already gets.
+
+**What's built:**
+
+- `supabase/migrations/0011_budget_manual_quantity.sql` — one enum value
+  (`budget_quantity_basis` gains `'manual'`), one column
+  (`budget_items.quantity`, nullable numeric), and `v_budget_items` /
+  `v_budget_summary` redefined (views carry no data of their own, so this
+  is additive the same way 0005 redefining `v_timeline_items` was — every
+  existing output column keeps its position, `quantity` is appended at the
+  end). Deliberately its own migration file rather than an edit to 0010:
+  "one feature, one migration" is this schema's convention regardless of
+  whether a migration has reached a live project yet, the same reasoning
+  0004/0005 split spec 1's two decision rounds.
+- `src/lib/budget.ts`'s `computeCurrent` gains the `manual` case
+  (`quantity ?? 1) * unitPrice`, unit-tested (3 new cases: explicit
+  quantity, a decimal quantity, and the null-defaults-to-1 case) and
+  cross-checked against `supabase/tests/03_budget.sql`'s two new fixture
+  items — one with `quantity = 12`, one with `quantity` unset — both
+  passed on the first run, meaning the JS mirror and the SQL view agreed
+  without any back-and-forth.
+- `src/server/actions/budget.ts` — the create/update schemas accept
+  `quantity` (decimals via `z.coerce.number()`, not `optionalMinorUnits()`
+  since it isn't a money column), and the "defaults to 1 when blank" rule
+  is applied explicitly in both `createBudgetItem` and `updateBudgetItem`
+  (the latter re-checks the *effective* basis — the patch's new basis if
+  changing, else the row's current one — so switching an existing line to
+  `manual` also gets the default).
+- `src/components/budget/budget-item-fields.tsx` — a fifth basis option
+  ("Manual (quantity × unit price)"), showing a quantity input alongside
+  the existing unit-price field when selected; `budget-item-row.tsx`'s
+  summary line shows "12 × £25.00" for a manual line.
+- `src/server/queries/budget.ts`'s `getPerSeatCostInvited` excludes
+  `manual` alongside `flat`, matching the view's own filter — decision 4
+  applied in exactly one place, not two definitions that could drift.
+- **Part B:** `/budget`'s linked-tasks popup gains a "Link a task…" search
+  box next to the existing "Link a list…" one, reusing spec 1's
+  `getAllItems` (already returns every task across every list with its
+  list's title — no new query needed) filtered in memory by title,
+  excluding tasks already linked to the line — same "few hundred rows, no
+  round trip" approach `HouseholdPicker` (spec 4) already uses. Clicking a
+  result calls `linkBudgetItemToTask`, which already existed from session
+  12; only the search UI was missing.
+
+`npm run typecheck`, `npm test` (206 tests, 3 of them new), and
+`./scripts/verify-migrations.sh` (106 SQL assertions, 2 of them new) are
+green, alongside `verify-bootstrap.sh` and `npm run build`.
+
+**Same live/browser caveat as every session since session 6, unchanged:**
+the new quantity field, the basis picker's fifth option, and the "Link a
+task…" search have all only been read, not clicked through in a real
+browser.
 
 ## Session 12: Spec 6 (budget management) built, ahead of spec 5, on the planner's direct word
 
@@ -625,6 +707,7 @@ first wedding. Full instructions in `supabase/migrations/README.md`.
 | 6 | `0006_reminders.sql` | `message_log.kind` gains `'digest'` — [spec](specs/02-reminders.md) |
 | 7 | `0007_settings.sql` | `weddings.reminder_window_days` — [spec](specs/03-settings-calendar-mobile.md) |
 | 10 | `0010_budget.sql` | Budget categories/items, consumption components, payments, `fx_rates`, section 7's linking tables, `v_budget_items`/`v_budget_summary`/`v_reminders_due`/`v_budget_item_tasks` — [spec](specs/06-budget-management.md) |
+| 11 | `0011_budget_manual_quantity.sql` | `budget_quantity_basis` gains `'manual'`, `budget_items.quantity` — [spec](specs/06.1-budget-quantity-and-task-linking.md) |
 | — | `bootstrap.sql` | Your wedding, both collaborators, starting events and questions |
 
 Numbers 8 and 9 are spec 5's (multi-cut lines, day-of run sheet) and don't
@@ -672,12 +755,22 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 ### Checks
 
 ```bash
-npm run typecheck                 # clean — reconfirmed, session 12
-npm test                          # 203 tests passing — reconfirmed, session 12
-./scripts/verify-migrations.sh    # 104 SQL assertions, throwaway PG cluster — reconfirmed, session 12
-./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 12
-npm run build                     # reconfirmed, session 12
+npm run typecheck                 # clean — reconfirmed, session 13
+npm test                          # 206 tests passing — reconfirmed, session 13
+./scripts/verify-migrations.sh    # 106 SQL assertions, throwaway PG cluster — reconfirmed, session 13
+./scripts/verify-bootstrap.sh     # bootstrap on a clean database — reconfirmed, session 13
+npm run build                     # reconfirmed, session 13
 ```
+
+**Session 13 ran all five checks against `0011_budget_manual_quantity.sql`
+on top of session 12's migrations, and every one is green:**
+`verify-migrations.sh` is 106 assertions, up from 104 (two new fixture
+items in `supabase/tests/03_budget.sql` — an explicit-quantity `manual`
+item and a quantity-left-blank one — both computed correctly and the
+per-head total stayed unchanged, proving the exclusion rule). `npm test`
+is 206 tests passing (3 of them new, in `src/lib/budget.test.ts`). `npm
+run build` succeeds and lists `/budget` unchanged in size class alongside
+every other route.
 
 **Session 12 ran all five checks against `0010_budget.sql` on top of
 session 10's migrations (session 11 built no schema — see its own note),

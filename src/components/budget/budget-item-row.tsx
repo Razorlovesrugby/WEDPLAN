@@ -16,6 +16,7 @@ import type {
   PaymentRow,
 } from "@/lib/types/database";
 import type { LinkedList, LinkedTask } from "@/server/queries/budget-links";
+import type { ListItemWithList } from "@/server/queries/lists";
 
 const BASIS_LABEL: Record<BudgetItemView["quantity_basis"], string> = {
   flat: "Flat",
@@ -23,6 +24,7 @@ const BASIS_LABEL: Record<BudgetItemView["quantity_basis"], string> = {
   per_child: "Per child",
   per_seat: "Per seat",
   consumption: "Consumption",
+  manual: "Manual",
 };
 
 /**
@@ -38,6 +40,7 @@ export function BudgetItemRow({
   components,
   payments,
   lists,
+  allTasks,
   links,
   timezone,
   counts,
@@ -50,6 +53,8 @@ export function BudgetItemRow({
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
   lists: ListRow[];
+  /** Every task across every list, for the popup's "Link a task…" search (spec 6.1, part B). */
+  allTasks: ListItemWithList[];
   links: { lists: LinkedList[]; tasks: LinkedTask[] };
   timezone: string;
   counts: { adult: number; child: number; seat: number };
@@ -108,6 +113,7 @@ export function BudgetItemRow({
           {item.vendor_name ? <span className="ml-2 text-sm text-muted">{item.vendor_name}</span> : null}
           <div className="mt-0.5 text-xs text-muted">
             {BASIS_LABEL[item.quantity_basis]}
+            {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price, item.currency)}` : ""}
             {item.currency !== baseCurrency ? ` · ${item.currency}` : ""}
             {linkedCount > 0 ? ` · ${linkedCount} linked` : ""}
           </div>
@@ -168,6 +174,7 @@ export function BudgetItemRow({
         itemId={item.id}
         itemLabel={item.label}
         lists={lists}
+        allTasks={allTasks}
         links={links}
         timezone={timezone}
         open={popupOpen}

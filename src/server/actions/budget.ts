@@ -45,6 +45,13 @@ const optionalMinorUnits = () =>
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "" ? null : v));
 
+/** Decimals allowed (spec 6.1, section 4, decision 2) — "2.5 hours", "40.5 metres", not just whole counts. */
+const optionalQuantity = () =>
+  z
+    .union([z.coerce.number().min(0), z.literal("")])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "" ? null : v));
+
 const currencyCode = z
   .string()
   .trim()
@@ -168,12 +175,14 @@ const budgetItemFields = z.object({
   label: z.string().trim().min(1, "Give the line a name").max(200),
   vendor_name: optionalText(200),
   currency: currencyCode,
-  quantity_basis: z.enum(["flat", "per_adult", "per_child", "per_seat", "consumption"]),
+  quantity_basis: z.enum(["flat", "per_adult", "per_child", "per_seat", "consumption", "manual"]),
   unit_price: optionalMinorUnits(),
   estimated: optionalMinorUnits(),
   quoted: optionalMinorUnits(),
   contracted: optionalMinorUnits(),
   notes: optionalText(2000),
+  /** Multiplier for `manual` (spec 6.1) — unused for every other basis. */
+  quantity: optionalQuantity(),
 });
 
 /** Looks up (and snapshots) an fx_rate for `currency` against the wedding's base_currency, unless they already match. */
@@ -191,13 +200,18 @@ export async function createBudgetItem(
   if (parsed.data.quantity_basis === "consumption" && parsed.data.unit_price) {
     return fail("A consumption item is priced by its components, not a unit price");
   }
+  // Defaults to 1 when left blank (spec 6.1, section 4, decision 3) — a
+  // forgotten quantity still produces a real total (the unit price on its
+  // own) rather than zero.
+  const quantity =
+    parsed.data.quantity_basis === "manual" ? (parsed.data.quantity ?? 1) : parsed.data.quantity;
 
   const fxRate = await resolveFxRateFor(parsed.data.currency, wedding.id);
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("budget_items")
-    .insert({ ...parsed.data, wedding_id: wedding.id, fx_rate: fxRate === 1 ? null : fxRate })
+    .insert({ ...parsed.data, quantity, wedding_id: wedding.id, fx_rate: fxRate === 1 ? null : fxRate })
     .select("id")
     .single();
   if (error) return fail(error.message);
@@ -224,7 +238,7 @@ export async function updateBudgetItem(
   const supabase = await createClient();
   const { data: current, error: readError } = await supabase
     .from("budget_items")
-    .select("currency, contracted, contracted_task_created")
+    .select("currency, contracted, contracted_task_created, quantity_basis")
     .eq("id", itemId)
     .eq("wedding_id", wedding.id)
     .maybeSingle();
@@ -232,6 +246,13 @@ export async function updateBudgetItem(
   if (!current) return fail("That line no longer exists");
 
   const update: Partial<BudgetItemRow> = { ...parsed.data };
+
+  // Defaults to 1 when left blank (spec 6.1, section 4, decision 3), for a
+  // line that either is or is becoming `manual`.
+  const effectiveBasis = parsed.data.quantity_basis ?? current.quantity_basis;
+  if (effectiveBasis === "manual" && "quantity" in parsed.data && parsed.data.quantity === null) {
+    update.quantity = 1;
+  }
 
   // A currency change (and only a currency change — an explicit fx_rate in
   // the patch is a manual override that must stick, not be silently
