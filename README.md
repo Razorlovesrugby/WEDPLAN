@@ -32,6 +32,13 @@ Next.js 15 (App Router) · Supabase (Postgres, Auth) · TypeScript · Tailwind
   one, and never after RSVPs close.
 - **Exports.** Guest list, household list, and a catering sheet that carries
   only confirmed attendees with their dietary notes.
+- **Moodboards.** Grids of images you can hand to one audience over a link
+  that needs no account — the photographer for the photo vibes, guests for
+  the dress code. Private notes per image, shown only on the shares you switch
+  them on for. Publishable inline on the public site or the RSVP page.
+- **A right-click clipper.** A Chrome extension (`extension/`) that sends any
+  image on the web to a board, live, and a Pinterest import for boards you
+  already have.
 
 ---
 
@@ -39,11 +46,17 @@ Next.js 15 (App Router) · Supabase (Postgres, Auth) · TypeScript · Tailwind
 
 ```bash
 npm install
-cp .env.example .env.local     # every value is explained in the file
-supabase start                 # or point at a hosted project
-supabase db reset              # applies migrations and the dev seed
+cp .env.example .env.local        # every value is explained in the file
+supabase start                    # or point at a hosted project
+supabase db reset                 # applies migrations and the dev seed
+node scripts/ensure-bucket.mjs    # the private moodboards storage bucket
 npm run dev
 ```
+
+`ensure-bucket.mjs` is idempotent and has to be run once per environment. It
+is a script rather than a migration on purpose: a migration touching `storage`
+could not be applied to the bare PostgreSQL cluster `verify-migrations.sh`
+builds. Skip it and image uploads fail with "Storage isn't reachable".
 
 No Supabase project exists yet — the migrations have only ever been applied to
 throwaway local clusters. See `docs/HANDOFF.md` for what that means and what to
@@ -62,8 +75,8 @@ project, so do it early.
 
 ```bash
 npm run typecheck                 # strict, with noUncheckedIndexedAccess
-npm test                          # 47 unit tests
-./scripts/verify-migrations.sh    # 52 SQL assertions on a throwaway cluster
+npm test                          # 287 unit tests
+./scripts/verify-migrations.sh    # 167 SQL assertions on a throwaway cluster
 npm run build
 ```
 
@@ -81,10 +94,12 @@ src/
   app/
     (planner)/        signed-in screens: dashboard, guests, ranking, invitations
     rsvp/[token]/     public RSVP — no login, one household per token
+    m/[token]/        public moodboard — no login, one board per token
     w/                public site
-    api/              cron and CSV exports
+    api/              cron, CSV exports, the clipper endpoint, Pinterest OAuth
   components/
   lib/                ranking, tokens, CSV, timezone, formatting, Supabase clients
+    net/              the one module allowed to fetch a URL somebody else chose
   server/
     actions/          every write in the app
     queries/          every read
@@ -93,8 +108,10 @@ supabase/
   migrations/         schema, RLS, views
   tests/              tenancy and derived-value assertions
   seed.sql            two weddings — a tenancy test with one tenant proves nothing
+extension/          the Chrome MV3 clipper. Not part of the Next.js build.
 docs/
   wedding-platform-spec.md   the amended spec, V1 through V3
+  specs/                     one spec per feature, with its open questions
   HANDOFF.md                 current state and what to pick up next
 ```
 
@@ -108,9 +125,19 @@ children reference `(parent_id, wedding_id)`. Attaching a guest in one wedding
 to a household in another is a foreign key violation — even for the service
 role, which bypasses RLS entirely.
 
-**The service role client bypasses RLS and has exactly two legitimate callers:**
-the public RSVP path, scoped by resolving a token to one household, and the
-cron sender. Everything a signed-in collaborator does goes through
-`src/lib/supabase/server.ts`, so the database stays the thing enforcing access.
+**The service role client bypasses RLS, and every caller scopes itself.** The
+public RSVP path (a token resolved to one household), the cron sender, the FX
+rate cache, moodboard storage, and the moodboard share and clip-token paths (a
+token resolved to one board or one wedding). Everything a signed-in
+collaborator does goes through `src/lib/supabase/server.ts`, so the database
+stays the thing enforcing access. `src/lib/supabase/admin.ts` lists all five
+and why each one is allowed.
+
+**The moodboards bucket is private and has no storage policies at all.** That
+is what keeps `storage.objects` out of every migration, which is what lets
+`verify-migrations.sh` apply the whole set to a bare PostgreSQL cluster. The
+consequence: object paths are *derived* from ids the server has already
+checked (`storageObjectPath()`), never accepted from a client. A client that
+could name its own path could name somebody else's.
 
 More, including the traps that have already cost time, in `docs/HANDOFF.md`.

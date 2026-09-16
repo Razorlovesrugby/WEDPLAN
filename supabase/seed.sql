@@ -191,3 +191,98 @@ insert into public.list_items (id, wedding_id, list_id, title) values
   ('b3111111-1111-4111-8111-0000000000ff', '22222222-2222-4222-8222-222222222222',
    'b1111111-1111-4111-8111-0000000000ff', 'Secret task')
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Moodboards (0013/0014)
+-- ---------------------------------------------------------------------------
+-- Two boards on wedding 1 — the two audiences the feature exists for — and
+-- one on wedding 2, because the cross-wedding assertions need a second tenant
+-- to fail against.
+--
+-- The storage_path values point at objects that do not exist in any bucket,
+-- and that is correct: the seed seeds the database, and a local
+-- `supabase start` has an empty bucket. What it exercises is that every
+-- surface renders a missing object as a broken tile rather than falling over
+-- — which is also what a half-deleted object looks like in production.
+insert into public.moodboards (id, wedding_id, title, description, event_id, sort_order) values
+  ('c1000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+   'Photography vibes', 'Light, not poses. The getting-ready shots matter more than the group ones.',
+   'e1111111-1111-4111-8111-111111111111', 0),
+  ('c1000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+   'What to wear', 'Garden party formal. Comfortable shoes — the lawn is real grass.',
+   null, 1)
+on conflict (id) do nothing;
+
+insert into public.moodboard_items
+  (id, wedding_id, moodboard_id, storage_path, thumb_path, content_type, byte_size,
+   width, height, uploaded_at, caption, note, source_url, credit, is_cover, sort_order, origin)
+values
+  ('c2000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000001/c2000000-0000-4000-8000-000000000001.webp',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000001/c2000000-0000-4000-8000-000000000001_thumb.webp',
+   'image/webp', 240000, 1600, 1067, now(),
+   'Golden hour, back-lit', 'This is the one I actually care about — 6pm, sun behind them.',
+   'https://example.com/walled-garden', 'example.com', true, 0, 'upload'),
+  ('c2000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000001/c2000000-0000-4000-8000-000000000002.webp',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000001/c2000000-0000-4000-8000-000000000002_thumb.webp',
+   'image/webp', 180000, 1200, 1600, now(),
+   'Confetti, from behind', null, 'https://www.pinterest.com/pin/12345/', null, false, 1, 'pinterest'),
+  -- An upload whose bytes never arrived: invisible everywhere except the
+  -- board page that created it.
+  ('c2000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000001',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000001/c2000000-0000-4000-8000-000000000003.webp',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000001/c2000000-0000-4000-8000-000000000003_thumb.webp',
+   'image/webp', 0, null, null, null, null, null, null, null, false, 2, 'upload'),
+  ('c2000000-0000-4000-8000-000000000011', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000002',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000002/c2000000-0000-4000-8000-000000000011.webp',
+   '11111111-1111-4111-8111-111111111111/c1000000-0000-4000-8000-000000000002/c2000000-0000-4000-8000-000000000011_thumb.webp',
+   'image/webp', 150000, 900, 1200, now(),
+   'Linen, muted colours', null, null, null, true, 0, 'clip')
+on conflict (id) do nothing;
+
+-- The pin id that makes a re-import a no-op.
+update public.moodboard_items
+   set external_id = '813744956860114778'
+ where id = 'c2000000-0000-4000-8000-000000000002';
+
+-- One link share for the photographer, with notes ON; one for a friend with
+-- notes off; and the dress-code board published to the RSVP page.
+--
+-- These token hashes are not derived from any real token — nothing can be
+-- opened with them. They exist so the shape is testable.
+insert into public.moodboard_shares
+  (id, wedding_id, moodboard_id, channel, label, token_hash, token_encrypted,
+   show_notes, show_credits, view_count) values
+  ('c3000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000001', 'link', 'Anna — photographer',
+   'seed-hash-photographer', 'seed-encrypted-photographer', true, true, 3),
+  ('c3000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000001', 'link', 'Mum',
+   'seed-hash-mum', 'seed-encrypted-mum', false, true, 0),
+  ('c3000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111',
+   'c1000000-0000-4000-8000-000000000002', 'rsvp', null, null, null, false, true, 0)
+on conflict (id) do nothing;
+
+insert into public.moodboard_clip_tokens (id, wedding_id, label, token_hash, token_encrypted, default_moodboard_id) values
+  ('c4000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
+   'Seed laptop', 'seed-hash-clip', 'seed-encrypted-clip', 'c1000000-0000-4000-8000-000000000001')
+on conflict (id) do nothing;
+
+-- Wedding 2's board. Nobody in wedding 1 may ever see this.
+insert into public.moodboards (id, wedding_id, title) values
+  ('c1000000-0000-4000-8000-0000000000ff', '22222222-2222-4222-8222-222222222222', 'Secret board')
+on conflict (id) do nothing;
+
+insert into public.moodboard_items
+  (id, wedding_id, moodboard_id, storage_path, thumb_path, content_type, byte_size, uploaded_at) values
+  ('c2000000-0000-4000-8000-0000000000ff', '22222222-2222-4222-8222-222222222222',
+   'c1000000-0000-4000-8000-0000000000ff',
+   '22222222-2222-4222-8222-222222222222/c1000000-0000-4000-8000-0000000000ff/c2000000-0000-4000-8000-0000000000ff.webp',
+   '22222222-2222-4222-8222-222222222222/c1000000-0000-4000-8000-0000000000ff/c2000000-0000-4000-8000-0000000000ff_thumb.webp',
+   'image/webp', 100000, now())
+on conflict (id) do nothing;

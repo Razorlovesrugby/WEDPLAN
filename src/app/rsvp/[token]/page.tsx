@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
+import { PublicBoardView } from "@/components/moodboards/public-board";
+import { listPublishedBoards } from "@/server/moodboards/resolve";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -36,6 +38,10 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
 
   const { context } = resolved;
   const { wedding, household, guests, events, questions, rsvps, answers, locked } = context;
+
+  // The household's own token has already done the authenticating, so a board
+  // published to this channel needs no credential of its own.
+  const boards = await listPublishedBoards(wedding.id, "rsvp");
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
@@ -80,6 +86,20 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
         answers={answers}
         locked={locked}
       />
+
+      {/* Moodboards published to the RSVP channel. Below the form, never
+          between a guest and the submit button — but on this page rather than
+          behind a second link, because "what do I wear" gets asked by someone
+          already standing here. */}
+      {boards.map((board) => (
+        <section key={board.board.id} className="mt-12 border-t border-line pt-8">
+          <h2 className="font-serif text-2xl">{board.board.title}</h2>
+          {board.board.description ? (
+            <p className="mb-4 mt-1 whitespace-pre-line text-sm text-muted">{board.board.description}</p>
+          ) : null}
+          <PublicBoardView board={board} />
+        </section>
+      ))}
 
       <p className="mt-10 text-xs text-muted">
         This link is yours — there&rsquo;s no account to create. Please don&rsquo;t forward it;

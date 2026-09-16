@@ -193,6 +193,37 @@ type RunSheetItemRelationships = [
   >,
 ];
 
+type MoodboardRelationships = [
+  Rel<"moodboards_event_id_wedding_id_fkey", ["event_id", "wedding_id"], "events", ["id", "wedding_id"]>,
+];
+
+type MoodboardItemRelationships = [
+  Rel<
+    "moodboard_items_moodboard_id_wedding_id_fkey",
+    ["moodboard_id", "wedding_id"],
+    "moodboards",
+    ["id", "wedding_id"]
+  >,
+];
+
+type MoodboardShareRelationships = [
+  Rel<
+    "moodboard_shares_moodboard_id_wedding_id_fkey",
+    ["moodboard_id", "wedding_id"],
+    "moodboards",
+    ["id", "wedding_id"]
+  >,
+];
+
+type MoodboardClipTokenRelationships = [
+  Rel<
+    "moodboard_clip_tokens_default_moodboard_id_wedding_id_fkey",
+    ["default_moodboard_id", "wedding_id"],
+    "moodboards",
+    ["id", "wedding_id"]
+  >,
+];
+
 type BudgetItemListRelationships = [
   Rel<
     "budget_item_lists_budget_item_id_wedding_id_fkey",
@@ -227,6 +258,9 @@ export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat
 export type BudgetGuestBasis = "per_adult" | "per_seat";
 export type ReminderDueSource = "list_item" | "payment";
 export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
+export type MoodboardShareChannel = "link" | "public_site" | "rsvp";
+export type MoodboardItemOrigin = "upload" | "clip" | "pinterest";
+export type MoodboardLayout = "grid" | "canvas";
 
 // ---------------------------------------------------------------------------
 // Rows
@@ -619,6 +653,102 @@ export type RunSheetItemRow = {
 }
 
 // ---------------------------------------------------------------------------
+// Moodboards
+// ---------------------------------------------------------------------------
+export type MoodboardRow = {
+  id: string;
+  wedding_id: string;
+  title: string;
+  description: string | null;
+  event_id: string | null;
+  /** Provisioned by 0014; nothing reads it yet. */
+  layout: MoodboardLayout;
+  sort_order: number;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MoodboardItemRow = {
+  id: string;
+  wedding_id: string;
+  moodboard_id: string;
+  storage_path: string;
+  thumb_path: string;
+  content_type: string;
+  byte_size: number;
+  width: number | null;
+  height: number | null;
+  /** Null means the bytes never arrived. Hidden everywhere except the board page that made it. */
+  uploaded_at: string | null;
+  /** Shown to everyone. */
+  caption: string | null;
+  /** Shown only where a share says to. */
+  note: string | null;
+  source_url: string | null;
+  credit: string | null;
+  is_cover: boolean;
+  sort_order: number;
+  origin: MoodboardItemOrigin;
+  /** The Pinterest pin id, for import dedupe. Null for anything else. */
+  external_id: string | null;
+  x: number | null;
+  y: number | null;
+  scale: number | null;
+  z_index: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MoodboardShareRow = {
+  id: string;
+  wedding_id: string;
+  moodboard_id: string;
+  channel: MoodboardShareChannel;
+  label: string | null;
+  /** Non-null iff channel is "link" — the database enforces it. */
+  token_hash: string | null;
+  token_encrypted: string | null;
+  show_notes: boolean;
+  show_credits: boolean;
+  expires_at: string | null;
+  revoked_at: string | null;
+  view_count: number;
+  last_viewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MoodboardClipTokenRow = {
+  id: string;
+  wedding_id: string;
+  label: string;
+  token_hash: string;
+  token_encrypted: string;
+  default_moodboard_id: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PinterestAccountRow = {
+  id: string;
+  wedding_id: string;
+  external_user_id: string;
+  username: string | null;
+  /** Encrypted, not hashed: these have to be used, not compared. */
+  access_token_encrypted: string;
+  refresh_token_encrypted: string | null;
+  token_expires_at: string | null;
+  scopes: string[];
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
 export type HouseholdView = {
@@ -766,6 +896,21 @@ export type RunSheetItemView = RunSheetItemRow & {
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
+export type MoodboardView = MoodboardRow & {
+  event_name: string | null;
+  /** Uploaded items only — a half-finished upload is not on the board. */
+  item_count: number;
+  total_bytes: number;
+  cover_thumb_path: string | null;
+  cover_width: number | null;
+  cover_height: number | null;
+  /** Live link shares: not revoked, not expired. */
+  link_share_count: number;
+  published_to_site: boolean;
+  published_to_rsvp: boolean;
+  last_viewed_at: string | null;
+}
+
 type Timestamps = "created_at" | "updated_at";
 
 export type Database = {
@@ -826,6 +971,27 @@ export type Database = {
       fx_rates: Table<FxRateRow, "fetched_at">;
       budget_item_tasks: Table<BudgetItemTaskRow, "created_at", BudgetItemTaskRelationships>;
       budget_item_lists: Table<BudgetItemListRow, "created_at", BudgetItemListRelationships>;
+      moodboards: Table<
+        MoodboardRow,
+        "id" | Timestamps | "layout" | "sort_order",
+        MoodboardRelationships
+      >;
+      moodboard_items: Table<
+        MoodboardItemRow,
+        "id" | Timestamps | "is_cover" | "sort_order" | "origin",
+        MoodboardItemRelationships
+      >;
+      moodboard_shares: Table<
+        MoodboardShareRow,
+        "id" | Timestamps | "channel" | "show_notes" | "show_credits" | "view_count",
+        MoodboardShareRelationships
+      >;
+      moodboard_clip_tokens: Table<
+        MoodboardClipTokenRow,
+        "id" | Timestamps,
+        MoodboardClipTokenRelationships
+      >;
+      pinterest_accounts: Table<PinterestAccountRow, "id" | Timestamps | "scopes">;
       run_sheet_items: Table<
         RunSheetItemRow,
         | "id"
@@ -849,6 +1015,7 @@ export type Database = {
       v_reminders_due: View<ReminderDueView>;
       v_budget_item_tasks: View<BudgetItemTaskView>;
       v_run_sheet_items: View<RunSheetItemView>;
+      v_moodboards: View<MoodboardView>;
     };
     Functions: {
       budget_guest_counts: {
@@ -871,6 +1038,9 @@ export type Database = {
       budget_quantity_basis: BudgetQuantityBasis;
       budget_guest_basis: BudgetGuestBasis;
       run_sheet_track: RunSheetTrack;
+      moodboard_share_channel: MoodboardShareChannel;
+      moodboard_item_origin: MoodboardItemOrigin;
+      moodboard_layout: MoodboardLayout;
     };
     CompositeTypes: Record<string, never>;
   };

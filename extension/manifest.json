@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Wedplan moodboard clipper",
+  "version": "1.0.0",
+  "description": "Right-click any image on the web and send it to a wedplan moodboard.",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "offscreen",
+    "notifications"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "host_permissions": [
+    "https://*.pinterest.com/*",
+    "https://*.pinimg.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "action": {
+    "default_popup": "options.html",
+    "default_title": "Moodboard clipper",
+    "default_icon": {
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.pinterest.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "128": "icon128.png"
+  }
+}

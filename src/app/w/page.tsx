@@ -3,6 +3,8 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate, formatDateTime } from "@/lib/format";
 import type { Json } from "@/lib/types/database";
+import { PublicBoardView } from "@/components/moodboards/public-board";
+import { listPublishedBoards } from "@/server/moodboards/resolve";
 
 /**
  * The public site.
@@ -68,6 +70,8 @@ export default async function PublicSitePage() {
       .order("starts_at"),
   ]);
 
+  const boards = await listPublishedBoards(wedding.id, "public_site");
+
   const byKey = new Map((blocks ?? []).map((block) => [block.block_key, block as Block]));
   const hero = asRecord(byKey.get("hero")?.payload ?? null);
   const travel = asRecord(byKey.get("travel")?.payload ?? null);
@@ -131,6 +135,16 @@ export default async function PublicSitePage() {
           </dl>
         </section>
       ) : null}
+
+      {boards.map((board) => (
+        <section key={board.board.id} className="border-b border-line py-10">
+          <h2 className="font-serif text-2xl">{board.board.title}</h2>
+          {board.board.description ? (
+            <p className="mb-4 mt-2 whitespace-pre-line text-sm text-muted">{board.board.description}</p>
+          ) : null}
+          <PublicBoardView board={board} />
+        </section>
+      ))}
 
       <section className="py-10 text-center">
         <h2 className="font-serif text-2xl">RSVP</h2>

@@ -17,6 +17,7 @@ const LINKS = [
   { href: "/calendar", label: "Calendar" },
   { href: "/board", label: "Board" },
   { href: "/budget", label: "Budget" },
+  { href: "/moodboards", label: "Moodboards" },
   { href: "/settings", label: "Settings" },
 ] as const;
 
@@ -28,7 +29,7 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 /**
- * Nine destinations is too many for a bottom tab bar without its own
+ * Fourteen destinations is too many for a bottom tab bar without its own
  * overflow menu (spec 03, section 7, decision 5), so below `sm:` this
  * collapses behind a hamburger button into a dropdown panel instead of
  * wrapping into a multi-row link soup. `sm:` and up keeps today's plain

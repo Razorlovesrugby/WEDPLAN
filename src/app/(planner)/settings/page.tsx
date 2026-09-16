@@ -7,18 +7,26 @@ import { listHouseholds } from "@/server/queries/guests";
 import { getLists } from "@/server/queries/lists";
 import { getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
 import { ranksNeedRebalance } from "@/server/actions/rank";
+import { ClipTokensCard } from "@/components/moodboards/clip-tokens-card";
+import { PinterestCard } from "@/components/moodboards/pinterest-card";
+import { getPinterestAccount, listClipTokens, listMoodboards } from "@/server/queries/moodboards";
+import { pinterestConfig } from "@/server/pinterest/client";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, lists, cutLines] = await Promise.all([
-    listHouseholds(wedding.id),
-    getWeddingStats(wedding.id),
-    ranksNeedRebalance(),
-    getLists(wedding.id),
-    getCutLines(wedding.id),
-  ]);
+  const [households, stats, rebalanceOffered, lists, cutLines, clipTokens, pinterest, boards] =
+    await Promise.all([
+      listHouseholds(wedding.id),
+      getWeddingStats(wedding.id),
+      ranksNeedRebalance(),
+      getLists(wedding.id),
+      getCutLines(wedding.id),
+      listClipTokens(wedding.id),
+      getPinterestAccount(wedding.id),
+      listMoodboards(wedding.id),
+    ]);
 
   const timeZones =
     typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
@@ -57,6 +65,12 @@ export default async function SettingsPage() {
         <ListAppearanceEditor lists={lists} />
       </section>
 
+      <PinterestCard account={pinterest} configured={pinterestConfig() !== null} />
+
+      <ClipTokensCard
+        tokens={clipTokens}
+        boards={boards.map((board) => ({ id: board.id, title: board.title }))}
+      />
       {/* Not a setting — there is nothing here to change. It is here because
           the privacy notice is a promise made in your name to your guests,
           and the only other way to read it is to open an RSVP link. A new
