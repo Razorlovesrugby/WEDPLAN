@@ -40,6 +40,7 @@ renumbered to spec 2, is unchanged in substance.
 | 7 | [Cooler list colors, auto-assign on task creation, a highlighted "today" on the calendar, and click-to-preview task cards](07-list-colors-task-assignment-calendar-today.md) | Built end to end, same session (2026-09-16) — new `LIST_COLOR_PALETTE`, `addItem` auto-assigning to the creating user, a highlighted today cell on `/calendar`, and a shared `TaskPreviewPopup` (click a card on `/calendar`/`/timeline`, see a summary, click through to `/lists/[id]`) reusing spec 6's `BudgetLinksPopup` pattern. No schema change. | Specs 1, 3, and 6, already built |
 | 8 | [Vendor management — contacts, notes, and the budget link](08-vendor-management.md) | **Proposed, not built — no migration, no screens.** Nothing is built, schema included, until its §11 Open Questions are answered (question 1 changes the `vendors` table's own shape). | Spec 6 / 6.1, already built |
 | 9 | [Moodboards, publicly shareable](09-moodboards.md) | **Proposed, not built — no migration, no storage bucket, no screens.** Nothing is built, schema included, until its §12 Open Questions are answered (question 1 decides whether images live in Supabase Storage at all, which changes `moodboard_items`' shape). This is the first feature in the project that needs a storage bucket — spec 8 §2 refused file uploads on exactly that ground, and §3 of this spec is that work. | V1 only |
+| 9.1 | [Moodboards — Pinterest import, and a right-click clipper](09.1-pinterest-import-and-clipper.md) | **Proposed, not built.** Written from a prototype spec the planner supplied (Express + socket.io + SQLite + an unauthenticated `/api/clip`); §1 records what of it survives contact with this stack and what was replaced. Two halves: a Pinterest API v5 import, and a Chrome MV3 extension that right-clicks any image on the web into a board, live. Blocked on its §12 **and** on a Pinterest developer app only the planner can register (§4) — though the clipper half needs neither. | Spec 9, itself unbuilt |
 
 ## Recommended build order
 
@@ -92,6 +93,14 @@ surface at all — it still reads no `guests`, `households` or `rsvp_*` data.
 Specs 8 and 9 both currently claim `0013_*.sql` and `supabase/tests/05_*.sql`;
 neither is built, so whichever ships first takes the numbers and the other
 renumbers.
+
+**Spec 9.1 sits on spec 9 and splits cleanly in two.** Its clipper half
+(a Chrome extension, `POST /api/clip`, live updates) depends on nothing but
+spec 9 and is a complete feature alone. Its Pinterest half additionally
+depends on a developer app registered outside this repository, at an access
+tier nobody here can predict — so it is the one piece of planned work whose
+schedule is not ours to set. Build order 2–5 of that spec deliberately
+produces the clipper without touching Pinterest at all.
 
 ## What's shared across both
 
