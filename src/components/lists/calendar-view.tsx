@@ -2,12 +2,21 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
 import { buildDigest, type DigestItem } from "@/lib/reminders/digest";
 import { monthLabel, monthWeeks, shiftMonth, monthStart } from "@/lib/calendar";
 import { todayIso } from "@/lib/lists/generate";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { TaskPreviewPopup } from "./task-preview-popup";
 import type { TimelineItemView } from "@/lib/types/database";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -25,12 +34,28 @@ const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
  * touch-friendly "Move to…" fallback (spec 03 section 7, decision 6) —
  * a native date input already opens the platform's own picker on a phone,
  * so no custom picker component was needed for this surface.
+ *
+ * Clicking a card's title (rather than dragging it) opens a read-only
+ * preview with a click-through to the task's real location on
+ * /lists/[id] — same pattern as BudgetLinksPopup (spec 6). A distance
+ * activation constraint on the pointer sensor keeps a plain click from
+ * being swallowed as a zero-distance drag.
  */
-export function CalendarView({ items, windowDays }: { items: TimelineItemView[]; windowDays: number }) {
+export function CalendarView({
+  items,
+  windowDays,
+  timezone,
+}: {
+  items: TimelineItemView[];
+  windowDays: number;
+  timezone: string;
+}) {
   const router = useRouter();
   const [month, setMonth] = useState(() => monthStart(todayIso()));
   const [error, setError] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<TimelineItemView | null>(null);
   const [, startTransition] = useTransition();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const today = todayIso();
   const weeks = useMemo(() => monthWeeks(month), [month]);
@@ -103,7 +128,7 @@ export function CalendarView({ items, windowDays }: { items: TimelineItemView[];
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
       ) : null}
 
-      <DndContext onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line text-xs">
           {WEEKDAY_LABELS.map((label) => (
             <div key={label} className="bg-paper px-2 py-1 text-center font-medium text-muted">
@@ -119,10 +144,13 @@ export function CalendarView({ items, windowDays }: { items: TimelineItemView[];
               items={itemsByDay.get(cell.date) ?? []}
               urgency={urgency}
               onReschedule={reschedule}
+              onPreview={setPreviewItem}
             />
           ))}
         </div>
       </DndContext>
+
+      <TaskPreviewPopup item={previewItem} timezone={timezone} open={previewItem !== null} onClose={() => setPreviewItem(null)} />
     </div>
   );
 }
@@ -134,6 +162,7 @@ function CalendarDay({
   items,
   urgency,
   onReschedule,
+  onPreview,
 }: {
   date: string;
   inMonth: boolean;
@@ -141,6 +170,7 @@ function CalendarDay({
   items: TimelineItemView[];
   urgency: { overdue: Set<string>; dueSoon: Set<string> };
   onReschedule: (itemId: string, targetDate: string) => void;
+  onPreview: (item: TimelineItemView) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: date });
   const dayNumber = Number(date.slice(-2));
@@ -168,6 +198,7 @@ function CalendarDay({
             item={item}
             urgent={urgency.overdue.has(item.id) ? "overdue" : urgency.dueSoon.has(item.id) ? "dueSoon" : null}
             onReschedule={onReschedule}
+            onPreview={onPreview}
           />
         ))}
       </div>
@@ -179,10 +210,12 @@ function CalendarCard({
   item,
   urgent,
   onReschedule,
+  onPreview,
 }: {
   item: TimelineItemView;
   urgent: "overdue" | "dueSoon" | null;
   onReschedule: (itemId: string, targetDate: string) => void;
+  onPreview: (item: TimelineItemView) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
   const [movePickerOpen, setMovePickerOpen] = useState(false);
@@ -199,7 +232,12 @@ function CalendarCard({
         ${item.status === "done" ? "opacity-60" : ""}
         ${urgent === "overdue" ? "ring-1 ring-red-400" : urgent === "dueSoon" ? "ring-1 ring-amber-400" : ""}`}
     >
-      <div {...attributes} {...listeners} className="cursor-grab truncate font-medium active:cursor-grabbing">
+      <div
+        {...attributes}
+        {...listeners}
+        onClick={() => onPreview(item)}
+        className="cursor-grab truncate font-medium active:cursor-grabbing"
+      >
         {item.status === "done" ? <span className="line-through">{item.title}</span> : item.title}
       </div>
       <div className="flex items-center justify-between gap-1">

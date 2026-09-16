@@ -11,7 +11,7 @@ export default async function CalendarPage() {
   return (
     <div className="space-y-4">
       <h1 className="font-serif text-2xl">Calendar</h1>
-      <CalendarView items={items} windowDays={wedding.reminder_window_days} />
+      <CalendarView items={items} windowDays={wedding.reminder_window_days} timezone={wedding.timezone} />
     </div>
   );
 }

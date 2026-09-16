@@ -1,11 +1,14 @@
-# Feature spec: Cooler list colors, auto-assign on task creation, and a highlighted "today" on the calendar
+# Feature spec: Cooler list colors, auto-assign on task creation, a highlighted "today" on the calendar, and click-to-preview task cards
 
-**Status: built end to end, same session (2026-09-16).** Three small,
+**Status: built end to end, same session (2026-09-16).** Four small,
 independent UI/behavior fixes the planner asked for directly, each with an
-unambiguous answer — no open questions to block the build on.
+unambiguous answer — no open questions to block the build on. Part D was
+added as a same-session follow-up request after A–C shipped.
 
 **Depends on:** Spec 1 (lists — `assigned_to`), spec 3 (`/calendar`'s month
-grid, `list.color`'s fixed palette). Both already built.
+grid, `list.color`'s fixed palette), spec 6 (`BudgetLinksPopup`, the
+click-a-card/see-a-dialog/click-through pattern Part D reuses). All already
+built.
 
 ## 1. What this changes
 
@@ -39,6 +42,25 @@ easy to scan past. Today's cell now gets a soft accent background wash and
 an inset accent ring around the whole cell, and the date number itself
 sits in a solid accent-filled circle badge instead of plain text.
 
+**Part D — clicking a task on `/calendar` or `/timeline` did nothing but
+start a drag.** `/budget` already has this exact pattern: click a budget
+line's label, a dialog (`BudgetLinksPopup`) opens with a summary and
+click-through links to whatever it's linked to, close it or follow a link.
+Task cards on `/calendar` and `/timeline` had no equivalent — the whole
+card (or, on `/calendar`, its title) only carried dnd-kit's drag listeners,
+so there was no way to see a task's details or jump to it on `/lists/[id]`
+without dragging it or hunting for its list. A new shared component,
+`TaskPreviewPopup`, gives both screens the same click → dialog →
+click-through flow: click a card's title (`/calendar`) or the card itself
+(`/timeline`, excluding its own 💰 budget-link badge, which already
+stops propagation) to open a read-only dialog with the title, list (dot +
+name), status, due date, flag/priority, and notes if any, plus an "Open
+task →" link to `/lists/[list_id]?highlight=[item_id]` — the same
+highlight-and-scroll destination `BudgetLinksPopup`'s task links already
+use. Both `DndContext`s now pass a `PointerSensor` with a 4px distance
+`activationConstraint` (matching `list-detail.tsx`'s existing sortable
+DndContext) so a plain click isn't swallowed as a zero-distance drag.
+
 ## 2. Scope
 
 **In:**
@@ -56,6 +78,14 @@ sits in a solid accent-filled circle badge instead of plain text.
   current session user's id on insert.
 - `CalendarDay` in `src/components/lists/calendar-view.tsx` — today's
   cell background/ring and date-badge styling.
+- `src/components/lists/task-preview-popup.tsx` — new `TaskPreviewPopup`,
+  shared by `CalendarView` and `TimelineView`.
+- `CalendarView`/`TimelineView` — a `PointerSensor` with a distance
+  activation constraint, `previewItem` state, and the click handler wiring
+  down through `CalendarDay`/`CalendarCard` and `TimelineColumn`/
+  `TimelineCard`. Both now take a required `timezone` prop (the popup's
+  due-date formatting), threaded from `wedding.timezone` in
+  `/calendar/page.tsx` and `/timeline/page.tsx`.
 
 **Out:**
 - No new picker UI, no free-text/hex color input — still a fixed swatch
@@ -69,11 +99,17 @@ sits in a solid accent-filled circle badge instead of plain text.
   only changes the value a new item starts with.
 - No change to `/calendar`'s urgency rings (overdue/due-soon) or drag-drop
   — Part C is additive styling on the same cell.
+- No editing inside the preview popup — status, date, assignment, and
+  notes stay editable only on `/lists/[id]` and `/board`, same as before;
+  Part D is look-then-click-through, not a second place to edit a task.
+- No board-view (`/board`) equivalent — that screen already links to
+  nothing on click (drag between columns is its whole interaction) and
+  wasn't asked for; can follow the same pattern later if wanted.
 
 ## 3. Test plan
 
 - `npm run typecheck` and `npm test` (220 tests, unchanged pass count —
-  none of these three changes touch logic covered by existing unit tests,
+  none of these four changes touch logic covered by existing unit tests,
   no new pure-logic module was added that needs its own).
 - `npm run build` compiles and typechecks clean; page-data collection
   fails only on missing `NEXT_PUBLIC_SUPABASE_*`/`NEXT_PUBLIC_SITE_URL`,

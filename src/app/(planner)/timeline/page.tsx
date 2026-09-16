@@ -19,7 +19,7 @@ export default async function TimelinePage() {
     <div className="space-y-4">
       <h1 className="font-serif text-2xl">Timeline</h1>
       <Suspense>
-        <TimelineView items={items} budgetLinksByItem={budgetLinksByItem} />
+        <TimelineView items={items} budgetLinksByItem={budgetLinksByItem} timezone={wedding.timezone} />
       </Suspense>
     </div>
   );
