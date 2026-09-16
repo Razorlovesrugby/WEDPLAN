@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isSchemaMissing } from "@/lib/db-errors";
 
 /**
  * GET /api/health — why is the site broken?
@@ -88,12 +89,15 @@ export async function GET() {
 
       for (const probe of SCHEMA_PROBE) {
         const result = await supabase.from(probe.table).select("*", { head: true, count: "exact" });
-        // 42P01 is "relation does not exist" — the migration has not run.
-        schema[probe.migration] = result.error
-          ? result.error.code === "42P01"
-            ? "MISSING"
-            : `error: ${result.error.code ?? "unknown"}`
-          : "applied";
+        // Through PostgREST a missing table is PGRST205, not PostgreSQL's
+        // 42P01 — the distinction this endpoint got wrong on its first pass,
+        // which would have reported the very outage it was written for as an
+        // unrecognised error. src/lib/db-errors.ts has both.
+        schema[probe.migration] = isSchemaMissing(result.error)
+          ? "MISSING"
+          : result.error
+            ? `error: ${result.error.code ?? "unknown"}`
+            : "applied";
       }
 
       const { data: bucketData, error: bucketError } = await supabase.storage.getBucket("moodboards");
@@ -125,7 +129,7 @@ export async function GET() {
       fix: !ok
         ? database["reachable"] !== true
           ? "Check that NEXT_PUBLIC_SUPABASE_URL points at a live project and that SUPABASE_SERVICE_ROLE_KEY belongs to it. A paused project fails exactly like a wrong one."
-          : `Apply the missing migrations: ${schemaBehind.join(", ")}. Locally that is \`supabase db push\`.`
+          : `Apply the missing migrations: ${schemaBehind.join(", ")}. That is \`supabase db push\` against this project, or paste each file from supabase/migrations into the SQL editor in order. If they HAVE been applied, PostgREST's schema cache is stale — reload it from the dashboard (API → Reload schema) or run: notify pgrst, 'reload schema';`
         : null,
       env,
       database,

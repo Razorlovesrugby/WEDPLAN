@@ -16,7 +16,7 @@ export default async function MoodboardsPage({
   const showArchived = archived === "1";
   const wedding = await requireWedding();
 
-  const boards = await listMoodboards(wedding.id);
+  const { ready, boards } = await listMoodboards(wedding.id);
   const archivedBoards = showArchived ? await listArchivedMoodboards(wedding.id) : [];
 
   // A text list of moodboards is a contradiction, so the list is covers —
@@ -38,7 +38,21 @@ export default async function MoodboardsPage({
         <NewBoardForm />
       </header>
 
-      {boards.length === 0 ? (
+      {!ready ? (
+        <div className="card space-y-2 p-8 text-center text-sm">
+          <p className="font-medium">Moodboards aren&rsquo;t set up on this database yet.</p>
+          <p className="text-muted">
+            Migrations <code>0013_moodboards</code> and <code>0014_moodboard_clipper</code> haven&rsquo;t
+            been applied here. Run <code>supabase db push</code>, then{" "}
+            <code>node scripts/ensure-bucket.mjs</code> for the image bucket.
+          </p>
+          <p className="text-muted">
+            <a href="/api/health" className="underline">
+              Check what else is missing
+            </a>
+          </p>
+        </div>
+      ) : boards.length === 0 ? (
         <p className="card p-8 text-center text-sm text-muted">
           No boards yet. Start one for the photographer, or one for what guests should wear.
         </p>
