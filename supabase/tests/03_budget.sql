@@ -146,20 +146,26 @@ insert into public.budget_categories (id, wedding_id, name) values
   ('c1000000-0000-4000-8000-000000000001', :w1, 'Venue');
 
 insert into public.budget_items
-  (id, wedding_id, category_id, label, currency, fx_rate, quantity_basis, unit_price, estimated, quoted, contracted)
+  (id, wedding_id, category_id, label, currency, fx_rate, quantity_basis, unit_price, estimated, quoted, contracted, quantity)
 values
   ('b0000000-0000-4000-8000-000000000001', :w1, 'c1000000-0000-4000-8000-000000000001',
-   'Venue hire', 'GBP', null, 'flat', null, 500000, 480000, 460000),
+   'Venue hire', 'GBP', null, 'flat', null, 500000, 480000, 460000, null),
   ('b0000000-0000-4000-8000-000000000002', :w1, 'c1000000-0000-4000-8000-000000000001',
-   'Adult meal', 'GBP', null, 'per_adult', 6000, null, null, null),
+   'Adult meal', 'GBP', null, 'per_adult', 6000, null, null, null, null),
   ('b0000000-0000-4000-8000-000000000003', :w1, 'c1000000-0000-4000-8000-000000000001',
-   'Child meal', 'GBP', null, 'per_child', 3000, null, null, null),
+   'Child meal', 'GBP', null, 'per_child', 3000, null, null, null, null),
   ('b0000000-0000-4000-8000-000000000004', :w1, 'c1000000-0000-4000-8000-000000000001',
-   'Chair hire', 'GBP', null, 'per_seat', 500, null, null, null),
+   'Chair hire', 'GBP', null, 'per_seat', 500, null, null, null, null),
   ('b0000000-0000-4000-8000-000000000005', :w1, 'c1000000-0000-4000-8000-000000000001',
-   'Bar package', 'GBP', null, 'consumption', null, null, null, null),
+   'Bar package', 'GBP', null, 'consumption', null, null, null, null, null),
   ('b0000000-0000-4000-8000-000000000006', :w1, 'c1000000-0000-4000-8000-000000000001',
-   'Photographer', 'USD', 1.25, 'flat', null, null, null, 100000);
+   'Photographer', 'USD', 1.25, 'flat', null, null, null, 100000, null),
+  -- spec 6.1: manual quantity x unit price, quantity explicit.
+  ('b0000000-0000-4000-8000-000000000007', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Centrepieces', 'GBP', null, 'manual', 2500, null, null, null, 12),
+  -- spec 6.1: manual with no quantity set — defaults to 1, per decision 3.
+  ('b0000000-0000-4000-8000-000000000008', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Signage', 'GBP', null, 'manual', 1000, null, null, null, null);
 
 insert into public.consumption_components
   (wedding_id, budget_item_id, label, guest_basis, servings_per_guest_per_hour, duration_hours, price_per_serving, wastage_buffer_pct)
@@ -223,14 +229,23 @@ select pg_temp.expect_num(
   (select outstanding_base from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000006'),
   62500, 'USD item''s outstanding_base is 125000 - 62500');
 
--- v_budget_summary: totals in base_currency, per-head figures over every non-flat line.
+-- Manual (spec 6.1): quantity x unit_price, ignoring the guest count entirely.
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000007'),
+  30000, 'manual item is quantity (12) * unit_price (2500)');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000008'),
+  1000, 'a manual item with no quantity set defaults to 1 (decision 3)');
+
+-- v_budget_summary: totals in base_currency, per-head figures over every non-flat, non-manual line.
 select pg_temp.expect((select total_estimated from public.v_budget_summary where wedding_id = :w1), 500000, 'total_estimated sums the one flat item''s estimated');
 select pg_temp.expect((select total_quoted from public.v_budget_summary where wedding_id = :w1), 480000, 'total_quoted sums the one flat item''s quoted');
 select pg_temp.expect((select total_contracted from public.v_budget_summary where wedding_id = :w1), 585000, 'total_contracted converts the USD item''s contracted figure into base_currency');
 select pg_temp.expect((select total_paid from public.v_budget_summary where wedding_id = :w1), 262500, 'total_paid sums paid_base across both payments');
-select pg_temp.expect((select total_outstanding from public.v_budget_summary where wedding_id = :w1), 428350, 'total_outstanding sums outstanding_base across all six items');
--- The four non-flat lines' computed_current_base: 60000 (adult meal) + 3000 (child meal) + 5500 (chair hire) + 37350 (bar) = 105850.
-select pg_temp.expect_num((select per_head_adult from public.v_budget_summary where wedding_id = :w1), 10585.00, 'per_head_adult is the four non-flat lines'' computed_current_base (105850) over 10 adults');
+select pg_temp.expect((select total_outstanding from public.v_budget_summary where wedding_id = :w1), 459350, 'total_outstanding sums outstanding_base across all eight items, including both manual ones');
+-- The four per-unit/consumption lines' computed_current_base: 60000 (adult meal) + 3000 (child meal) + 5500 (chair hire) + 37350 (bar) = 105850.
+-- Unchanged by adding the two manual items above (30000 + 1000) — they are excluded from this sum by decision 4, proven by the total staying put while total_outstanding above moved.
+select pg_temp.expect_num((select per_head_adult from public.v_budget_summary where wedding_id = :w1), 10585.00, 'per_head_adult excludes both manual lines — still the four non-flat/non-manual lines'' computed_current_base (105850) over 10 adults');
 select pg_temp.expect_num((select per_head_seat from public.v_budget_summary where wedding_id = :w1), 9622.73, 'per_head_seat is the same total (105850) over 11 seats');
 rollback;
 

@@ -10,6 +10,7 @@ export type BudgetItemFormValue = {
   currency: string;
   quantity_basis: BudgetQuantityBasis;
   unit_price: string;
+  quantity: string;
   estimated: string;
   quoted: string;
   contracted: string;
@@ -23,6 +24,7 @@ const BASIS_OPTIONS: { value: BudgetQuantityBasis; label: string }[] = [
   { value: "per_child", label: "Per child" },
   { value: "per_seat", label: "Per seat (adult + child)" },
   { value: "consumption", label: "Consumption (components below)" },
+  { value: "manual", label: "Manual (quantity × unit price)" },
 ];
 
 /**
@@ -52,6 +54,7 @@ export function BudgetItemFields({
   const [currency, setCurrency] = useState(initial?.currency ?? "GBP");
   const [basis, setBasis] = useState<BudgetQuantityBasis>(initial?.quantity_basis ?? "flat");
   const [unitPrice, setUnitPrice] = useState(initial?.unit_price ? String(initial.unit_price / 100) : "");
+  const [quantity, setQuantity] = useState(initial?.quantity !== null && initial?.quantity !== undefined ? String(initial.quantity) : "");
   const [estimated, setEstimated] = useState(initial?.estimated ? String(initial.estimated / 100) : "");
   const [quoted, setQuoted] = useState(initial?.quoted ? String(initial.quoted / 100) : "");
   const [contracted, setContracted] = useState(initial?.contracted ? String(initial.contracted / 100) : "");
@@ -69,6 +72,7 @@ export function BudgetItemFields({
       currency: currency.toUpperCase(),
       quantity_basis: basis,
       unit_price: basis === "flat" || basis === "consumption" ? "" : String(Math.round(Number(unitPrice || "0") * 100)),
+      quantity: basis === "manual" ? quantity : "",
       estimated: estimated ? String(Math.round(Number(estimated) * 100)) : "",
       quoted: quoted ? String(Math.round(Number(quoted) * 100)) : "",
       contracted: contracted ? String(Math.round(Number(contracted) * 100)) : "",
@@ -169,14 +173,27 @@ export function BudgetItemFields({
       ) : null}
 
       {basis !== "flat" && basis !== "consumption" ? (
-        <label className="block text-xs text-muted">
-          Unit price ({currency})
-          <input
-            value={unitPrice}
-            onChange={(e) => setUnitPrice(e.target.value)}
-            className="field mt-0.5 block w-32 text-sm"
-          />
-        </label>
+        <div className="flex flex-wrap items-end gap-2">
+          {basis === "manual" ? (
+            <label className="block text-xs text-muted">
+              Quantity
+              <input
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="1"
+                className="field mt-0.5 block w-24 text-sm"
+              />
+            </label>
+          ) : null}
+          <label className="block text-xs text-muted">
+            Unit price ({currency})
+            <input
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              className="field mt-0.5 block w-32 text-sm"
+            />
+          </label>
+        </div>
       ) : null}
 
       <div className="grid gap-2 sm:grid-cols-3">

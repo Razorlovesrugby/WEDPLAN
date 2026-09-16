@@ -44,6 +44,39 @@ describe("computeCurrent", () => {
     ).toBe(66000);
   });
 
+  it("scales a manual item by its own quantity, not a guest count", () => {
+    expect(
+      computeCurrent(
+        { quantityBasis: "manual", unitPrice: 2500, estimated: null, quoted: null, contracted: null, quantity: 12 },
+        seedCounts,
+      ),
+    ).toBe(30000); // 12 centrepieces at £25
+  });
+
+  it("allows a decimal manual quantity", () => {
+    expect(
+      computeCurrent(
+        { quantityBasis: "manual", unitPrice: 6000, estimated: null, quoted: null, contracted: null, quantity: 2.5 },
+        seedCounts,
+      ),
+    ).toBe(15000); // 2.5 hours at £60/hr
+  });
+
+  it("defaults a manual item's quantity to 1 when not set", () => {
+    expect(
+      computeCurrent(
+        { quantityBasis: "manual", unitPrice: 4500, estimated: null, quoted: null, contracted: null, quantity: null },
+        seedCounts,
+      ),
+    ).toBe(4500);
+    expect(
+      computeCurrent(
+        { quantityBasis: "manual", unitPrice: 4500, estimated: null, quoted: null, contracted: null },
+        seedCounts,
+      ),
+    ).toBe(4500);
+  });
+
   it("uses whatever count a caller already scoped to one event, same math either way", () => {
     const eventCounts = { adult: 4, child: 0, seat: 4 };
     expect(

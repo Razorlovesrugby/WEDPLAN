@@ -85,10 +85,14 @@ export const getGuestCounts = cache(
  * mirror rather than reading v_budget_summary.per_head_seat, because that
  * view's figure switches to RSVP-confirmed counts once any RSVP exists —
  * exactly the behaviour this one must not have.
+ *
+ * `manual` (spec 6.1) is excluded alongside `flat` — a quantity-priced line
+ * like "12 centrepieces" isn't a per-guest cost just because it has a
+ * quantity, matching `v_budget_summary`'s own per-head filter.
  */
 export const getPerSeatCostInvited = cache(async (weddingId: string): Promise<number | null> => {
   const [items, components] = await Promise.all([listBudgetItems(weddingId), listConsumptionComponents(weddingId)]);
-  const nonFlat = items.filter((i) => i.quantity_basis !== "flat");
+  const nonFlat = items.filter((i) => i.quantity_basis !== "flat" && i.quantity_basis !== "manual");
   if (nonFlat.length === 0) return null;
 
   const eventIds = [...new Set(nonFlat.map((i) => i.event_id))];

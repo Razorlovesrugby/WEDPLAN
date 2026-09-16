@@ -214,7 +214,7 @@ export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
 export type HouseholdTier = "A" | "B" | "C";
 export type ListKind = "checklist" | "timeline" | "generic";
 export type ListItemStatus = "not_started" | "in_progress" | "done";
-export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption";
+export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption" | "manual";
 export type BudgetGuestBasis = "per_adult" | "per_seat";
 export type ReminderDueSource = "list_item" | "payment";
 
@@ -511,6 +511,8 @@ export type BudgetItemRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Planner-entered multiplier for the `manual` basis (spec 6.1) — decimals allowed, defaults to 1 when blank. Null and unused for every other basis. */
+  quantity: number | null;
 }
 
 export type ConsumptionComponentRow = {

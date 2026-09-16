@@ -12,18 +12,22 @@ import {
 import { formatDate, pluralise } from "@/lib/format";
 import type { ListRow } from "@/lib/types/database";
 import type { LinkedList, LinkedTask } from "@/server/queries/budget-links";
+import type { ListItemWithList } from "@/server/queries/lists";
 
 /**
  * Clicking a budget line's label opens this — a dialog, not a route (spec 6,
  * section 4's decision against a /budget/[id] page). Shows every linked list
  * (open/done counts) and every individually-linked task, click-through to
- * either, plus a link/unlink picker and the inline "create a task here"
- * shortcut (spec 6, section 7).
+ * either, plus link/unlink pickers for both a whole list and an existing
+ * task, and the inline "create a task here" shortcut (spec 6, section 7;
+ * the existing-task search itself is spec 6.1, part B — the one piece of
+ * section 7 the original build left unfinished).
  */
 export function BudgetLinksPopup({
   itemId,
   itemLabel,
   lists,
+  allTasks,
   links,
   timezone,
   open,
@@ -32,6 +36,8 @@ export function BudgetLinksPopup({
   itemId: string;
   itemLabel: string;
   lists: ListRow[];
+  /** Every task across every list, filtered in memory as the planner types — same "few hundred rows, no round trip" approach spec 4's HouseholdPicker already uses. */
+  allTasks: ListItemWithList[];
   links: { lists: LinkedList[]; tasks: LinkedTask[] };
   timezone: string;
   open: boolean;
@@ -42,6 +48,7 @@ export function BudgetLinksPopup({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
+  const [taskQuery, setTaskQuery] = useState("");
   const [newTaskListId, setNewTaskListId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
 
@@ -59,6 +66,15 @@ export function BudgetLinksPopup({
         .filter((l) => !linkedListIds.has(l.id) && l.title.toLowerCase().includes(query.toLowerCase()))
         .slice(0, 8),
     [lists, linkedListIds, query],
+  );
+
+  const linkedTaskIds = useMemo(() => new Set(links.tasks.map((t) => t.list_item_id)), [links.tasks]);
+  const candidateTasks = useMemo(
+    () =>
+      allTasks
+        .filter((t) => !linkedTaskIds.has(t.id) && t.title.toLowerCase().includes(taskQuery.toLowerCase()))
+        .slice(0, 8),
+    [allTasks, linkedTaskIds, taskQuery],
   );
 
   function refresh() {
@@ -89,6 +105,17 @@ export function BudgetLinksPopup({
       const result = await unlinkBudgetItemFromTask(itemId, listItemId);
       if (!result.ok) setError(result.error);
       else refresh();
+    });
+  }
+
+  function onLinkTask(listItemId: string) {
+    startTransition(async () => {
+      const result = await linkBudgetItemToTask(itemId, listItemId);
+      if (!result.ok) setError(result.error);
+      else {
+        setTaskQuery("");
+        refresh();
+      }
     });
   }
 
@@ -199,6 +226,34 @@ export function BudgetLinksPopup({
                 </li>
               ))}
               {candidateLists.length === 0 ? <li className="px-2 py-1 text-xs text-muted">No matching lists.</li> : null}
+            </ul>
+          ) : null}
+        </section>
+
+        <section className="space-y-2 border-t border-line pt-3">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Link a task…</h3>
+          <input
+            value={taskQuery}
+            onChange={(e) => setTaskQuery(e.target.value)}
+            placeholder="Search every task, in every list…"
+            className="field w-full text-sm"
+          />
+          {taskQuery.trim() ? (
+            <ul className="max-h-32 divide-y divide-line/50 overflow-y-auto rounded border border-line text-sm">
+              {candidateTasks.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    className="block w-full px-2 py-1 text-left hover:bg-paper"
+                    onClick={() => onLinkTask(t.id)}
+                  >
+                    {t.title}
+                    <span className="ml-2 text-xs text-muted">{t.lists?.title ?? ""}</span>
+                  </button>
+                </li>
+              ))}
+              {candidateTasks.length === 0 ? <li className="px-2 py-1 text-xs text-muted">No matching tasks.</li> : null}
             </ul>
           ) : null}
         </section>
