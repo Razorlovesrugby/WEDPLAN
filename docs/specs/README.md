@@ -38,6 +38,7 @@ renumbered to spec 2, is unchanged in substance.
 | 6 | [Budget management](06-budget-management.md) | Built end to end, session 12 (2026-09-15) — schema (`0010_budget.sql`), `src/lib/budget.ts`/`fx.ts` + `getFxRate`, all server actions/queries, `/budget`, the dashboard "Budget" tile, the `/guests/rank` per-seat figure, the `v_reminders_due` digest sync, and the budget-line <-> task/list linking (§7) with its reverse badges on `/lists/[id]` and `/timeline`. Built **ahead of spec 5**, at the planner's direct request. Same live/browser caveat as specs 1–3 — see `docs/HANDOFF.md` session 12. | V1 only; its reminders sync and linking additionally depend on specs 1 and 2, already shipped |
 | 6.1 | [Budget — quantity × unit price, and linking to an existing task](06.1-budget-quantity-and-task-linking.md) | Built end to end, session 13 (2026-09-16) — `0011_budget_manual_quantity.sql` (the `manual` basis, `budget_items.quantity`), `src/lib/budget.ts`'s matching `computeCurrent` case, the item editor's quantity field, and a "Link a task…" search in `/budget`'s linked-tasks popup completing spec 6 §7. | Spec 6, already built |
 | 7 | [Cooler list colors, auto-assign on task creation, a highlighted "today" on the calendar, and click-to-preview task cards](07-list-colors-task-assignment-calendar-today.md) | Built end to end, same session (2026-09-16) — new `LIST_COLOR_PALETTE`, `addItem` auto-assigning to the creating user, a highlighted today cell on `/calendar`, and a shared `TaskPreviewPopup` (click a card on `/calendar`/`/timeline`, see a summary, click through to `/lists/[id]`) reusing spec 6's `BudgetLinksPopup` pattern. No schema change. | Specs 1, 3, and 6, already built |
+| 8 | [Vendor management — contacts, notes, and the budget link](08-vendor-management.md) | **Proposed, not built — no migration, no screens.** Nothing is built, schema included, until its §11 Open Questions are answered (question 1 changes the `vendors` table's own shape). | Spec 6 / 6.1, already built |
 
 ## Recommended build order
 
@@ -73,11 +74,19 @@ reads `events` (V1) and nothing more.
 reminders sync (§5/§6 of that spec), so it should ship after those two,
 though it has no dependency on spec 3, 4, or 5.
 
+**Spec 8 sits on top of spec 6**, as 6.1 and 7 already do. It turns
+`budget_items.vendor_name` — free text that spec 6 §2 explicitly named as
+"the natural migration target" once a vendor record exists — into a real
+foreign key, and reads spec 6 §7's `v_budget_item_tasks` for the tasks it
+shows against a vendor. It has no dependency on specs 3, 4, or 5, and
+touches nothing in V1's guest/RSVP surface.
+
 ## What's shared across both
 
 - Neither needs vendors, budget, or Gmail — only `weddings`, `events`, and
   the two collaborators already in the schema. That's what lets this ship
-  ahead of V2.
+  ahead of V2. (Specs 6 and 8 postdate that sentence and do need budget;
+  it still holds for specs 1–3, which is what it was written about.)
 - No guest-facing or invitation surface. Neither spec reads or writes
   `guests`, `households`, `invitations`, or `rsvp_*` — V1's guest/RSVP
   system is untouched and out of scope for this rebase entirely, per the
