@@ -3,11 +3,106 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 13 — spec 6.1 (a manual quantity × unit price
-costing basis, and a "Link a task…" search completing spec 6's task/list
-linking) written and built in the same session, at the planner's direct
-word. Read that session's note before touching budget item bases or the
-linking popup.
+Last updated: session 14 — spec 5 built end to end, both parts (multi-cut
+guest lines, and the day-of run sheet). Read that session's note before
+touching `cut_lines`, `v_households.tier`/`tier_position`, or
+`run_sheet_items`.
+
+## Session 14: Spec 5 built — multi-cut guest lines, and the day-of run sheet
+
+**Both parts of spec 5 were already fully decided** (every question in A6
+and B6 answered 2026-09-15, per `docs/specs/README.md`), so this session
+went straight to building, per each part's own build order (A3–A5, B8).
+
+**Part A — multi-cut guest lines:**
+
+- `supabase/migrations/0008_multi_cut_lines.sql` — new `cut_lines` table
+  (`label`, `position`, `boundary_rank`), backfilled one row per existing
+  wedding per current line so every wedding keeps its exact effective
+  A/B/C split. `v_households` is dropped and recreated (not
+  `CREATE OR REPLACE` — Postgres refuses to change an existing view
+  column's type, and `tier` moves from the `household_tier` enum to plain
+  text) with `tier`/`tier_position` from a lateral join against
+  `cut_lines`; `v_wedding_stats` follows (cascaded by the drop, then
+  recreated with `tier_position = 0` replacing the literal `tier = 'A'`
+  filter). `weddings.cut_rank`/`tier_b_rank` and the `household_tier` enum
+  are dropped. Both views' grants are reapplied at the end, since a
+  drop-and-recreate loses them.
+- `supabase/migrations/0012_budget_tier_position.sql` — spec 6's
+  `budget_guest_population()` still filtered on the literal `h.tier = 'A'`,
+  which would have silently stopped matching anything the moment a planner
+  renamed their top line. Fixed to `h.tier_position = 0`. Its own migration
+  file, not an edit to 0010/0011 — "one feature, one migration" applies
+  regardless of live-application status, the same precedent 0011 already
+  set for 0010.
+- `src/lib/tier.ts`'s `tierFor` now walks an ordered `CutLine[]` instead of
+  two named rank parameters; `tier.test.ts` covers the old two-line cases
+  plus 3+ lines, a middle-line deletion, and a shared (zero-width) boundary.
+- `src/server/actions/rank.ts` — `setCutLine(lineId, householdId)` replaces
+  the old `which: "a"|"b"` branch; new `addCutLine`/`removeCutLine`/
+  `renameCutLine`/`reorderCutLine`. Adding bumps the trailing line's
+  position out of the way first so the insert never collides with the
+  `unique (wedding_id, position)` index; removing shifts every lower line
+  up by one and, if the removed line was the trailing one, forces the new
+  trailing line's boundary back to null to preserve that invariant;
+  reordering swaps two positions through a `-1` park, same shape
+  `rebalanceRanks` already uses for ranks.
+- `src/components/settings/cut-line-picker.tsx` rewritten as a repeatable
+  list (one row per line, reorder/remove controls, "Add another line"),
+  reused inline on `/guests/rank` per A5. `rank-list.tsx`'s per-row "cut
+  here" button became a small select (there can be more than one line to
+  end now); tier badges/colours index a fixed 8-colour palette
+  (`src/lib/tier-colors.ts`, backed by `tailwind.config.ts`'s new
+  `cut0`-`cut7` tokens) by `tier_position` instead of a 3-way ternary on
+  `tierA`/`tierB`/`tierC` — those three tokens are left alone, since half a
+  dozen unrelated screens (RSVP status, payment-paid, budget over/under)
+  reuse them as generic good/warn colours, not as guest-tier colours.
+- `src/lib/filters.ts`'s `tier` filter, `guests-table.tsx`'s tier column,
+  and `filter-bar.tsx`'s tier dropdown all now key off the wedding's actual
+  configured labels rather than a compile-time `"A"|"B"|"C"` enum.
+
+**Part B — day-of run sheet:**
+
+- `supabase/migrations/0009_run_sheet.sql` — `run_sheet_items` (pinned
+  bool + `pinned_at`, `predecessor_id` self-FK, `offset_minutes`, `track`
+  enum, `guest_visible` schema-only per B6 decision 3) and
+  `v_run_sheet_items`, a recursive CTE computing `starts_at`/`ends_at`
+  (pinned items anchor on `pinned_at`; unpinned items chain off their
+  predecessor's computed `ends_at` plus their offset; an unpinned item with
+  no predecessor is "time TBD", null propagates forward through anything
+  chained off it) plus a `conflict` boolean — true when an item's computed
+  end runs past the next pinned anchor in the same event, found via a
+  `LEFT JOIN LATERAL` rather than blocking the save.
+- `src/lib/run-sheet.ts` mirrors that CTE in TypeScript (memoised,
+  cycle-safe — a predecessor cycle resolves to "time TBD" for every item in
+  it rather than recursing forever) for the item editor's live preview;
+  `run-sheet.test.ts` (11 cases) and `supabase/tests/04_run_sheet.sql` (13
+  assertions) cover the same ground independently and agreed on the first
+  run.
+- `src/server/actions/run-sheet.ts` — `createRunSheetItem`,
+  `updateRunSheetItem` (never touches pin state), `pinRunSheetItem`,
+  `unpinRunSheetItem`, `deleteRunSheetItem` (re-links whatever pointed at
+  it to its own predecessor rather than leaving a dangling FK or silently
+  cascading), and `reorderRunSheetItem` — a drag re-points exactly two
+  edges (the old gap closes, the new slot opens), computed server-side from
+  a fresh read of every item, never trusted from the client, same rule
+  spec 4's `moveHousehold`/`moveGuest` already follow.
+- Screens: `/events/[id]/run-sheet` (parallel columns by track, dnd-kit
+  drag within a column re-points the predecessor on drop, a summary count
+  plus a per-item marker for conflicts) and `/run-sheet` (redirects
+  straight through when exactly one event has items, otherwise a picker).
+  The item editor is a dialog, not a route, same pattern spec 6's
+  `BudgetLinksPopup` already establishes.
+
+`npm run typecheck`, `npm test` (231 tests total, 22 of them new),
+`./scripts/verify-migrations.sh` (128 SQL assertions, 24 of them new), and
+`npm run build` are all green.
+
+**Same live/browser caveat as every session since session 6:** none of
+this has been applied to the live Supabase project or clicked through in
+a real browser — no live project is reachable from this session. The
+migrations were verified against a throwaway local Postgres cluster
+(`scripts/verify-migrations.sh`), not the hosted one.
 
 ## Session 13: Spec 6.1 written, decided, and built — quantity × unit price, and the existing-task-link gap closed
 

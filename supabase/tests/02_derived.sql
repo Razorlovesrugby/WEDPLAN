@@ -44,12 +44,15 @@ select pg_temp.expect_text(
 select pg_temp.expect_text((select ('B' < 'a' collate "C")::text), 'true',
   'C collation puts uppercase before lowercase, as JavaScript does');
 
--- Seed cut lines: cut_rank = 'a6', tier_b_rank = 'a8'.
+-- Seed cut lines: A ends at 'a6', B ends at 'a8', C (no boundary) trailing.
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a1'), 'A', 'a0 is tier A');
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a6'), 'A', 'a5 is tier A (on the line)');
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a7'), 'B', 'a6 is tier B');
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a8'), 'B', 'a7 is tier B');
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a9'), 'C', 'a8 is tier C');
+select pg_temp.expect_num((select tier_position from public.v_households where rank = 'a1'), 0, 'a0 is tier_position 0');
+select pg_temp.expect_num((select tier_position from public.v_households where rank = 'a7'), 1, 'a6 is tier_position 1');
+select pg_temp.expect_num((select tier_position from public.v_households where rank = 'a9'), 2, 'a8 is tier_position 2');
 
 -- Infants do not occupy a seat; children do.
 select pg_temp.expect_num((select head_count from public.v_households where rank = 'a1'), 4, 'Okonkwo head_count is 4');
@@ -75,8 +78,10 @@ rollback;
 -- ---------------------------------------------------------------------------
 begin;
 set local role service_role;
-update public.weddings set cut_rank = 'a3', tier_b_rank = 'a5'
-where id = '11111111-1111-4111-8111-111111111111';
+update public.cut_lines set boundary_rank = 'a3'
+where wedding_id = '11111111-1111-4111-8111-111111111111' and label = 'A';
+update public.cut_lines set boundary_rank = 'a5'
+where wedding_id = '11111111-1111-4111-8111-111111111111' and label = 'B';
 
 select set_config('request.jwt.claim.sub', :alex, true);
 set local role authenticated;
@@ -84,6 +89,40 @@ select pg_temp.expect_text((select tier::text from public.v_households where ran
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a4'), 'B', 'after move: a3 dropped to tier B');
 select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a6'), 'C', 'after move: a5 dropped to tier C');
 select pg_temp.expect_num((select above_cut_households from public.v_wedding_stats), 3, 'after move: 3 households above the cut');
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 3+ lines, and deleting a middle line merges its tier into the one below
+-- with no write to any household (spec 5, A6 decision 3)
+-- ---------------------------------------------------------------------------
+begin;
+set local role service_role;
+-- Split the existing waitlist (today's B, ending a8) into two: "Maybe" ending
+-- a7, "Long shot" ending a8, ahead of the existing trailing C.
+update public.cut_lines set position = 3
+where wedding_id = '11111111-1111-4111-8111-111111111111' and label = 'C';
+update public.cut_lines set label = 'Long shot', position = 2, boundary_rank = 'a8'
+where wedding_id = '11111111-1111-4111-8111-111111111111' and label = 'B';
+insert into public.cut_lines (wedding_id, label, position, boundary_rank)
+values ('11111111-1111-4111-8111-111111111111', 'Maybe', 1, 'a7');
+
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a7'), 'Maybe', 'a6 sits in the new Maybe tier');
+select pg_temp.expect_num((select tier_position from public.v_households where rank = 'a7'), 1, 'Maybe is tier_position 1');
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a8'), 'Long shot', 'a7 sits in Long shot');
+select pg_temp.expect_num((select above_cut_households from public.v_wedding_stats), 6, 'splitting the waitlist does not change who is above the cut');
+
+-- Deleting "Maybe" (the middle line) absorbs its households into "Long
+-- shot" below it — nothing about any household changes, since tier is
+-- fully derived from cut_lines alone.
+delete from public.cut_lines
+where wedding_id = '11111111-1111-4111-8111-111111111111' and label = 'Maybe';
+select pg_temp.expect_text((select tier::text from public.v_households where rank = 'a7'), 'Long shot', 'deleting Maybe merges a6 into Long shot');
+-- Position itself is not renumbered by SQL alone — that's the action
+-- layer's job (src/server/actions/rank.ts's removeCutLine); this only
+-- proves tier resolution tolerates a gap in the sequence.
+select pg_temp.expect_num((select tier_position from public.v_households where rank = 'a7'), 2, 'Long shot keeps its own position (2) — nothing renumbers it at the SQL level');
 rollback;
 
 -- ---------------------------------------------------------------------------

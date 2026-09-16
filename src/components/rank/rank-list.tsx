@@ -21,12 +21,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { moveHousehold, setCutLine } from "@/server/actions/rank";
-import { tierFor } from "@/lib/tier";
-import type { HouseholdTier, HouseholdView } from "@/lib/types/database";
+import { tierFor, type CutLine, type Tier } from "@/lib/tier";
+import { tierTextClass } from "@/lib/tier-colors";
+import type { CutLineRow, HouseholdView } from "@/lib/types/database";
 
 type Row = HouseholdView;
 
 const ROW_HEIGHT = 52;
+
+function toCutLine(row: CutLineRow): CutLine {
+  return { label: row.label, position: row.position, boundaryRank: row.boundary_rank };
+}
 
 /**
  * The ranked household list.
@@ -43,14 +48,19 @@ const ROW_HEIGHT = 52;
 export function RankList({
   households,
   capacity,
-  cutRank,
-  tierBRank,
+  cutLines,
 }: {
   households: Row[];
   capacity: number | null;
-  cutRank: string | null;
-  tierBRank: string | null;
+  cutLines: CutLineRow[];
 }) {
+  const lines = useMemo(() => cutLines.map(toCutLine), [cutLines]);
+  // Only non-trailing lines take a household boundary — the last one by
+  // position is always the catch-all, enforced null server-side.
+  const assignableLines = useMemo(
+    () => [...cutLines].sort((a, b) => a.position - b.position).slice(0, -1),
+    [cutLines],
+  );
   const [rows, setRows] = useState<Row[]>(households);
   const [optimisticRows, applyOptimistic] = useOptimistic(
     rows,
@@ -130,9 +140,9 @@ export function RankList({
     applyMove(from, to);
   }
 
-  function onSetCut(householdId: string, which: "a" | "b") {
+  function onSetCut(lineId: string, householdId: string) {
     startTransition(async () => {
-      const result = await setCutLine(householdId, which);
+      const result = await setCutLine(lineId, householdId);
       if (!result.ok) setError(result.error);
     });
   }
@@ -163,7 +173,8 @@ export function RankList({
               {items.map((virtualRow) => {
                 const row = optimisticRows[virtualRow.index];
                 if (!row) return null;
-                const tier = tierFor(row.rank, cutRank, tierBRank);
+                const tier = tierFor(row.rank, lines);
+                const boundaryHere = assignableLines.filter((l) => l.boundary_rank === row.rank);
                 return (
                   <div
                     key={row.id}
@@ -181,8 +192,9 @@ export function RankList({
                       index={virtualRow.index}
                       tier={tier}
                       seatsCumulative={cumulative[virtualRow.index] ?? 0}
-                      isCutLine={cutRank !== null && row.rank === cutRank}
+                      isCutLine={boundaryHere.length > 0}
                       isCapacityLine={virtualRow.index === capacityIndex - 1}
+                      assignableLines={assignableLines}
                       onSetCut={onSetCut}
                       onMoveUp={virtualRow.index > 0 ? () => applyMove(virtualRow.index, virtualRow.index - 1) : undefined}
                       onMoveDown={
@@ -214,17 +226,19 @@ function SortableRow({
   seatsCumulative,
   isCutLine,
   isCapacityLine,
+  assignableLines,
   onSetCut,
   onMoveUp,
   onMoveDown,
 }: {
   row: Row;
   index: number;
-  tier: HouseholdTier;
+  tier: Tier;
   seatsCumulative: number;
   isCutLine: boolean;
   isCapacityLine: boolean;
-  onSetCut: (id: string, which: "a" | "b") => void;
+  assignableLines: CutLineRow[];
+  onSetCut: (lineId: string, householdId: string) => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
@@ -232,7 +246,7 @@ function SortableRow({
     id: row.id,
   });
 
-  const tierColour = tier === "A" ? "text-tierA" : tier === "B" ? "text-tierB" : "text-tierC";
+  const tierColour = tierTextClass(tier.position);
 
   return (
     <div
@@ -269,7 +283,12 @@ function SortableRow({
       >
         {seatsCumulative}
       </span>
-      <span className={`w-4 shrink-0 text-center text-xs font-medium ${tierColour}`}>{tier}</span>
+      <span
+        className={`hidden w-24 shrink-0 truncate text-center text-xs font-medium sm:inline ${tierColour}`}
+        title={tier.label}
+      >
+        {tier.label}
+      </span>
 
       {/* Touch-friendly fallback for drag reorder (spec 03 section 7, decision 6) —
           adjacent-swap buttons, always visible rather than hover-gated. */}
@@ -294,14 +313,23 @@ function SortableRow({
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onSetCut(row.id, "a")}
-        className="hidden shrink-0 rounded px-1.5 py-0.5 text-xs text-muted hover:bg-line/50 hover:text-ink sm:inline"
-        title="Put the cut line directly below this household"
-      >
-        cut here
-      </button>
+      {assignableLines.length > 0 ? (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onSetCut(e.target.value, row.id);
+          }}
+          className="field hidden w-28 shrink-0 text-xs sm:inline"
+          title="End a cut line directly below this household"
+        >
+          <option value="">Cut here…</option>
+          {assignableLines.map((line) => (
+            <option key={line.id} value={line.id}>
+              End &ldquo;{line.label}&rdquo;
+            </option>
+          ))}
+        </select>
+      ) : null}
     </div>
   );
 }

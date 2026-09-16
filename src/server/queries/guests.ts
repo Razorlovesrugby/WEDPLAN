@@ -2,13 +2,14 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { GuestFilters } from "@/lib/filters";
-import type { GuestRow, HouseholdTier, HouseholdView, RsvpStatus } from "@/lib/types/database";
+import type { GuestRow, HouseholdView, RsvpStatus } from "@/lib/types/database";
 
 export type GuestListItem = GuestRow & {
   household_name: string;
   household_rank: string;
   household_address: string | null;
-  tier: HouseholdTier;
+  tier: string;
+  tier_position: number;
   tag_ids: string[];
   rsvps: { event_id: string; status: RsvpStatus }[];
 };
@@ -45,19 +46,23 @@ export const listGuests = cache(
     if (error) throw new Error(`Could not load guests: ${error.message}`);
     if (householdError) throw new Error(`Could not load tiers: ${householdError.message}`);
 
-    const tierByHousehold = new Map<string, HouseholdTier>(
-      ((households ?? []) as HouseholdView[]).map((h) => [h.id, h.tier]),
+    const householdById = new Map<string, HouseholdView>(
+      ((households ?? []) as HouseholdView[]).map((h) => [h.id, h]),
     );
 
-    const rows: GuestListItem[] = (guests ?? []).map((guest) => ({
-      ...guest,
-      household_name: guest.households?.display_name ?? "—",
-      household_rank: guest.households?.rank ?? "",
-      household_address: guest.households?.address ?? null,
-      tier: tierByHousehold.get(guest.household_id) ?? "C",
-      tag_ids: (guest.guest_tags ?? []).map((t) => t.tag_id),
-      rsvps: guest.rsvps ?? [],
-    }));
+    const rows: GuestListItem[] = (guests ?? []).map((guest) => {
+      const household = householdById.get(guest.household_id);
+      return {
+        ...guest,
+        household_name: guest.households?.display_name ?? "—",
+        household_rank: guest.households?.rank ?? "",
+        household_address: guest.households?.address ?? null,
+        tier: household?.tier ?? "",
+        tier_position: household?.tier_position ?? 0,
+        tag_ids: (guest.guest_tags ?? []).map((t) => t.tag_id),
+        rsvps: guest.rsvps ?? [],
+      };
+    });
 
     return sortGuests(rows.filter((guest) => matches(guest, filters)), filters.sort);
   },

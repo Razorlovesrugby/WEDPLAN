@@ -6,14 +6,9 @@ import { InlineText } from "./inline-text";
 import { HouseholdPicker } from "./household-picker";
 import { moveGuests, setGuestTags, updateGuest } from "@/server/actions/guests";
 import { guestName } from "@/lib/format";
+import { tierBadgeClass } from "@/lib/tier-colors";
 import type { GuestListItem } from "@/server/queries/guests";
-import type { EventRow, HouseholdTier, HouseholdView, RsvpStatus, TagRow } from "@/lib/types/database";
-
-const TIER_STYLE: Record<HouseholdTier, string> = {
-  A: "bg-tierA/10 text-tierA",
-  B: "bg-tierB/10 text-tierB",
-  C: "bg-tierC/10 text-tierC",
-};
+import type { EventRow, HouseholdView, RsvpStatus, TagRow } from "@/lib/types/database";
 
 const RSVP_LABEL: Record<RsvpStatus, string> = {
   yes: "Yes",
@@ -176,7 +171,9 @@ export function GuestsTable({
                     </Link>
                   </td>
                   <td className="px-3 py-1.5">
-                    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${TIER_STYLE[guest.tier]}`}>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${tierBadgeClass(guest.tier_position)}`}
+                    >
                       {guest.tier}
                     </span>
                   </td>

@@ -4,18 +4,19 @@ import { ListAppearanceEditor } from "@/components/settings/list-appearance-edit
 import { CapacityControl } from "@/components/rank/capacity-control";
 import { listHouseholds } from "@/server/queries/guests";
 import { getLists } from "@/server/queries/lists";
-import { getWeddingStats, requireWedding } from "@/server/queries/wedding";
+import { getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
 import { ranksNeedRebalance } from "@/server/actions/rank";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, lists] = await Promise.all([
+  const [households, stats, rebalanceOffered, lists, cutLines] = await Promise.all([
     listHouseholds(wedding.id),
     getWeddingStats(wedding.id),
     ranksNeedRebalance(),
     getLists(wedding.id),
+    getCutLines(wedding.id),
   ]);
 
   const timeZones =
@@ -44,7 +45,7 @@ export default async function SettingsPage() {
         {households.length === 0 ? (
           <p className="text-sm text-muted">No households yet — nothing to set a cut line on.</p>
         ) : (
-          <CutLinePicker households={households} cutRank={wedding.cut_rank} tierBRank={wedding.tier_b_rank} />
+          <CutLinePicker households={households} cutLines={cutLines} />
         )}
       </section>
 

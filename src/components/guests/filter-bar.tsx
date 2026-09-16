@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
-import type { EventRow, TagRow } from "@/lib/types/database";
+import type { CutLineRow, EventRow, TagRow } from "@/lib/types/database";
 
 const RSVP_OPTIONS = [
   { value: "yes", label: "Attending" },
@@ -25,10 +25,12 @@ const MISSING_OPTIONS = [
 export function FilterBar({
   tags,
   events,
+  cutLines,
   activeCount,
 }: {
   tags: TagRow[];
   events: EventRow[];
+  cutLines: CutLineRow[];
   activeCount: number;
 }) {
   const router = useRouter();
@@ -96,9 +98,14 @@ export function FilterBar({
         <span className="mb-1 block text-xs text-muted">Tier</span>
         <select value={current("tier")} onChange={(e) => setParam("tier", e.target.value)} className="field">
           <option value="">Any</option>
-          <option value="A">A — above the cut</option>
-          <option value="B">B — waitlist</option>
-          <option value="C">C — below</option>
+          {[...cutLines]
+            .sort((a, b) => a.position - b.position)
+            .map((line) => (
+              <option key={line.id} value={line.label}>
+                {line.label}
+                {line.position === 0 ? " — above the cut" : ""}
+              </option>
+            ))}
         </select>
       </label>
 

@@ -3,7 +3,7 @@ import { FilterBar } from "@/components/guests/filter-bar";
 import { GuestsTable } from "@/components/guests/guests-table";
 import { countActiveFilters, guestFiltersToQuery, parseGuestFilters } from "@/lib/filters";
 import { listGuests, listHouseholds } from "@/server/queries/guests";
-import { getEvents, getTags, requireWedding } from "@/server/queries/wedding";
+import { getCutLines, getEvents, getTags, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Guests" };
 
@@ -17,11 +17,12 @@ export default async function GuestsPage({
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
 
-  const [guests, tags, events, households] = await Promise.all([
+  const [guests, tags, events, households, cutLines] = await Promise.all([
     listGuests(wedding.id, filters),
     getTags(wedding.id),
     getEvents(wedding.id),
     listHouseholds(wedding.id),
+    getCutLines(wedding.id),
   ]);
 
   return (
@@ -47,7 +48,7 @@ export default async function GuestsPage({
         </div>
       </div>
 
-      <FilterBar tags={tags} events={events} activeCount={countActiveFilters(filters)} />
+      <FilterBar tags={tags} events={events} cutLines={cutLines} activeCount={countActiveFilters(filters)} />
 
       <GuestsTable guests={guests} tags={tags} events={events} households={households} />
     </div>
