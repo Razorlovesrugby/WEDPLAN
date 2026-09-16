@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { signPaths } from "@/lib/supabase/storage";
+import { isSchemaMissing } from "@/lib/db-errors";
 import type {
   MoodboardClipTokenRow,
   MoodboardItemRow,
@@ -10,13 +11,38 @@ import type {
   PinterestAccountRow,
 } from "@/lib/types/database";
 
+/**
+ * Reads that degrade when the migration has not been applied.
+ *
+ * `0013`/`0014` may not exist on a given database — /settings carries two
+ * moodboard cards next to the cut-line and list-appearance editors, and a
+ * throw here would black out all four on a page that worked before this
+ * feature shipped.
+ *
+ * The check lives in src/lib/db-errors.ts because the first version of it
+ * was wrong in a way worth not repeating: it tested for PostgreSQL's 42P01,
+ * but the app reaches the database through PostgREST, which says PGRST205
+ * instead. See that file.
+ */
+
 /** An item with its images already signed, which is the only form a page can render. */
 export type SignedItem = MoodboardItemRow & {
   displayUrl: string | null;
   thumbUrl: string | null;
 };
 
-export const listMoodboards = cache(async (weddingId: string): Promise<MoodboardView[]> => {
+/**
+ * The board list, and whether the feature's schema exists at all.
+ *
+ * Two different empties: "you have no boards yet" wants an invitation to
+ * make one, "this database has never had 0013 applied" wants a migration.
+ * Rendering the first when it is the second is how somebody concludes their
+ * boards were deleted.
+ */
+export const listMoodboards = cache(async (weddingId: string): Promise<{
+  ready: boolean;
+  boards: MoodboardView[];
+}> => {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("v_moodboards")
@@ -25,8 +51,9 @@ export const listMoodboards = cache(async (weddingId: string): Promise<Moodboard
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
+  if (isSchemaMissing(error)) return { ready: false, boards: [] };
   if (error) throw new Error(`Could not load moodboards: ${error.message}`);
-  return data ?? [];
+  return { ready: true, boards: data ?? [] };
 });
 
 /** Archived boards, for the ?archived=1 toggle. Never mixed into the default list. */
@@ -39,6 +66,7 @@ export const listArchivedMoodboards = cache(async (weddingId: string) => {
     .not("archived_at", "is", null)
     .order("archived_at", { ascending: false });
 
+  if (isSchemaMissing(error)) return [];
   if (error) throw new Error(`Could not load archived moodboards: ${error.message}`);
   return data ?? [];
 });
@@ -138,6 +166,7 @@ export const listClipTokens = cache(async (weddingId: string): Promise<Moodboard
     .eq("wedding_id", weddingId)
     .order("created_at", { ascending: true });
 
+  if (isSchemaMissing(error)) return [];
   if (error) throw new Error(`Could not load clip tokens: ${error.message}`);
   return data ?? [];
 });
@@ -150,6 +179,7 @@ export const getPinterestAccount = cache(async (weddingId: string): Promise<Pint
     .eq("wedding_id", weddingId)
     .maybeSingle();
 
+  if (isSchemaMissing(error)) return null;
   if (error) throw new Error(`Could not load the Pinterest connection: ${error.message}`);
   return data;
 });

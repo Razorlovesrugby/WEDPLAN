@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentWedding, getSessionUser } from "@/server/queries/wedding";
 import { encryptToken } from "@/lib/tokens";
 import { exchangeCode, fetchAccount, pinterestConfig } from "@/server/pinterest/client";
+import { absoluteUrl } from "@/lib/env";
 
 /**
  * GET /api/pinterest/callback — the OAuth redirect target.
@@ -21,7 +22,10 @@ export const dynamic = "force-dynamic";
 const STATE_COOKIE = "pinterest_oauth_state";
 
 function back(message: string, ok = false): NextResponse {
-  const url = new URL("/settings", process.env["NEXT_PUBLIC_SITE_URL"] ?? "http://localhost:3000");
+  // absoluteUrl, not a raw env read: it completes a bare hostname and falls
+  // back to Vercel's own URLs, which is the difference between this working
+  // on a preview deployment and redirecting to localhost.
+  const url = new URL(absoluteUrl("/settings"));
   url.searchParams.set(ok ? "pinterest" : "pinterest_error", message);
   return NextResponse.redirect(url);
 }

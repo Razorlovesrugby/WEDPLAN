@@ -16,7 +16,7 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, lists, cutLines, clipTokens, pinterest, boards] =
+  const [households, stats, rebalanceOffered, lists, cutLines, clipTokens, pinterest, moodboards] =
     await Promise.all([
       listHouseholds(wedding.id),
       getWeddingStats(wedding.id),
@@ -69,7 +69,7 @@ export default async function SettingsPage() {
 
       <ClipTokensCard
         tokens={clipTokens}
-        boards={boards.map((board) => ({ id: board.id, title: board.title }))}
+        boards={moodboards.boards.map((board) => ({ id: board.id, title: board.title }))}
       />
       {/* Not a setting — there is nothing here to change. It is here because
           the privacy notice is a promise made in your name to your guests,
