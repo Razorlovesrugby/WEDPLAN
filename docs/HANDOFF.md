@@ -3,7 +3,28 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 19 — the deployment 500 is diagnosed: `0013`/`0014`
+Last updated: session 20 — spec 14 (the public wedding site and the invites
+that point at it) was written from a discovery pass against
+[aisle.wedding](https://aisle.wedding), **all twelve of its questions were
+answered in the same session**, and **build steps 0 and 1 are now built**:
+`weddings.slug`, the Script theme system, and a themed `/w/[slug]` rendered
+from `site_content`. Steps 2–5 are not started. **Read
+`docs/specs/14-public-site-and-invites.md`'s "Build status" section first** —
+it is the per-file handoff, including the three places the build corrected the
+spec and the environment traps that cost time here.
+
+**The one thing to know before picking it up: there is no editor.** The
+renderer works and is tested; every section's content is still a JSONB payload
+that has to be typed into `site_content` by hand, and `/site` does not exist.
+That is the next piece of work and it is what stands between this feature and
+being usable.
+
+**Also unread, still:** `aisle.wedding` is blocked by this environment's
+egress policy, so the design proportions in §5 are this session's judgement
+rather than the reference's. Screenshots of `/example-wedding`, or that host
+on the allowlist, would close it.
+
+Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
 have never been applied to the live project, and the guard that should have
 degraded gracefully was written against the wrong error layer (42P01 vs
 PostgREST's PGRST205) so it never fired. Fixed, with tests. **The remaining
@@ -26,6 +47,188 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 20: discovery — the public site and invites, against aisle.wedding
+
+**The planner asked for a discovery session and a spec** covering "invites
+and wedding website vibes", pointing at `https://aisle.wedding/example-wedding`
+and saying to copy it directly where it is better.
+
+**The reference site was never opened.** `aisle.wedding` is blocked by this
+session's egress policy — every request to that host, `/example-wedding`
+included, is refused by the proxy with a 403, and `/root/.ccr/README.md` is
+explicit that policy denials get reported rather than worked around. So the
+spec was written from search-engine descriptions of Aisle's own `/features`
+and guide pages plus their published help material. That is enough to fix the
+*feature set* and the *data model* with confidence; it is not enough for
+layout, type scale, motion or the actual copy. The spec says so in its own §0,
+and names the two fixes: full-page screenshots dropped into the repo, or
+adding the host to the environment's egress allowlist.
+
+**Written this session:**
+
+- `docs/specs/14-public-site-and-invites.md` — the public site (§§3–11) and
+  the invitation surface (§12), with a schema (`0015_public_site.sql`, not
+  written), a planner-side screen list (§13), 11 open questions (§14), a
+  build order (§15) and a done-when (§16).
+- `docs/specs/README.md` — spec 14 added to the index and the build-order
+  notes.
+
+**No code, no migration, no screens.** Per `docs/specs/README.md`'s process,
+writing a spec is not permission to build it.
+
+**Four questions answered the same session**, and folded into the spec:
+
+- **Q1 — household token, confirmed.** No phone verification, no per-guest
+  accounts. `/w` gains a "find my invitation" resend; everything personalised
+  stays at `/rsvp/[token]`, keyed by household. An entire authentication
+  subsystem left the spec.
+- **Q2 — local, "maybe set up a bus".** The biggest change. Aisle's
+  travel-and-stays apparatus (multi-hotel room blocks, rooms, nights, prices,
+  holds, rooming lists, airports, flight times) is **cut**. In its place:
+  parking, a few places to stay as plain links, and **a coach done properly**
+  — named runs, timed pickup stops, capacity shown, and seats a household
+  reserves from their RSVP page so there is a manifest on the day. Three
+  tables left §4; two smaller ones arrived.
+- **Q4 — money links out.** No Stripe. Registry funds link to whatever the
+  couple already uses and a pledge is a note that produces the thank-you
+  list; coach seats are a reservation, not a transaction.
+- **Q3a — the theme is Script.** Traditional: script display over a humanist
+  serif, centred, monogram, floral rule. The other three presets stay in the
+  spec as a system, not as scheduled work. `hero_style: 'type'` is the
+  default until photographs exist, and with Script that is not a compromise.
+
+**Consequence worth knowing:** build steps 1–3 (theme and renderer, schedule
+and FAQ, and the whole invitation surface) now need **no migration at all**,
+so they can ship while the rest of §14.2 is still open. Step 3 (invites) is
+the only part with a date that cannot move.
+
+**Round two, same session — four more answered:**
+
+- **Q12 — an open-source script face**, so step 1 is unblocked and nothing
+  waits on a purchase. Recommendation in §5: Pinyon Script for the display,
+  EB Garamond for body and real small-caps labels. The spec is explicit about
+  the trade-off: a paid foundry script is better in the joins and flourishes,
+  and the reason the gap does not matter here is §5's rule that the script is
+  used for the names and section rules only, never at body or label size.
+  Free script fonts betray a template when they get used for everything.
+- **Q3b — photographs exist**, so `hero_style: 'framed'` and the AVIF/WebP +
+  blurhash pipeline moves into step 1. `type` stays as the no-image fallback.
+- **Q5 — guest photo uploads in**, gated to `/rsvp/[token]` so uploads are
+  household-attributable, `review` moderation by default.
+- **Q6 — no registry section at all.** §8 is cut and `registry_items` /
+  `registry_pledges` leave the schema. §8 is kept in the file as a record of
+  the decision and what reversing it would cost, so nobody helpfully re-adds
+  it. The FAQ's "What's the gift situation?" is where a sentence about it
+  belongs instead.
+
+**Round three, same session — the last five:**
+
+- **Q11 — first person plural.** The site is written as "we" throughout,
+  headings included ("Where to stay", not "Accommodation"). One deliberate
+  exception: the face of the stationery keeps formal third person, because
+  that is a typographic tradition rather than a voice. §10 gains a third
+  editor hint saying so — "the couple ask that guests refrain from…" is how a
+  venue writes, and it is the fastest way to make a wedding site feel like an
+  event management system.
+- **Q7 — no SMS.** Email plus the WhatsApp copy-out. Adding it later touches
+  only the sender.
+- **Q8 — no password gate**, `noindex` on. Specified in §11 but not built, at
+  a recorded cost of about half a day if a reason ever appears.
+- **Q9 — `/w/[slug]`**, no custom domain. This retires the "takes the first
+  wedding" hack `src/app/w/page.tsx` admits to in a comment, **and it is the
+  correction above**: it needs `weddings.slug`, so §4 grew a column after
+  being called final. The slug is wanted by build step 1, not step 4, so the
+  work splits into `0015_wedding_slug.sql` (one column, step 1) and
+  `0016_public_site.sql` (everything else, step 4). Writing the public routing
+  twice is the alternative.
+- **Q10 — the site stays up indefinitely and the planner pays.** No expiry, no
+  archive, no code. Written into §11 as a standing cost, because the failure
+  mode is discovering it at a renewal in three years and letting it lapse.
+
+**Where that leaves it:** every question closed, six build steps, none
+blocked, and steps 0–3 need one column between them. Not being built:
+registry, SMS, password gate, custom domain, any expiry step.
+
+**Still owed by the planner, and the only thing holding the design back:**
+screenshots of `aisle.wedding/example-wedding`, or that host on the egress
+allowlist. §5's proportions are this session's judgement, not the
+reference's.
+
+**Two recommendations made against Aisle**, both argued in the spec: no SMS
+(§12.3 — the WhatsApp copy-out V1 already ships covers it without a provider,
+per-country compliance or opt-out handling), and no natural-language setup
+assistant (§13 — two people entering forty facts once are better served by a
+form they can see).
+
+**Unchanged and still outstanding from session 19:** apply `0013` and `0014`
+to the live project and run `node scripts/ensure-bucket.mjs` against it. Only
+the planner can do it, and nothing about moodboards works until it happens.
+`/api/health` confirms both.
+
+## Session 20 (build): spec 14 steps 0 and 1
+
+**Green:** `npm run typecheck`, `npm test` (384, up from 306),
+`./scripts/verify-migrations.sh` (187 assertions, up from 167), `npm run build`.
+**Never opened in a browser and never run against a live Supabase project** —
+the fonts have never been rendered, the theme has never been seen, and no
+query in `src/server/queries/site.ts` has returned a real row.
+
+Three commits, each reviewable alone:
+
+- `3bba307` — **step 0**, `0015_wedding_slug.sql`. `weddings.slug` with a
+  `slugify()` that transliterates rather than depending on `unaccent` (an
+  extension the bare cluster may not carry), a backfill, a shape check in the
+  database because this column ends up in a URL, and a BEFORE INSERT trigger
+  that derives a slug when none is given — without which a NOT NULL unique
+  column breaks `bootstrap.sql`, which the planner runs by hand. 20 new SQL
+  assertions.
+- `b90fde6` — **step 1a**, the theme foundation. Self-hosted Pinyon Script and
+  EB Garamond; the five tokens moved to CSS custom properties carrying RGB
+  channels so Tailwind's `<alpha-value>` keeps working (there are 62 opacity
+  modifiers in this codebase and a hex custom property renders them all
+  transparent); six palettes, every one asserted to pass rather than assumed
+  checked.
+- `51a2dbd` — **step 1b**, the renderer, `/w/[slug]`, the `.ics` route, and
+  `/w` kept as a redirect because `/privacy` links to it and
+  `revalidatePath("/w")` targets it.
+
+**Three corrections the build made to the spec**, all recorded in spec 14's
+Build status section:
+
+1. **EB Garamond has no small caps.** §5 claimed it ships real ones. Its
+   Google build exposes no `smcp` feature at all — verified with fontTools.
+   Labels are letterspaced uppercase instead.
+2. **The section-rule contrast check is advisory, not blocking.** The spec
+   said 3:1; all six palettes sit near 1.2:1 there, because a hairline is
+   meant to be faint, and 3:1 would force rules in near-black. Every text pair
+   still blocks with no exception.
+3. **`weddings.slug` grew §4 after it was called final** (recorded a round
+   earlier), which is why there are two migrations rather than one.
+
+**What is NOT built** — the full list is in the spec, but the headlines:
+no `/site` editor at all, so the contrast validator is written and tested but
+wired to nothing and a custom palette written by hand is unchecked; no hero
+image upload (its storage is `site_assets`, in `0016` at step 4); no seed
+content, so a fresh reset renders the hero and the RSVP pointer and nothing
+else; no FAQ starter library in the database; the scroll motion and its
+`prefers-reduced-motion` handling are not implemented; "find my invitation"
+does not exist, and the RSVP section says "message us" as a placeholder rather
+than linking to an anchor that is not there. Steps 2–5 otherwise untouched.
+
+**Two environment traps, both cost time here:**
+
+- `./scripts/verify-migrations.sh` must not run as root and there is no
+  unprivileged login user in the container. The `postgres` system user works:
+  `su postgres -s /bin/bash -c "cd /home/user/WEDPLAN && ./scripts/verify-migrations.sh"`.
+- `npm run build` fails on a **clean checkout** with no `.env.local`, dying
+  while collecting page data for `/api/export/[kind]`. This predates spec 14 —
+  confirmed by stashing and rebuilding. Copy `.env.example` and fill in any
+  non-empty strings; nothing calls out with them.
+
+**Unrelated and still outstanding from session 19:** `0013`/`0014` have never
+been applied to the live project and `ensure-bucket.mjs` has never run against
+it. `0015` now joins that queue. `/api/health` confirms.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 

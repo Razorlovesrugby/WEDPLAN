@@ -30,6 +30,8 @@ describe("isPublicPath", () => {
   it("keeps the public site, the privacy notice and the auth pages open", () => {
     for (const path of [
       "/w",
+      "/w/alex-sam",
+      "/api/public/events/11111111-1111-4111-8111-111111111111/ics",
       "/w/anything",
       "/privacy",
       "/login",

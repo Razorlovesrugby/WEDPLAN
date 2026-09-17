@@ -268,6 +268,8 @@ export type MoodboardLayout = "grid" | "canvas";
 export type WeddingRow = {
   id: string;
   name: string;
+  /** Public site address: /w/<slug>. Derived from `name` on insert (0015). */
+  slug: string;
   wedding_date: string | null;
   timezone: string;
   base_currency: string;
@@ -918,7 +920,12 @@ export type Database = {
     Tables: {
       // The second parameter lists columns with a database DEFAULT. Nullable
       // columns are inferred, so they are not repeated here.
-      weddings: Table<WeddingRow, "id" | Timestamps | "timezone" | "base_currency" | "reminder_window_days">;
+      weddings: Table<
+        WeddingRow,
+        // `slug` is optional on insert: 0015's trigger derives one from the
+        // name when it is absent, so callers that do not care never set it.
+        "id" | Timestamps | "timezone" | "base_currency" | "reminder_window_days" | "slug"
+      >;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
       events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted">;
