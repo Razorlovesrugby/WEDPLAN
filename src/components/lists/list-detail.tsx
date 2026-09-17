@@ -21,6 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { addSection, archiveList, reorderItems } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { sortCompletedLast } from "@/lib/lists/sort";
 import { ItemRow } from "./item-row";
 import { QuickAdd } from "./quick-add";
 import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow } from "@/lib/types/database";
@@ -70,6 +71,12 @@ export function ListDetail({
       const list = map.get(item.parent_item_id) ?? [];
       list.push(item);
       map.set(item.parent_item_id, list);
+    }
+    for (const [parentId, subItems] of map) {
+      map.set(
+        parentId,
+        sortCompletedLast(subItems, (i) => i.status === "done"),
+      );
     }
     return map;
   }, [items]);
@@ -209,8 +216,20 @@ function SectionGroup({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const currentOrder = order.filter((id) => itemsById.has(id));
-  for (const item of items) if (!currentOrder.includes(item.id)) currentOrder.push(item.id);
+  const rawOrder = order.filter((id) => itemsById.has(id));
+  for (const item of items) if (!rawOrder.includes(item.id)) rawOrder.push(item.id);
+
+  /**
+   * What's actually shown, and what drag-and-drop operates over: done items
+   * sunk below every not-done one (spec 10). `rawOrder` still records manual
+   * ordering within each of those two groups — this is a display-time
+   * partition, not a change to what gets persisted as `sort_order`, so a
+   * move that would cross the done/not-done line just lands on the correct
+   * side of it instead, rather than actually interleaving.
+   */
+  const currentOrder = sortCompletedLast(rawOrder, (id) => itemsById.get(id)?.status === "done");
+  const doneStart = currentOrder.findIndex((id) => itemsById.get(id)?.status === "done");
+  const firstDoneIndex = doneStart === -1 ? currentOrder.length : doneStart;
 
   /** Shared by drag-and-drop and the Move up/down buttons — see rank-list.tsx for the same split. */
   function applyMove(from: number, to: number) {
@@ -256,8 +275,12 @@ function SectionGroup({
                   currentUserId={currentUserId}
                   budgetLinks={budgetLinksByItem[id] ?? []}
                   highlighted={id === highlightId}
-                  onMoveUp={index > 0 ? () => applyMove(index, index - 1) : undefined}
-                  onMoveDown={index < currentOrder.length - 1 ? () => applyMove(index, index + 1) : undefined}
+                  onMoveUp={index > 0 && index !== firstDoneIndex ? () => applyMove(index, index - 1) : undefined}
+                  onMoveDown={
+                    index < currentOrder.length - 1 && index !== firstDoneIndex - 1
+                      ? () => applyMove(index, index + 1)
+                      : undefined
+                  }
                 />
               );
             })}
