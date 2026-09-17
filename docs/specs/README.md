@@ -42,6 +42,9 @@ renumbered to spec 2, is unchanged in substance.
 | 9 | [Moodboards, publicly shareable](09-moodboards.md) | Built end to end, session 17 (2026-09-16) — `0013_moodboards.sql`, `v_moodboards`, the private storage bucket and its `ensure-bucket.mjs`, `/moodboards`, `/moodboards/[id]`, `/m/[token]`, and the `/w` + `/rsvp/[token]` sections. The first feature in the project to need Supabase Storage. Never applied to a live project and never opened in a browser — see `docs/HANDOFF.md` session 17. | V1 only |
 | 9.1 | [Moodboards — Pinterest import, and a right-click clipper](09.1-pinterest-import-and-clipper.md) | Built end to end, session 17 (2026-09-16) — `0014_moodboard_clipper.sql`, `src/lib/net/` (SSRF address checks + hardened fetcher), `src/lib/pinterest.ts`, `POST /api/clip`, `/moodboards/[id]/import`, and `extension/` (Chrome MV3). §1 records what of the planner's supplied prototype spec survived contact with this stack and what was replaced. **No Pinterest call has ever been made and the extension has never been loaded** — see `docs/HANDOFF.md` session 17. | Spec 9 |
 | 10 | [Completed tasks sink to the bottom of the list](10-completed-tasks-sort-to-bottom.md) | Built end to end, same session (2026-09-16) — new `sortCompletedLast` in `src/lib/lists/sort.ts`, applied to `/lists/[id]`'s per-section checklist (including drag-and-drop/Move up-down and sub-items) and `/lists`'s "All"/"Flagged" smart views. No schema change. | Spec 1; spec 3 for the smart views |
+| 11 | [Editable list titles, moving tasks between sections, reordering sections, and completing a task closes its sub-tasks](11-list-editing-cross-section-drag-and-cascading-completion.md) | Built end to end, same session (2026-09-17) — `InlineText` title editing on both `/lists/[id]` and `/settings`; `moveItemToSection`/`reorderSections` actions; a shared `DndContext` for cross-section item drag plus a per-item "Section" select; sections reorder via Move up/down (drag was scoped out while building — see spec's §1C); `setStatus` cascades closing to sub-items, not reopening. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, spec 10, already built |
+| 12 | [Reordering the lists themselves in the sidebar](12-reorder-lists-sidebar.md) | Built end to end, same session (2026-09-17) — rewritten from its original draft (manual ordering inside "Assigned to me") after the planner clarified they meant reordering the lists shown under "Your lists" instead, see §4; new `reorderLists` action renumbering the existing `lists.sort_order`, plus drag/Move up-down in `ListsSidebar`. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, already built |
+| 13 | [Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives](13-navigation-regrouping.md) | Built end to end, same session (2026-09-17) — `Nav` collapsed from 14 entries to 8; a new shared `SubTabs` component over the Guests hub (`/guests`, `/guests/rank`, `/invitations`) and the Tasks hub (`/lists`, `/lists/[id]`, `/calendar`, `/board`, `/timeline`); a "Run sheet →" link per event row in `EventsEditor`; cross-links between `/questions` and `/invitations`. No schema, no URL changes. Not yet opened in a browser (no Supabase project in this sandbox). | V1, spec 1, spec 3, spec 5 part B, spec 6, already built |
 
 ## Recommended build order
 
@@ -102,6 +105,19 @@ depends on a developer app registered outside this repository, at an access
 tier nobody here can predict — so it is the one piece of planned work whose
 schedule is not ours to set. Build order 2–5 of that spec deliberately
 produces the clipper without touching Pinterest at all.
+
+**Specs 11–13 are three independent proposals from the same round of
+planner feedback, all answered and built end to end 2026-09-17.** Spec 11
+(list titles, moving/reordering sections, cascading completion) and spec 12
+(reordering the lists sidebar) both sit on top of specs 1, 3 and 10 only,
+and have no dependency on each other — either can be built first. Spec 13
+(navigation regrouping) depends on the underlying screens each grouping
+touches (specs 1, 3, 5 part B, 6, plus V1's own guest/invitation/event
+surface) but not on specs 11 or 12 — it reshuffles `Nav` and adds shared tab
+strips over existing routes, and works the same way whether or not 11 or 12
+have shipped. Spec 13's one genuine conflict (§5 question 1: Invitations
+was asked to pair with both Guests and Questions) is resolved as a
+cross-link rather than a shared tab — see that spec's §1D and §5.
 
 ## What's shared across both
 

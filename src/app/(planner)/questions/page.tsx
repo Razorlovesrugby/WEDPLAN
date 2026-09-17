@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { QuestionsEditor } from "@/components/questions/questions-editor";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
@@ -28,7 +29,10 @@ export default async function QuestionsPage() {
         <p className="mt-1 max-w-2xl text-sm text-muted">
           Extra questions on the RSVP form, on top of dietary requirements and access needs, which
           everyone is always asked. Per guest for anything about the person; per household for
-          anything a family answers once.
+          anything a family answers once.{" "}
+          <Link href="/invitations" className="underline">
+            See who&rsquo;s been sent one →
+          </Link>
         </p>
       </div>
 

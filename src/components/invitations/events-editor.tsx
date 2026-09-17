@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteEvent, saveEvent } from "@/server/actions/events";
@@ -57,6 +58,9 @@ export function EventsEditor({ events, timeZone }: { events: EventRow[]; timeZon
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <Link href={`/events/${event.id}/run-sheet`} className="btn" prefetch={false}>
+                    Run sheet →
+                  </Link>
                   <button type="button" className="btn" onClick={() => setEditing(event.id)}>
                     Edit
                   </button>

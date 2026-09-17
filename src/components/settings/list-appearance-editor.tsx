@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { updateList } from "@/server/actions/lists";
 import { LIST_COLOR_PALETTE, DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { InlineText } from "@/components/guests/inline-text";
 import type { ListRow } from "@/lib/types/database";
 
 export function ListAppearanceEditor({ lists }: { lists: ListRow[] }) {
@@ -38,6 +39,12 @@ function ListAppearanceRow({ list }: { list: ListRow }) {
     });
   }
 
+  async function saveTitle(next: string) {
+    const result = await updateList(list.id, { title: next });
+    if (result.ok) router.refresh();
+    return result;
+  }
+
   return (
     <li className="flex flex-wrap items-center gap-3 p-3">
       <span
@@ -45,7 +52,14 @@ function ListAppearanceRow({ list }: { list: ListRow }) {
         style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
         aria-hidden
       />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">{list.title}</span>
+      <span className="min-w-0 flex-1">
+        <InlineText
+          value={list.title}
+          ariaLabel="List title"
+          onSave={saveTitle}
+          className="text-sm font-medium"
+        />
+      </span>
 
       <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`Color for ${list.title}`}>
         {LIST_COLOR_PALETTE.map((swatch) => (

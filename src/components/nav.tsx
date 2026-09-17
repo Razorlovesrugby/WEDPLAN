@@ -4,36 +4,36 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/**
+ * Eight destinations (spec 13) — collapsed down from a flat fourteen.
+ * "Guests" and "Tasks" each cover several routes underneath them; a page
+ * living under one of `matchPrefixes` keeps that top-level entry lit even
+ * though its own URL isn't the link's own `href` (spec 13 §1B/§1A's hub
+ * pages, plus `/households`, which stays reachable only from a guest row —
+ * not its own tab — but is still "Guests" territory for nav purposes).
+ */
 const LINKS = [
   { href: "/", label: "Overview" },
-  { href: "/guests", label: "Guests" },
-  { href: "/guests/rank", label: "Ranking" },
-  { href: "/events", label: "Events" },
-  { href: "/run-sheet", label: "Run sheet" },
-  { href: "/invitations", label: "Invitations" },
-  { href: "/questions", label: "Questions" },
-  { href: "/lists", label: "Lists" },
-  { href: "/timeline", label: "Timeline" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/board", label: "Board" },
+  { href: "/guests", label: "Guests", matchPrefixes: ["/guests", "/invitations", "/households"] },
   { href: "/budget", label: "Budget" },
+  { href: "/events", label: "Events" },
+  { href: "/questions", label: "Questions" },
+  { href: "/lists", label: "Tasks", matchPrefixes: ["/lists", "/calendar", "/board", "/timeline"] },
   { href: "/moodboards", label: "Moodboards" },
   { href: "/settings", label: "Settings" },
 ] as const;
 
-function isActive(pathname: string, href: string): boolean {
-  // "/" would otherwise match everything; "/guests" must not stay lit
-  // while you are on "/guests/rank", which is its own destination.
-  if (href === "/") return pathname === "/";
-  return pathname === href || (pathname.startsWith(`${href}/`) && href !== "/guests");
+function isActive(pathname: string, link: { href: string; matchPrefixes?: readonly string[] }): boolean {
+  if (link.href === "/") return pathname === "/";
+  const prefixes = link.matchPrefixes ?? [link.href];
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 /**
- * Fourteen destinations is too many for a bottom tab bar without its own
- * overflow menu (spec 03, section 7, decision 5), so below `sm:` this
- * collapses behind a hamburger button into a dropdown panel instead of
- * wrapping into a multi-row link soup. `sm:` and up keeps today's plain
- * wrapping link row unchanged.
+ * Eight destinations still wraps into more than one row on a narrow phone,
+ * so below `sm:` this collapses behind a hamburger button into a dropdown
+ * panel instead (spec 03, section 7, decision 5). `sm:` and up keeps a
+ * plain wrapping link row.
  */
 export function Nav() {
   const pathname = usePathname();
@@ -60,7 +60,7 @@ export function Nav() {
         className={`${open ? "flex" : "hidden"} flex-col gap-1 pb-2 sm:flex sm:flex-row sm:flex-wrap sm:pb-0`}
       >
         {LINKS.map((link) => {
-          const active = isActive(pathname, link.href);
+          const active = isActive(pathname, link);
           return (
             <Link
               key={link.href}

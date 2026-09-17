@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import {
   assignItem,
   addSubItem,
@@ -12,7 +12,7 @@ import {
   toggleFlag,
 } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
-import type { CollaboratorRow, ListItemRow } from "@/lib/types/database";
+import type { CollaboratorRow, ListItemRow, ListSectionRow } from "@/lib/types/database";
 
 export type ItemWithList = ListItemRow & {
   lists?: { title: string; color: string | null; kind: string } | null;
@@ -35,6 +35,9 @@ export function ItemRow({
   dragHandle,
   budgetLinks = [],
   highlighted = false,
+  sections,
+  currentSectionId,
+  onSelectSection,
 }: {
   item: ItemWithList;
   subItems?: ListItemRow[];
@@ -47,6 +50,10 @@ export function ItemRow({
   budgetLinks?: { id: string; label: string }[];
   /** True when this is the `?highlight=` target from a budget popup's click-through. */
   highlighted?: boolean;
+  /** Every section in this item's own list — present only on `/lists/[id]`'s top-level rows (spec 11 §1B). */
+  sections?: ListSectionRow[];
+  currentSectionId?: string | null;
+  onSelectSection?: (itemId: string, sectionId: string | null) => void;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -58,6 +65,14 @@ export function ItemRow({
   const [addingSub, setAddingSub] = useState(false);
   const [subTitle, setSubTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // A sub-item can be closed by its parent's own checkbox (spec 11 §1D)
+  // rather than this row's, so `checked` has to track the server value
+  // whenever a refresh brings a new one in, not just reflect this row's own
+  // last click.
+  useEffect(() => {
+    setChecked(item.status === "done");
+  }, [item.status]);
 
   function onToggleDone() {
     const next = !checked;
@@ -231,6 +246,21 @@ export function ItemRow({
                 {collaborators.map((c) => (
                   <option key={c.user_id} value={c.user_id}>
                     {c.user_id === currentUserId ? "You" : c.role === "owner" ? "Owner" : "Partner"}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {allowSubItems && sections && sections.length > 0 && onSelectSection ? (
+              <select
+                value={currentSectionId ?? ""}
+                onChange={(e) => onSelectSection(item.id, e.target.value || null)}
+                aria-label={`Section for "${item.title}"`}
+                className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
+              >
+                <option value="">No section</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
                   </option>
                 ))}
               </select>

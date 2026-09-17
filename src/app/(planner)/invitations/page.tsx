@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { InvitationsTable } from "@/components/invitations/invitations-table";
+import { SubTabs } from "@/components/sub-tabs";
+import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { listInvitations } from "@/server/queries/invitations";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatDate } from "@/lib/format";
@@ -46,6 +48,7 @@ export default async function InvitationsPage({
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={GUESTS_TABS} />
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl">Invitations</h1>
         <div className="flex flex-wrap items-center gap-3">
@@ -72,7 +75,10 @@ export default async function InvitationsPage({
       <p className="max-w-2xl text-sm text-muted">
         One link per household, no account to create. Reminders go only to households who
         haven&rsquo;t finished answering, never more than once every ten days, and never to a muted
-        one — so you watch the numbers rather than chasing by hand.
+        one — so you watch the numbers rather than chasing by hand.{" "}
+        <Link href="/questions" className="underline">
+          Manage the RSVP questions households answer →
+        </Link>
       </p>
 
       <InvitationsTable

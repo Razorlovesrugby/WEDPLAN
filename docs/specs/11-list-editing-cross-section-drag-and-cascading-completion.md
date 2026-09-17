@@ -1,0 +1,239 @@
+# Feature spec: Editable list titles, moving tasks between sections, reordering sections, and completing a task closes its sub-tasks
+
+**Status: built end to end, same session (2026-09-17).** Four requests
+about the same screen (`/lists/[id]`) and the same action file
+(`src/server/actions/lists.ts`), each small on its own but each with at
+least one real decision behind it. The open questions are answered in §4;
+one further scope call (sections reorder by button only, not drag) was
+made while building — see §1C.
+
+**Not to be confused with spec 13, part A** — renaming the *nav entry*
+"Lists" to "Tasks" (a terminology change, no schema, no per-list data). This
+spec is about renaming an *individual list's own title* ("Wedding Day" →
+"Wedding Day (final)") and reorganising what's inside one list, which are
+different, narrower things. Read both before answering either — the
+wording the planner used ("list names editable," "rename lists to tasks")
+bundles the two together, and they don't have to ship together.
+
+**Depends on:** Spec 1 (lists, sections, sub-items — `lists.title`,
+`list_sections`, `list_items.parent_item_id`), spec 10 (`sortCompletedLast`,
+which every part of this spec renders on top of unchanged). All already
+built.
+
+## 1. What this changes
+
+### A. A list's own title becomes editable
+
+`updateList` in `src/server/actions/lists.ts` already accepts a `title`
+patch — `listFields` validates it, nothing about the server side needs to
+change. What's missing is a place to type one in. Today a list's title
+renders as plain text in exactly two places:
+
+- `/lists/[id]`'s header (`ListDetail`, `list-detail.tsx` line 138) — an
+  `<h1>`, no click handler.
+- `/settings`'s "List appearance" row (`ListAppearanceEditor` →
+  `ListAppearanceRow`, `list-appearance-editor.tsx` line 48) — a
+  `<span className="truncate">`, sitting next to that same row's already-
+  editable color swatches and icon field.
+
+Both become `InlineText` (`src/components/guests/inline-text.tsx`, already
+used across the guest screens for exactly this — click, an input appears,
+Enter or blur saves, Escape cancels) wired to `updateList(list.id, {
+title })`. No new component, no new action.
+
+### B. Moving a task between sections — drag, or a direct "Section" select
+
+Today's drag-and-drop (`SectionGroup` in `list-detail.tsx`) is scoped to one
+section's own `DndContext` — its `order` state, its own `SortableContext`,
+its own `reorderItems` call. A task can be dragged up and down within the
+section it's already in, but there is no way — drag or otherwise — to move
+a card out of "Ceremony" and into "Reception." (`updateItem` already
+accepts a `section_id` patch, but nothing in the UI ever sends one.) The
+planner asked for this two ways — as a drag gesture, and as a plain select
+— and both are worth building together, since they end up calling the same
+one action:
+
+- **The select**: every top-level card (not sub-items — see below) gets a
+  "Section" `<select>` next to its due-date/flag/priority/assign controls
+  in `ItemRow`, listing every section in the list plus "No section," current
+  value pre-selected. Choosing a different one calls the new action
+  immediately — no drag, no drag-and-drop library involved, the plain
+  form-control way of doing the same thing a mouse drag does. This is the
+  more directly useful of the two on a touch device, and the planner asked
+  for it by name ("select a sub section"). Built and shipped in the same
+  pass as the drag (§4.1 answer 2) rather than the drag landing first and
+  the select following later.
+- **The drag**: using the same dnd-kit primitives `BoardView` already uses
+  for a conceptually identical problem (moving a card between three fixed
+  containers), generalised to however many sections a list has — one
+  `DndContext` per list (lifted from `SectionGroup` up into `ListDetail`),
+  each section rendering as its own droppable/sortable container, tracking
+  which section a dragged card is currently hovering over during
+  `onDragOver` (dnd-kit's documented "multiple containers" pattern) so the
+  card visually moves into the section it's over before the drop, not just
+  on drop.
+- **One action serves both**: `moveItemToSection(itemId, sectionId, orderedIdsInDestinationSection)`
+  — `reorderItems` alone can't do this because it never touches
+  `section_id`, only `sort_order`. The new action sets `section_id` and
+  renumbers the destination section the same way `reorderItems` renumbers
+  today (`(index + 1) * 10`); the section the card left needs no renumbering
+  since `sort_order` doesn't need to be contiguous, only ordered. The select
+  calls it with the destination section's *current* order plus the moved
+  item appended at the end; a drag calls it with wherever in that section
+  the card was actually dropped.
+- **Sub-items stay out of this entirely**, same as `BoardView`'s existing
+  rule ("a sub-item ... moving here is not possible — one level of nesting
+  only"). `ListDetail`'s `topLevel` filter already excludes them from
+  section grouping; neither the drag nor the select appears on a sub-item
+  row. Moving a parent to a new section does **not** rewrite its sub-items'
+  own `section_id` — that column is already vestigial for a sub-item (§2,
+  `subItemsByParent` renders every sub-item under its parent regardless of
+  the sub-item's own `section_id`, and always has), so leaving it stale
+  costs nothing and touching it would be a second write for no visible
+  effect.
+
+### C. Reordering the sections themselves
+
+Separate from moving a *task* between sections (§1B) is reordering the
+*sections* — today `list_sections.sort_order` is set once, at creation
+(`addSection` always inserts at `last + 1`), and nothing ever changes it
+afterward. There's no way to move "Reception" above "Ceremony" once both
+exist except deleting and re-adding both in the order you want, which also
+loses whatever was in them (`removeSection` sets their items' `section_id`
+to null rather than deleting the items, but a re-add starts empty).
+
+- A new server action, `reorderSections(listId, orderedSectionIds)` —
+  the direct analogue of `reorderItems`, renumbering `list_sections.sort_order`
+  the same `(index + 1) * 10` way.
+- In `ListDetail`, each section's `<h2>` heading gets Move up/down buttons.
+  **Built as buttons only, no drag handle**, which is a deliberate change
+  from this section's original draft: dnd-kit's drag state lives on the
+  nearest `DndContext`, and §1B's cross-section item drag already needs one
+  `DndContext` spanning every section on the page. A second draggable kind
+  (the sections themselves) sharing that same context would need every
+  drag tagged with its own type and both the item-drop and section-drop
+  logic taught to ignore the other kind's targets — real complexity for a
+  control that Move up/down already serves reliably (as it already does for
+  every other reorder surface in this app, §1B's item drag included). A
+  scope reduction made while building, not a re-opened planner question.
+- **The "no section" bucket never participates.** Items with `section_id =
+  null` already always render last, after every real section, regardless of
+  those sections' own `sort_order` (`ListDetail`'s `groups`,
+  `ordered.push({ section: null, ... })` unconditionally at the end). That
+  stays true here — there's no `list_sections` row for "no section" to drag
+  in the first place, and this spec doesn't add one.
+
+### D. Completing a task closes its sub-tasks with it
+
+Marking a parent item done today (`setStatus(itemId, "done")`) only ever
+touches that one row. Its sub-items, if it has any, are left exactly as
+they were — the planner has asked twice for the opposite: ticking the
+parent off should tick every sub-item off too.
+
+This sits right next to an **existing, opposite-direction** trigger that
+has to keep working: `list_items_derive_parent_status` (0005), which
+already derives a *parent's* status from its children — done when none are
+open moves it nowhere automatically (spec 1's own rule: "every sub-item
+done" stays a manual call on the parent), part-done moves it to
+`in_progress`, none-done moves it to `not_started`. That trigger fires
+*after* any child's status changes and only ever writes to the *parent*. It
+is not touched by this change and does not need to be — walking through
+what happens once cascading writes are added:
+
+- `setStatus` marks the parent done, then does the equivalent of `setStatus`
+  on every one of its sub-items (not a bare column update — see below for
+  why). Each sub-item write fires the existing trigger, which recomputes the
+  parent from its children: all now done → "no automatic transition," so the
+  parent's just-set `done` status is left alone. No ping-pong, no extra
+  round trip needed to protect it.
+- **Reopening** a parent (moving it off `done`) does **not** reopen its
+  sub-items (§4.1 answer 1) — the cascade is one-directional, matching the
+  planner's own wording ("closes with it"). Un-checking a parent that was
+  ticked by this cascade leaves every sub-item exactly as done as it was;
+  reopening any of them individually afterward is a separate, manual click,
+  same as it is today.
+
+**Why this goes through the same logic as `setStatus`, not a raw
+`update({ status: "done" })` on the children:** a sub-item can carry its own
+`repeat_rule` (nothing stops it — schema-wise a sub-item is a `list_items`
+row like any other) and `setStatus` already knows how to spawn that item's
+next occurrence when it's completed (`spawnNextOccurrence`, same file). A
+cascade that bypassed that would silently stop recurring sub-items from
+recurring the moment their parent, rather than they themselves, is what
+closes them. The cascade calls the same completion path per sub-item —
+`done_at`/`done_by` set the same way, recurrence spawned the same way —
+just triggered by the parent's own `setStatus` call instead of a separate
+click on each child.
+
+## 2. Scope
+
+**In:**
+- `InlineText` wired into `list-detail.tsx`'s `<h1>` and
+  `list-appearance-editor.tsx`'s title span, both calling `updateList`.
+- `src/server/actions/lists.ts`: new `moveItemToSection` and
+  `reorderSections`.
+- `ItemRow`: a "Section" select on every top-level item row (§1B).
+- `list-detail.tsx`: one shared `DndContext` for cross-section item drag,
+  multi-container drag tracking, section renumbering on drop (§1B); Move
+  up/down buttons (no drag) on each section heading, calling
+  `reorderSections` (§1C).
+- `setStatus`: cascades a `done` write (only — reopening a parent does not
+  reopen its sub-items, §4.1 answer 1) to every direct sub-item of the item
+  being closed, through the same completion path (status, `done_at`/
+  `done_by`, recurrence spawn) `setStatus` already applies to the item
+  itself.
+
+**Out:**
+- No change to `list_items_derive_parent_status` (0005) — it already does
+  the opposite-direction job correctly and needs no edit for this to work
+  (§1D).
+- No change to how sub-items are grouped, filtered, or rendered — still one
+  level of nesting, still excluded from section-level drag and the section
+  select, still displayed under their parent regardless of `section_id`
+  (§1B).
+- No change to `/board`'s own drag-between-status-columns, which is a
+  different screen with a different (status, not section) grouping.
+- No bulk "close whole section" or "close whole list" control — §1D is
+  about a task's own sub-items, not a new bulk action.
+- No way to drag the "no section" bucket into a position among real
+  sections — it isn't a `list_sections` row, and stays pinned last (§1C).
+
+## 3. Data model
+
+No schema change. `moveItemToSection` writes `list_items.section_id` and
+`list_items.sort_order`; `reorderSections` writes `list_sections.sort_order`
+— both existing columns on existing tables. The cascade in `setStatus`
+writes `status`/`done_at`/`done_by`/(recurrence spawn columns), all
+existing. No migration.
+
+## 4. Answered (2026-09-17)
+
+1. **Does reopening a parent reopen its sub-items too, or only closing
+   cascades?** **Only closing cascades.** Un-checking a parent leaves its
+   sub-items as they are; reopening one is a separate, manual click.
+2. **Does the section select ship alongside the drag, or wait for it?**
+   **Built together, one pass** — both land in the same change, not the
+   select first with the drag following later.
+3. **Do the existing per-item Move up/down buttons ever cross a section
+   boundary?** **No — they stay scoped to their own section.** Drag and the
+   select are the only ways to move a card across sections; both name the
+   destination explicitly, where an "up" arrow silently crossing a boundary
+   would not.
+4. **Is the settings-page rename (§1A) wanted as well as the `/lists/[id]`
+   header rename?** **Both.**
+
+## 5. Test plan
+
+- `npm run typecheck`: clean.
+- `npm test`: 304 tests, unchanged pass count — none of this touches logic
+  covered by existing unit tests, and no new pure-logic module was added
+  (the reordering/reconciliation logic lives in `list-detail.tsx` itself,
+  matching how `SectionGroup`'s pre-existing per-section reorder state was
+  never separately unit-tested either).
+- `npm run build`: compiles and typechecks clean; page-data collection
+  fails only on missing `NEXT_PUBLIC_SUPABASE_*`/`NEXT_PUBLIC_SITE_URL`,
+  the same sandbox-has-no-Supabase-project caveat every prior spec in this
+  rebase carries.
+- Not opened in a browser against a live project — same caveat as every
+  prior spec; this sandbox has no Supabase project and no way to stand one
+  up (no `supabase` CLI, no running Docker daemon for `supabase start`).
