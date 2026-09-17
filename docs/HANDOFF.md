@@ -3,7 +3,20 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 19 — the deployment 500 is diagnosed: `0013`/`0014`
+Last updated: session 20 — a discovery session against
+[aisle.wedding](https://aisle.wedding) at the planner's request, producing
+`docs/specs/14-public-site-and-invites.md`. **Spec only: nothing was built,
+and nothing should be** until its §14 Open Questions are answered. Two things
+the planner needs to know: (1) **the reference site could not be read** — this
+session's egress policy blocks that host outright, so the spec is assembled
+from search-surfaced descriptions of Aisle's own pages, and its design section
+(§5) is a defensible default rather than a transcription; screenshots of
+`/example-wedding`, or an egress allowlist entry, would close that gap.
+(2) **Question 2 — is this a destination wedding? — reorders the entire
+build**, because Aisle's whole shape assumes it is. Session 19's outstanding
+item below is unchanged and still blocking moodboards in production.
+
+Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
 have never been applied to the live project, and the guard that should have
 degraded gracefully was written against the wrong error layer (42P01 vs
 PostgREST's PGRST205) so it never fired. Fixed, with tests. **The remaining
@@ -26,6 +39,62 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 20: discovery — the public site and invites, against aisle.wedding
+
+**The planner asked for a discovery session and a spec** covering "invites
+and wedding website vibes", pointing at `https://aisle.wedding/example-wedding`
+and saying to copy it directly where it is better.
+
+**The reference site was never opened.** `aisle.wedding` is blocked by this
+session's egress policy — every request to that host, `/example-wedding`
+included, is refused by the proxy with a 403, and `/root/.ccr/README.md` is
+explicit that policy denials get reported rather than worked around. So the
+spec was written from search-engine descriptions of Aisle's own `/features`
+and guide pages plus their published help material. That is enough to fix the
+*feature set* and the *data model* with confidence; it is not enough for
+layout, type scale, motion or the actual copy. The spec says so in its own §0,
+and names the two fixes: full-page screenshots dropped into the repo, or
+adding the host to the environment's egress allowlist.
+
+**Written this session:**
+
+- `docs/specs/14-public-site-and-invites.md` — the public site (§§3–11) and
+  the invitation surface (§12), with a schema (`0015_public_site.sql`, not
+  written), a planner-side screen list (§13), 11 open questions (§14), a
+  build order (§15) and a done-when (§16).
+- `docs/specs/README.md` — spec 14 added to the index and the build-order
+  notes.
+
+**No code, no migration, no screens.** Per `docs/specs/README.md`'s process,
+writing a spec is not permission to build it.
+
+**The three decisions that matter most**, out of the eleven:
+
+- **Q1 — household token or per-guest phone verification?** Aisle verifies
+  each guest by phone and shows them a personal portal. The spec recommends
+  keeping V1's one-token-per-household model and adding a "find my
+  invitation" resend on `/w` instead, which gets most of the benefit and
+  builds no authentication system. Saying no means a verified phone number
+  for every guest and re-keys three new tables.
+- **Q2 — is this a destination wedding?** Aisle's shape assumes yes. If it
+  is not, §7 (travel options, hotel room blocks) collapses to a paragraph and
+  a map link, and the effort moves to the theme system, the FAQ and the
+  stationery.
+- **Q4 — does money move through the site?** The spec recommends linking out
+  for both room bookings and registry funds, recording intent rather than
+  taking payment. Yes means Stripe, refunds and chargebacks.
+
+**Two recommendations made against Aisle**, both argued in the spec: no SMS
+(§12.3 — the WhatsApp copy-out V1 already ships covers it without a provider,
+per-country compliance or opt-out handling), and no natural-language setup
+assistant (§13 — two people entering forty facts once are better served by a
+form they can see).
+
+**Unchanged and still outstanding from session 19:** apply `0013` and `0014`
+to the live project and run `node scripts/ensure-bucket.mjs` against it. Only
+the planner can do it, and nothing about moodboards works until it happens.
+`/api/health` confirms both.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 
