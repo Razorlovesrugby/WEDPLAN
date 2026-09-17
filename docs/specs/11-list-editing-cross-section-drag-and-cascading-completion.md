@@ -1,9 +1,11 @@
 # Feature spec: Editable list titles, moving tasks between sections, reordering sections, and completing a task closes its sub-tasks
 
-**Status: answered (2026-09-17), building.** Four requests about the same
-screen (`/lists/[id]`) and the same action file
+**Status: built end to end, same session (2026-09-17).** Four requests
+about the same screen (`/lists/[id]`) and the same action file
 (`src/server/actions/lists.ts`), each small on its own but each with at
-least one real decision behind it. The open questions are answered in §4.
+least one real decision behind it. The open questions are answered in §4;
+one further scope call (sections reorder by button only, not drag) was
+made while building — see §1C.
 
 **Not to be confused with spec 13, part A** — renaming the *nav entry*
 "Lists" to "Tasks" (a terminology change, no schema, no per-list data). This
@@ -103,12 +105,17 @@ to null rather than deleting the items, but a re-add starts empty).
 - A new server action, `reorderSections(listId, orderedSectionIds)` —
   the direct analogue of `reorderItems`, renumbering `list_sections.sort_order`
   the same `(index + 1) * 10` way.
-- In `ListDetail`, each section's `<h2>` heading gets a drag handle (the
-  same `⠿` pattern `SortableItem` already uses for a task row) plus Move
-  up/down buttons, wrapped in their own `DndContext`/`SortableContext` —
-  separate from §1B's item-level dragging, since it's a different set of
-  draggable things (sections, not the tasks inside them) even though both
-  live on the same page.
+- In `ListDetail`, each section's `<h2>` heading gets Move up/down buttons.
+  **Built as buttons only, no drag handle**, which is a deliberate change
+  from this section's original draft: dnd-kit's drag state lives on the
+  nearest `DndContext`, and §1B's cross-section item drag already needs one
+  `DndContext` spanning every section on the page. A second draggable kind
+  (the sections themselves) sharing that same context would need every
+  drag tagged with its own type and both the item-drop and section-drop
+  logic taught to ignore the other kind's targets — real complexity for a
+  control that Move up/down already serves reliably (as it already does for
+  every other reorder surface in this app, §1B's item drag included). A
+  scope reduction made while building, not a re-opened planner question.
 - **The "no section" bucket never participates.** Items with `section_id =
   null` already always render last, after every real section, regardless of
   those sections' own `sort_order` (`ListDetail`'s `groups`,
@@ -166,10 +173,10 @@ click on each child.
 - `src/server/actions/lists.ts`: new `moveItemToSection` and
   `reorderSections`.
 - `ItemRow`: a "Section" select on every top-level item row (§1B).
-- `list-detail.tsx`: `DndContext` lifted to `ListDetail` for item drag,
-  multi-container drag tracking, section renumbering on drop (§1B); a
-  second, separate drag surface (handle + Move up/down) on each section
-  heading, calling `reorderSections` (§1C).
+- `list-detail.tsx`: one shared `DndContext` for cross-section item drag,
+  multi-container drag tracking, section renumbering on drop (§1B); Move
+  up/down buttons (no drag) on each section heading, calling
+  `reorderSections` (§1C).
 - `setStatus`: cascades a `done` write (only — reopening a parent does not
   reopen its sub-items, §4.1 answer 1) to every direct sub-item of the item
   being closed, through the same completion path (status, `done_at`/
@@ -214,3 +221,19 @@ existing. No migration.
    would not.
 4. **Is the settings-page rename (§1A) wanted as well as the `/lists/[id]`
    header rename?** **Both.**
+
+## 5. Test plan
+
+- `npm run typecheck`: clean.
+- `npm test`: 304 tests, unchanged pass count — none of this touches logic
+  covered by existing unit tests, and no new pure-logic module was added
+  (the reordering/reconciliation logic lives in `list-detail.tsx` itself,
+  matching how `SectionGroup`'s pre-existing per-section reorder state was
+  never separately unit-tested either).
+- `npm run build`: compiles and typechecks clean; page-data collection
+  fails only on missing `NEXT_PUBLIC_SUPABASE_*`/`NEXT_PUBLIC_SITE_URL`,
+  the same sandbox-has-no-Supabase-project caveat every prior spec in this
+  rebase carries.
+- Not opened in a browser against a live project — same caveat as every
+  prior spec; this sandbox has no Supabase project and no way to stand one
+  up (no `supabase` CLI, no running Docker daemon for `supabase start`).

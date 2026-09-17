@@ -493,32 +493,25 @@ export async function assignItem(itemId: string, userId: string | null): Promise
 const STATUSES: ListItemStatus[] = ["not_started", "in_progress", "done"];
 
 /**
- * What /board's drag-between-columns calls, and what ticking an item off
- * anywhere else calls too — one action, so "done" means the same thing
- * everywhere. Marking a recurring item done spawns its next occurrence and
- * leaves this row as history (spec 1, section 5a) rather than resetting it.
+ * Applies a status change to one already-fetched row: the status/done_at/
+ * done_by patch, plus spawning its next occurrence if it's done and repeats.
+ * Shared by `setStatus`'s own item and, below, every sub-item a close
+ * cascades to — so a recurring sub-item keeps recurring even when it's
+ * closed by its parent rather than by its own checkbox.
  */
-export async function setStatus(itemId: string, status: ListItemStatus): Promise<ActionResult> {
-  const wedding = await requireWedding();
-  if (!STATUSES.includes(status)) return fail("Invalid status");
-  const user = await getSessionUser();
-
-  const supabase = await createClient();
-  const { data: item, error: readError } = await supabase
-    .from("list_items")
-    .select("*")
-    .eq("id", itemId)
-    .eq("wedding_id", wedding.id)
-    .maybeSingle();
-  if (readError) return fail(readError.message);
-  if (!item) return fail("That item no longer exists");
-
+async function completeItemRow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  weddingId: string,
+  userId: string | undefined,
+  item: ListItemRow,
+  status: ListItemStatus,
+): Promise<ActionResult> {
   const patch: Partial<ListItemRow> =
     status === "done"
-      ? { status, done_at: new Date().toISOString(), done_by: user?.id ?? null }
+      ? { status, done_at: new Date().toISOString(), done_by: userId ?? null }
       : { status, done_at: null, done_by: null };
 
-  const { error } = await supabase.from("list_items").update(patch).eq("id", itemId).eq("wedding_id", wedding.id);
+  const { error } = await supabase.from("list_items").update(patch).eq("id", item.id).eq("wedding_id", weddingId);
   if (error) return fail(error.message);
 
   if (status === "done" && item.repeat_rule) {
@@ -528,7 +521,7 @@ export async function setStatus(itemId: string, status: ListItemStatus): Promise
     });
     if (spawned) {
       const { error: spawnError } = await supabase.from("list_items").insert({
-        wedding_id: wedding.id,
+        wedding_id: weddingId,
         list_id: item.list_id,
         section_id: item.section_id,
         parent_item_id: item.parent_item_id,
@@ -546,6 +539,60 @@ export async function setStatus(itemId: string, status: ListItemStatus): Promise
       if (spawnError) return fail(spawnError.message);
     }
   }
+
+  return ok(undefined);
+}
+
+/**
+ * What /board's drag-between-columns calls, and what ticking an item off
+ * anywhere else calls too — one action, so "done" means the same thing
+ * everywhere. Marking a recurring item done spawns its next occurrence and
+ * leaves this row as history (spec 1, section 5a) rather than resetting it.
+ *
+ * Closing a parent closes its open sub-items with it (spec 11 §1D) —
+ * reopening a parent does not reopen them; that stays a separate, manual
+ * click per sub-item. The sub-items are closed *before* the parent's own
+ * row: `list_items_derive_parent_status` (0005) recomputes the parent's
+ * status every time a child's status changes, and closing children one at a
+ * time would otherwise walk the parent through "in_progress" and leave it
+ * there — that trigger derives up to "in_progress" for a part-done set but
+ * deliberately never auto-promotes to "done" even once every child catches
+ * up (spec 1 §5a: "every sub-item done" stays a manual call). Writing the
+ * parent's own status last means no further child update follows it to
+ * re-derive anything out from under it.
+ */
+export async function setStatus(itemId: string, status: ListItemStatus): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!STATUSES.includes(status)) return fail("Invalid status");
+  const user = await getSessionUser();
+
+  const supabase = await createClient();
+  const { data: item, error: readError } = await supabase
+    .from("list_items")
+    .select("*")
+    .eq("id", itemId)
+    .eq("wedding_id", wedding.id)
+    .maybeSingle();
+  if (readError) return fail(readError.message);
+  if (!item) return fail("That item no longer exists");
+
+  if (status === "done" && !item.parent_item_id) {
+    const { data: subItems, error: subError } = await supabase
+      .from("list_items")
+      .select("*")
+      .eq("parent_item_id", itemId)
+      .eq("wedding_id", wedding.id)
+      .neq("status", "done");
+    if (subError) return fail(subError.message);
+
+    for (const subItem of subItems ?? []) {
+      const subResult = await completeItemRow(supabase, wedding.id, user?.id, subItem, "done");
+      if (!subResult.ok) return subResult;
+    }
+  }
+
+  const result = await completeItemRow(supabase, wedding.id, user?.id, item, status);
+  if (!result.ok) return result;
 
   revalidateLists(item.list_id);
   return ok(undefined);
@@ -652,6 +699,79 @@ export async function reorderItems(orderedIds: string[]): Promise<ActionResult> 
     parsed.data.map((id, index) =>
       supabase
         .from("list_items")
+        .update({ sort_order: (index + 1) * 10 })
+        .eq("id", id)
+        .eq("wedding_id", wedding.id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return fail(failed.error.message);
+
+  revalidateLists();
+  return ok(undefined);
+}
+
+/**
+ * Moves a top-level item into a (possibly different) section and renumbers
+ * that section's order in one call — `reorderItems` alone can't do this
+ * because it only ever touches `sort_order`, never `section_id` (spec 11
+ * §1B). Shared by the cross-section drag and the per-item "Section" select:
+ * a drag passes wherever in the destination section the card was actually
+ * dropped; the select passes the destination's current order with the
+ * moved item appended at the end. `sectionId: null` moves it to "no
+ * section." The section the item left needs no renumbering of its own —
+ * `sort_order` only has to stay ordered, not contiguous.
+ */
+export async function moveItemToSection(
+  itemId: string,
+  sectionId: string | null,
+  orderedIdsInDestinationSection: string[],
+): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsedIds = z.array(z.string().uuid()).min(1).max(2000).safeParse(orderedIdsInDestinationSection);
+  if (!parsedIds.success) return fail("Nothing to reorder");
+  if (!parsedIds.data.includes(itemId)) return fail("That item isn't in the destination order given");
+
+  const supabase = await createClient();
+  const { error: sectionError } = await supabase
+    .from("list_items")
+    .update({ section_id: sectionId })
+    .eq("id", itemId)
+    .eq("wedding_id", wedding.id);
+  if (sectionError) return fail(sectionError.message);
+
+  const results = await Promise.all(
+    parsedIds.data.map((id, index) =>
+      supabase
+        .from("list_items")
+        .update({ sort_order: (index + 1) * 10 })
+        .eq("id", id)
+        .eq("wedding_id", wedding.id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return fail(failed.error.message);
+
+  revalidateLists();
+  return ok(undefined);
+}
+
+/**
+ * Reordering the sections themselves (spec 11 §1C) — the direct analogue of
+ * `reorderItems`, renumbering `list_sections.sort_order` the same way. The
+ * "no section" bucket isn't a `list_sections` row and always renders last
+ * regardless (`ListDetail`'s `groups`), so it never appears in this list.
+ */
+export async function reorderSections(orderedSectionIds: string[]): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = z.array(z.string().uuid()).min(1).max(200).safeParse(orderedSectionIds);
+  if (!parsed.success) return fail("Nothing to reorder");
+
+  const supabase = await createClient();
+  const results = await Promise.all(
+    parsed.data.map((id, index) =>
+      supabase
+        .from("list_sections")
         .update({ sort_order: (index + 1) * 10 })
         .eq("id", id)
         .eq("wedding_id", wedding.id),

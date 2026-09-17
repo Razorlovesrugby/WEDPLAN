@@ -15,11 +15,14 @@ export function InlineText({
   placeholder,
   ariaLabel,
   onSave,
+  className,
 }: {
   value: string | null;
   placeholder?: string;
   ariaLabel: string;
   onSave: (next: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Overrides the default small-field type scale — e.g. matching a page heading. */
+  className?: string;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -55,10 +58,11 @@ export function InlineText({
             e.currentTarget.blur();
           }
         }}
-        className={`w-full rounded border bg-transparent px-1.5 py-1 text-sm outline-none
+        className={`w-full rounded border bg-transparent px-1.5 py-1 outline-none
           focus:border-accent focus:bg-white
           ${error ? "border-red-400" : "border-transparent hover:border-line"}
-          ${pending ? "opacity-60" : ""}`}
+          ${pending ? "opacity-60" : ""}
+          ${className ?? "text-sm"}`}
       />
       {error ? <span className="px-1.5 text-xs text-red-700">{error}</span> : null}
     </span>
