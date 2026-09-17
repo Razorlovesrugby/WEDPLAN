@@ -18,10 +18,13 @@ household token stays (no phone verification), this is a **local wedding with
 a coach** rather than a destination one (so Aisle's room blocks and airports
 are cut and replaced by coach runs with timed stops and a seat manifest),
 money links out rather than moving through the site, and the theme is Script.
-That removed roughly a third of the scope and left build steps 1–3 needing no
-migration at all. **One new blocker: §14.2 Q12 — the script typeface needs a
-paid web licence before step 1 can start.** Session 19's outstanding item
-below is unchanged and still blocking moodboards in production.
+A second round the same session settled four more — open-source script face,
+a `framed` hero because photographs exist, guest photo uploads in (gated to
+the RSVP token and moderated), and **no registry section at all**. **Seven of
+twelve answered, including every question that changes a table's shape**, so
+§4 is final and nothing in the build order is blocked. The five still open are
+scope-only. Session 19's outstanding item below is unchanged and still
+blocking moodboards in production.
 
 Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
 have never been applied to the live project, and the guard that should have
@@ -102,10 +105,36 @@ and FAQ, and the whole invitation surface) now need **no migration at all**,
 so they can ship while the rest of §14.2 is still open. Step 3 (invites) is
 the only part with a date that cannot move.
 
-**A new blocker, §14.2 Q12:** the Script preset self-hosts its fonts, so the
-script face needs a paid web licence (typically £30–£200 one-off). Free
-script fonts are the tell that a site came from a template. Which face, and
-who buys it — this gates step 1.
+**Round two, same session — four more answered:**
+
+- **Q12 — an open-source script face**, so step 1 is unblocked and nothing
+  waits on a purchase. Recommendation in §5: Pinyon Script for the display,
+  EB Garamond for body and real small-caps labels. The spec is explicit about
+  the trade-off: a paid foundry script is better in the joins and flourishes,
+  and the reason the gap does not matter here is §5's rule that the script is
+  used for the names and section rules only, never at body or label size.
+  Free script fonts betray a template when they get used for everything.
+- **Q3b — photographs exist**, so `hero_style: 'framed'` and the AVIF/WebP +
+  blurhash pipeline moves into step 1. `type` stays as the no-image fallback.
+- **Q5 — guest photo uploads in**, gated to `/rsvp/[token]` so uploads are
+  household-attributable, `review` moderation by default.
+- **Q6 — no registry section at all.** §8 is cut and `registry_items` /
+  `registry_pledges` leave the schema. §8 is kept in the file as a record of
+  the decision and what reversing it would cost, so nobody helpfully re-adds
+  it. The FAQ's "What's the gift situation?" is where a sentence about it
+  belongs instead.
+
+**Where that leaves it:** §4 is settled — every question that changed a table
+is answered, so `0015` can be written as specified. The build order is six
+steps, none blocked, and steps 1–3 (theme and renderer, schedule and FAQ, the
+whole invitation surface) touch no schema at all. The five remaining questions
+— SMS, a password gate, one wedding or many, how long the site lives, and the
+copy voice — are scope-only.
+
+**Still owed by the planner, and the only thing holding the design back:**
+screenshots of `aisle.wedding/example-wedding`, or that host on the egress
+allowlist. §5's proportions are this session's judgement, not the
+reference's.
 
 **Two recommendations made against Aisle**, both argued in the spec: no SMS
 (§12.3 — the WhatsApp copy-out V1 already ships covers it without a provider,

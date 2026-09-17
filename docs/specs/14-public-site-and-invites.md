@@ -1,8 +1,9 @@
 # Spec 14 — The public wedding site, and the invites that point at it
 
-**Status: proposed, partly answered (2026-09-17 — see the next section).
-Nothing is built, schema included, until §14.2's remaining questions have
-answers too.**
+**Status: proposed, answered (2026-09-17, two rounds — see the next section).
+Seven of the twelve questions are settled, including every one that changes a
+table's shape. §14.2's five remaining questions are scope-only and none of
+them blocks the build order.**
 
 Reference: [aisle.wedding](https://aisle.wedding) — the planner asked for
 its example guest site to be studied and, where it is better than what we
@@ -31,9 +32,9 @@ RSVP page so you get a manifest for the day. See the rewritten §7. Three
 tables disappear from §4; two smaller ones arrive.
 
 **Q4 — money links out, intent is recorded.** Confirmed. No Stripe, no card
-handling, no refunds. Registry funds link to whatever you already use, and a
-pledge is a note to you that produces the thank-you list (§8). Coach seats
-work the same way: a reservation, not a transaction.
+handling, no refunds. Coach seats are a reservation, not a transaction. (This
+originally also settled how registry funds would work; round two cut the
+registry entirely, so Q4 now governs the coach alone.)
 
 **Q3 (part) — the theme is Script.** Script display over a humanist serif,
 centred, monogram, floral rule — the traditional one. It ships first and is
@@ -42,9 +43,38 @@ three presets stay in the spec as a system, not as work. §5 is rewritten
 around this. Still owed: whether photographs exist yet, which decides the
 hero style (§14.2 Q3b).
 
-**Net effect on scope:** roughly a third smaller. Steps 1–3 of the build
+**Net effect of round one:** roughly a third smaller. Steps 1–3 of the build
 order (§15) now need **no migration at all**, so the theme, the schedule, the
 FAQ and the whole invitation surface can ship before any schema is written.
+
+### Round two, same day
+
+**Q12 — an open-source script face. Step 1 is unblocked.** No licence to buy,
+no purchase to wait on. Pinyon Script, Italianno or Petit Formal Script, all
+self-hostable under the OFL. This is a better decision than it looks: §5 uses
+the script for the couple's names and the section rules *only*, never at body
+or label size, and at display size used that sparingly the gap from a £200
+foundry face is small. Specific recommendation and the reasoning in §5.
+
+**Q3b — photographs exist, so `hero_style: 'framed'`.** The hero is built once,
+with the image, and the AVIF/WebP + blurhash pipeline moves into step 1 rather
+than arriving later. `type` stays in the system as the fallback when no image
+is set, which is also what a half-configured site should render.
+
+**Q5 — guest photo uploads: yes, gated to `/rsvp/[token]`, moderated.**
+Settled as recommended. `site_assets` keeps its `uploaded_by` and `approved_at`
+columns, and `gallery.moderation` defaults to `review`.
+
+**Q6 — no registry section at all.** §8 is **cut**, and `registry_items` and
+`registry_pledges` leave the schema with it. Two tables, a planner screen, a
+public section, the pledge anonymity rule and the thank-you list, all gone.
+§8 is kept in the file as a short record of the decision and what it would
+take to reverse — an empty "Gifts" heading is worse than no gifts heading, and
+so is a spec that quietly forgets why something is missing.
+
+**Net effect of both rounds:** the spec is roughly half the size it was
+written at, nothing is waiting on a purchase, and **every remaining open
+question is scope-only** — none of them touches a table or the build order.
 
 ---
 
@@ -102,13 +132,13 @@ into **a piece of stationery with a schedule attached**.
 
 | Aisle | Us today | This spec |
 | --- | --- | --- |
-| Home / Our Story / Schedule / Travel / Stays / Registry / Gallery / FAQ / RSVP | Hero, "The day", "Getting there", "Questions", moodboards, an RSVP note | §3 — all of them, as blocks |
+| Home / Our Story / Schedule / Travel / Stays / Registry / Gallery / FAQ / RSVP | Hero, "The day", "Getting there", "Questions", moodboards, an RSVP note | §3 — all of them as blocks, less Registry |
 | Themes: palettes, font pairings, hero imagery | One serif, one neutral palette, no hero image | §5 |
 | Guest verifies with a phone number, then sees *their* page | One opaque token per household | §2 — keep the token, add lookup |
 | Room blocks at several hotels, rooms, nights, price, guest picks and pays | — | **Cut** — Q2, not a destination wedding |
 | Airports, shuttles, trains, car hire, with cost / duration / booking link | One free-text "Getting there" paragraph | §7 — reduced to parking, taxis, a train line, and a coach done properly |
-| Registry links plus cash contributions toward named things | — | §8 |
-| Gallery, including guest uploads after the day | Moodboards (planner-curated only) | §9 |
+| Registry links plus cash contributions toward named things | — | **Cut** — Q6, no registry section |
+| Gallery, including guest uploads after the day | Moodboards (planner-curated only) | §9 — in, gated to the token and moderated |
 | FAQ populated from dashboard answers; six shown, rest expand | A flat `faq` block | §10 |
 | Password / phone-gate, custom domain, site lives five years | `noindex`, no gate, no domain | §11 |
 | Save-the-date → invitation → broadcast updates, email and SMS | Invitation email + a WhatsApp copy button | §12 — email and WhatsApp; SMS declined |
@@ -177,7 +207,7 @@ phone will not navigate.
 Each is a `site_content` row. `block_key` is the section, `payload` is its
 JSONB, `sort_order` orders them, `visible` hides one without deleting its
 content. Sections with no content do not render, and do not appear in the
-nav — an empty "Registry" heading is worse than no registry.
+nav — an empty "Photos" heading is worse than no photos section.
 
 | `block_key` | Section | Payload shape (summary) |
 | --- | --- | --- |
@@ -188,8 +218,7 @@ nav — an empty "Registry" heading is worse than no registry.
 | `schedule` | The weekend | `intro`; the events themselves come from `events` (§6) |
 | `travel` | Getting there | `intro`, `venue_postcode`, `what3words`; the coach from `coach_runs`, the rest from `transport_options` (§7) |
 | `stays` | Where to stay | `intro`; a list of links from `accommodations` (§7) |
-| `registry` | Gifts | `intro`; items from `registry_items` (§8) |
-| `gallery` | Photos | `intro`, `uploads_open`, `moderation` (§9) |
+| `gallery` | Photos | `intro`, `uploads_open`, `moderation` (§9) — curated before the day, guest uploads after |
 | `faq` | Questions | `items[]` of `{ q, a, tags[], featured }` (§10) |
 | `party` | Who's who | `members[]` of `{ name, role, blurb, image_id }` |
 | `things_to_do` | While you're here | `items[]` of `{ title, body, link, image_id }` |
@@ -197,7 +226,7 @@ nav — an empty "Registry" heading is worse than no registry.
 | `footer` | — | `note`, `contact_email`, `hashtag` |
 
 Moodboards already publish into `/w` (spec 9) and keep doing so, as their
-own section between `story` and `registry` — the dress-code board is exactly
+own section between `story` and `gallery` — the dress-code board is exactly
 the kind of thing guests open twice.
 
 **Nav.** Derived from the visible, non-empty sections. Sticky on scroll,
@@ -234,12 +263,6 @@ coach_seats          id, wedding_id, coach_run_id, coach_stop_id,
 accommodations       id, wedding_id, name, address, url, distance_label,
                      notes, image_id, sort_order
 
-registry_items       id, wedding_id, kind ('link'|'fund'), title, body,
-                     url, image_id, target_minor, currency, sort_order
-registry_pledges     id, wedding_id, registry_item_id, household_id,
-                     amount_minor, message, anonymous, received_at,
-                     created_at                                    -- §8
-
 site_visits          wedding_id, day, section, count               -- §13
 ```
 
@@ -247,10 +270,16 @@ Plus one view, `v_coach_runs`, carrying seats taken per run and per stop, so
 the "34 of 49" on the page and the capacity check in the action read the same
 number from the same place.
 
-**Cut by Q2**, and recorded here so nobody re-adds them by reflex:
-`accommodation_rooms`, `room_holds`, and the cost/duration columns on what
-was `travel_options`. A destination wedding needs all three; this one does
-not.
+**Cut, and recorded here so nobody re-adds them by reflex.** By Q2:
+`accommodation_rooms`, `room_holds`, and the cost/duration columns on what was
+`travel_options` — a destination wedding needs all three, this one does not.
+By Q6: `registry_items` and `registry_pledges` (§8).
+
+On `site_assets`, Q5 confirms the two columns that carry guest uploads:
+`uploaded_by` null for a guest upload, and `approved_at` null until the
+planner approves it. The household that uploaded an image is recorded for the
+"remove this" control in §9, which means guest uploads are household-keyed
+like everything else Q1 decided.
 
 **Storage.** `site_assets` reuses spec 9's private-bucket discipline exactly:
 one bucket, no storage policies, object paths *derived* server-side from ids
@@ -259,15 +288,18 @@ images are served through a signed-URL route with a long expiry, not by
 making the bucket public — a public bucket is a permanent, un-revocable
 decision, and this one holds a guest list's faces.
 
-**What gets built ahead of the remaining answers.** Nothing. §14.2 Q5 and Q6
-still change table shapes (`site_assets`' guest-upload columns, and whether
-`registry_pledges` exists at all).
+**This schema is now settled.** Every question that changed a table's shape —
+Q1, Q2, Q4, Q5, Q6 — has been answered, so `0015` can be written as specified
+whenever step 4 comes up. The five questions still open in §14.2 are scope
+decisions and none of them touches a column.
 
 ## 5. The vibes: a theme system
 
-**Q3 answered: the theme is Script.** That narrows this section from four
-things to build to one, with the other three kept as a system so a change of
-mind later is a preset, not a rewrite.
+**Q3a answered: the theme is Script**, on an **open-source face (Q12)**, with
+a **`framed` hero (Q3b)** because photographs exist. That narrows this section
+from four things to build to one, with the other three kept as a system so a
+change of mind later is a preset, not a rewrite — and it removes the only
+item in the spec that was waiting on a purchase.
 
 Still owed, and the reason §0's caveat has not gone away: nobody here has
 seen the reference site, so the *proportions* below — type scale, rhythm,
@@ -300,10 +332,33 @@ Stored as
   the only decorative element in the system.
 - **Radius** — 2px. Traditional means edges, not pills.
 
+### The faces
+
 Fonts self-hosted (`next/font/local`), subsetted, no runtime Google Fonts
 request — a third-party font request from a guest site is a privacy leak and
-a layout shift. The script face needs a real licence for web use; that is a
-purchase, not a decision (§14.2 Q12).
+a layout shift. Q12 chose open-source, so all three are OFL-licensed and ship
+in the repo with no licence admin and nothing to buy.
+
+- **Display: Pinyon Script.** The recommendation. An engraved copperplate
+  script with restrained flourishes and — the part that matters — a high
+  x-height for its class, so it survives being set at 40px on a 390px phone,
+  which is where the couple's names will mostly be read. Italianno is the
+  alternative if you want more flourish and can live with it being harder to
+  read at small sizes; Petit Formal Script is the safest and the least
+  distinctive. All three are free.
+- **Body: EB Garamond.** Humanist old-style, a genuinely good revival, wide
+  weight range, excellent at 17px, and it pairs with a copperplate script the
+  way it was historically set to.
+- **Labels: EB Garamond small caps**, tracked out. The family ships real small
+  caps rather than the browser's faked ones, which is the difference between
+  a label that looks engraved and one that looks stretched.
+
+**The honest trade-off**, since Q12 was a cost decision: a £200 foundry script
+is better, mostly in the joins between letters and in how the flourishes
+resolve. §5's rule — script for the names and the section rules only, never at
+body or label size — is what makes that gap small enough not to matter. Where
+free script fonts betray a template is when they get used for headings,
+buttons and captions too. This spec does not do that.
 
 ### The other three presets
 
@@ -328,9 +383,17 @@ grey ink — is exactly the one that fails contrast if nobody checks.
 
 Three styles: `full` (image bleeds to viewport, text over a scrim), `framed`
 (image inset with a border, text below), `type` (no image — the names set
-large in the script face, a monogram, the date). **`type` is the default
-until photographs exist**, and with the Script preset it is not a compromise:
-a monogram and two names is what the front of an invitation looks like.
+large in the script face, a monogram, the date).
+
+**Q3b: photographs exist, so `framed` is what gets built**, and the image
+pipeline — AVIF/WebP through `next/image`, sized, blurhash placeholder — moves
+into step 1 rather than arriving with the gallery later. `framed` over `full`
+is the right pairing for Script: a bordered, inset image with the names set
+beneath it is the composition of an invitation, where text over a scrim is the
+composition of a landing page.
+
+`type` stays in the system as the fallback when no hero image is set, which is
+also what a half-configured site should render rather than a broken frame.
 
 ### Motion
 
@@ -427,25 +490,25 @@ setting cookies before a guest has read a word. The venue address, a
 what3words if the entrance is awkward, and the postcode spelled out for
 people typing it into a sat-nav.
 
-## 8. Registry
+## 8. Registry — cut
 
-Two kinds in one list, exactly as Aisle does it:
+**Q6: no registry section.** Not links, not funds, not a hidden section
+waiting to be switched on. `registry_items` and `registry_pledges` are out of
+§4, `/registry` is out of §13, and the `registry` block is out of §3.
 
-- **`link`** — a store, with a logo and a sentence.
-- **`fund`** — a named thing ("two nights in Kyoto", "the honeymoon flights")
-  with an optional target and a progress indication.
+Recorded rather than deleted, because a spec that quietly forgets why
+something is missing invites somebody to helpfully re-add it. If this is
+revisited, the shape it would take is: two kinds in one list — `link` (a
+store, a logo, a sentence) and `fund` (a named thing with an optional target,
+linking out to whatever the couple already uses, per Q4's link-out rule) —
+plus a pledge record that exists to produce the thank-you list, anonymous
+unless the giver opts in. That is about a day's work on top of the settled
+schema, and nothing else in the spec depends on it.
 
-**Money, again: confirmed as link-out (Q4).** A fund item links out to whatever the
-couple already uses (Monzo pot link, bank details behind a click, PayPal,
-Stripe payment link). `registry_pledges` exists so a guest can *tell* the
-couple what they sent, which is what produces the thank-you list — it is a
-record, not a transaction. Progress on a fund shows pledged totals, and the
-planner can mark a pledge received. **A pledge is never shown publicly with a
-name against it** unless the giver ticks a box; defaults to anonymous.
-
-Section copy defaults to the standard disarming line, editable:
-"Your being there is genuinely the gift. If you'd like to do something
-anyway, here are some ideas."
+What replaces it on the public site: nothing. The FAQ's starter library
+already carries "What's the gift situation?" (§10), which is the right place
+for a sentence about it, and a sentence is what most couples actually want to
+say.
 
 ---
 
@@ -457,15 +520,17 @@ Two lifecycles on one section.
 couple uploads. This is `site_assets` with `kind = 'gallery'`, uploaded from
 the planner side.
 
-**After the day:** open, if the planner opens it. `gallery.uploads_open`
-turns on an upload control **on `/rsvp/[token]` only** — a guest uploads from
+**After the day:** open. **Q5 settled this as in, gated and moderated.**
+`gallery.uploads_open` turns on an upload control **on `/rsvp/[token]` only** — a guest uploads from
 the link they already hold, so uploads are attributable to a household and
 the open internet cannot post to the wedding's gallery. This is the one place
 where insisting on the token instead of a public form pays for itself
 immediately.
 
 Moderation, per `gallery.moderation`: `auto` (appear at once) or `review`
-(the planner approves; `site_assets.approved_at`). **Default `review`.**
+(the planner approves; `site_assets.approved_at`). **`review`, per Q5** —
+`auto` stays in the system because it is one line and the week after a wedding
+is exactly when approving forty photos stops being appealing.
 Uploads are capped per household and per file, stripped of EXIF GPS on
 ingest, and images only — no video in V1, because video is a transcoding
 pipeline wearing a small feature's clothes.
@@ -606,7 +671,6 @@ New, under the existing `Nav` grouping that spec 13 established:
 - **`/travel`** — the coach (runs, stops, times, capacity) with a manifest
   export per run and per stop, parking and the other ways in, and the list of
   places to stay. One screen, not three: Q2 shrank all of it to fit.
-- **`/registry`** — items and pledges, with a thank-you checklist.
 - **`/gallery`** — curated assets, plus the moderation queue when uploads are
   open.
 - **`/invitations`** — extended with the save-the-date and broadcast sends,
@@ -630,34 +694,33 @@ the 20% that carries the value.
 
 ### 14.1 Answered, 2026-09-17
 
-Recorded in full at the top of this file. In short: **Q1** keep the household
-token; **Q2** local wedding with a coach, so room blocks and airports are cut;
-**Q3a** the Script preset; **Q4** money links out, intent is recorded.
+Recorded in full at the top of this file.
+
+**Round one:** **Q1** keep the household token; **Q2** local wedding with a
+coach, so room blocks and airports are cut; **Q3a** the Script preset; **Q4**
+money links out, intent is recorded.
+
+**Round two:** **Q3b** photographs exist, so a `framed` hero and the image
+pipeline in step 1; **Q5** guest uploads in, gated to `/rsvp/[token]`,
+moderated; **Q6** no registry section at all, so §8 and two tables are cut;
+**Q12** an open-source script face, so nothing waits on a purchase.
+
+**Every question that changed a table's shape is answered.** §4 is settled and
+`0015` can be written as specified.
 
 ### 14.2 Still open
 
-**Nothing is built until these are answered.** Q5, Q6 and Q12 change a table's
-shape or cost money; the rest change scope.
+Five, all scope-only. **None of them blocks the build order**, so steps 1–4 can
+proceed while they sit — which is the point of having answered the structural
+ones first.
 
-3b. **Do photographs exist yet?** Decides `hero_style`. With Script, `type`
-    (names, monogram, date, no image) is a genuinely good default and needs no
-    photography at all — but if there are engagement photos, `framed` is the
-    better version of the same look, and the hero gets built once instead of
-    twice.
-5. **Guest photo uploads after the day: in, or out?** Recommend in, gated to
-   `/rsvp/[token]`, moderated by default. It adds the guest-upload columns to
-   `site_assets` and a moderation queue. It is the section most likely to be
-   wanted the week *after* the day, when attention is lowest — so it is worth
-   deciding now and building last.
-6. **Registry: links only, or funds too?** Links only is one small table.
-   Funds additionally bring `registry_pledges`, the anonymous-by-default rule,
-   and the thank-you list. The thank-you list is the part people underrate.
-7. **SMS?** Recommend no (§12.3). Q1's answer already removed the only
-   structural reason to want a phone number for every guest, so this is now
-   purely a "do we want to text people" question. The WhatsApp copy-out V1
-   ships covers it.
+7. **SMS?** Recommend no (§12.3). Q1 already removed the only structural
+   reason to want a phone number for every guest, so this is now purely "do we
+   want to text people". The WhatsApp copy-out V1 already ships covers it, and
+   adding SMS later touches only the sender.
 8. **Password-gate the site?** Recommend off, with `noindex` on. A local
-   wedding is a weaker case for a gate than a destination one.
+   wedding is a weaker case for a gate than a destination one. Decidable any
+   time; it is a cookie and a form.
 9. **One wedding or many?** `/w` currently serves "the first wedding" and says
    so in a comment. A slug (`/w/[slug]`) is small; a custom domain per wedding
    is not. Which is needed, and by when?
@@ -665,26 +728,25 @@ shape or cost money; the rest change scope.
     Aisle says five years out loud. Guests link to these for years, and this is
     a billing decision the code should reflect rather than discover.
 11. **Whose site is this, in the copy?** First person plural ("we're getting
-    married") reads warmer; third person is more formal. With Script chosen —
-    the most traditional preset — third person is the more coherent pairing,
-    but it sets the tone of every default string in §§3, 10 and 12, so it
-    should be a decision rather than a drift.
-12. **The script typeface needs a web licence.** Self-hosting (§5) means a
-    webfont licence for a face that is worth paying for — the free script
-    fonts are the tell that a wedding site was made in a template. Budget is
-    typically £30–£200 one-off. Which face, and who buys it? This blocks step 1
-    of the build order, so it is worth doing this week.
+    married") reads warmer; third person is more formal. With Script chosen,
+    third person is the more coherent pairing, but it sets the tone of every
+    default string in §§3, 10 and 12. Worth deciding before step 2 writes the
+    FAQ library, though changing it later is a find-and-replace on defaults
+    nobody has edited yet.
 
 ## 15. Build order
 
-Revised for the answers: local wedding, coach, household token, Script.
+Revised for both rounds of answers. **Nothing here is blocked** — Q12's
+open-source face removed the last dependency on a purchase, and the five
+questions left in §14.2 touch none of these steps.
 
-1. **Theme and renderer** (§5, §3) — the Script preset, the palette tokens and
-   their contrast validator, the monogram, the section renderer, the nav, the
-   `/site` editor skeleton. `/w` becomes a wedding site using the content it
-   already has. **No migration.** Blocked only by Q12 (the font licence).
-2. **Schedule and FAQ** (§6, §10) — the two sections guests actually open,
-   plus the starter FAQ library, per-event dress code and `.ics`. Both are
+1. **Theme and renderer** (§5, §3) — the Script preset on Pinyon Script and EB
+   Garamond, the palette tokens and their contrast validator, the SVG
+   monogram, the `framed` hero **with its AVIF/WebP + blurhash pipeline**, the
+   section renderer, the nav, the `/site` editor skeleton. `/w` becomes a
+   wedding site using the content it already has. **No migration.**
+2. **Schedule and FAQ** (§6, §10) — the two sections guests actually open, plus
+   the starter FAQ library, per-event dress code and `.ics`. Both are
    `site_content` payloads. **No migration.**
 3. **Invites** (§12) — save-the-date, the `/i/[token]` card with its OG image,
    the print-ready PDF with the household QR code, and broadcasts. **No
@@ -695,23 +757,24 @@ Revised for the answers: local wedding, coach, household token, Script.
 4. **Getting there** (§7) — migration `0015`, the coach with its runs, stops,
    capacity and manifest export, parking and the rest, the places to stay, the
    static map. Seat reservation on `/rsvp/[token]`.
-5. **Registry** (§8), if Q6 says funds.
-6. **Gallery** (§9) — curated first; guest uploads can land after the day,
-   because that is when they are needed.
-7. **Access and address** (§11) — passphrase if Q8 wants one, then the slug,
+5. **Gallery** (§9) — curated first, sharing step 1's image pipeline. Guest
+   uploads and the moderation queue can land close to the day, because that is
+   when they start mattering.
+6. **Access and address** (§11) — a passphrase if Q8 wants one, then the slug,
    then a domain if Q9 asks for it.
+
+**Registry is gone** (Q6), which is why this list is six steps rather than
+seven.
 
 Steps 1–3 are worth shipping alone and, between them, touch no schema at all.
 They are the difference between a page that carries information and a page you
-are willing to send to four hundred people — and they can ship while the
-answers to §14.2 are still outstanding, because none of those questions
-touches them.
+are willing to send to four hundred people.
 
 ## 16. Done when
 
-- `/w` renders every section in §3 from `site_content` in the Script theme,
-  passes contrast at 4.5:1, has an LCP under 2.5s on throttled 4G, and reads
-  correctly at 390px.
+- `/w` renders every section in §3 from `site_content` in the Script theme
+  with a `framed` hero, passes contrast at 4.5:1, has an LCP under 2.5s on
+  throttled 4G, and reads correctly at 390px.
 - A guest who lost their link can get it re-sent from `/w` without exposing
   whether their address is on the list.
 - A household can see the events they are invited to, their coach stop and
@@ -721,5 +784,7 @@ touches them.
 - A save-the-date, an invitation and one broadcast can each be sent to a
   chosen segment, once, from `/invitations`, and the same design exports as a
   print-ready PDF carrying that household's QR code.
+- A guest can upload a photo from their RSVP link, the planner approves it,
+  and it appears in the gallery — and either of them can delete it.
 - `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh` and
   `npm run build` are green, and `0015` has been applied to the live project.
