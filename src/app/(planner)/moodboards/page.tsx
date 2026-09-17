@@ -35,7 +35,12 @@ export default async function MoodboardsPage({
             account.
           </p>
         </div>
-        <NewBoardForm />
+        <div className="flex items-center gap-3">
+          <Link href="/moodboards/help" className="text-sm text-muted underline">
+            How this works
+          </Link>
+          <NewBoardForm />
+        </div>
       </header>
 
       {!ready ? (
