@@ -1,12 +1,22 @@
 # Feature spec: Export all tasks to CSV
 
-**Status: proposed, not built.** One new export kind on an existing,
-already-built export endpoint — the smallest of this round, standalone
-from specs 15 and 16.
+**Status: built, same session.** `"tasks"` added to `KINDS` in
+`src/app/api/export/[kind]/route.ts`, a new `getItemsForExport` query in
+`src/server/queries/lists.ts` (every item across every active list,
+joined to its list and section, ordered list → section → sort_order, "no
+section" last within its list), and an "Export CSV" link on `/lists`
+next to "New list." `npm run typecheck`, `npm test` (384 tests, +1 for
+the new `/api/export/tasks` path in `public-paths.test.ts`), and
+`npm run build` all pass (build only completes with dummy
+`NEXT_PUBLIC_SUPABASE_*`/`NEXT_PUBLIC_SITE_URL` values — this sandbox has
+never had a real Supabase project, same caveat every prior spec in this
+rebase carries). Not opened against a live project or a real browser.
 
-**Depends on:** Spec 1 (`list_items`, `list_sections`, `lists`), and spec
-15 §2 for the "assigned to" column to show a real name rather than a role
-label (falls back gracefully if built first). No dependency on spec 16.
+**Depends on:** Spec 1 (`list_items`, `list_sections`, `lists`), already
+built. "Assigned to" currently shows the existing role label ("Owner" /
+"Partner") since spec 15's real display names aren't built yet — it'll
+pick those up automatically once spec 15 lands, no further change needed
+here.
 
 ## 1. What this changes
 

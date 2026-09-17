@@ -53,6 +53,7 @@ describe("isPublicPath", () => {
       "/budget",
       "/settings",
       "/api/export/guests",
+      "/api/export/tasks",
       "/api/proxy-image",
       "/api/pinterest/callback",
     ]) {
