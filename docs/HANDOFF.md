@@ -12,9 +12,16 @@ session's egress policy blocks that host outright, so the spec is assembled
 from search-surfaced descriptions of Aisle's own pages, and its design section
 (§5) is a defensible default rather than a transcription; screenshots of
 `/example-wedding`, or an egress allowlist entry, would close that gap.
-(2) **Question 2 — is this a destination wedding? — reorders the entire
-build**, because Aisle's whole shape assumes it is. Session 19's outstanding
-item below is unchanged and still blocking moodboards in production.
+(2) **Four of the spec's questions were answered in the same session** and
+are folded into the file with a dated "Answered" section at the top: the
+household token stays (no phone verification), this is a **local wedding with
+a coach** rather than a destination one (so Aisle's room blocks and airports
+are cut and replaced by coach runs with timed stops and a seat manifest),
+money links out rather than moving through the site, and the theme is Script.
+That removed roughly a third of the scope and left build steps 1–3 needing no
+migration at all. **One new blocker: §14.2 Q12 — the script typeface needs a
+paid web licence before step 1 can start.** Session 19's outstanding item
+below is unchanged and still blocking moodboards in production.
 
 Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
 have never been applied to the live project, and the guard that should have
@@ -69,21 +76,36 @@ adding the host to the environment's egress allowlist.
 **No code, no migration, no screens.** Per `docs/specs/README.md`'s process,
 writing a spec is not permission to build it.
 
-**The three decisions that matter most**, out of the eleven:
+**Four questions answered the same session**, and folded into the spec:
 
-- **Q1 — household token or per-guest phone verification?** Aisle verifies
-  each guest by phone and shows them a personal portal. The spec recommends
-  keeping V1's one-token-per-household model and adding a "find my
-  invitation" resend on `/w` instead, which gets most of the benefit and
-  builds no authentication system. Saying no means a verified phone number
-  for every guest and re-keys three new tables.
-- **Q2 — is this a destination wedding?** Aisle's shape assumes yes. If it
-  is not, §7 (travel options, hotel room blocks) collapses to a paragraph and
-  a map link, and the effort moves to the theme system, the FAQ and the
-  stationery.
-- **Q4 — does money move through the site?** The spec recommends linking out
-  for both room bookings and registry funds, recording intent rather than
-  taking payment. Yes means Stripe, refunds and chargebacks.
+- **Q1 — household token, confirmed.** No phone verification, no per-guest
+  accounts. `/w` gains a "find my invitation" resend; everything personalised
+  stays at `/rsvp/[token]`, keyed by household. An entire authentication
+  subsystem left the spec.
+- **Q2 — local, "maybe set up a bus".** The biggest change. Aisle's
+  travel-and-stays apparatus (multi-hotel room blocks, rooms, nights, prices,
+  holds, rooming lists, airports, flight times) is **cut**. In its place:
+  parking, a few places to stay as plain links, and **a coach done properly**
+  — named runs, timed pickup stops, capacity shown, and seats a household
+  reserves from their RSVP page so there is a manifest on the day. Three
+  tables left §4; two smaller ones arrived.
+- **Q4 — money links out.** No Stripe. Registry funds link to whatever the
+  couple already uses and a pledge is a note that produces the thank-you
+  list; coach seats are a reservation, not a transaction.
+- **Q3a — the theme is Script.** Traditional: script display over a humanist
+  serif, centred, monogram, floral rule. The other three presets stay in the
+  spec as a system, not as scheduled work. `hero_style: 'type'` is the
+  default until photographs exist, and with Script that is not a compromise.
+
+**Consequence worth knowing:** build steps 1–3 (theme and renderer, schedule
+and FAQ, and the whole invitation surface) now need **no migration at all**,
+so they can ship while the rest of §14.2 is still open. Step 3 (invites) is
+the only part with a date that cannot move.
+
+**A new blocker, §14.2 Q12:** the Script preset self-hosts its fonts, so the
+script face needs a paid web licence (typically £30–£200 one-off). Free
+script fonts are the tell that a site came from a template. Which face, and
+who buys it — this gates step 1.
 
 **Two recommendations made against Aisle**, both argued in the spec: no SMS
 (§12.3 — the WhatsApp copy-out V1 already ships covers it without a provider,

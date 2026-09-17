@@ -1,11 +1,50 @@
 # Spec 14 — The public wedding site, and the invites that point at it
 
-**Status: proposed. Nothing is built, schema included, until §14 Open
-Questions has answers.**
+**Status: proposed, partly answered (2026-09-17 — see the next section).
+Nothing is built, schema included, until §14.2's remaining questions have
+answers too.**
 
 Reference: [aisle.wedding](https://aisle.wedding) — the planner asked for
 its example guest site to be studied and, where it is better than what we
 have, copied directly.
+
+---
+
+## Answered — 2026-09-17
+
+Four of §14's twelve questions came back in the discovery session. They are
+folded into the sections below; this is the record of what changed and why.
+
+**Q1 — guest identity: keep the household token.** Confirmed. No phone
+verification, no per-guest accounts, no SMS provider. `/w` gains "find my
+invitation" (§2); everything personalised stays at `/rsvp/[token]` and is
+keyed by household. This deletes an entire authentication subsystem from the
+spec and keeps `room`-style features household-keyed throughout.
+
+**Q2 — not a destination wedding. Local, "maybe set up a bus".** This is the
+biggest change. Aisle's travel-and-stays apparatus — multi-hotel room blocks,
+rooms, nights, prices, holds, rooming lists, airports, flight times — is
+**cut**. What replaces it is smaller and more useful: parking, a couple of
+recommended places to stay as plain links, and **a coach**, done properly —
+named runs, timed pickup stops, and seats a household reserves from their
+RSVP page so you get a manifest for the day. See the rewritten §7. Three
+tables disappear from §4; two smaller ones arrive.
+
+**Q4 — money links out, intent is recorded.** Confirmed. No Stripe, no card
+handling, no refunds. Registry funds link to whatever you already use, and a
+pledge is a note to you that produces the thank-you list (§8). Coach seats
+work the same way: a reservation, not a transaction.
+
+**Q3 (part) — the theme is Script.** Script display over a humanist serif,
+centred, monogram, floral rule — the traditional one. It ships first and is
+the only preset that has to exist for step 1 of the build order. The other
+three presets stay in the spec as a system, not as work. §5 is rewritten
+around this. Still owed: whether photographs exist yet, which decides the
+hero style (§14.2 Q3b).
+
+**Net effect on scope:** roughly a third smaller. Steps 1–3 of the build
+order (§15) now need **no migration at all**, so the theme, the schedule, the
+FAQ and the whole invitation surface can ship before any schema is written.
 
 ---
 
@@ -36,7 +75,9 @@ Two ways to close that gap, both cheap, both needing the planner:
 
 Everything in §§1–13 is written so it stands up either way: the feature set
 and the data model do not change when the screenshots arrive. Only §5 (the
-design system) and the copy defaults in §§3, 10 would be revised.
+design system) and the copy defaults in §§3, 10 would be revised — and since
+the planner has now picked the Script preset, even §5's remaining exposure is
+narrow: proportions and rhythm, not which direction to go in.
 
 ---
 
@@ -64,13 +105,13 @@ into **a piece of stationery with a schedule attached**.
 | Home / Our Story / Schedule / Travel / Stays / Registry / Gallery / FAQ / RSVP | Hero, "The day", "Getting there", "Questions", moodboards, an RSVP note | §3 — all of them, as blocks |
 | Themes: palettes, font pairings, hero imagery | One serif, one neutral palette, no hero image | §5 |
 | Guest verifies with a phone number, then sees *their* page | One opaque token per household | §2 — keep the token, add lookup |
-| Room blocks at several hotels, rooms, nights, price, guest picks and pays | — | §7 |
-| Airports, shuttles, trains, car hire, with cost / duration / booking link | One free-text "Getting there" paragraph | §7 |
+| Room blocks at several hotels, rooms, nights, price, guest picks and pays | — | **Cut** — Q2, not a destination wedding |
+| Airports, shuttles, trains, car hire, with cost / duration / booking link | One free-text "Getting there" paragraph | §7 — reduced to parking, taxis, a train line, and a coach done properly |
 | Registry links plus cash contributions toward named things | — | §8 |
 | Gallery, including guest uploads after the day | Moodboards (planner-curated only) | §9 |
 | FAQ populated from dashboard answers; six shown, rest expand | A flat `faq` block | §10 |
 | Password / phone-gate, custom domain, site lives five years | `noindex`, no gate, no domain | §11 |
-| Save-the-date → invitation → broadcast updates, email and SMS | Invitation email + a WhatsApp copy button | §12 |
+| Save-the-date → invitation → broadcast updates, email and SMS | Invitation email + a WhatsApp copy button | §12 — email and WhatsApp; SMS declined |
 | Natural-language setup ("add a welcome dinner Friday at seven") | — | Not copied — §13 |
 
 ### What this spec is *not*
@@ -79,7 +120,7 @@ Not a second CMS. `site_content` already exists and already does
 key → JSONB → sort_order → visible; everything below is more block kinds and
 a renderer worth looking at, not a new storage idea. Not multi-tenant public
 routing either: `/w` still serves "the first wedding" until somebody asks for
-more (§14 Q9).
+more (§14.2 Q9).
 
 ---
 
@@ -98,8 +139,8 @@ household, no account, no verification, no phone number required — which is
 the point, because a chunk of any real guest list has no phone we hold and
 no inclination to receive a code.
 
-**Recommendation: keep the token. Do not build phone verification.** Add two
-things that get most of Aisle's felt benefit for a fraction of the surface:
+**Decided (Q1): keep the token. Phone verification is not being built.** Add
+two things that get most of Aisle's felt benefit for a fraction of the surface:
 
 1. **"Find my invitation"** on `/w`. A guest types the email address or
    phone number we already have on file. If it matches exactly one
@@ -116,11 +157,12 @@ things that get most of Aisle's felt benefit for a fraction of the surface:
    addressed by token instead of by phone. `/w` stays the page anyone with
    the link can read.
 
-The cost of this choice: personalisation is per *household*, not per person,
-so "your shuttle at 14:00" is a household-level statement. For a wedding
-that is nearly always right. If the planner wants true per-guest portals,
-that is a different spec and it starts with collecting a verified phone
-number for every guest — see §14 Q1.
+The cost of this choice, accepted: personalisation is per *household*, not
+per person, so "your coach leaves The Crown at 14:20" is a household-level
+statement, and coach seats are reserved as a number per household rather than
+named per guest. For a wedding that is nearly always right — a household
+travels together. True per-guest portals would be a different spec, and it
+would start with collecting a verified phone number for every guest.
 
 ---
 
@@ -144,8 +186,8 @@ nav — an empty "Registry" heading is worse than no registry.
 | `countdown` | Days to go | `enabled`, `hide_after` |
 | `story` | Our story | `body` (markdown), `image_id`, plus optional `milestones[]` of `{ date, title, body, image_id }` |
 | `schedule` | The weekend | `intro`; the events themselves come from `events` (§6) |
-| `travel` | Getting there | `intro`; options from `travel_options` (§7) |
-| `stays` | Where to stay | `intro`; hotels from `accommodations` (§7) |
+| `travel` | Getting there | `intro`, `venue_postcode`, `what3words`; the coach from `coach_runs`, the rest from `transport_options` (§7) |
+| `stays` | Where to stay | `intro`; a list of links from `accommodations` (§7) |
 | `registry` | Gifts | `intro`; items from `registry_items` (§8) |
 | `gallery` | Photos | `intro`, `uploads_open`, `moderation` (§9) |
 | `faq` | Questions | `items[]` of `{ q, a, tags[], featured }` (§10) |
@@ -167,38 +209,48 @@ token) gets "Your RSVP" instead of "RSVP".
 
 ## 4. Schema
 
-One migration, `0015_public_site.sql`. It follows the two rules in the
-README without exception: every table carries `wedding_id`, every parent
-gets `unique (id, wedding_id)`, every child references the composite.
+One migration, `0015_public_site.sql`, and **it is not needed until step 4 of
+the build order** — steps 1–3 store everything they need in `site_content`,
+which already exists. It follows the two rules in the README without
+exception: every table carries `wedding_id`, every parent gets
+`unique (id, wedding_id)`, every child references the composite.
 
 ```
 site_assets          id, wedding_id, storage_path, width, height, blurhash,
                      alt, credit, kind ('hero'|'gallery'|'story'|'party'|…),
                      uploaded_by (null = guest), approved_at, sort_order
 
-travel_options       id, wedding_id, kind ('airport'|'train'|'shuttle'|
-                     'car_hire'|'ferry'|'other'), name, detail,
-                     duration_minutes, cost_minor, currency, booking_url,
-                     sort_order
+transport_options    id, wedding_id, kind ('parking'|'taxi'|'train'|'walk'
+                     |'other'), name, detail, url, sort_order
+
+coach_runs           id, wedding_id, direction ('to_venue'|'from_venue'),
+                     label, departs_at, capacity, notes, sort_order
+coach_stops          id, wedding_id, coach_run_id, name, address, map_url,
+                     pickup_at, sort_order
+coach_seats          id, wedding_id, coach_run_id, coach_stop_id,
+                     household_id, seats, created_at
+                     -- unique (coach_run_id, household_id)
 
 accommodations       id, wedding_id, name, address, url, distance_label,
                      notes, image_id, sort_order
-accommodation_rooms  id, wedding_id, accommodation_id, name, description,
-                     nightly_minor, currency, nights, quantity, hold_until,
-                     booking_url, sort_order
-room_holds           id, wedding_id, room_id, household_id, quantity,
-                     status ('held'|'confirmed'|'released'), created_at
 
 registry_items       id, wedding_id, kind ('link'|'fund'), title, body,
                      url, image_id, target_minor, currency, sort_order
 registry_pledges     id, wedding_id, registry_item_id, household_id,
-                     amount_minor, message, created_at        -- see §8
+                     amount_minor, message, anonymous, received_at,
+                     created_at                                    -- §8
 
-site_visits          wedding_id, day, section, count           -- §13 analytics
+site_visits          wedding_id, day, section, count               -- §13
 ```
 
-`site_content` itself is unchanged — new `block_key`s only, which is the
-whole reason it was built as key/JSONB.
+Plus one view, `v_coach_runs`, carrying seats taken per run and per stop, so
+the "34 of 49" on the page and the capacity check in the action read the same
+number from the same place.
+
+**Cut by Q2**, and recorded here so nobody re-adds them by reflex:
+`accommodation_rooms`, `room_holds`, and the cost/duration columns on what
+was `travel_options`. A destination wedding needs all three; this one does
+not.
 
 **Storage.** `site_assets` reuses spec 9's private-bucket discipline exactly:
 one bucket, no storage policies, object paths *derived* server-side from ids
@@ -207,37 +259,59 @@ images are served through a signed-URL route with a long expiry, not by
 making the bucket public — a public bucket is a permanent, un-revocable
 decision, and this one holds a guest list's faces.
 
-**What gets built ahead of the answers.** Nothing. Unlike spec 6, this
-migration is not pure infrastructure: §14 Q1, Q4 and Q6 each change a table's
-shape.
-
----
+**What gets built ahead of the remaining answers.** Nothing. §14.2 Q5 and Q6
+still change table shapes (`site_assets`' guest-upload columns, and whether
+`registry_pledges` exists at all).
 
 ## 5. The vibes: a theme system
 
-The half of this that cannot be specified properly until somebody has seen
-the reference site (§0). What follows is a defensible default, not a
-transcription.
+**Q3 answered: the theme is Script.** That narrows this section from four
+things to build to one, with the other three kept as a system so a change of
+mind later is a preset, not a rewrite.
 
-**Not a page builder.** The planner picks a theme and a palette; the layout
-is fixed. This is deliberate — every wedding site that lets people move
-blocks around produces a wedding site that looks like it.
+Still owed, and the reason §0's caveat has not gone away: nobody here has
+seen the reference site, so the *proportions* below — type scale, rhythm,
+how much air — are a defensible default rather than a transcription.
+Screenshots would settle it in one pass.
 
-### Themes
+**Not a page builder.** The planner picks a palette and a hero style; the
+layout is fixed. This is deliberate — every wedding site that lets people
+move blocks around produces a wedding site that looks like it.
 
-Four, each a full type + spacing + ornament system, stored as
-`site_content['theme'] = { preset, palette, heading_font, body_font, radius, hero_style }`.
+### The Script preset, in detail
 
-| Preset | Type | Feel | Ornament |
-| --- | --- | --- | --- |
-| **Editorial** | High-contrast serif display (Canela/Tiempos-like), grotesque body | Magazine. Big hero image, wide margins, rules between sections | Hairline rules |
-| **Deckle** | Old-style serif throughout, small caps for labels | Letterpress stationery. Warm off-white, generous leading | Deckled edges, drop caps |
-| **Sans** | One geometric sans, two weights | Modern, Swiss, quiet. Tight grid, no ornament | None |
-| **Script** | Script display over a humanist serif | Traditional. Centred everything, monogram | Monogram, floral rule |
+Stored as
+`site_content['theme'] = { preset: 'script', palette, heading_font, body_font, radius, hero_style, monogram }`.
+
+- **Display** — a script face for the couple's names and the section
+  headings' ornamental line only. Used sparingly: script is illegible at body
+  size and at small sizes on a phone, and a wedding site read at arm's length
+  in a car park is the actual use case.
+- **Body** — a humanist serif, 17px base, 1.6 line height, measure capped at
+  62 characters.
+- **Labels** — the same serif in small caps with generous tracking for times,
+  dress codes and field labels. Never the script.
+- **Composition** — centred. Headings centred, section intros centred, the
+  schedule's day headings centred with the events left-aligned beneath them,
+  because centred *data* is unreadable.
+- **Ornament** — a monogram (two initials and an ampersand, drawn as SVG from
+  the couple's names, not an uploaded image) in the header and once in the
+  footer. A floral rule between sections, one weight, one colour, and it is
+  the only decorative element in the system.
+- **Radius** — 2px. Traditional means edges, not pills.
 
 Fonts self-hosted (`next/font/local`), subsetted, no runtime Google Fonts
 request — a third-party font request from a guest site is a privacy leak and
-a layout shift.
+a layout shift. The script face needs a real licence for web use; that is a
+purchase, not a decision (§14.2 Q12).
+
+### The other three presets
+
+Kept as a system, not scheduled. **Editorial** (high-contrast serif display,
+grotesque body, magazine), **Deckle** (old-style serif, small caps, warm
+off-white, letterpress), **Sans** (one geometric sans, two weights, no
+ornament). Each is a token set plus a `hero_style` default; adding one later
+is a file, not a refactor.
 
 ### Palettes
 
@@ -247,13 +321,16 @@ Six presets plus custom. Each defines five tokens — `ink`, `paper`, `muted`,
 theme for free. Every preset ships pre-checked at 4.5:1 for body text and 3:1
 for large text; **custom palettes are validated in the editor and refuse to
 save below those ratios.** A guest reading a schedule on a phone in sunlight
-is the actual use case.
+is the actual use case, and Script's natural palette — warm ivory paper, soft
+grey ink — is exactly the one that fails contrast if nobody checks.
 
 ### Hero
 
 Three styles: `full` (image bleeds to viewport, text over a scrim), `framed`
-(image inset with a border, text below), `type` (no image — the couple's
-names set large, which is the best option until the photos exist).
+(image inset with a border, text below), `type` (no image — the names set
+large in the script face, a monogram, the date). **`type` is the default
+until photographs exist**, and with the Script preset it is not a compromise:
+a monogram and two names is what the front of an invitation looks like.
 
 ### Motion
 
@@ -270,8 +347,6 @@ opacity.
   through `next/image`, sized, with a blurhash placeholder.
 - **Prints.** A print stylesheet for `/w/schedule` and `/w/travel`. Somebody's
   parent will print it.
-
----
 
 ## 6. Schedule
 
@@ -293,37 +368,64 @@ not invited discovers it was concealed.
 
 ---
 
-## 7. Travel and stays
+## 7. Getting there, and where to stay
 
-The section where Aisle is genuinely ahead, and worth copying closely.
+**Rewritten after Q2: this is a local wedding with a coach, not a destination
+one.** Aisle's room blocks, rooms, nights, prices, holds and rooming lists
+are cut, along with airports and flight times. What is left is the three
+things a guest at a local wedding actually needs to know — how do I get
+there, where do I put the car, and is there a bus — plus somewhere to sleep
+if they want it.
 
-**Travel** is a list of `travel_options` grouped by kind: airports with
-approximate flight times and a booking link, trains, shuttles with pickup
-points and times, car hire, ferries. Each carries an optional cost and
-duration so a guest can compare without opening five tabs. Free-text
-`travel.body` from the current `/w` is preserved as the section intro, so
-nothing existing is lost.
+### 7.1 The coach
 
-**Stays** is `accommodations` → `accommodation_rooms`. Per hotel: name,
-address, distance from the venue, a photo, notes. Per room type: description,
-nightly price, the number of nights the block covers, how many are held, a
-`hold_until` date, and a booking link. The page shows "8 of 20 rooms left" and
-a date after which the block releases — the two facts that actually make
-people book.
+The one part of this section worth building properly, because it is the part
+with a headcount and a departure time.
 
-**Booking: link out, do not take money.** `room_holds` records a household
-saying "we'll take one of these", which gives the planner a list to give the
-hotel and gives the guest a confirmation; the payment happens on the hotel's
-own booking page. Aisle lets guests pay their share in-product; doing the
-same means card handling, refunds, chargebacks and a PCI conversation, for a
-feature whose value is a spreadsheet. **Recommend: link out in V1** — see
-§14 Q4 if the planner disagrees.
+- **Runs.** A named coach run in each direction — "Coach from town, Saturday
+  afternoon", "Coach back, late". Each has a departure time and a capacity.
+- **Stops.** Each run has ordered pickup points with a name, an address, a
+  map link, and its own pickup time. A guest reads "The Crown, 14:20" and
+  needs nothing else.
+- **Seats.** From `/rsvp/[token]`, a household picks a run, a stop, and how
+  many seats. That is a **reservation, not a payment** (Q4), and it gives the
+  planner the thing that actually matters on the day: a manifest per run and
+  per stop, exportable as CSV through the same exporter that backs the
+  catering sheet.
+- **Capacity is shown, not enforced silently.** "34 of 49 seats taken" on the
+  page; reserving past capacity is refused with a message, not a crash. The
+  count comes from a view, not a cached column, so it cannot drift.
 
-Room holds appear on `/rsvp/[token]` under "Your stay" once made, and in a
-planner-side `/stays` screen with a per-hotel rooming list export (CSV,
-reusing the exporter that already backs the catering sheet).
+Seats appear on the public site as read-only information ("there's a coach,
+here are the stops") and become bookable only on `/rsvp/[token]`, where we
+know which household is asking. Same discipline as the gallery (§9).
 
----
+### 7.2 Parking and the other ways in
+
+A flat list of `transport_options`, each a kind, a name, a paragraph, and an
+optional link: **parking** (where, how much, whether it's overnight — the
+single most-asked local-wedding question after dress code), **taxis** with a
+local firm's number, **train** with the nearest station and how far it is
+from the venue, **walking** if that is a real option, and anything else.
+
+No costs, no durations, no booking flows. At this distance a guest wants a
+sentence and a phone number.
+
+### 7.3 Somewhere to stay
+
+Cut to a list of links. `accommodations` holds a name, an address, a
+distance label ("8 minutes by car"), a URL, an optional photo and a note —
+"we've stayed here, it's fine, book early". **No room types, no nightly
+prices, no blocks, no holds.** If a block gets negotiated with one hotel
+later, the note field carries the code and the deadline, which is all a block
+really is from the guest's side.
+
+### 7.4 The map
+
+A static map image plus a link out, as §11 requires — no embedded iframe
+setting cookies before a guest has read a word. The venue address, a
+what3words if the entrance is awkward, and the postcode spelled out for
+people typing it into a sat-nav.
 
 ## 8. Registry
 
@@ -333,7 +435,7 @@ Two kinds in one list, exactly as Aisle does it:
 - **`fund`** — a named thing ("two nights in Kyoto", "the honeymoon flights")
   with an optional target and a progress indication.
 
-**Money, again: do not take it.** A fund item links out to whatever the
+**Money, again: confirmed as link-out (Q4).** A fund item links out to whatever the
 couple already uses (Monzo pot link, bank details behind a click, PayPal,
 Stripe payment link). `registry_pledges` exists so a guest can *tell* the
 couple what they sent, which is what produces the thank-you list — it is a
@@ -418,12 +520,12 @@ their own link is never asked for the passphrase.
 
 **Custom domain.** `theirnames.com` → the Vercel project, with `/w` served at
 the root for that hostname. Needs a `wedding_domains` mapping and the
-multi-wedding routing question (§14 Q9) answered first. A `siteSlug` on
+multi-wedding routing question (§14.2 Q9) answered first. A `siteSlug` on
 `weddings` and `/w/[slug]` is the cheap half and can ship first.
 
 **How long it lives.** Aisle advertises five years. Ours lives as long as the
 Supabase project does, which is a billing question, not a code one — but it
-is worth putting in writing (§14 Q10), because guests link to these for
+is worth putting in writing (§14.2 Q10), because guests link to these for
 years.
 
 **No third-party anything on the guest site.** No Google Fonts, no analytics
@@ -481,7 +583,7 @@ somebody accidentally mails four hundred people at 03:00.
 **SMS: recommend not yet.** Aisle offers it; it brings a provider, per-country
 compliance, opt-out handling, sending limits, and a phone number for every
 guest we mostly do not have. The WhatsApp copy-out that V1 already ships
-covers the same need at zero operational cost. §14 Q7.
+covers the same need at zero operational cost. §14.2 Q7.
 
 ### 12.4 Before any of this sends
 
@@ -501,8 +603,9 @@ New, under the existing `Nav` grouping that spec 13 established:
   toggle that renders `/w` exactly as a given household sees it.
 - **`/site/theme`** — theme, palette, fonts, hero, with the contrast
   validator (§5).
-- **`/stays`** — hotels, room types, holds, rooming-list export.
-- **`/travel`** — travel options.
+- **`/travel`** — the coach (runs, stops, times, capacity) with a manifest
+  export per run and per stop, parking and the other ways in, and the list of
+  places to stay. One screen, not three: Q2 shrank all of it to fit.
 - **`/registry`** — items and pledges, with a thank-you checklist.
 - **`/gallery`** — curated assets, plus the moderation queue when uploads are
   open.
@@ -525,77 +628,96 @@ the 20% that carries the value.
 
 ## 14. Open questions
 
-**Nothing gets built until these are answered.** Q1, Q4 and Q6 change table
-shapes; the rest change scope.
+### 14.1 Answered, 2026-09-17
 
-1. **Household token, or per-guest phone verification?** §2 recommends
-   keeping the token and adding "find my invitation". Confirming this kills a
-   whole authentication subsystem. Saying no means collecting a verified
-   phone number for every guest, and changes `room_holds`, `registry_pledges`
-   and gallery attribution from household-keyed to guest-keyed.
-2. **Is this wedding a destination wedding?** Aisle's entire shape assumes
-   yes. If ours is a village hall forty minutes from where most guests live,
-   §7 shrinks to a paragraph and a map link, and the effort moves to §§5,
-   10 and 12 instead. This one reorders the whole build.
-3. **Which theme (§5), and do photographs exist yet?** If there are no
-   engagement photos, `hero_style: 'type'` is not a compromise, it is the
-   better design — but it changes what gets built first.
-4. **Do guests pay through the site?** §7 and §8 both recommend linking out.
-   Saying yes means Stripe, refunds, and a materially larger spec.
-5. **Guest photo uploads: in, or out?** Recommend in, gated to
-   `/rsvp/[token]`, moderated by default. It is the section most likely to be
-   wanted the week *after* the day, when attention is lowest.
-6. **Registry: links only, or funds too?** Funds bring `registry_pledges`,
-   the anonymity default, and the thank-you list.
-7. **SMS?** Recommend no (§12.3). Say yes and it needs a provider decision
-   and a compliance pass.
-8. **Password-gate the site?** Recommend off by default, `noindex` on.
+Recorded in full at the top of this file. In short: **Q1** keep the household
+token; **Q2** local wedding with a coach, so room blocks and airports are cut;
+**Q3a** the Script preset; **Q4** money links out, intent is recorded.
+
+### 14.2 Still open
+
+**Nothing is built until these are answered.** Q5, Q6 and Q12 change a table's
+shape or cost money; the rest change scope.
+
+3b. **Do photographs exist yet?** Decides `hero_style`. With Script, `type`
+    (names, monogram, date, no image) is a genuinely good default and needs no
+    photography at all — but if there are engagement photos, `framed` is the
+    better version of the same look, and the hero gets built once instead of
+    twice.
+5. **Guest photo uploads after the day: in, or out?** Recommend in, gated to
+   `/rsvp/[token]`, moderated by default. It adds the guest-upload columns to
+   `site_assets` and a moderation queue. It is the section most likely to be
+   wanted the week *after* the day, when attention is lowest — so it is worth
+   deciding now and building last.
+6. **Registry: links only, or funds too?** Links only is one small table.
+   Funds additionally bring `registry_pledges`, the anonymous-by-default rule,
+   and the thank-you list. The thank-you list is the part people underrate.
+7. **SMS?** Recommend no (§12.3). Q1's answer already removed the only
+   structural reason to want a phone number for every guest, so this is now
+   purely a "do we want to text people" question. The WhatsApp copy-out V1
+   ships covers it.
+8. **Password-gate the site?** Recommend off, with `noindex` on. A local
+   wedding is a weaker case for a gate than a destination one.
 9. **One wedding or many?** `/w` currently serves "the first wedding" and says
-   so in a comment. A slug (`/w/[slug]`) is a small change; a custom domain
-   per wedding is a bigger one. Which is needed?
+   so in a comment. A slug (`/w/[slug]`) is small; a custom domain per wedding
+   is not. Which is needed, and by when?
 10. **How long does the site stay up after the day, and who pays for it?**
-    Aisle says five years out loud. Guests link to these for years, and this
-    is a billing decision the code should reflect, not discover.
+    Aisle says five years out loud. Guests link to these for years, and this is
+    a billing decision the code should reflect rather than discover.
 11. **Whose site is this, in the copy?** First person plural ("we're getting
-    married") reads warmer and is what Aisle's examples use; third person is
-    more formal. It sets the tone of every default string in §§3, 10, 12.
-
----
+    married") reads warmer; third person is more formal. With Script chosen —
+    the most traditional preset — third person is the more coherent pairing,
+    but it sets the tone of every default string in §§3, 10 and 12, so it
+    should be a decision rather than a drift.
+12. **The script typeface needs a web licence.** Self-hosting (§5) means a
+    webfont licence for a face that is worth paying for — the free script
+    fonts are the tell that a wedding site was made in a template. Budget is
+    typically £30–£200 one-off. Which face, and who buys it? This blocks step 1
+    of the build order, so it is worth doing this week.
 
 ## 15. Build order
 
-Assuming Q1 = token and Q2 = destination:
+Revised for the answers: local wedding, coach, household token, Script.
 
-1. **Theme and renderer** (§5, §3) — `theme` block, the four presets, the
-   section renderer, the nav, the `/site` editor skeleton. `/w` looks like a
-   wedding site with the content it already has. Nothing new stored.
+1. **Theme and renderer** (§5, §3) — the Script preset, the palette tokens and
+   their contrast validator, the monogram, the section renderer, the nav, the
+   `/site` editor skeleton. `/w` becomes a wedding site using the content it
+   already has. **No migration.** Blocked only by Q12 (the font licence).
 2. **Schedule and FAQ** (§6, §10) — the two sections guests actually open,
-   plus the starter FAQ library and `.ics`.
-3. **Travel and stays** (§7) — migration `0015`, `/travel` and `/stays`
-   editors, room holds surfaced on `/rsvp/[token]`, rooming-list export.
-4. **Invites** (§12) — save-the-date, `/i/[token]` card, OG image, the PDF
-   with its QR code, broadcasts. **Pull this forward ahead of 3 if the send
-   date is close** — it is the only part with a deadline that cannot move.
-5. **Registry** (§8).
+   plus the starter FAQ library, per-event dress code and `.ics`. Both are
+   `site_content` payloads. **No migration.**
+3. **Invites** (§12) — save-the-date, the `/i/[token]` card with its OG image,
+   the print-ready PDF with the household QR code, and broadcasts. **No
+   migration** — it reuses `invitations` and `message_log` as they stand.
+   **This is the only part of the spec carrying a date that cannot move**, so
+   if the send is close it goes first, ahead of even step 1; the card inherits
+   whatever theme exists at the time.
+4. **Getting there** (§7) — migration `0015`, the coach with its runs, stops,
+   capacity and manifest export, parking and the rest, the places to stay, the
+   static map. Seat reservation on `/rsvp/[token]`.
+5. **Registry** (§8), if Q6 says funds.
 6. **Gallery** (§9) — curated first; guest uploads can land after the day,
    because that is when they are needed.
-7. **Access and address** (§11) — passphrase, slug, then domain.
+7. **Access and address** (§11) — passphrase if Q8 wants one, then the slug,
+   then a domain if Q9 asks for it.
 
-Steps 1 and 2 are worth shipping alone. They are the difference between a
-page that carries information and a page you are willing to send to four
-hundred people.
-
----
+Steps 1–3 are worth shipping alone and, between them, touch no schema at all.
+They are the difference between a page that carries information and a page you
+are willing to send to four hundred people — and they can ship while the
+answers to §14.2 are still outstanding, because none of those questions
+touches them.
 
 ## 16. Done when
 
-- `/w` renders every section in §3 from `site_content`, in a chosen theme,
+- `/w` renders every section in §3 from `site_content` in the Script theme,
   passes contrast at 4.5:1, has an LCP under 2.5s on throttled 4G, and reads
   correctly at 390px.
 - A guest who lost their link can get it re-sent from `/w` without exposing
   whether their address is on the list.
-- A household can see their own events, their room and their travel on
-  `/rsvp/[token]`.
+- A household can see the events they are invited to, their coach stop and
+  time, and their own answers on `/rsvp/[token]`.
+- A household can reserve coach seats, and the planner can export a manifest
+  per run and per stop.
 - A save-the-date, an invitation and one broadcast can each be sent to a
   chosen segment, once, from `/invitations`, and the same design exports as a
   print-ready PDF carrying that household's QR code.
