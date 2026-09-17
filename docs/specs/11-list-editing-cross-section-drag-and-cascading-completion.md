@@ -1,10 +1,9 @@
 # Feature spec: Editable list titles, moving tasks between sections, reordering sections, and completing a task closes its sub-tasks
 
-**Status: proposed, not built.** Four requests about the same screen
-(`/lists/[id]`) and the same action file (`src/server/actions/lists.ts`),
-each small on its own but each with at least one real decision behind it —
-per `docs/specs/README.md`, nothing here is built until §4's questions have
-answers.
+**Status: answered (2026-09-17), building.** Four requests about the same
+screen (`/lists/[id]`) and the same action file
+(`src/server/actions/lists.ts`), each small on its own but each with at
+least one real decision behind it. The open questions are answered in §4.
 
 **Not to be confused with spec 13, part A** — renaming the *nav entry*
 "Lists" to "Tasks" (a terminology change, no schema, no per-list data). This
@@ -59,9 +58,9 @@ one action:
   immediately — no drag, no drag-and-drop library involved, the plain
   form-control way of doing the same thing a mouse drag does. This is the
   more directly useful of the two on a touch device, and the planner asked
-  for it by name ("select a sub section"), so it isn't gated behind the
-  drag build the way a fallback control normally would be in this app — see
-  §4 question 2.
+  for it by name ("select a sub section"). Built and shipped in the same
+  pass as the drag (§4.1 answer 2) rather than the drag landing first and
+  the select following later.
 - **The drag**: using the same dnd-kit primitives `BoardView` already uses
   for a conceptually identical problem (moving a card between three fixed
   containers), generalised to however many sections a list has — one
@@ -140,12 +139,12 @@ what happens once cascading writes are added:
   parent from its children: all now done → "no automatic transition," so the
   parent's just-set `done` status is left alone. No ping-pong, no extra
   round trip needed to protect it.
-- **Reopening** a parent (moving it off `done`) is the open question in §4.1
-  — the planner's wording ("closes with it") only says what happens when a
-  task *closes*. Symmetric behaviour (reopening the parent reopens every
-  sub-item) is the more consistent default, but it's the one part of this
-  section actually worth asking about before it's built, since the answer
-  changes what un-checking a parent does to work someone already finished.
+- **Reopening** a parent (moving it off `done`) does **not** reopen its
+  sub-items (§4.1 answer 1) — the cascade is one-directional, matching the
+  planner's own wording ("closes with it"). Un-checking a parent that was
+  ticked by this cascade leaves every sub-item exactly as done as it was;
+  reopening any of them individually afterward is a separate, manual click,
+  same as it is today.
 
 **Why this goes through the same logic as `setStatus`, not a raw
 `update({ status: "done" })` on the children:** a sub-item can carry its own
@@ -171,10 +170,11 @@ click on each child.
   multi-container drag tracking, section renumbering on drop (§1B); a
   second, separate drag surface (handle + Move up/down) on each section
   heading, calling `reorderSections` (§1C).
-- `setStatus`: cascades a `done` (and, pending §4.1, a reopen) write to
-  every direct sub-item of the item being changed, through the same
-  completion path (status, `done_at`/`done_by`, recurrence spawn) `setStatus`
-  already applies to the item itself.
+- `setStatus`: cascades a `done` write (only — reopening a parent does not
+  reopen its sub-items, §4.1 answer 1) to every direct sub-item of the item
+  being closed, through the same completion path (status, `done_at`/
+  `done_by`, recurrence spawn) `setStatus` already applies to the item
+  itself.
 
 **Out:**
 - No change to `list_items_derive_parent_status` (0005) — it already does
@@ -199,30 +199,18 @@ No schema change. `moveItemToSection` writes `list_items.section_id` and
 writes `status`/`done_at`/`done_by`/(recurrence spawn columns), all
 existing. No migration.
 
-## 4. Open questions — need the planner's answers before anything is built
+## 4. Answered (2026-09-17)
 
 1. **Does reopening a parent reopen its sub-items too, or only closing
-   cascades?** Recommendation: yes, symmetric — un-checking a parent
-   reopens every sub-item that was closed along with it. The alternative
-   (closing cascades, reopening doesn't) is cheaper to explain but means a
-   parent you accidentally ticked and immediately un-ticked leaves its
-   sub-items marked done, which reads as a bug the first time it happens.
-2. **Confirming the section select ships alongside the drag, not as a
-   fallback gated on the drag being built first** (§1B). Recommendation:
-   confirm — it's simpler to build than the multi-container drag and was
-   asked for directly, so there's no reason to make it wait on the harder
-   half of the same feature.
+   cascades?** **Only closing cascades.** Un-checking a parent leaves its
+   sub-items as they are; reopening one is a separate, manual click.
+2. **Does the section select ship alongside the drag, or wait for it?**
+   **Built together, one pass** — both land in the same change, not the
+   select first with the drag following later.
 3. **Do the existing per-item Move up/down buttons ever cross a section
-   boundary** — pressing "up" on the first item in a section moves it to
-   the end of the previous section — **or do they stay scoped to the
-   section they're in, with drag and the select the only ways to cross a
-   section?** Recommendation: keep Move up/down scoped to their own
-   section, same as today, and let the select be the deliberate,
-   named-destination way to cross a section boundary — an "up" arrow that
-   sometimes jumps a card into a different section with no warning is a
-   worse surprise than a select that names where the card is going.
-4. **Is the settings-page rename (§1A, `ListAppearanceEditor`) wanted as
-   well as the `/lists/[id]` header rename, or just one of the two?**
-   Recommendation: both — `updateList` already accepts the write either way,
-   and there's no reason renaming should work from one screen a list
-   appears on but not the other.
+   boundary?** **No — they stay scoped to their own section.** Drag and the
+   select are the only ways to move a card across sections; both name the
+   destination explicitly, where an "up" arrow silently crossing a boundary
+   would not.
+4. **Is the settings-page rename (§1A) wanted as well as the `/lists/[id]`
+   header rename?** **Both.**

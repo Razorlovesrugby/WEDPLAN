@@ -1,10 +1,10 @@
 # Feature spec: Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives
 
-**Status: proposed, not built.** Five separate navigation requests that all
-land on the same fourteen-entry `Nav` (`src/components/nav.tsx`) and
-interact with each other — one of them (§1D vs. §1B) is a direct conflict in
-what was asked for, so **nothing here should be built until §5 is
-answered**, starting with question 1.
+**Status: answered (2026-09-17), building.** Five separate navigation
+requests that all land on the same fourteen-entry `Nav`
+(`src/components/nav.tsx`) and interact with each other — one of them (§1D
+vs. §1B) was a direct conflict in what was asked for. §5 records the
+answers, starting with question 1's resolution.
 
 **Not to be confused with spec 11** — that spec is about editing an
 individual list's own title and how tasks move within one; this spec is
@@ -51,10 +51,11 @@ This collapses those four into one `Nav` entry, **"Tasks"**, linking to
 `/lists` (unchanged route, unchanged default landing on the "Today" smart
 view). `/lists/page.tsx` gains a sub-tab strip above the sidebar +
 smart-view/list-detail area, matching the shape `/guests` gets in §1B below:
-**Tasks · Calendar · Board**, plus — per §5 question 2 — possibly
-**Timeline** as a fourth, since the planner's wording named only calendar
-and board but Timeline is the same family of screen and currently sits
-right next to them in the flat nav today.
+**Tasks · Calendar · Board · Timeline** — Timeline joins as a fourth
+sub-tab (§5 answer 2) even though the planner's own wording named only
+Calendar and Board, since it's the same `list_items` rows in a third
+layout and sits right next to its two siblings in today's flat nav
+already.
 
 The rename itself is copy-only, scoped to what a planner reads, not what the
 schema or code calls anything — same posture spec 10 and spec 7 took with
@@ -87,11 +88,11 @@ linking to `/guests`, with a sub-tab strip above the guest table:
 screen's already-existing route (`/guests`, `/guests/rank`, `/invitations`)
 — not a client-side tab panel, since each of the three is its own server
 page with its own data fetching. `Households` stays reachable exactly as it
-is today (from a guest row, or `/households/new`) — not asked for as a
-fourth tab, and folding it in isn't assumed here; see §5 question 3.
+is today (from a guest row, or `/households/new`) — not folded in as a
+fourth tab (§5 answer 3).
 
-This is the one that collides with §1D below — see §5 question 1 before
-reading further.
+This is Invitations' one and only home in `Nav` (§5 answer 1) — see §1D for
+how it still connects to Questions without a second, conflicting home.
 
 ### C. Events and its run sheet, made discoverable together
 
@@ -113,37 +114,49 @@ useful as a fallback destination if something old links straight to it
 (nothing in this codebase does, per a search of `href="/run-sheet"`), so it
 stays rather than being deleted, but it's no longer a `Nav` entry.
 
-### D. Invitations and Questions, together in a tab
+### D. Invitations and Questions, connected without sharing a tab
 
-The other place "Invitations" was asked to land — its own tab, next to
-`Questions`, since an invitation and the RSVP questions attached to it are
-both about the same thing a household receives: one link, some questions on
-the other end of it.
+The other place "Invitations" was asked to land — paired with `Questions`,
+since an invitation and the RSVP questions attached to it are both about
+the same thing a household receives: one link, some questions on the other
+end of it. This is the direct conflict with §1B (Invitations can't be two
+nav entries' tab at once) — resolved (§5 answer 1) as a cross-link rather
+than a shared tab strip: `/questions`' header gets a visible link over to
+the Guests hub's Invitations tab ("See who's been sent one → Invitations"),
+and `/invitations` gets one back ("Manage the RSVP questions households
+answer → Questions"). Neither screen's own route, data, or tab membership
+changes — this is one link added to each page, matching the plain-link
+style `RunSheetPickerPage` already uses to point at `/events` when it has
+nothing to show.
+
+`Questions` keeps its own `Nav` entry — it isn't folded into the Guests hub
+alongside Invitations, since RSVP questions are configuration for the whole
+wedding's form, not a per-household record the way Guests/Ranking/
+Invitations all are.
 
 ### E. Budget moves to second, right after Guests
 
-`Nav`'s order, after the four groupings above (and however §5 question 1
-resolves the B/D conflict), becomes: **Overview, Guests, Budget, Events,
-[Invitations placement per §5 question 1], Tasks, Moodboards, Settings** —
-Budget's new position is unambiguous regardless of how question 1 resolves,
-since it only says "after Guests," not anything about Invitations' place
-relative to it.
+`Nav`'s order, after the four groupings above, becomes: **Overview, Guests,
+Budget, Events, Questions, Tasks, Moodboards, Settings.**
 
 ## 2. Scope
 
 **In:**
-- `Nav`'s `LINKS` array collapses from fourteen entries to roughly eight
-  (exact count depends on §5's answers), reordered per §1E.
-- A small shared tab-strip component (sub-tabs are plain links with
-  `aria-current`, the same pattern `ListsSidebar`'s `SMART_VIEWS` already
-  uses — not a new UI primitive) rendered above `/guests`, `/guests/rank`,
-  `/invitations` (§1B) and above `/lists`, `/calendar`, `/board`, possibly
-  `/timeline` (§1A).
+- `Nav`'s `LINKS` array collapses from fourteen entries to eight: Overview,
+  Guests, Budget, Events, Questions, Tasks, Moodboards, Settings (§1E).
+- A small shared tab-strip component, styled like `Nav` itself one level
+  down (§5 answer 4) — same active/inactive treatment and `aria-current`,
+  not `ListsSidebar`'s vertical list style — rendered above `/guests`,
+  `/guests/rank`, `/invitations` (§1B) and above `/lists`, `/calendar`,
+  `/board`, `/timeline` (§1A).
 - `EventsEditor`: a "Run sheet →" link per event row (§1C).
 - Copy-only renames: `Nav`'s `Lists` label, `ListsSidebar`'s "Your lists"
   heading, `/lists`'s page title (§1A).
 - `/run-sheet` (the picker) demoted from a `Nav` entry to an unlinked
   fallback route (§1C).
+- One link added to `/questions`' header pointing at the Guests hub's
+  Invitations tab, and one added to `/invitations` pointing back at
+  `/questions` (§1D).
 
 **Out:**
 - **No URL changes, anywhere.** `/guests`, `/guests/rank`, `/invitations`,
@@ -157,8 +170,8 @@ relative to it.
   `/guests/rank`, and `/invitations` stay three separate server components
   with their own queries — this only adds a shared tab strip above them, not
   a combined page.
-- **No change to `/households`** — not folded into the Guests hub by this
-  spec (§5 question 3 is where that gets decided if wanted).
+- **No change to `/households`** — not folded into the Guests hub (§5
+  answer 3).
 - **No mobile-nav rework beyond what falls out naturally** from having
   fewer top-level entries — spec 3's existing hamburger collapse
   (`Nav`'s `sm:hidden` panel) already handles however many entries remain;
@@ -167,26 +180,22 @@ relative to it.
 
 ## 3. Nav, before and after
 
-| Today (14 entries) | Proposed (per §5's answers) |
+| Today (14 entries) | Final (8 entries) |
 | --- | --- |
 | Overview | Overview |
-| Guests | **Guests** (sub-tabs: Guests · Ranking · Invitations\*) |
+| Guests | **Guests** (sub-tabs: Guests · Ranking · Invitations) |
 | Ranking | **Budget** |
 | Events | **Events** (run sheet reached per-event, §1C) |
-| Run sheet | Invitations\* — *only if §5 Q1 answers "Questions," not "Guests"* |
-| Invitations | Questions\* — *paired with Invitations per above* |
-| Questions | **Tasks** (sub-tabs: Tasks · Calendar · Board\*\*) |
-| Lists | Moodboards |
-| Timeline | Settings |
+| Run sheet | **Questions** (cross-linked with Invitations, §1D) |
+| Invitations | **Tasks** (sub-tabs: Tasks · Calendar · Board · Timeline) |
+| Questions | Moodboards |
+| Lists | Settings |
+| Timeline | |
 | Calendar | |
 | Board | |
 | Budget | |
 | Moodboards | |
 | Settings | |
-
-\* Exact placement of Invitations, and whether Questions gets folded into
-the Guests hub instead of staying separate, is §5 question 1.
-\*\* Whether Timeline joins as a third sub-tab is §5 question 2.
 
 ## 4. What doesn't change
 
@@ -197,47 +206,19 @@ the Guests hub instead of staying separate, is §5 question 1.
 - `docs/specs/README.md`'s feature list gains a row for this spec; nothing
   about specs 1–12's own statuses changes.
 
-## 5. Open questions — need the planner's answers before anything is built
+## 5. Answered (2026-09-17)
 
 1. **The direct conflict: does Invitations join the Guests hub (§1B), or
-   pair with Questions (§1D)?** The planner asked for both in the same
-   message, and a single nav entry can't do both — "Invitations" would need
-   to appear under two different tabs simultaneously, which is confusing
-   rather than convenient. Three ways to resolve it, roughly in order of how
-   much they preserve of what was asked:
-   - **(a) Invitations joins Guests** (§1B as written); Questions stays its
-     own standalone `Nav` entry, unpaired. Loses the "Invitations and
-     Questions together" request.
-   - **(b) Invitations pairs with Questions** (§1D as written); the Guests
-     hub becomes just Guests + Ranking, two tabs instead of three. Loses
-     half of "Guests and ranking and invitations into one page."
-   - **(c) Both, via a cross-link rather than shared nav placement**:
-     Invitations lives under the Guests hub as its primary home (since
-     that's where "who's coming" naturally sits, and where the dashboard's
-     invitation tiles already point), and the Questions screen gets a
-     visible link over to Invitations (and vice versa) without either
-     screen literally sharing a tab strip with the other. This is my
-     recommendation — it keeps one unambiguous home for Invitations (so
-     "where do I click for invitations" always has one answer) while still
-     making the Questions ↔ Invitations relationship a one-click hop, which
-     is most of what "together in a tab" is actually asking for.
-2. **Does Timeline join Tasks' sub-tabs (§1A) as a third one, alongside
-   Calendar and Board, or stay a separate top-level `Nav` entry?** The
-   planner's wording named only Calendar and Board. Recommendation: fold
-   it in as a third sub-tab — it's the same `list_items` rows in a third
-   layout, sitting right next to Calendar and Board in today's flat nav
-   already, and leaving it as a lone standalone entry after its two
-   siblings move would read as an inconsistency rather than a choice.
-3. **Does Households join the Guests hub as a fourth tab**, or stay reached
-   only from a guest row / `/households/new`, as today? Not asked for
-   directly. Recommendation: leave it as-is for this pass — a household is
-   usually reached *from* a specific guest, not browsed as its own top-level
-   destination, so it doesn't obviously want the same "browse this section"
-   framing Guests/Ranking/Invitations share. Worth asking rather than
-   assuming, since "guests" as a concept does include households.
-4. **Sub-tab strip styling**: a full-width bar under the page heading (like
-   `ListsSidebar`'s vertical list, but horizontal), or something visually
-   closer to `Nav` itself, just one level down? Recommendation: closer to
-   `Nav` — same active/inactive treatment, same `aria-current`, so a planner
-   already reads "this is how tabs work here" without a second visual
-   language to learn for the sub-level.
+   pair with Questions (§1D)?** **Both, via a cross-link rather than
+   shared nav placement (option c).** Invitations' one nav home is the
+   Guests hub; `/questions` and `/invitations` link to each other instead
+   of sharing a tab strip. Keeps one unambiguous "where do I click for
+   invitations" answer while still making the Questions ↔ Invitations
+   relationship a one-click hop.
+2. **Does Timeline join Tasks' sub-tabs as a third one?** **Yes** — Tasks'
+   sub-tabs are Tasks · Calendar · Board · Timeline.
+3. **Does Households join the Guests hub as a fourth tab?** **No** — stays
+   reached only from a guest row / `/households/new`, as today.
+4. **Sub-tab strip styling?** **Matches `Nav` itself, one level down** —
+   same active/inactive treatment and `aria-current`, not `ListsSidebar`'s
+   vertical list style.
