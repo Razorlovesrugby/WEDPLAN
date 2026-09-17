@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ListsSidebar } from "@/components/lists/lists-sidebar";
 import { NewListForm } from "@/components/lists/new-list-form";
@@ -79,7 +80,12 @@ export default async function ListsPage({
         <div className="min-w-0 flex-1 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h1 className="font-serif text-2xl">{TITLES[view]}</h1>
-            <NewListForm templates={templates} />
+            <div className="flex items-center gap-2">
+              <Link href="/api/export/tasks" className="btn" prefetch={false}>
+                Export CSV
+              </Link>
+              <NewListForm templates={templates} />
+            </div>
           </div>
           <SmartView view={view} items={items} collaborators={collaborators} currentUserId={user?.id} />
         </div>

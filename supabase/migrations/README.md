@@ -32,6 +32,27 @@ Run them one file at a time and read the result before moving on. Each script
 is written to fail loudly rather than half-apply, so if a step errors, do not
 run the next one — fix that step first.
 
+**After a migration adds a column or table, the app may still 404 it as
+"Could not find the '…' column … in the schema cache" for a few moments.**
+PostgREST caches the schema and only reloads on its own `LISTEN`/DDL hook,
+which can lag right after a dashboard paste. If it doesn't clear on its own,
+Dashboard → **Settings → API → Reload schema** (or `NOTIFY pgrst, 'reload
+schema';` from the SQL editor) forces it. This is also exactly what you'll
+see if the migration itself failed partway (e.g. the enum error below) —
+check `select column_name from information_schema.columns where
+table_name = 'budget_items'` first to confirm the column actually exists
+before reloading the cache.
+
+**A file whose number has two parts (e.g. `0011_budget_manual_quantity.sql`
+and `0011_budget_manual_quantity_columns.sql`) must be pasted and run as two
+separate steps, in that order.** The SQL editor sends a whole pasted script
+as one multi-statement query, which Postgres runs as a single implicit
+transaction — and a query added by `alter type ... add value` can't be used
+anywhere else in that same transaction (`55P04 unsafe use of new value`,
+with a hint that new enum values must be committed first). Splitting the
+enum add into its own file/paste is how this schema avoids that error;
+running both halves in one paste reproduces it.
+
 ### What "success" looks like
 
 After `0003` (before `0004`, if you're checking incrementally):

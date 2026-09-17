@@ -3,12 +3,29 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 20 — spec 14 (the public wedding site and the invites
+Last updated: session 21 — a migration bug, not a build session: `0011`
+tried to add an enum value and use it in the same file, which works when
+applied statement-by-statement (`psql -f`, what `verify-migrations.sh` and
+the CLI do) but throws `55P04 unsafe use of new value` when pasted into the
+Supabase SQL editor, which runs a whole pasted script as one implicit
+transaction. Fixed by splitting `0011_budget_manual_quantity.sql` into that
+file (now enum-only) plus a new `0011_budget_manual_quantity_columns.sql`
+(the column and the two views, which reference `'manual'`) that must be run
+second, after the first has committed. `supabase/migrations/README.md`
+gained a section on this and on the "column not found in the schema cache"
+symptom that follows a half-applied migration. `verify-migrations.sh` still
+passes (187 assertions) since it applies each file statement-by-statement
+either way; the failure mode was confirmed separately with `psql -1` (single
+transaction, matching what the dashboard does) against the pre-split file.
+Session 20's entry, below, is unchanged.
+
+Previously: session 20 — spec 14 (the public wedding site and the invites
 that point at it) was written from a discovery pass against
 [aisle.wedding](https://aisle.wedding), **all twelve of its questions were
-answered in the same session**, and **build steps 0 and 1 are now built**:
-`weddings.slug`, the Script theme system, and a themed `/w/[slug]` rendered
-from `site_content`. Steps 2–5 are not started. **Read
+answered in the same session**, and **build steps 0 to 2 are largely built**:
+`weddings.slug`, the Script theme system, a themed `/w/[slug]` rendered from
+`site_content`, and the `/site` editor behind it. Steps 3–5 are not started.
+**Read
 `docs/specs/14-public-site-and-invites.md`'s "Build status" section first** —
 it is the per-file handoff, including the three places the build corrected the
 spec and the environment traps that cost time here.
@@ -48,6 +65,56 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 21: `0011`'s enum-in-the-same-transaction bug, fixed
+
+**The planner reported two errors** trying to run migration 11 from the
+Supabase SQL editor:
+
+```
+ERROR: 55P04: unsafe use of new value "manual" of enum type budget_quantity_basis
+HINT: New enum values must be committed before they can be used.
+```
+
+and, separately, `/budget` failing to save a quantity with "Could not find
+the 'quantity' column of 'budget_items' in the schema cache."
+
+**Same root cause.** `alter type public.budget_quantity_basis add value
+'manual'` and the `create or replace view` statements that compare
+`quantity_basis = 'manual'` were both in `0011_budget_manual_quantity.sql`.
+Postgres refuses to let any statement use an enum value added by `alter
+type ... add value` until that add is committed — and the Supabase SQL
+editor sends a whole pasted script as one multi-statement query, which
+Postgres runs as a single implicit transaction (documented protocol
+behaviour, not a Supabase quirk). So the `alter type` and its first use
+never got to commit separately, the whole paste rolled back, and
+`budget_items.quantity` was never actually created — hence the second
+error: the app wasn't looking at a stale schema cache, it was looking at a
+column that had never existed.
+
+This had gone uncaught because `scripts/verify-migrations.sh` applies each
+migration file with `psql -f`, which sends the file's statements to the
+server one at a time (autocommit between them) rather than as one batched
+string — so the local verification path never exercises the failure mode
+the dashboard hits.
+
+**Fixed:** `0011_budget_manual_quantity.sql` now contains only the `alter
+type` line. Everything that follows it in the original file — the
+`quantity` column and the `v_budget_items`/`v_budget_summary` redefinitions
+— moved to a new `0011_budget_manual_quantity_columns.sql`, which must be
+pasted and run second, after the first file has committed. Confirmed two
+ways: `./scripts/verify-migrations.sh` still passes (187 assertions, same
+as before the split, since both files apply in file order either way), and
+a direct repro with `psql -1` (single-transaction mode, matching the
+dashboard's behaviour) reproduced the exact `55P04` error against the old
+single-file version and succeeded against the two-file version.
+`supabase/migrations/README.md` gained a section warning about this split
+naming pattern for any future migration that adds and uses an enum value,
+plus a note on the schema-cache symptom and how to tell it apart from a
+migration that silently didn't apply.
+
+**Nothing else changed** — no application code, no other migration, no new
+column or table beyond what `0011` already specified.
 
 ## Session 20: discovery — the public site and invites, against aisle.wedding
 
@@ -1422,7 +1489,7 @@ first wedding. Full instructions in `supabase/migrations/README.md`.
 | 6 | `0006_reminders.sql` | `message_log.kind` gains `'digest'` — [spec](specs/02-reminders.md) |
 | 7 | `0007_settings.sql` | `weddings.reminder_window_days` — [spec](specs/03-settings-calendar-mobile.md) |
 | 10 | `0010_budget.sql` | Budget categories/items, consumption components, payments, `fx_rates`, section 7's linking tables, `v_budget_items`/`v_budget_summary`/`v_reminders_due`/`v_budget_item_tasks` — [spec](specs/06-budget-management.md) |
-| 11 | `0011_budget_manual_quantity.sql` | `budget_quantity_basis` gains `'manual'`, `budget_items.quantity` — [spec](specs/06.1-budget-quantity-and-task-linking.md) |
+| 11 | `0011_budget_manual_quantity.sql` + `0011_budget_manual_quantity_columns.sql` | `budget_quantity_basis` gains `'manual'` (own file — must commit before the second file's column/views can reference it), `budget_items.quantity` — [spec](specs/06.1-budget-quantity-and-task-linking.md) |
 | — | `bootstrap.sql` | Your wedding, both collaborators, starting events and questions |
 
 Numbers 8 and 9 are spec 5's (multi-cut lines, day-of run sheet) and don't
