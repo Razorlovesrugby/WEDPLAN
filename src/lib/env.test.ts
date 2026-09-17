@@ -54,3 +54,41 @@ describe("normaliseOrigin", () => {
     expect(normaliseOrigin("https://")).toBe("https:");
   });
 });
+
+/**
+ * A regression, not a nicety.
+ *
+ * /settings renders a "Pinterest" card, which asks whether Pinterest is
+ * configured. The first version asked through serverEnv(), which validates
+ * EVERY server secret at once — so a deployment with no INVITE_TOKEN_PEPPER
+ * (a value that page neither uses nor mentions) threw, and /settings became
+ * the only planner screen that would not open. The cut-line editor and the
+ * list-appearance editor went with it.
+ */
+describe("pinterestEnv", () => {
+  it("answers without validating any other secret", async () => {
+    const { pinterestEnv } = await import("./env");
+
+    delete process.env["INVITE_TOKEN_PEPPER"];
+    delete process.env["SUPABASE_SERVICE_ROLE_KEY"];
+    delete process.env["PINTEREST_APP_ID"];
+    delete process.env["PINTEREST_APP_SECRET"];
+
+    // The point: this does not throw.
+    expect(pinterestEnv()).toEqual({ appId: null, appSecret: null });
+  });
+
+  it("reads the pair when they are set, and treats blank as unset", async () => {
+    const { pinterestEnv } = await import("./env");
+
+    process.env["PINTEREST_APP_ID"] = "  12345  ";
+    process.env["PINTEREST_APP_SECRET"] = "   ";
+    expect(pinterestEnv()).toEqual({ appId: "12345", appSecret: null });
+
+    process.env["PINTEREST_APP_SECRET"] = "shh";
+    expect(pinterestEnv()).toEqual({ appId: "12345", appSecret: "shh" });
+
+    delete process.env["PINTEREST_APP_ID"];
+    delete process.env["PINTEREST_APP_SECRET"];
+  });
+});

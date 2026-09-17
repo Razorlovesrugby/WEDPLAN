@@ -152,6 +152,28 @@ export function serverEnv(): z.infer<typeof serverSchema> {
 }
 
 /** Absolute URL for a path, for links that leave the app (email, QR codes). */
+/**
+ * The two Pinterest values, read WITHOUT validating the rest of the server
+ * schema.
+ *
+ * `serverEnv()` parses everything at once and throws if ANY required value is
+ * wrong — which is the right behaviour for a path that needs those values,
+ * and the wrong behaviour for asking "is Pinterest configured?". /settings
+ * asks exactly that, and became the only planner page that died on a missing
+ * INVITE_TOKEN_PEPPER as a result: a secret it does not use, for a feature it
+ * does not touch, taking out the cut-line editor next to it.
+ *
+ * Both are optional strings with no shape to check, so there is nothing for a
+ * schema to validate here anyway. Read literally rather than through a
+ * variable — Next.js only substitutes `process.env.X` when it can see the
+ * name as written.
+ */
+export function pinterestEnv(): { appId: string | null; appSecret: string | null } {
+  const appId = process.env["PINTEREST_APP_ID"]?.trim();
+  const appSecret = process.env["PINTEREST_APP_SECRET"]?.trim();
+  return { appId: appId || null, appSecret: appSecret || null };
+}
+
 export function absoluteUrl(path: string): string {
   const base = clientEnv.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
