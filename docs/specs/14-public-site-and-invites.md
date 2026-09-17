@@ -116,9 +116,10 @@ screenshots of the Aisle example, or that host on the egress allowlist, so
 
 ## Build status — handoff, 2026-09-17
 
-**Steps 0 and 1 are built. Steps 2–5 are not started.** Everything below was
-verified by `npm run typecheck`, `npm test` (384), `./scripts/verify-migrations.sh`
-(187 assertions) and `npm run build`. **Nothing has been opened in a browser,
+**Steps 0 and 1 are built, and step 2 is most of the way there. Steps 3–5 are
+not started.** Everything below was verified by `npm run typecheck`,
+`npm test` (399), `./scripts/verify-migrations.sh` (187 assertions) and
+`npm run build`. **Nothing has been opened in a browser,
 and nothing has run against a live Supabase project** — the same caveat every
 spec since 1 carries. In particular the fonts have never been rendered, the
 theme has never been seen, and no query below has returned a real row.
@@ -139,39 +140,38 @@ theme has never been seen, and no query below has returned a real row.
 | 1 | The public read path | `src/server/queries/site.ts` |
 | 1 | `/w/[slug]`, and `/w` kept as a redirect | `src/app/w/` |
 | 1 | `GET /api/public/events/[id]/ics` | `src/app/api/public/events/[id]/ics/route.ts` |
+| 1 | **The `/site` editor** — every section listed, show/hide, reorder, inline forms, repeaters for list sections, per-event dress codes and map links | `src/app/(planner)/site/`, `src/components/site/editor/`, `src/lib/site/editor-fields.ts` |
+| 1 | **`/site/theme`** — preset, palette, custom colours with the contrast check running live, hero style, monogram | `src/components/site/editor/theme-editor.tsx` |
+| 1 | The write path, with per-section payload validation | `src/server/actions/site.ts` |
+| 2 | **The FAQ starter library**, 18 questions as drafts, added by a button that appends and skips duplicates | `src/lib/site/faq-library.ts` |
+| 2 | A full example site in the seed, so a reset renders every section type | `supabase/seed.sql` |
+| 2 | "Site" in the planner nav | `src/components/nav.tsx` |
 
-Unit tests added: 78 (theme 28, sections 29, names 6, ics 15). Total 384.
+Unit tests added: 93 (theme 28, sections 29, names 6, ics 15, faq library 8,
+editor fields 7). Total 399.
 
 ### Not done, and worth knowing before picking this up
 
-**The biggest gap: there is no editor.** Every section's content is a JSONB
-payload that currently has to be typed into `site_content` by hand. The
-renderer works and is tested; nothing feeds it. `/site` and `/site/theme`
-(§13) do not exist. Until they do, the feature is not usable by the people it
-is for.
+**The biggest gap now is step 3, the invites.** The site itself is editable
+end to end: a planner can write every section, reorder them, hide them, pick a
+theme and a palette, and see the result. What nobody can do yet is send
+anything.
 
 Specifically outstanding:
 
-- **`/site` and `/site/theme`.** No editor, no section reorder, no
-  show/hide, no preview-as-guest.
-- **The contrast validator is not wired to anything.** `validatePalette` is
-  written and tested, but nothing calls it, because the thing it is supposed
-  to guard — the custom-palette form — does not exist. A custom palette
-  written directly into `site_content` is currently unchecked.
+- **No preview-as-guest.** The editor links out to the live site rather than
+  rendering it inline at phone width. `/site/theme`'s preview is a colour
+  strip that says so — the real faces only load on the public site.
 - **No hero image can be uploaded.** `SiteHero` renders `framed` from a
-  same-origin path in the payload and falls back to `type` otherwise. The
+  same-origin path in the payload and falls back to `type` otherwise, and the
+  editor asks for a path with that caveat written into its help text. The
   storage it should read from is `site_assets`, which is in `0016` at step 4.
   Q3b moved the image pipeline into step 1 and it is half-moved: the
   rendering is here, the upload is not.
-- **No seed content.** A fresh `supabase db reset` renders the hero and the
-  RSVP pointer and nothing else, because no `site_content` rows exist. Worth
-  adding a seeded example site — it is also the only way to look at the theme
-  without typing JSON.
-- **The FAQ starter library (§10) is not written anywhere.** The 20 questions
-  are prose in this spec. They should be seed rows or an editor action.
-- **Per-event extras are read but never written.** `dress_code`, `detail`,
-  `map_url` and `hide_time` render from the schedule payload; nothing sets
-  them.
+- **`gallery.uploads_open` and `gallery.moderation` are stored and do
+  nothing.** The editor writes them and the renderer ignores them, because
+  guest uploads are step 5. The editor's help text says so rather than
+  implying a working switch.
 - **"Find my invitation" (§2) does not exist.** The RSVP section says "message
   us" rather than linking to it. That copy is the placeholder — it becomes the
   link when the lookup is built.
@@ -181,9 +181,16 @@ Specifically outstanding:
   standalone routes do not exist — the site is one scrolling page only. The
   existing print rules in `globals.css` are V1's, for `/invitations/print`.
 - **`site_visits` (§13) is not built.** No analytics of any kind.
-- **Steps 2–5 proper:** the rest of step 2 (above), step 3 invites entirely,
-  step 4 the coach and `0016` entirely, step 5 the gallery and guest uploads
-  entirely.
+- **Step 3, invites: nothing.** Save-the-date, the `/i/[token]` card, its
+  Open Graph image, the print-ready PDF with a household QR code, and
+  broadcasts. This is the only part of the spec carrying a date that cannot
+  move, and it is now the largest single piece left.
+- **Step 4, getting there: nothing.** `0016_public_site.sql`, the coach with
+  its runs, stops, capacity and manifest export, parking, places to stay as
+  structured rows rather than the free-text block the editor writes today,
+  and the static map.
+- **Step 5, the gallery: nothing** beyond published moodboards appearing in
+  the section, which predates this spec.
 
 ### Three corrections this build made to the spec above
 

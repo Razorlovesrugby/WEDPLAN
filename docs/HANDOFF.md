@@ -13,11 +13,12 @@ from `site_content`. Steps 2–5 are not started. **Read
 it is the per-file handoff, including the three places the build corrected the
 spec and the environment traps that cost time here.
 
-**The one thing to know before picking it up: there is no editor.** The
-renderer works and is tested; every section's content is still a JSONB payload
-that has to be typed into `site_content` by hand, and `/site` does not exist.
-That is the next piece of work and it is what stands between this feature and
-being usable.
+**The editor now exists** (`/site` and `/site/theme`), so the site is editable
+end to end: every section, reordering, hide/show, theme, palette with a live
+contrast check, and an FAQ starter library. The seed carries a full example
+site, so `supabase db reset` renders every section type at `/w/alex-sam`.
+**The next piece of work is step 3, the invites** — and it is the only part of
+spec 14 carrying a date that cannot move.
 
 **Also unread, still:** `aisle.wedding` is blocked by this environment's
 egress policy, so the design proportions in §5 are this session's judgement
@@ -229,6 +230,52 @@ than linking to an anchor that is not there. Steps 2–5 otherwise untouched.
 **Unrelated and still outstanding from session 19:** `0013`/`0014` have never
 been applied to the live project and `ensure-bucket.mjs` has never run against
 it. `0015` now joins that queue. `/api/health` confirms.
+
+## Session 20 (build, continued): the /site editor, the FAQ library, seed content
+
+**Green:** typecheck, `npm test` (399), `verify-migrations.sh` (187),
+`npm run build`. Still never opened in a browser and never run against a live
+project.
+
+`24a0318`. What changed:
+
+- **`/site`** — every section listed (including empty ones: the site drops
+  them, the editor must not or a blank section is unreachable), show/hide,
+  move up/down, an inline form each, repeaters for the list-shaped sections,
+  and per-event dress codes and map links keyed to real events.
+- **`/site/theme`** — and this is the first caller of `validatePalette`, which
+  until now was written, tested and wired to nothing. A custom palette that
+  fails on text does not save. The check also runs live while typing, because
+  a planner picking a pale grey should find out then rather than after
+  pressing a button; the server re-checks regardless, since the live one is a
+  client component.
+- **The forms are generated from a field spec** (`src/lib/site/editor-fields.ts`)
+  rather than written twelve times, which is what makes the useful test
+  possible: every payload key the renderer reads has somewhere to be typed,
+  and the array keys match what `sections.ts` actually reads. A key the
+  renderer supports and the editor never writes looks exactly like a broken
+  feature.
+- **The FAQ starter library** — 18 questions shipped as *drafts with the
+  specifics in [brackets]*, deliberately not plausible filled-in guesses. A
+  wrong answer that already reads like a sentence does not get proofread; an
+  obvious blank does. Adding appends and skips duplicates, so the button is
+  safe to press twice.
+- **Seed content** — a full example site. Without it a fresh reset showed a
+  hero and nothing else (empty sections do not render), which made a working
+  renderer look broken and made the theme impossible to see without writing
+  JSON by hand.
+- **"Site" added to the planner nav**, taking it from eight entries to nine.
+
+**One bug caught before it shipped:** saving a section wrote `sort_order` back
+as the designed default, silently undoing a planner's reordering the next time
+they edited any section's text. An upsert names every column it sets, so all
+three writers now read the current value first and only fall back to the
+default for a row that does not exist yet.
+
+**Two things the editor stores that do nothing yet**, with help text saying so
+rather than implying a working switch: `gallery.uploads_open` and
+`gallery.moderation` (guest uploads are step 5), and the hero photo path,
+which works but has no upload behind it until `site_assets` lands in `0016`.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 
