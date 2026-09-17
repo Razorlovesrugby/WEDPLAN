@@ -1,10 +1,23 @@
 # Feature spec: List content — inline editing everywhere, notes sections, calculated due dates, and hiding completed tasks
 
-**Status: proposed, not built.** Six requests about `/lists/[id]`'s content
-model, bundled into one spec because they all touch the same screen and
-the same handful of files (`item-row.tsx`, `list-detail.tsx`,
-`src/server/actions/lists.ts`). Every decision below is settled — no open
-questions block the build.
+**Status: built, same session.** `0016_list_content_and_calculated_dates.sql`
+(`collaborators.display_name`, the `list_section_kind` enum +
+`list_sections.kind`, `list_items.due_date_offset_days`); section, task, and
+sub-task titles are now `InlineText` (reusing `renameSection`/`updateItem`);
+a "Names" section in `/settings` (`CollaboratorNamesEditor`); a due-date ×
+clear button; a fixed/relative toggle on every date row (`setDueDateOffset`,
+recomputed in `updateWeddingSettings` whenever the wedding date changes); a
+section-kind picker ("Checklist" / "Notes") on "Add a section," with
+notes-kind sections rendering plain editable lines (no checkbox/date/flag/
+priority/assignment) and excluded from `getAllItems`/`getBoardItems` so a
+brain-dump line never shows up as a task; and a client-persisted "Hide
+completed" toggle on `/lists/[id]` and every smart view. A checklist item
+can no longer be dragged or selected into a notes section (`list-detail.tsx`'s
+`applyItemMove` guard). `npm run typecheck`, `npm test` (384 tests),
+`scripts/verify-migrations.sh` (192 SQL assertions, +5 for this migration),
+`scripts/verify-bootstrap.sh`, and `npm run build` all pass. Not opened
+against a live project or a real browser — same caveat every prior spec in
+this rebase carries.
 
 **Depends on:** Spec 1 (lists/sections/items, `assigned_to`,
 `due_date`), spec 10 (`sortCompletedLast`), spec 11 (`InlineText`, already

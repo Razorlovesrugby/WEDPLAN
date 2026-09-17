@@ -287,6 +287,8 @@ export type CollaboratorRow = {
   wedding_id: string;
   user_id: string;
   role: CollaboratorRole;
+  /** A typed name for the assign picker and every place an assignee renders — falls back to the role label when unset (spec 15 §2). */
+  display_name: string | null;
   created_at: string;
 }
 
@@ -496,11 +498,15 @@ export type ListRow = {
   updated_at: string;
 }
 
+export type ListSectionKind = "checklist" | "notes";
+
 export type ListSectionRow = {
   id: string;
   wedding_id: string;
   list_id: string;
   title: string;
+  /** Fixed at creation (spec 15 §4) — a "notes" section holds plain text lines, no checkbox/due date/status. */
+  kind: ListSectionKind;
   sort_order: number;
   created_at: string;
 }
@@ -515,6 +521,13 @@ export type ListItemRow = {
   qty: number | null;
   url: string | null;
   due_date: string | null;
+  /**
+   * Non-null: due_date is calculated relative to the wedding date, kept in
+   * sync by updateWeddingSettings, not typed directly. Negative = before the
+   * wedding, positive = after, 0 = on the day. Mutually exclusive with a
+   * fixed due_date — setting one clears the other (spec 15 §5).
+   */
+  due_date_offset_days: number | null;
   done_at: string | null;
   done_by: string | null;
   flagged: boolean;
@@ -951,7 +964,7 @@ export type Database = {
       rsvp_token_attempts: Table<RsvpTokenAttemptRow, "id" | "succeeded" | "attempted_at">;
       list_templates: Table<ListTemplateRow, "id" | "created_at" | "kind" | "sort_order" | "payload">;
       lists: Table<ListRow, "id" | Timestamps | "kind" | "sort_order">;
-      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order", ListSectionRelationships>;
+      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order" | "kind", ListSectionRelationships>;
       list_items: Table<
         ListItemRow,
         | "id"

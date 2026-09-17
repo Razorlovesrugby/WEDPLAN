@@ -409,3 +409,68 @@ begin
 end;
 $$;
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- 10. Spec 15: collaborator display names, notes-kind sections, calculated due dates (0016)
+-- ---------------------------------------------------------------------------
+begin;
+set local role service_role;
+do $$
+declare
+  checklist_section_id uuid;
+  notes_section_id uuid;
+  offset_item_id uuid;
+  got_kind text;
+  got_offset int;
+  got_name text;
+begin
+  update public.collaborators set display_name = 'Alex'
+    where wedding_id = '11111111-1111-4111-8111-111111111111'
+      and user_id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  select display_name into got_name from public.collaborators
+    where wedding_id = '11111111-1111-4111-8111-111111111111'
+      and user_id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  if got_name <> 'Alex' then
+    raise exception 'FAIL — collaborators.display_name did not round-trip, got %', got_name;
+  end if;
+  raise notice '  ok  collaborators.display_name round-trips';
+
+  insert into public.list_sections (wedding_id, list_id, title)
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Untyped section')
+  returning id into checklist_section_id;
+  select kind into got_kind from public.list_sections where id = checklist_section_id;
+  if got_kind <> 'checklist' then
+    raise exception 'FAIL — a section did not default to checklist kind, got %', got_kind;
+  end if;
+  raise notice '  ok  list_sections.kind defaults to checklist';
+
+  insert into public.list_sections (wedding_id, list_id, title, kind)
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Brain dump', 'notes')
+  returning id into notes_section_id;
+  select kind into got_kind from public.list_sections where id = notes_section_id;
+  if got_kind <> 'notes' then
+    raise exception 'FAIL — a notes-kind section did not store its kind, got %', got_kind;
+  end if;
+  raise notice '  ok  list_sections.kind stores "notes"';
+
+  begin
+    insert into public.list_sections (wedding_id, list_id, title, kind)
+    values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Bogus kind', 'bogus');
+    raise exception 'FAIL — an invalid section kind was accepted';
+  exception
+    when invalid_text_representation then
+      raise notice '  ok  list_sections.kind rejects a value outside checklist/notes';
+  end;
+
+  insert into public.list_items (wedding_id, list_id, title, due_date, due_date_offset_days)
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111',
+          'Book the venue', '2026-01-01', -14)
+  returning id into offset_item_id;
+  select due_date_offset_days into got_offset from public.list_items where id = offset_item_id;
+  if got_offset <> -14 then
+    raise exception 'FAIL — due_date_offset_days did not round-trip, got %', got_offset;
+  end if;
+  raise notice '  ok  list_items.due_date_offset_days round-trips';
+end;
+$$;
+rollback;

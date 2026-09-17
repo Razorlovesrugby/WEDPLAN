@@ -10,7 +10,16 @@ import { quickAddItem } from "@/server/actions/lists";
  * ("tomorrow", "next Friday") is parsed server-side and confirmed back so
  * the field can show what it understood before it disappears.
  */
-export function QuickAdd({ listId, sectionId = null }: { listId: string; sectionId?: string | null }) {
+export function QuickAdd({
+  listId,
+  sectionId = null,
+  notesMode = false,
+}: {
+  listId: string;
+  sectionId?: string | null;
+  /** This section holds plain text lines, not tasks (spec 15 §4) — no date parsing, different placeholder copy. */
+  notesMode?: boolean;
+}) {
   const router = useRouter();
   const [value, setValue] = useState("");
   const [confirmed, setConfirmed] = useState<string | null>(null);
@@ -28,7 +37,7 @@ export function QuickAdd({ listId, sectionId = null }: { listId: string; section
       }
       setError(null);
       setValue("");
-      setConfirmed(result.data.due_date ? `Added, due ${result.data.due_date}` : "Added");
+      setConfirmed(!notesMode && result.data.due_date ? `Added, due ${result.data.due_date}` : "Added");
       router.refresh();
       setTimeout(() => setConfirmed(null), 2000);
     });
@@ -43,8 +52,8 @@ export function QuickAdd({ listId, sectionId = null }: { listId: string; section
         onKeyDown={(e) => {
           if (e.key === "Enter") submit();
         }}
-        placeholder='Add an item — try "tomorrow" or "next Friday"'
-        aria-label="Quick add an item"
+        placeholder={notesMode ? "Add a line" : 'Add an item — try "tomorrow" or "next Friday"'}
+        aria-label={notesMode ? "Add a line" : "Quick add an item"}
         className="field text-sm"
       />
       {confirmed ? <span className="shrink-0 text-xs text-muted">{confirmed}</span> : null}
