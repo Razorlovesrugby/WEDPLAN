@@ -38,7 +38,9 @@ Next.js 15 (App Router) · Supabase (Postgres, Auth) · TypeScript · Tailwind
   them on for. Publishable inline on the public site or the RSVP page.
 - **A right-click clipper.** A Chrome extension (`extension/`) that sends any
   image on the web to a board, live, and a Pinterest import for boards you
-  already have.
+  already have. How to use all of it is at `/moodboards/help`, in the app —
+  the questions it answers get asked while looking at the screen, usually on
+  a phone.
 
 ---
 

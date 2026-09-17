@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { decryptToken, encryptToken } from "@/lib/tokens";
-import { absoluteUrl, serverEnv } from "@/lib/env";
+import { absoluteUrl, pinterestEnv } from "@/lib/env";
 import {
   PINTEREST_API_BASE,
   PINTEREST_TOKEN_URL,
@@ -31,13 +31,19 @@ import type { PinterestAccountRow } from "@/lib/types/database";
 
 export type PinterestConfig = { clientId: string; clientSecret: string; redirectUri: string };
 
-/** Null when the app has no Pinterest credentials, which is a supported state. */
+/**
+ * Null when the app has no Pinterest credentials, which is a supported state.
+ *
+ * Reads through pinterestEnv() rather than serverEnv() on purpose — see that
+ * function. Asking "is Pinterest configured?" must not depend on every other
+ * secret in the deployment being correct.
+ */
 export function pinterestConfig(): PinterestConfig | null {
-  const env = serverEnv();
-  if (!env.PINTEREST_APP_ID || !env.PINTEREST_APP_SECRET) return null;
+  const { appId, appSecret } = pinterestEnv();
+  if (!appId || !appSecret) return null;
   return {
-    clientId: env.PINTEREST_APP_ID,
-    clientSecret: env.PINTEREST_APP_SECRET,
+    clientId: appId,
+    clientSecret: appSecret,
     redirectUri: absoluteUrl("/api/pinterest/callback"),
   };
 }
