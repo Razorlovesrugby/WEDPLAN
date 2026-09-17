@@ -42,6 +42,9 @@ renumbered to spec 2, is unchanged in substance.
 | 9 | [Moodboards, publicly shareable](09-moodboards.md) | Built end to end, session 17 (2026-09-16) — `0013_moodboards.sql`, `v_moodboards`, the private storage bucket and its `ensure-bucket.mjs`, `/moodboards`, `/moodboards/[id]`, `/m/[token]`, and the `/w` + `/rsvp/[token]` sections. The first feature in the project to need Supabase Storage. Never applied to a live project and never opened in a browser — see `docs/HANDOFF.md` session 17. | V1 only |
 | 9.1 | [Moodboards — Pinterest import, and a right-click clipper](09.1-pinterest-import-and-clipper.md) | Built end to end, session 17 (2026-09-16) — `0014_moodboard_clipper.sql`, `src/lib/net/` (SSRF address checks + hardened fetcher), `src/lib/pinterest.ts`, `POST /api/clip`, `/moodboards/[id]/import`, and `extension/` (Chrome MV3). §1 records what of the planner's supplied prototype spec survived contact with this stack and what was replaced. **No Pinterest call has ever been made and the extension has never been loaded** — see `docs/HANDOFF.md` session 17. | Spec 9 |
 | 10 | [Completed tasks sink to the bottom of the list](10-completed-tasks-sort-to-bottom.md) | Built end to end, same session (2026-09-16) — new `sortCompletedLast` in `src/lib/lists/sort.ts`, applied to `/lists/[id]`'s per-section checklist (including drag-and-drop/Move up-down and sub-items) and `/lists`'s "All"/"Flagged" smart views. No schema change. | Spec 1; spec 3 for the smart views |
+| 11 | [Editable list titles, drag-and-drop between sections, and completing a task closes its sub-tasks](11-list-editing-cross-section-drag-and-cascading-completion.md) | **Proposed, not built.** No schema change, but §4's questions (does reopening a parent reopen its sub-items, does the cross-section move get a touch-friendly "Move to section" select, do Move up/down cross section boundaries, is the settings-page rename wanted too) need answers first. | Spec 1, spec 10, already built |
+| 12 | [Manual ordering in the "Assigned to me" view](12-reorder-assigned-to-me.md) | **Proposed, not built — needs a migration** (`list_items.mine_sort_order`). §4 asks the planner to confirm the new-column approach and how it interacts with due-date ordering before it's built. | Spec 1, spec 3 (the "Mine" smart view itself), already built |
+| 13 | [Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives](13-navigation-regrouping.md) | **Proposed, not built.** No schema, no new screens — a `Nav` reshuffle plus shared sub-tab strips over existing routes. §5 question 1 is a direct conflict in what was asked (Invitations can't share a tab with both Guests and Questions at once) and has to be answered before anything else in this spec is built. | V1, spec 1, spec 3, spec 5 part B, spec 6, already built |
 
 ## Recommended build order
 
@@ -102,6 +105,20 @@ depends on a developer app registered outside this repository, at an access
 tier nobody here can predict — so it is the one piece of planned work whose
 schedule is not ours to set. Build order 2–5 of that spec deliberately
 produces the clipper without touching Pinterest at all.
+
+**Specs 11–13 are three independent proposals from the same round of
+planner feedback, none of them built.** Spec 11 (list titles, cross-section
+drag, cascading completion) and spec 12 (manual ordering in "Assigned to
+me") both sit on top of specs 1, 3 and 10 only, and have no dependency on
+each other — either can be answered and built first. Spec 13 (navigation
+regrouping) depends on the underlying screens each grouping touches (specs
+1, 3, 5 part B, 6, plus V1's own guest/invitation/event surface) but not on
+specs 11 or 12 — it reshuffles `Nav` and adds shared tab strips over
+existing routes, and would work the same way whether or not 11 or 12 have
+shipped. Spec 13 is also the one with a genuine conflict in what was asked
+(§5 question 1: Invitations can't pair with both Guests and Questions at
+once) and should be read in full, question 1 first, before any of its parts
+are built.
 
 ## What's shared across both
 
