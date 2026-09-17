@@ -1,7 +1,7 @@
 # Feature spec: Reordering the lists themselves in the sidebar
 
-**Status: answered (2026-09-17), building.** One request, no schema
-question behind it — this spec originally covered a different idea
+**Status: built end to end, same session (2026-09-17).** One request, no
+schema question behind it — this spec originally covered a different idea
 (manual ordering inside the "Assigned to me" smart view); the planner
 clarified they meant reordering the *lists* shown under "Your lists" in
 the sidebar instead ("Wedding Day," "Vendors," "Ceremony," and so on), not
@@ -83,3 +83,16 @@ under the "Your lists" heading in the sidebar, not the tasks inside the
 "Assigned to me" view. That idea, migration and all, is dropped — nothing
 from the original draft carries forward, and "Assigned to me" stays exactly
 as it is today (read-only, sorted by due date).
+
+## 5. Test plan
+
+- `npm run typecheck`: clean.
+- `npm test`: 304 tests, unchanged pass count — no new pure-logic module
+  needed testing away from a database.
+- `npm run build`: compiles and typechecks clean; page-data collection
+  fails only on missing `NEXT_PUBLIC_SUPABASE_*`/`NEXT_PUBLIC_SITE_URL`,
+  the same sandbox-has-no-Supabase-project caveat every prior spec in this
+  rebase carries.
+- Not opened in a browser against a live project — same caveat; this
+  sandbox has no Supabase project and no way to stand one up (no
+  `supabase` CLI, no running Docker daemon for `supabase start`).

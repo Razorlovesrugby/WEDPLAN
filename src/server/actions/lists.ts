@@ -122,6 +122,46 @@ export async function archiveList(listId: string): Promise<ActionResult> {
 }
 
 /**
+ * Reordering the lists themselves under "Your lists" in the sidebar (spec
+ * 12) — the direct analogue of `reorderItems`/`reorderSections`, renumbering
+ * `lists.sort_order` the same way. Every id is checked against this
+ * wedding's own non-archived lists rather than trusted as given, since this
+ * reads from `ListsSidebar`, which spans every list at once rather than one
+ * already-scoped list or section.
+ */
+export async function reorderLists(orderedIds: string[]): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = z.array(z.string().uuid()).min(1).max(500).safeParse(orderedIds);
+  if (!parsed.success) return fail("Nothing to reorder");
+
+  const supabase = await createClient();
+  const { data: owned, error: readError } = await supabase
+    .from("lists")
+    .select("id")
+    .eq("wedding_id", wedding.id)
+    .is("archived_at", null)
+    .in("id", parsed.data);
+  if (readError) return fail(readError.message);
+  const ownedIds = new Set((owned ?? []).map((l) => l.id));
+  if (parsed.data.some((id) => !ownedIds.has(id))) return fail("That list no longer exists");
+
+  const results = await Promise.all(
+    parsed.data.map((id, index) =>
+      supabase
+        .from("lists")
+        .update({ sort_order: (index + 1) * 10 })
+        .eq("id", id)
+        .eq("wedding_id", wedding.id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return fail(failed.error.message);
+
+  revalidateLists();
+  return ok(undefined);
+}
+
+/**
  * Copies a checklist template's sections and items into a fresh list.
  * Deliberately refuses the timeline template — that one is date-generated
  * and idempotent, and goes through `generateTimelineTemplate` from
