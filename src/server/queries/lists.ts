@@ -261,6 +261,41 @@ export const getTimelineSummary = cache(
   },
 );
 
+// ---------------------------------------------------------------------------
+// CSV export (spec 17) — every item across every active list, joined to its
+// list and section for context, ordered the same way /lists/[id] groups
+// them: by list, then by section (an item with no section sorts last within
+// its list, matching ListDetail's own "no section" bucket rule), then by
+// the item's own sort_order.
+// ---------------------------------------------------------------------------
+
+export type ListItemForExport = ListItemRow & {
+  lists: Pick<ListRow, "title" | "sort_order"> | null;
+  list_sections: Pick<ListSectionRow, "title" | "sort_order"> | null;
+};
+
+export const getItemsForExport = cache(async (weddingId: string): Promise<ListItemForExport[]> => {
+  const supabase = await createClient();
+  const activeListIds = await getActiveListIds(weddingId);
+  if (activeListIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("list_items")
+    .select("*, lists(title, sort_order), list_sections(title, sort_order)")
+    .eq("wedding_id", weddingId)
+    .in("list_id", activeListIds);
+  if (error) throw new Error(`Could not load tasks: ${error.message}`);
+
+  const items = (data ?? []) as ListItemForExport[];
+  return items.sort((a, b) => {
+    const byList = (a.lists?.sort_order ?? 0) - (b.lists?.sort_order ?? 0);
+    if (byList !== 0) return byList;
+    const aSection = a.list_sections?.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const bSection = b.list_sections?.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (aSection !== bSection) return aSection - bSection;
+    return a.sort_order - b.sort_order;
+  });
+});
+
 export const getBoardItems = cache(
   async (weddingId: string, listId?: string): Promise<ListItemWithList[]> => {
     const supabase = await createClient();

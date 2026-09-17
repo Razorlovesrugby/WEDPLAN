@@ -46,6 +46,9 @@ renumbered to spec 2, is unchanged in substance.
 | 12 | [Reordering the lists themselves in the sidebar](12-reorder-lists-sidebar.md) | Built end to end, same session (2026-09-17) — rewritten from its original draft (manual ordering inside "Assigned to me") after the planner clarified they meant reordering the lists shown under "Your lists" instead, see §4; new `reorderLists` action renumbering the existing `lists.sort_order`, plus drag/Move up-down in `ListsSidebar`. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, already built |
 | 13 | [Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives](13-navigation-regrouping.md) | Built end to end, same session (2026-09-17) — `Nav` collapsed from 14 entries to 8; a new shared `SubTabs` component over the Guests hub (`/guests`, `/guests/rank`, `/invitations`) and the Tasks hub (`/lists`, `/lists/[id]`, `/calendar`, `/board`, `/timeline`); a "Run sheet →" link per event row in `EventsEditor`; cross-links between `/questions` and `/invitations`. No schema, no URL changes. Not yet opened in a browser (no Supabase project in this sandbox). | V1, spec 1, spec 3, spec 5 part B, spec 6, already built |
 | 14 | [The public wedding site, and the invites that point at it](14-public-site-and-invites.md) | **Steps 0 and 1 built (2026-09-17); steps 2–5 not started.** All twelve questions answered. `0015_wedding_slug.sql` + `/w/[slug]` rendered from `site_content` in the Script theme, with self-hosted fonts, a contrast-validated palette system, the section/FAQ model, the monogram, and an RFC 5545 `.ics` route. 78 new unit tests (384 total), 20 new SQL assertions (187 total). **No editor exists** — content is still hand-written JSONB, which is the next work. Never opened in a browser or run against a live project. See the spec's "Build status" section for the per-file handoff and the three corrections the build made to the spec. | V1; spec 9 for the moodboard sections already on `/w` |
+| 15 | [List content — inline editing everywhere, notes sections, calculated due dates, and hiding completed tasks](15-list-content-editing-and-calculated-dates.md) | **Proposed, not built — no open questions, every decision settled in the spec itself.** Section/task/sub-task renaming reuses already-built actions (`renameSection`, `updateItem`); assignee names need one new nullable column (`collaborators.display_name`); a new `list_sections.kind` (`checklist \| notes`) covers both "research under a section" and "a brain-dump section" with one mechanism; calculated dates get a new `list_items.due_date_offset_days`, anchored to the wedding date only, recomputed from the one action that already changes it; hide-completed is a client-persisted view toggle, no schema. | Spec 1, spec 10, spec 11, already built |
+| 16 | [List appearance, sidebar cleanup, and budget links at the section level](16-list-appearance-sidebar-and-budget-section-links.md) | **Proposed, not built — no open questions.** Removes spec 12's Move up/down sidebar buttons for a live outstanding-task count per list; makes `lists.color`/`lists.icon` mutually exclusive (icon wins when set) everywhere a list's identity shows; adds the one budget-link grain spec 6 §7 explicitly deferred — a `budget_item_sections` join table alongside the two spec 6 already built, badging a linked section's own heading only. | Spec 3, spec 6 / 6.1, spec 7, spec 12, already built |
+| 17 | [Export all tasks to CSV](17-tasks-csv-export.md) | **Built, same session.** A fourth kind (`tasks`) on the already-built `/api/export/[kind]` route, a new `getItemsForExport` query, and an "Export CSV" link on `/lists`. No schema change. `typecheck`, `npm test` (384 tests), `npm run build` all pass; not opened against a live project. | Spec 1, already built; picks up real assignee names automatically once spec 15 lands |
 
 ## Recommended build order
 
@@ -155,3 +158,18 @@ that cannot move, so it goes first if the send is close. Note that Q9's answer
 added `weddings.slug` after §4 had already been called settled — the spec
 records that correction rather than absorbing it, and it is why there are two
 migrations instead of one.
+
+**Specs 15–17 are one round of task-list feedback, condensed from an
+earlier six-file split down to three** at the planner's direct request.
+The first draft treated "which date is a calculated due date relative to"
+and "what does 'research under a section' mean" as open questions blocking
+the build; the planner's own "brain dump" example resolved the second one
+(a section-*kind* toggle — checklist vs. plain-text lines — covers both
+requests with one mechanism, folded into spec 15 §4) and there was no need
+to leave the first one open either, once "the wedding date, not a
+per-list event" was picked as the sensible default (spec 15 §5) rather
+than a question. All three specs now ship with zero open questions. Spec
+15 (list content — editing, notes sections, calculated dates, hiding
+completed) and spec 17 (CSV export) touch `/lists/[id]` and its item
+model; spec 16 (sidebar, list appearance, budget-section links) is
+independent of both and could be built first, last, or alongside them.

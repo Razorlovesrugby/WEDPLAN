@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentWedding } from "@/server/queries/wedding";
+import { getCollaborators, getCurrentWedding } from "@/server/queries/wedding";
 import { listGuests } from "@/server/queries/guests";
+import { getItemsForExport } from "@/server/queries/lists";
 import { parseGuestFilters } from "@/lib/filters";
 import { csvDocument } from "@/lib/csv";
 import { guestName } from "@/lib/format";
+import type { ListItemStatus } from "@/lib/types/database";
 
 /**
  * CSV exports.
@@ -19,7 +21,7 @@ import { guestName } from "@/lib/format";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households"] as const;
+const KINDS = ["guests", "catering", "households", "tasks"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -41,12 +43,53 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const wedding = await getCurrentWedding();
   if (!wedding) return NextResponse.json({ error: "No wedding" }, { status: 404 });
 
-  const filters = parseGuestFilters(Object.fromEntries(request.nextUrl.searchParams));
-  const guests = await listGuests(wedding.id, filters);
-
   const stamp = new Date().toISOString().slice(0, 10);
   let body: string;
   let filename: string;
+
+  if (kind === "tasks") {
+    /*
+     * Every task across every active list, not scoped to whatever smart
+     * view happened to be open — "export all tasks" names the whole task
+     * system, not a filtered slice of it (spec 17). "Assigned to" uses the
+     * same role label the assign picker itself falls back to
+     * (item-row.tsx) until spec 15 gives collaborators a real display name.
+     */
+    const [items, collaborators] = await Promise.all([getItemsForExport(wedding.id), getCollaborators(wedding.id)]);
+    const roleLabel = new Map(collaborators.map((c) => [c.user_id, c.role === "owner" ? "Owner" : "Partner"]));
+    const statusLabel: Record<ListItemStatus, string> = {
+      not_started: "Not started",
+      in_progress: "In progress",
+      done: "Done",
+    };
+
+    body = csvDocument(
+      ["List", "Section", "Task", "Status", "Due date", "Assigned to", "Flagged", "Priority", "Notes"],
+      items.map((item) => [
+        item.lists?.title ?? "",
+        item.list_sections?.title ?? "",
+        item.title,
+        statusLabel[item.status],
+        item.due_date ?? "",
+        item.assigned_to ? (roleLabel.get(item.assigned_to) ?? "") : "",
+        item.flagged ? "yes" : "no",
+        item.priority > 0 ? item.priority : "",
+        item.notes ?? "",
+      ]),
+    );
+    filename = `tasks-${stamp}.csv`;
+
+    return new NextResponse(body, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  const filters = parseGuestFilters(Object.fromEntries(request.nextUrl.searchParams));
+  const guests = await listGuests(wedding.id, filters);
 
   if (kind === "catering") {
     /*
