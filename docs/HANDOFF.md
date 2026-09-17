@@ -3,29 +3,26 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 20 — a discovery session against
-[aisle.wedding](https://aisle.wedding) at the planner's request, producing
-`docs/specs/14-public-site-and-invites.md`. **Spec only: nothing was built,
-and nothing should be** until its §14 Open Questions are answered. Two things
-the planner needs to know: (1) **the reference site could not be read** — this
-session's egress policy blocks that host outright, so the spec is assembled
-from search-surfaced descriptions of Aisle's own pages, and its design section
-(§5) is a defensible default rather than a transcription; screenshots of
-`/example-wedding`, or an egress allowlist entry, would close that gap.
-(2) **Four of the spec's questions were answered in the same session** and
-are folded into the file with a dated "Answered" section at the top: the
-household token stays (no phone verification), this is a **local wedding with
-a coach** rather than a destination one (so Aisle's room blocks and airports
-are cut and replaced by coach runs with timed stops and a seat manifest),
-money links out rather than moving through the site, and the theme is Script.
-Two further rounds the same session closed **all twelve questions** — see the
-spec's §14.1 for the table. Nothing in the build order is blocked and nothing
-waits on a purchase. **One correction worth reading: §4 was called final after
-round two, and round three's Q9 answer (add `/w/[slug]`) added a `slug` column
-to `weddings` anyway.** That is one column and one index, not a new table, but
-it splits the work into two migrations and the spec records the correction
-rather than absorbing it. Session 19's outstanding item below is unchanged and
-still blocking moodboards in production.
+Last updated: session 20 — spec 14 (the public wedding site and the invites
+that point at it) was written from a discovery pass against
+[aisle.wedding](https://aisle.wedding), **all twelve of its questions were
+answered in the same session**, and **build steps 0 and 1 are now built**:
+`weddings.slug`, the Script theme system, and a themed `/w/[slug]` rendered
+from `site_content`. Steps 2–5 are not started. **Read
+`docs/specs/14-public-site-and-invites.md`'s "Build status" section first** —
+it is the per-file handoff, including the three places the build corrected the
+spec and the environment traps that cost time here.
+
+**The one thing to know before picking it up: there is no editor.** The
+renderer works and is tested; every section's content is still a JSONB payload
+that has to be typed into `site_content` by hand, and `/site` does not exist.
+That is the next piece of work and it is what stands between this feature and
+being usable.
+
+**Also unread, still:** `aisle.wedding` is blocked by this environment's
+egress policy, so the design proportions in §5 are this session's judgement
+rather than the reference's. Screenshots of `/example-wedding`, or that host
+on the allowlist, would close it.
 
 Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
 have never been applied to the live project, and the guard that should have
@@ -168,6 +165,70 @@ form they can see).
 to the live project and run `node scripts/ensure-bucket.mjs` against it. Only
 the planner can do it, and nothing about moodboards works until it happens.
 `/api/health` confirms both.
+
+## Session 20 (build): spec 14 steps 0 and 1
+
+**Green:** `npm run typecheck`, `npm test` (384, up from 306),
+`./scripts/verify-migrations.sh` (187 assertions, up from 167), `npm run build`.
+**Never opened in a browser and never run against a live Supabase project** —
+the fonts have never been rendered, the theme has never been seen, and no
+query in `src/server/queries/site.ts` has returned a real row.
+
+Three commits, each reviewable alone:
+
+- `3bba307` — **step 0**, `0015_wedding_slug.sql`. `weddings.slug` with a
+  `slugify()` that transliterates rather than depending on `unaccent` (an
+  extension the bare cluster may not carry), a backfill, a shape check in the
+  database because this column ends up in a URL, and a BEFORE INSERT trigger
+  that derives a slug when none is given — without which a NOT NULL unique
+  column breaks `bootstrap.sql`, which the planner runs by hand. 20 new SQL
+  assertions.
+- `b90fde6` — **step 1a**, the theme foundation. Self-hosted Pinyon Script and
+  EB Garamond; the five tokens moved to CSS custom properties carrying RGB
+  channels so Tailwind's `<alpha-value>` keeps working (there are 62 opacity
+  modifiers in this codebase and a hex custom property renders them all
+  transparent); six palettes, every one asserted to pass rather than assumed
+  checked.
+- `51a2dbd` — **step 1b**, the renderer, `/w/[slug]`, the `.ics` route, and
+  `/w` kept as a redirect because `/privacy` links to it and
+  `revalidatePath("/w")` targets it.
+
+**Three corrections the build made to the spec**, all recorded in spec 14's
+Build status section:
+
+1. **EB Garamond has no small caps.** §5 claimed it ships real ones. Its
+   Google build exposes no `smcp` feature at all — verified with fontTools.
+   Labels are letterspaced uppercase instead.
+2. **The section-rule contrast check is advisory, not blocking.** The spec
+   said 3:1; all six palettes sit near 1.2:1 there, because a hairline is
+   meant to be faint, and 3:1 would force rules in near-black. Every text pair
+   still blocks with no exception.
+3. **`weddings.slug` grew §4 after it was called final** (recorded a round
+   earlier), which is why there are two migrations rather than one.
+
+**What is NOT built** — the full list is in the spec, but the headlines:
+no `/site` editor at all, so the contrast validator is written and tested but
+wired to nothing and a custom palette written by hand is unchecked; no hero
+image upload (its storage is `site_assets`, in `0016` at step 4); no seed
+content, so a fresh reset renders the hero and the RSVP pointer and nothing
+else; no FAQ starter library in the database; the scroll motion and its
+`prefers-reduced-motion` handling are not implemented; "find my invitation"
+does not exist, and the RSVP section says "message us" as a placeholder rather
+than linking to an anchor that is not there. Steps 2–5 otherwise untouched.
+
+**Two environment traps, both cost time here:**
+
+- `./scripts/verify-migrations.sh` must not run as root and there is no
+  unprivileged login user in the container. The `postgres` system user works:
+  `su postgres -s /bin/bash -c "cd /home/user/WEDPLAN && ./scripts/verify-migrations.sh"`.
+- `npm run build` fails on a **clean checkout** with no `.env.local`, dying
+  while collecting page data for `/api/export/[kind]`. This predates spec 14 —
+  confirmed by stashing and rebuilding. Copy `.env.example` and fill in any
+  non-empty strings; nothing calls out with them.
+
+**Unrelated and still outstanding from session 19:** `0013`/`0014` have never
+been applied to the live project and `ensure-bucket.mjs` has never run against
+it. `0015` now joins that queue. `/api/health` confirms.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 

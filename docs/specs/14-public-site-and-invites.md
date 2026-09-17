@@ -114,6 +114,107 @@ screenshots of the Aisle example, or that host on the egress allowlist, so
 
 ---
 
+## Build status — handoff, 2026-09-17
+
+**Steps 0 and 1 are built. Steps 2–5 are not started.** Everything below was
+verified by `npm run typecheck`, `npm test` (384), `./scripts/verify-migrations.sh`
+(187 assertions) and `npm run build`. **Nothing has been opened in a browser,
+and nothing has run against a live Supabase project** — the same caveat every
+spec since 1 carries. In particular the fonts have never been rendered, the
+theme has never been seen, and no query below has returned a real row.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 0 | `weddings.slug`, `slugify()`, the insert trigger that derives one, shape check, unique index | `supabase/migrations/0015_wedding_slug.sql`, `supabase/tests/06_wedding_slug.sql` (20 assertions) |
+| 1 | Self-hosted Pinyon Script + EB Garamond, latin & latin-ext, ~300KB | `src/lib/fonts/` |
+| 1 | WCAG contrast maths and the palette validator | `src/lib/theme/contrast.ts` |
+| 1 | 4 presets (only `script` available), 6 palettes, `resolveTheme`/`themeTokens`/`themeCssVars` | `src/lib/theme/presets.ts` |
+| 1 | The five tokens as CSS variables, so the site re-themes its subtree | `tailwind.config.ts`, `src/app/globals.css` |
+| 1 | Section model: payload readers, FAQ split/group, `hasContent`, `resolveSections`, `navItems` | `src/lib/site/sections.ts` |
+| 1 | Monogram derivation | `src/lib/site/names.ts` |
+| 1 | RFC 5545 serialisation | `src/lib/ics.ts` |
+| 1 | Nav, hero, countdown, section shell, schedule, FAQ, story, party, things-to-do, RSVP pointer | `src/components/site/` |
+| 1 | The public read path | `src/server/queries/site.ts` |
+| 1 | `/w/[slug]`, and `/w` kept as a redirect | `src/app/w/` |
+| 1 | `GET /api/public/events/[id]/ics` | `src/app/api/public/events/[id]/ics/route.ts` |
+
+Unit tests added: 78 (theme 28, sections 29, names 6, ics 15). Total 384.
+
+### Not done, and worth knowing before picking this up
+
+**The biggest gap: there is no editor.** Every section's content is a JSONB
+payload that currently has to be typed into `site_content` by hand. The
+renderer works and is tested; nothing feeds it. `/site` and `/site/theme`
+(§13) do not exist. Until they do, the feature is not usable by the people it
+is for.
+
+Specifically outstanding:
+
+- **`/site` and `/site/theme`.** No editor, no section reorder, no
+  show/hide, no preview-as-guest.
+- **The contrast validator is not wired to anything.** `validatePalette` is
+  written and tested, but nothing calls it, because the thing it is supposed
+  to guard — the custom-palette form — does not exist. A custom palette
+  written directly into `site_content` is currently unchecked.
+- **No hero image can be uploaded.** `SiteHero` renders `framed` from a
+  same-origin path in the payload and falls back to `type` otherwise. The
+  storage it should read from is `site_assets`, which is in `0016` at step 4.
+  Q3b moved the image pipeline into step 1 and it is half-moved: the
+  rendering is here, the upload is not.
+- **No seed content.** A fresh `supabase db reset` renders the hero and the
+  RSVP pointer and nothing else, because no `site_content` rows exist. Worth
+  adding a seeded example site — it is also the only way to look at the theme
+  without typing JSON.
+- **The FAQ starter library (§10) is not written anywhere.** The 20 questions
+  are prose in this spec. They should be seed rows or an editor action.
+- **Per-event extras are read but never written.** `dress_code`, `detail`,
+  `map_url` and `hide_time` render from the schedule payload; nothing sets
+  them.
+- **"Find my invitation" (§2) does not exist.** The RSVP section says "message
+  us" rather than linking to it. That copy is the placeholder — it becomes the
+  link when the lookup is built.
+- **The scroll motion in §5 is not implemented.** No fade-and-rise, and so
+  nothing yet reads `prefers-reduced-motion` on the public site.
+- **No print stylesheet for the site**, and `/w/schedule` and `/w/travel` as
+  standalone routes do not exist — the site is one scrolling page only. The
+  existing print rules in `globals.css` are V1's, for `/invitations/print`.
+- **`site_visits` (§13) is not built.** No analytics of any kind.
+- **Steps 2–5 proper:** the rest of step 2 (above), step 3 invites entirely,
+  step 4 the coach and `0016` entirely, step 5 the gallery and guest uploads
+  entirely.
+
+### Three corrections this build made to the spec above
+
+1. **EB Garamond has no small caps.** §5 claimed it "ships real small caps
+   rather than the browser's faked ones". Its Google build exposes no `smcp`
+   feature at all (verified with fontTools: only `liga`, `frac`, `numr`,
+   `dnom`, `tnum`, `pnum`, `locl`, `rlig`). Labels are letterspaced uppercase
+   instead, which is what stationery does anyway, and §5 now says so.
+2. **The `line on paper` contrast check is advisory, not blocking.** §5 said
+   palettes ship "pre-checked at 4.5:1 for body text and 3:1 for large text"
+   and the implementation applied 3:1 to section rules. All six palettes sit
+   near **1.2:1** there, because a hairline rule is supposed to be faint.
+   Enforcing it would force rules in near-black. Every text pair still blocks.
+3. **The `.ics` route is under `/api/public/`, not `/api/events/`.**
+   `src/lib/public-paths.ts` warns that an over-broad public prefix exposes
+   routes that do not exist yet; `/api/events` would have done that.
+
+### Environment notes for the next session
+
+- `./scripts/verify-migrations.sh` **must not run as root** and the container
+  has no unprivileged login user by default. The existing `postgres` system
+  user works: `su postgres -s /bin/bash -c "cd <repo> && ./scripts/verify-migrations.sh"`.
+- `npm run build` fails on a clean checkout with no `.env.local` — it dies
+  collecting page data for `/api/export/[kind]`. This predates spec 14
+  (confirmed by stashing). Copy `.env.example` and put any non-empty strings
+  in; no network call is made with them.
+- `aisle.wedding` is still blocked by the egress policy, so §5's proportions
+  are still this session's judgement. See §0.
+
+---
+
 ## 0. A caveat about the research, read this first
 
 **`aisle.wedding` is blocked by this session's egress policy.** Every request
@@ -402,9 +503,12 @@ in the repo with no licence admin and nothing to buy.
 - **Body: EB Garamond.** Humanist old-style, a genuinely good revival, wide
   weight range, excellent at 17px, and it pairs with a copperplate script the
   way it was historically set to.
-- **Labels: EB Garamond small caps**, tracked out. The family ships real small
-  caps rather than the browser's faked ones, which is the difference between
-  a label that looks engraved and one that looks stretched.
+- **Labels: EB Garamond uppercase**, tracked out at about 0.14em and set a
+  little smaller than the body. **Not small caps** — the corrected claim: this
+  family's web build carries no `smcp` feature, so asking for small caps would
+  get the browser's synthesised ones, which are capitals scaled down and come
+  out thin and stretched beside the real thing. Tracked uppercase is what
+  stationery does anyway, and it needs no feature support at all.
 
 **The honest trade-off**, since Q12 was a cost decision: a £200 foundry script
 is better, mostly in the joins between letters and in how the flourishes
@@ -426,9 +530,16 @@ is a file, not a refactor.
 Six presets plus custom. Each defines five tokens — `ink`, `paper`, `muted`,
 `line`, `accent` — mapped onto the Tailwind names already used across the app
 (`text-muted`, `border-line`, `hover:text-accent`), so the existing components
-theme for free. Every preset ships pre-checked at 4.5:1 for body text and 3:1
-for large text; **custom palettes are validated in the editor and refuse to
-save below those ratios.** A guest reading a schedule on a phone in sunlight
+theme for free. Every preset ships pre-checked at 4.5:1 on all four text pairs — ink, muted
+and accent against paper, and paper against accent for a filled button — and
+`theme.test.ts` asserts it rather than trusting it was checked once.
+**Custom palettes are validated and refuse to save below those ratios.**
+
+**The rule between sections is advisory, not blocking**, which is a correction
+to this spec's original 3:1: all six palettes sit near 1.2:1 there, because a
+hairline is supposed to be faint, and enforcing 3:1 would force every palette
+to draw its rules in near-black. It is reported with its real ratio so the
+number is visible when a rule genuinely disappears. A guest reading a schedule on a phone in sunlight
 is the actual use case, and Script's natural palette — warm ivory paper, soft
 grey ink — is exactly the one that fails contrast if nobody checks.
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Label } from "./section";
 import { faqItems, groupByTag, rows, splitFaq, text } from "@/lib/site/sections";
 import { formatDate, formatTime } from "@/lib/format";
@@ -273,12 +272,11 @@ export function RsvpPointer({ payload }: { payload: unknown }) {
     <div className="text-center">
       <p className="mx-auto max-w-prose text-[1.0625rem] leading-relaxed text-ink">{intro}</p>
       {closes ? <p className="mt-3 text-[0.95rem] text-muted">{closes}</p> : null}
+      {/* "Find my invitation" (spec 14 §2) is not built yet, so this is plain
+          copy rather than a link to an anchor that does not exist. When that
+          lands, this becomes the link to it. */}
       <p className="mt-5 text-[0.95rem] text-muted">
-        Lost it?{" "}
-        <Link className="text-accent underline underline-offset-2" href="#find-invitation">
-          We&rsquo;ll send it again
-        </Link>
-        .
+        Lost your link? Message us and we&rsquo;ll send it again.
       </p>
     </div>
   );
