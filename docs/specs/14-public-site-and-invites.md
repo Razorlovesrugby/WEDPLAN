@@ -1,9 +1,9 @@
 # Spec 14 — The public wedding site, and the invites that point at it
 
-**Status: proposed, answered (2026-09-17, two rounds — see the next section).
-Seven of the twelve questions are settled, including every one that changes a
-table's shape. §14.2's five remaining questions are scope-only and none of
-them blocks the build order.**
+**Status: proposed, fully answered (2026-09-17, three rounds — see the next
+section). All twelve questions are settled. §4 is final, the build order is
+unblocked end to end, and the only thing still owed from outside is design
+reference for §5.**
 
 Reference: [aisle.wedding](https://aisle.wedding) — the planner asked for
 its example guest site to be studied and, where it is better than what we
@@ -41,7 +41,7 @@ centred, monogram, floral rule — the traditional one. It ships first and is
 the only preset that has to exist for step 1 of the build order. The other
 three presets stay in the spec as a system, not as work. §5 is rewritten
 around this. Still owed: whether photographs exist yet, which decides the
-hero style (§14.2 Q3b).
+hero style — answered in round two, below.
 
 **Net effect of round one:** roughly a third smaller. Steps 1–3 of the build
 order (§15) now need **no migration at all**, so the theme, the schedule, the
@@ -72,9 +72,45 @@ public section, the pledge anonymity rule and the thank-you list, all gone.
 take to reverse — an empty "Gifts" heading is worse than no gifts heading, and
 so is a spec that quietly forgets why something is missing.
 
-**Net effect of both rounds:** the spec is roughly half the size it was
-written at, nothing is waiting on a purchase, and **every remaining open
-question is scope-only** — none of them touches a table or the build order.
+### Round three, same day — the last five
+
+**Q11 — first person plural. The site is written as "we".** "We're getting
+married", "we'd love you to come", "we've put a coach on". Every default
+string in §§3, 10 and 12 is written that way, and §10's FAQ answers read as
+the couple talking rather than a venue's terms and conditions. One deliberate
+exception, §12.2: the **invitation and save-the-date keep formal third person
+on their face**, because that is a typographic tradition rather than a voice —
+"Sarah and James request the pleasure of your company" set in Pinyon Script is
+the thing being copied. The button underneath it still says "See the details".
+
+**Q7 — no SMS.** Email plus the WhatsApp copy-out V1 already ships. No
+provider, no per-country compliance, no opt-out handling. Adding it later
+touches only the sender, so nothing here forecloses it.
+
+**Q8 — no password gate for now**, `noindex` on. Recorded in §11 with its
+cost: it is a signed cookie and a form, roughly half a day, addable at any
+point without touching anything else. Not built, not designed around.
+
+**Q9 — add the slug: `/w/[slug]`.** This retires the "takes the first
+wedding" hack that `src/app/w/page.tsx` currently admits to in a comment. No
+custom domain.
+
+> **This one changes §4 after it was called final.** The slug needs a
+> `slug` column on `weddings` — a unique, lowercase, URL-safe text column with
+> a backfill for the existing row. It is one column and one index rather than
+> a new table, but the claim "every question that changes a table's shape is
+> answered" was made one question too early, and the migration is a line
+> longer than advertised. §4 carries it now.
+
+**Q10 — the site stays up indefinitely, the planner pays.** No expiry, no
+archive step, no shutdown date. Recorded in §11 as a standing cost rather than
+left to be discovered at a renewal in three years.
+
+**Net effect of all three rounds:** the spec is roughly half the size it was
+drafted at, nothing waits on a purchase or a decision, and **every question is
+closed**. What is still owed from outside is not a decision but a reference:
+screenshots of the Aisle example, or that host on the egress allowlist, so
+§5's proportions stop being this session's judgement.
 
 ---
 
@@ -149,8 +185,8 @@ into **a piece of stationery with a schedule attached**.
 Not a second CMS. `site_content` already exists and already does
 key → JSONB → sort_order → visible; everything below is more block kinds and
 a renderer worth looking at, not a new storage idea. Not multi-tenant public
-routing either: `/w` still serves "the first wedding" until somebody asks for
-more (§14.2 Q9).
+routing either: Q9 adds a slug, `/w/[slug]`, and stops there — no custom
+domain, no hostname routing.
 
 ---
 
@@ -225,6 +261,11 @@ nav — an empty "Photos" heading is worse than no photos section.
 | `rsvp` | RSVP | `intro`, `closes_label` — the block is a pointer, the form is at `/rsvp/[token]` |
 | `footer` | — | `note`, `contact_email`, `hashtag` |
 
+**Voice (Q11): every default string in this table and the sections below is
+written as "we".** Section headings included — "Where to stay", not
+"Accommodation"; "Getting there", not "Travel information". The one exception
+is the face of the stationery in §12.2.
+
 Moodboards already publish into `/w` (spec 9) and keep doing so, as their
 own section between `story` and `gallery` — the dress-code board is exactly
 the kind of thing guests open twice.
@@ -238,13 +279,19 @@ token) gets "Your RSVP" instead of "RSVP".
 
 ## 4. Schema
 
-One migration, `0015_public_site.sql`, and **it is not needed until step 4 of
-the build order** — steps 1–3 store everything they need in `site_content`,
+**Two migrations, after Q9.** `0015_wedding_slug.sql` is one column and ships
+with step 1; `0016_public_site.sql` is everything else and is not needed until
+step 4 — steps 1–3 otherwise store everything they need in `site_content`,
 which already exists. It follows the two rules in the README without
 exception: every table carries `wedding_id`, every parent gets
 `unique (id, wedding_id)`, every child references the composite.
 
 ```
+weddings             + slug  text unique, lowercase, URL-safe          -- Q9
+                     -- not a new table: one column, one unique index, and a
+                     -- backfill for the row that already exists. Retires the
+                     -- "takes the first wedding" hack in src/app/w/page.tsx.
+
 site_assets          id, wedding_id, storage_path, width, height, blurhash,
                      alt, credit, kind ('hero'|'gallery'|'story'|'party'|…),
                      uploaded_by (null = guest), approved_at, sort_order
@@ -288,10 +335,16 @@ images are served through a signed-URL route with a long expiry, not by
 making the bucket public — a public bucket is a permanent, un-revocable
 decision, and this one holds a guest list's faces.
 
-**This schema is now settled.** Every question that changed a table's shape —
-Q1, Q2, Q4, Q5, Q6 — has been answered, so `0015` can be written as specified
-whenever step 4 comes up. The five questions still open in §14.2 are scope
-decisions and none of them touches a column.
+**This schema is now settled**, across all twelve answers: Q1, Q2, Q4, Q5 and
+Q6 shaped the tables above, and Q9 added `weddings.slug` in round three —
+after §4 had already been called final, which is recorded honestly at the top
+of this file rather than quietly absorbed.
+
+One note on sequencing: `weddings.slug` is wanted by **step 1**, not step 4,
+because the renderer should not inherit the "first wedding" hack. So this
+splits into `0015_wedding_slug.sql` (one column, with step 1) and
+`0016_public_site.sql` (everything else, with step 4). A one-column migration
+is cheap; writing the public routing twice is not.
 
 ## 5. The vibes: a theme system
 
@@ -565,9 +618,13 @@ What currency and do places take cards? · Do I need a visa? · What's the
 gift situation? · Can I take photos during the ceremony? · Who do I ask if
 something goes wrong on the day?*
 
-Two rules from Aisle's guide, worth keeping as editor hints: answers in two
-to four sentences, and anything logistical carries a direct link to the thing
-the guest will actually use.
+Three rules, worth keeping as editor hints. Two are Aisle's: answers in two to
+four sentences, and anything logistical carries a direct link to the thing the
+guest will actually use. The third is Q11's: **answers are written as "we"** —
+"we'd rather you didn't", "we've put a coach on", "we're not doing a gift
+list". "The couple ask that guests refrain from…" is how a venue writes, and
+it is the single fastest way to make a wedding site feel like an event
+management system.
 
 ---
 
@@ -577,21 +634,31 @@ the guest will actually use.
 wedding site turning up in search results for the couple's names is a
 decision, not an accident. A setting can flip it, with a clear warning.
 
-**A shared password, optional.** One passphrase for the whole site, set in
-settings, held in a signed httpOnly cookie for 30 days. This is the
-"celebrity guest list / complicated family" case Aisle names. It gates `/w`
-only; `/rsvp/[token]` is already gated by the token, and a guest who followed
-their own link is never asked for the passphrase.
+**No password gate (Q8).** Anyone with the link can read the site; nothing in
+search results points at it. Specified but **not built**, so the cost is known
+if it is ever wanted: one passphrase for the whole site, set in settings, held
+in a signed httpOnly cookie for 30 days, gating `/w` only — `/rsvp/[token]` is
+already gated by its token and a guest arriving on their own link is never
+asked. Roughly half a day, addable at any point, touching nothing else. If a
+reason appears — a family situation, an ex, somebody with a public profile —
+it is not a redesign.
 
-**Custom domain.** `theirnames.com` → the Vercel project, with `/w` served at
-the root for that hostname. Needs a `wedding_domains` mapping and the
-multi-wedding routing question (§14.2 Q9) answered first. A `siteSlug` on
-`weddings` and `/w/[slug]` is the cheap half and can ship first.
+**The address: `/w/[slug]` (Q9).** A `slug` on `weddings` (§4), unique and
+URL-safe, replacing the current "takes the first wedding" behaviour. This is
+wanted by step 1 so the renderer never inherits that hack.
 
-**How long it lives.** Aisle advertises five years. Ours lives as long as the
-Supabase project does, which is a billing question, not a code one — but it
-is worth putting in writing (§14.2 Q10), because guests link to these for
-years.
+**No custom domain.** `theirnames.com` → the Vercel project would additionally
+need a `wedding_domains` mapping and hostname routing on top of the slug. Not
+being built. The slug is the part that pays for itself; the domain is the part
+that only pays off if this becomes a product for other people.
+
+**How long it lives: indefinitely, and the planner pays (Q10).** No expiry, no
+archive step, no shutdown date, no code. Written down here because it is a
+standing cost rather than a free one — the Supabase project and the Vercel
+deployment keep running, and guests will link to this for years, including
+from their own photo albums. Aisle advertises five years and charges for it;
+this is the same promise made privately. The thing to avoid is discovering it
+at a renewal in three years and letting it lapse by accident.
 
 **No third-party anything on the guest site.** No Google Fonts, no analytics
 SDK, no embedded map iframe that sets cookies before a guest has read a word.
@@ -623,8 +690,16 @@ A save-the-date and an invitation are each a themed HTML email **plus** a
 shareable card page at `/i/[token]` — the thing you send over WhatsApp, which
 is how a real proportion of any guest list will actually receive it. The card
 page uses the site's theme (§5), shows the names, date, place and a "See the
-details / RSVP" button, and renders an Open Graph image so the WhatsApp
-preview is the card rather than a naked URL. Emails are table-layout, inline
+details" button, and renders an Open Graph image so the WhatsApp preview is
+the card rather than a naked URL.
+
+**Voice, per Q11.** The site is written as "we" throughout — but the
+**stationery itself keeps formal third person on its face**: "Sarah and James
+request the pleasure of your company", set in Pinyon Script. That is a
+typographic tradition rather than a voice, and it is specifically the thing
+being copied from a printed invitation. Everything around it — the button, the
+email's preheader, the surrounding paragraph, the whole site the card links to
+— is "we". The two do not clash; they are doing different jobs. Emails are table-layout, inline
 CSS, dark-mode-tested, with a plain-text alternative — the existing
 `supabase/templates/` is where they go.
 
@@ -645,10 +720,12 @@ The chasing cron (V1) is untouched and stays separate: it is automatic and
 conditional, broadcasts are manual and deliberate, and merging them is how
 somebody accidentally mails four hundred people at 03:00.
 
-**SMS: recommend not yet.** Aisle offers it; it brings a provider, per-country
+**SMS: no (Q7).** Aisle offers it; it brings a provider, per-country
 compliance, opt-out handling, sending limits, and a phone number for every
 guest we mostly do not have. The WhatsApp copy-out that V1 already ships
-covers the same need at zero operational cost. §14.2 Q7.
+covers the same need at zero operational cost. Q1's answer removed the only
+structural reason to hold a phone number for every guest, and adding SMS later
+touches only the sender, so nothing here forecloses it.
 
 ### 12.4 Before any of this sends
 
@@ -692,89 +769,85 @@ the 20% that carries the value.
 
 ## 14. Open questions
 
-### 14.1 Answered, 2026-09-17
+**None. All twelve are answered**, across three rounds on 2026-09-17, and
+recorded in full at the top of this file.
 
-Recorded in full at the top of this file.
+### 14.1 The answers, in one place
 
-**Round one:** **Q1** keep the household token; **Q2** local wedding with a
-coach, so room blocks and airports are cut; **Q3a** the Script preset; **Q4**
-money links out, intent is recorded.
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Guest identity | Household token. No phone verification. |
+| 2 | Destination wedding? | No — local, with a coach. Room blocks and airports cut. |
+| 3a | Theme | Script. |
+| 3b | Hero | `framed` — photographs exist. |
+| 4 | Payments | Link out, record intent. |
+| 5 | Guest photo uploads | In, gated to `/rsvp/[token]`, moderated. |
+| 6 | Registry | Cut entirely. |
+| 7 | SMS | No. Email plus the WhatsApp copy-out. |
+| 8 | Password gate | No, `noindex` on. Specified but not built. |
+| 9 | One wedding or many | Add `/w/[slug]`. No custom domain. |
+| 10 | Site lifespan | Indefinite, planner pays. |
+| 11 | Copy voice | First person plural, except the face of the stationery. |
+| 12 | Script typeface | Open-source (Pinyon Script). Nothing to buy. |
 
-**Round two:** **Q3b** photographs exist, so a `framed` hero and the image
-pipeline in step 1; **Q5** guest uploads in, gated to `/rsvp/[token]`,
-moderated; **Q6** no registry section at all, so §8 and two tables are cut;
-**Q12** an open-source script face, so nothing waits on a purchase.
+### 14.2 What is still owed, and by whom
 
-**Every question that changed a table's shape is answered.** §4 is settled and
-`0015` can be written as specified.
+Not a question — a dependency. **`aisle.wedding` has never been read from this
+side** (§0). The feature set and the schema do not depend on it, but §5's
+proportions — type scale, rhythm, how much air — are this session's judgement
+rather than the reference's. Closed by either full-page screenshots of
+`/example-wedding` (desktop and phone) or that host on the environment's
+egress allowlist.
 
-### 14.2 Still open
-
-Five, all scope-only. **None of them blocks the build order**, so steps 1–4 can
-proceed while they sit — which is the point of having answered the structural
-ones first.
-
-7. **SMS?** Recommend no (§12.3). Q1 already removed the only structural
-   reason to want a phone number for every guest, so this is now purely "do we
-   want to text people". The WhatsApp copy-out V1 already ships covers it, and
-   adding SMS later touches only the sender.
-8. **Password-gate the site?** Recommend off, with `noindex` on. A local
-   wedding is a weaker case for a gate than a destination one. Decidable any
-   time; it is a cookie and a form.
-9. **One wedding or many?** `/w` currently serves "the first wedding" and says
-   so in a comment. A slug (`/w/[slug]`) is small; a custom domain per wedding
-   is not. Which is needed, and by when?
-10. **How long does the site stay up after the day, and who pays for it?**
-    Aisle says five years out loud. Guests link to these for years, and this is
-    a billing decision the code should reflect rather than discover.
-11. **Whose site is this, in the copy?** First person plural ("we're getting
-    married") reads warmer; third person is more formal. With Script chosen,
-    third person is the more coherent pairing, but it sets the tone of every
-    default string in §§3, 10 and 12. Worth deciding before step 2 writes the
-    FAQ library, though changing it later is a find-and-replace on defaults
-    nobody has edited yet.
+Two things also carried over from earlier sessions and unrelated to this spec:
+`0013`/`0014` have never been applied to the live project, and
+`ensure-bucket.mjs` has never run against it. Moodboards on `/w` (§3) will not
+render until both happen. `/api/health` confirms.
 
 ## 15. Build order
 
-Revised for both rounds of answers. **Nothing here is blocked** — Q12's
-open-source face removed the last dependency on a purchase, and the five
-questions left in §14.2 touch none of these steps.
+All twelve answers in. **Nothing in this list is blocked.**
 
+0. **`weddings.slug`** (§4, Q9) — one column, one unique index, one backfill,
+   as `0015_wedding_slug.sql`. Shipped with step 1 so the renderer is written
+   against `/w/[slug]` once rather than against the "first wedding" hack and
+   then again.
 1. **Theme and renderer** (§5, §3) — the Script preset on Pinyon Script and EB
    Garamond, the palette tokens and their contrast validator, the SVG
    monogram, the `framed` hero **with its AVIF/WebP + blurhash pipeline**, the
-   section renderer, the nav, the `/site` editor skeleton. `/w` becomes a
-   wedding site using the content it already has. **No migration.**
-2. **Schedule and FAQ** (§6, §10) — the two sections guests actually open, plus
-   the starter FAQ library, per-event dress code and `.ics`. Both are
-   `site_content` payloads. **No migration.**
+   section renderer, the nav, the `/site` editor skeleton. `/w/[slug]` becomes
+   a wedding site using the content it already has.
+2. **Schedule and FAQ** (§6, §10) — the two sections guests actually open,
+   plus the starter FAQ library **written in "we"**, per-event dress code and
+   `.ics`. `site_content` payloads, no migration.
 3. **Invites** (§12) — save-the-date, the `/i/[token]` card with its OG image,
-   the print-ready PDF with the household QR code, and broadcasts. **No
-   migration** — it reuses `invitations` and `message_log` as they stand.
+   the print-ready PDF with the household QR code, and broadcasts. No
+   migration — it reuses `invitations` and `message_log` as they stand.
    **This is the only part of the spec carrying a date that cannot move**, so
    if the send is close it goes first, ahead of even step 1; the card inherits
    whatever theme exists at the time.
-4. **Getting there** (§7) — migration `0015`, the coach with its runs, stops,
-   capacity and manifest export, parking and the rest, the places to stay, the
-   static map. Seat reservation on `/rsvp/[token]`.
+4. **Getting there** (§7) — `0016_public_site.sql`, the coach with its runs,
+   stops, capacity and manifest export, parking and the rest, the places to
+   stay, the static map. Seat reservation on `/rsvp/[token]`.
 5. **Gallery** (§9) — curated first, sharing step 1's image pipeline. Guest
    uploads and the moderation queue can land close to the day, because that is
    when they start mattering.
-6. **Access and address** (§11) — a passphrase if Q8 wants one, then the slug,
-   then a domain if Q9 asks for it.
 
-**Registry is gone** (Q6), which is why this list is six steps rather than
-seven.
+**Not being built:** the registry (Q6), the password gate (Q8, specified in
+§11 at about half a day if it is ever wanted), a custom domain (Q9), SMS (Q7),
+and any expiry or archive step (Q10).
 
-Steps 1–3 are worth shipping alone and, between them, touch no schema at all.
-They are the difference between a page that carries information and a page you
-are willing to send to four hundred people.
+Steps 0–3 are worth shipping alone and, between them, need one column. They
+are the difference between a page that carries information and a page you are
+willing to send to four hundred people.
 
 ## 16. Done when
 
-- `/w` renders every section in §3 from `site_content` in the Script theme
-  with a `framed` hero, passes contrast at 4.5:1, has an LCP under 2.5s on
-  throttled 4G, and reads correctly at 390px.
+- `/w/[slug]` renders every section in §3 from `site_content` in the Script
+  theme with a `framed` hero, passes contrast at 4.5:1, has an LCP under 2.5s
+  on throttled 4G, and reads correctly at 390px.
+- No string on the public site refers to the couple in the third person,
+  except the face of the stationery in §12.2.
 - A guest who lost their link can get it re-sent from `/w` without exposing
   whether their address is on the list.
 - A household can see the events they are invited to, their coach stop and
@@ -787,4 +860,5 @@ are willing to send to four hundred people.
 - A guest can upload a photo from their RSVP link, the planner approves it,
   and it appears in the gallery — and either of them can delete it.
 - `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh` and
-  `npm run build` are green, and `0015` has been applied to the live project.
+  `npm run build` are green, and `0015`/`0016` have been applied to the live
+  project.

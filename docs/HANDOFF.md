@@ -18,13 +18,14 @@ household token stays (no phone verification), this is a **local wedding with
 a coach** rather than a destination one (so Aisle's room blocks and airports
 are cut and replaced by coach runs with timed stops and a seat manifest),
 money links out rather than moving through the site, and the theme is Script.
-A second round the same session settled four more — open-source script face,
-a `framed` hero because photographs exist, guest photo uploads in (gated to
-the RSVP token and moderated), and **no registry section at all**. **Seven of
-twelve answered, including every question that changes a table's shape**, so
-§4 is final and nothing in the build order is blocked. The five still open are
-scope-only. Session 19's outstanding item below is unchanged and still
-blocking moodboards in production.
+Two further rounds the same session closed **all twelve questions** — see the
+spec's §14.1 for the table. Nothing in the build order is blocked and nothing
+waits on a purchase. **One correction worth reading: §4 was called final after
+round two, and round three's Q9 answer (add `/w/[slug]`) added a `slug` column
+to `weddings` anyway.** That is one column and one index, not a new table, but
+it splits the work into two migrations and the spec records the correction
+rather than absorbing it. Session 19's outstanding item below is unchanged and
+still blocking moodboards in production.
 
 Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
 have never been applied to the live project, and the guard that should have
@@ -124,12 +125,33 @@ the only part with a date that cannot move.
   it. The FAQ's "What's the gift situation?" is where a sentence about it
   belongs instead.
 
-**Where that leaves it:** §4 is settled — every question that changed a table
-is answered, so `0015` can be written as specified. The build order is six
-steps, none blocked, and steps 1–3 (theme and renderer, schedule and FAQ, the
-whole invitation surface) touch no schema at all. The five remaining questions
-— SMS, a password gate, one wedding or many, how long the site lives, and the
-copy voice — are scope-only.
+**Round three, same session — the last five:**
+
+- **Q11 — first person plural.** The site is written as "we" throughout,
+  headings included ("Where to stay", not "Accommodation"). One deliberate
+  exception: the face of the stationery keeps formal third person, because
+  that is a typographic tradition rather than a voice. §10 gains a third
+  editor hint saying so — "the couple ask that guests refrain from…" is how a
+  venue writes, and it is the fastest way to make a wedding site feel like an
+  event management system.
+- **Q7 — no SMS.** Email plus the WhatsApp copy-out. Adding it later touches
+  only the sender.
+- **Q8 — no password gate**, `noindex` on. Specified in §11 but not built, at
+  a recorded cost of about half a day if a reason ever appears.
+- **Q9 — `/w/[slug]`**, no custom domain. This retires the "takes the first
+  wedding" hack `src/app/w/page.tsx` admits to in a comment, **and it is the
+  correction above**: it needs `weddings.slug`, so §4 grew a column after
+  being called final. The slug is wanted by build step 1, not step 4, so the
+  work splits into `0015_wedding_slug.sql` (one column, step 1) and
+  `0016_public_site.sql` (everything else, step 4). Writing the public routing
+  twice is the alternative.
+- **Q10 — the site stays up indefinitely and the planner pays.** No expiry, no
+  archive, no code. Written into §11 as a standing cost, because the failure
+  mode is discovering it at a renewal in three years and letting it lapse.
+
+**Where that leaves it:** every question closed, six build steps, none
+blocked, and steps 0–3 need one column between them. Not being built:
+registry, SMS, password gate, custom domain, any expiry step.
 
 **Still owed by the planner, and the only thing holding the design back:**
 screenshots of `aisle.wedding/example-wedding`, or that host on the egress

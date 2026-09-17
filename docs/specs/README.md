@@ -45,7 +45,7 @@ renumbered to spec 2, is unchanged in substance.
 | 11 | [Editable list titles, moving tasks between sections, reordering sections, and completing a task closes its sub-tasks](11-list-editing-cross-section-drag-and-cascading-completion.md) | Built end to end, same session (2026-09-17) — `InlineText` title editing on both `/lists/[id]` and `/settings`; `moveItemToSection`/`reorderSections` actions; a shared `DndContext` for cross-section item drag plus a per-item "Section" select; sections reorder via Move up/down (drag was scoped out while building — see spec's §1C); `setStatus` cascades closing to sub-items, not reopening. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, spec 10, already built |
 | 12 | [Reordering the lists themselves in the sidebar](12-reorder-lists-sidebar.md) | Built end to end, same session (2026-09-17) — rewritten from its original draft (manual ordering inside "Assigned to me") after the planner clarified they meant reordering the lists shown under "Your lists" instead, see §4; new `reorderLists` action renumbering the existing `lists.sort_order`, plus drag/Move up-down in `ListsSidebar`. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, already built |
 | 13 | [Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives](13-navigation-regrouping.md) | Built end to end, same session (2026-09-17) — `Nav` collapsed from 14 entries to 8; a new shared `SubTabs` component over the Guests hub (`/guests`, `/guests/rank`, `/invitations`) and the Tasks hub (`/lists`, `/lists/[id]`, `/calendar`, `/board`, `/timeline`); a "Run sheet →" link per event row in `EventsEditor`; cross-links between `/questions` and `/invitations`. No schema, no URL changes. Not yet opened in a browser (no Supabase project in this sandbox). | V1, spec 1, spec 3, spec 5 part B, spec 6, already built |
-| 14 | [The public wedding site, and the invites that point at it](14-public-site-and-invites.md) | **Answered (2026-09-17, two rounds), not built.** A discovery pass against [aisle.wedding](https://aisle.wedding), requested by the planner. The reference site could not be read (egress policy blocks that host — see the spec's §0), so its design detail is still owed: screenshots or an allowlist entry. Seven of twelve questions settled, **including every one that changes a table's shape**, so §4 is final and `0015` can be written as specified. Household token kept; **local wedding with a coach** (room blocks and airports cut); link-out payments; Script theme on an open-source face; `framed` hero; guest photo uploads in, gated and moderated; **registry cut entirely**. The five remaining questions are scope-only and block nothing. Roughly half the size it was written at. | V1; spec 9 for the moodboard sections already on `/w` |
+| 14 | [The public wedding site, and the invites that point at it](14-public-site-and-invites.md) | **Fully answered (2026-09-17, three rounds), not built.** A discovery pass against [aisle.wedding](https://aisle.wedding), requested by the planner. **All twelve open questions are closed** — see the spec's §14.1 for the table. Household token kept; **local wedding with a coach** (room blocks and airports cut); link-out payments; Script theme on an open-source face with a `framed` hero; guest photo uploads in, gated and moderated; registry, SMS, password gate and custom domain all cut; `/w/[slug]`; site lives indefinitely; copy in first person plural. Roughly half the size it was drafted at. Two migrations: `0015_wedding_slug.sql` (one column, with build step 1) and `0016_public_site.sql` (step 4). The reference site was never read — egress policy blocks that host — so §5's proportions still want screenshots. | V1; spec 9 for the moodboard sections already on `/w` |
 
 ## Recommended build order
 
@@ -147,10 +147,11 @@ cross-link rather than a shared tab — see that spec's §1D and §5.
 It depends on nothing but V1's `site_content`, `events` and invitation
 tokens, and on spec 9 only insofar as moodboards already publish into `/w`
 and keep their section there. It claims migration `0015_public_site.sql`;
-nothing else does. Its §15 build order is deliberately shippable in pieces — after session 20's
-two rounds of answers, steps 1–3 (theme and renderer, schedule and FAQ, and
-the whole invitation surface) need **no migration at all** and can ship while
-§14.2 is still outstanding. Step 3 is the only part carrying a date that
-cannot move, so it goes first if the send is close. **Nothing in the build
-order is blocked**: the last external dependency, a paid licence for the
-script typeface, was removed by choosing an OFL face.
+nothing else does. Its §15 build order is deliberately shippable in pieces. After session 20's
+three rounds of answers, **nothing in it is blocked**, and steps 0–3 (the slug
+column, theme and renderer, schedule and FAQ, and the whole invitation
+surface) need one column between them. Step 3 is the only part carrying a date
+that cannot move, so it goes first if the send is close. Note that Q9's answer
+added `weddings.slug` after §4 had already been called settled — the spec
+records that correction rather than absorbing it, and it is why there are two
+migrations instead of one.
