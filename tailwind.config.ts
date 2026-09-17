@@ -5,11 +5,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: "#1a1a1a",
-        paper: "#fbfaf8",
-        line: "#e6e2dc",
-        muted: "#6b6560",
-        accent: "#7c5c3e",
+        // The five themeable tokens. They read CSS custom properties so the
+        // public site can restyle its whole subtree from the database (spec 14
+        // §5) without the planner app changing colour: `globals.css` defines
+        // the defaults on :root, and only the site's root element overrides
+        // them. Channels rather than hex so `/40`, `/60`, `/85` still work.
+        ink: "rgb(var(--site-ink) / <alpha-value>)",
+        paper: "rgb(var(--site-paper) / <alpha-value>)",
+        line: "rgb(var(--site-line) / <alpha-value>)",
+        muted: "rgb(var(--site-muted) / <alpha-value>)",
+        accent: "rgb(var(--site-accent) / <alpha-value>)",
         tierA: "#2f6f4f",
         tierB: "#b07d2b",
         tierC: "#8a8580",
@@ -29,6 +34,11 @@ export default {
       fontFamily: {
         sans: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
         serif: ["ui-serif", "Georgia", "Cambria", "serif"],
+        // The public site's faces (spec 14 §5). Loaded by src/lib/fonts and
+        // exposed as variables on the site's root element, so these resolve to
+        // the fallback stack anywhere else — the planner app never loads them.
+        script: ["var(--font-script)", "Snell Roundhand", "Apple Chancery", "cursive"],
+        body: ["var(--font-body)", "Georgia", "Cambria", "serif"],
       },
     },
   },

@@ -3,6 +3,27 @@
 @tailwind utilities;
 
 @layer base {
+  /* ---------------------------------------------------------------------------
+     Theme tokens
+     ---------------------------------------------------------------------------
+     The five colours every component in the app resolves through. These are
+     the planner's own palette and the defaults for anything that does not
+     override them; the public site sets the same variables on its root element
+     from the database (spec 14 §5, src/lib/theme), which re-themes its whole
+     subtree — shared components like the moodboard grid included — without a
+     second set of class names.
+
+     RGB channels rather than hex so Tailwind's `<alpha-value>` works and
+     `bg-line/40` keeps meaning what it means.
+  --------------------------------------------------------------------------- */
+  :root {
+    --site-ink: 26 26 26;
+    --site-paper: 251 250 248;
+    --site-line: 230 226 220;
+    --site-muted: 107 101 96;
+    --site-accent: 124 92 62;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }
