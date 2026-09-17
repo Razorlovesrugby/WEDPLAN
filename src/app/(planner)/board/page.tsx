@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { BoardView } from "@/components/lists/board-view";
+import { SubTabs } from "@/components/sub-tabs";
+import { TASKS_TABS } from "@/lib/nav-tabs";
 import { getBoardItems, getLists } from "@/server/queries/lists";
 import { requireWedding } from "@/server/queries/wedding";
 
@@ -16,6 +18,7 @@ export default async function BoardPage({
 
   return (
     <div className="space-y-4">
+      <SubTabs tabs={TASKS_TABS} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="font-serif text-2xl">Board</h1>
         <div className="flex flex-wrap gap-1 text-sm">

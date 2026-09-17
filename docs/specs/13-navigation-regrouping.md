@@ -1,10 +1,10 @@
 # Feature spec: Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives
 
-**Status: answered (2026-09-17), building.** Five separate navigation
-requests that all land on the same fourteen-entry `Nav`
+**Status: built end to end, same session (2026-09-17).** Five separate
+navigation requests that all land on the same fourteen-entry `Nav`
 (`src/components/nav.tsx`) and interact with each other — one of them (§1D
 vs. §1B) was a direct conflict in what was asked for. §5 records the
-answers, starting with question 1's resolution.
+answers.
 
 **Not to be confused with spec 11** — that spec is about editing an
 individual list's own title and how tasks move within one; this spec is
@@ -222,3 +222,15 @@ Budget, Events, Questions, Tasks, Moodboards, Settings.**
 4. **Sub-tab strip styling?** **Matches `Nav` itself, one level down** —
    same active/inactive treatment and `aria-current`, not `ListsSidebar`'s
    vertical list style.
+
+## 6. Test plan
+
+- `npm run typecheck`: clean.
+- `npm test`: 304 tests, unchanged pass count — no pure logic added.
+- `npm run build`: compiles and typechecks clean; page-data collection
+  fails only on missing `NEXT_PUBLIC_SUPABASE_*`/`NEXT_PUBLIC_SITE_URL`,
+  the same sandbox-has-no-Supabase-project caveat every prior spec in this
+  rebase carries.
+- Not opened in a browser against a live project — same caveat; this
+  sandbox has no Supabase project and no way to stand one up (no
+  `supabase` CLI, no running Docker daemon for `supabase start`).

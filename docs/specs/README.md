@@ -44,7 +44,7 @@ renumbered to spec 2, is unchanged in substance.
 | 10 | [Completed tasks sink to the bottom of the list](10-completed-tasks-sort-to-bottom.md) | Built end to end, same session (2026-09-16) — new `sortCompletedLast` in `src/lib/lists/sort.ts`, applied to `/lists/[id]`'s per-section checklist (including drag-and-drop/Move up-down and sub-items) and `/lists`'s "All"/"Flagged" smart views. No schema change. | Spec 1; spec 3 for the smart views |
 | 11 | [Editable list titles, moving tasks between sections, reordering sections, and completing a task closes its sub-tasks](11-list-editing-cross-section-drag-and-cascading-completion.md) | Built end to end, same session (2026-09-17) — `InlineText` title editing on both `/lists/[id]` and `/settings`; `moveItemToSection`/`reorderSections` actions; a shared `DndContext` for cross-section item drag plus a per-item "Section" select; sections reorder via Move up/down (drag was scoped out while building — see spec's §1C); `setStatus` cascades closing to sub-items, not reopening. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, spec 10, already built |
 | 12 | [Reordering the lists themselves in the sidebar](12-reorder-lists-sidebar.md) | Built end to end, same session (2026-09-17) — rewritten from its original draft (manual ordering inside "Assigned to me") after the planner clarified they meant reordering the lists shown under "Your lists" instead, see §4; new `reorderLists` action renumbering the existing `lists.sort_order`, plus drag/Move up-down in `ListsSidebar`. No schema change. Not yet opened in a browser (no Supabase project in this sandbox). | Spec 1, already built |
-| 13 | [Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives](13-navigation-regrouping.md) | **Answered (2026-09-17), building.** No schema, no new screens — a `Nav` reshuffle from 14 entries to 8, plus shared sub-tab strips over existing routes. §5 resolves the Invitations conflict: it lives under the Guests hub, with a cross-link to/from Questions rather than a shared tab. | V1, spec 1, spec 3, spec 5 part B, spec 6, already built |
+| 13 | [Navigation regrouping — Tasks, a Guests hub, Events with its run sheet, and where Invitations lives](13-navigation-regrouping.md) | Built end to end, same session (2026-09-17) — `Nav` collapsed from 14 entries to 8; a new shared `SubTabs` component over the Guests hub (`/guests`, `/guests/rank`, `/invitations`) and the Tasks hub (`/lists`, `/lists/[id]`, `/calendar`, `/board`, `/timeline`); a "Run sheet →" link per event row in `EventsEditor`; cross-links between `/questions` and `/invitations`. No schema, no URL changes. Not yet opened in a browser (no Supabase project in this sandbox). | V1, spec 1, spec 3, spec 5 part B, spec 6, already built |
 
 ## Recommended build order
 
@@ -107,7 +107,7 @@ schedule is not ours to set. Build order 2–5 of that spec deliberately
 produces the clipper without touching Pinterest at all.
 
 **Specs 11–13 are three independent proposals from the same round of
-planner feedback, all answered 2026-09-17 and now building.** Spec 11
+planner feedback, all answered and built end to end 2026-09-17.** Spec 11
 (list titles, moving/reordering sections, cascading completion) and spec 12
 (reordering the lists sidebar) both sit on top of specs 1, 3 and 10 only,
 and have no dependency on each other — either can be built first. Spec 13

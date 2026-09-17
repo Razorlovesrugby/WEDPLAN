@@ -2,6 +2,8 @@ import Link from "next/link";
 import { CapacityControl } from "@/components/rank/capacity-control";
 import { RankList } from "@/components/rank/rank-list";
 import { CutLinePicker } from "@/components/settings/cut-line-picker";
+import { SubTabs } from "@/components/sub-tabs";
+import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { listHouseholds } from "@/server/queries/guests";
 import { getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
 import { getPerSeatCostInvited } from "@/server/queries/budget";
@@ -39,6 +41,7 @@ export default async function RankPage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={GUESTS_TABS} />
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl">Ranking</h1>
         <span className="text-sm text-muted">

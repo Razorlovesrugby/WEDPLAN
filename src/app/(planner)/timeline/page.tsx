@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { TimelineView } from "@/components/lists/timeline-view";
+import { SubTabs } from "@/components/sub-tabs";
+import { TASKS_TABS } from "@/lib/nav-tabs";
 import { getLists, getTimelineItems } from "@/server/queries/lists";
 import { getBudgetLinksForLists } from "@/server/queries/budget-links";
 import { requireWedding } from "@/server/queries/wedding";
@@ -24,6 +26,7 @@ export default async function TimelinePage() {
 
   return (
     <div className="space-y-4">
+      <SubTabs tabs={TASKS_TABS} />
       <h1 className="font-serif text-2xl">Timeline</h1>
       <Suspense>
         <TimelineView items={items} budgetLinksByItem={budgetLinksByItem} timezone={wedding.timezone} />

@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { ListsSidebar } from "@/components/lists/lists-sidebar";
 import { NewListForm } from "@/components/lists/new-list-form";
 import { SmartView } from "@/components/lists/smart-view";
+import { SubTabs } from "@/components/sub-tabs";
+import { TASKS_TABS } from "@/lib/nav-tabs";
 import {
   getAllItems,
   getAssignedToMeItems,
@@ -14,7 +16,7 @@ import {
 } from "@/server/queries/lists";
 import { getCollaborators, getSessionUser, requireWedding } from "@/server/queries/wedding";
 
-export const metadata = { title: "Lists" };
+export const metadata = { title: "Tasks" };
 
 const VIEWS = ["today", "scheduled", "flagged", "all", "mine"] as const;
 type View = (typeof VIEWS)[number];
@@ -70,14 +72,17 @@ export default async function ListsPage({
   if (items === null) notFound();
 
   return (
-    <div className="flex flex-col gap-6 sm:flex-row">
-      <ListsSidebar lists={lists} />
-      <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="font-serif text-2xl">{TITLES[view]}</h1>
-          <NewListForm templates={templates} />
+    <div className="space-y-4">
+      <SubTabs tabs={TASKS_TABS} />
+      <div className="flex flex-col gap-6 sm:flex-row">
+        <ListsSidebar lists={lists} />
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="font-serif text-2xl">{TITLES[view]}</h1>
+            <NewListForm templates={templates} />
+          </div>
+          <SmartView view={view} items={items} collaborators={collaborators} currentUserId={user?.id} />
         </div>
-        <SmartView view={view} items={items} collaborators={collaborators} currentUserId={user?.id} />
       </div>
     </div>
   );

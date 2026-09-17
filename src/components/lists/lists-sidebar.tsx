@@ -111,7 +111,7 @@ export function ListsSidebar({ lists }: { lists: ListRow[] }) {
       </div>
 
       <div>
-        <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wide text-muted">Your lists</p>
+        <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wide text-muted">Your tasks</p>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

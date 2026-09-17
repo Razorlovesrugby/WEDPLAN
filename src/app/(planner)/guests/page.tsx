@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { FilterBar } from "@/components/guests/filter-bar";
 import { GuestsTable } from "@/components/guests/guests-table";
+import { SubTabs } from "@/components/sub-tabs";
+import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { countActiveFilters, guestFiltersToQuery, parseGuestFilters } from "@/lib/filters";
 import { listGuests, listHouseholds } from "@/server/queries/guests";
 import { getCutLines, getEvents, getTags, requireWedding } from "@/server/queries/wedding";
@@ -27,6 +29,7 @@ export default async function GuestsPage({
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={GUESTS_TABS} />
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl">Guests</h1>
         <div className="flex flex-wrap gap-2">
