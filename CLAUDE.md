@@ -1,5 +1,67 @@
 # Instructions for Claude Code working in this repo
 
+## Product
+
+WEDPLAN is a wedding planning platform for a couple and their close
+collaborators (partner, family helping out) to run an entire wedding from
+one place, replacing a pile of spreadsheets and group chats. See
+`docs/wedding-platform-spec.md` for the full technical spec and
+`docs/specs/` for the per-feature specs built on top of it (each is a
+proposal-plus-decisions document — read `docs/specs/README.md` first for
+how that process works, and read that before assuming a feature is done
+just because a spec file describes it).
+
+What it actually covers, roughly in the order a couple would touch it:
+guests and households (with RSVP, dietary/accessibility, and multi-cut
+guest-list tiers for trimming an oversized list), lists and a timeline
+that auto-syncs from them, reminders, a day-of run sheet, budget
+(categories, line items, per-head and consumption-based costing, a
+payment schedule — NZD only, see spec 18), moodboards with Pinterest
+import, and a public wedding website with invitations and RSVP.
+
+**Stack:** Next.js App Router (deployed on Vercel), Supabase (Postgres +
+Auth; RLS keyed to `wedding_id` on every table), TypeScript throughout,
+Vitest for unit tests, a plain-SQL test suite in `supabase/tests/` run
+against a throwaway Postgres cluster via `./scripts/verify-migrations.sh`.
+
+A few product-level rules that shape the schema everywhere (from
+`docs/wedding-platform-spec.md`): `wedding_id` on every table, even leaf
+and join tables; RLS on every table, tested with a second account; money
+as integer minor units with no float rounding; every timestamp is
+`timestamptz`, displayed in the wedding's own timezone; no destructive
+writes to guest data (`deleted_at`, never a hard delete) — a guest cut
+after invitations went out has to remain reconstructable.
+
+## Working as a software developer on this repo
+
+Act like the senior engineer who already knows this codebase, not like
+someone seeing it for the first time on every task:
+
+- **Read `docs/HANDOFF.md` first**, always — it's a living document,
+  rewritten at the end of every work session, and it names what's actually
+  been verified vs. what's only been typechecked. This app has never run
+  against a live Supabase project or opened in a real browser (see its
+  repeated caveat to that effect) — don't imply otherwise in anything you
+  tell the person.
+- **Match the conventions already in the code** before introducing your
+  own: every write is a server action in `src/server/actions/` returning
+  `ActionResult`; every read is in `src/server/queries/`, wrapped in
+  `cache()`; pure, unit-testable logic lives in `src/lib/`, never inline
+  in a `"use server"` action; migrations are append-only — add the next
+  numbered file, never edit one that's already landed (`docs/HANDOFF.md`
+  section 8 has the full list).
+- **Verify the way this repo verifies**: `npm run typecheck`, `npm test`,
+  `./scripts/verify-migrations.sh` (needs a non-root user — see this
+  session's transcript or just `useradd`/`su` a throwaway one, `initdb`
+  refuses to run as root), and `npm run build` before calling anything
+  done. A passing build is not the same claim as "opened in a browser" —
+  say which one you actually did.
+- **Prefer the smallest correct change.** This is a solo/small-team side
+  project mid-build, not a codebase to defensively over-engineer against
+  imagined future requirements — see the general "don't add abstractions
+  beyond what the task requires" guidance you already operate under, and
+  apply it doubly hard here.
+
 ## Spec requests are not build authorization
 
 If the person asks for a **spec**, write the spec file under `docs/specs/`
