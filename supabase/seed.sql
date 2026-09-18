@@ -146,15 +146,40 @@ insert into public.list_items (id, wedding_id, list_id, section_id, title, due_d
    'Confirm the florist', null, true, 2)
 on conflict (id) do nothing;
 
+-- ---------------------------------------------------------------------------
+-- The public site (spec 14)
+-- ---------------------------------------------------------------------------
+-- Enough content that `/w/alex-sam` renders every section type after a reset.
+-- Without this the site shows a hero and an RSVP pointer and nothing else,
+-- because empty sections do not render — which makes the theme impossible to
+-- look at without hand-writing JSON, and makes a working renderer look broken.
+--
+-- Written in first person plural (Q11), like the real defaults.
 insert into public.site_content (wedding_id, block_key, payload, sort_order) values
+  ('11111111-1111-4111-8111-111111111111', 'theme',
+   '{"preset":"script","palette":"ivory","hero_style":"framed","monogram":true}', -1),
   ('11111111-1111-4111-8111-111111111111', 'hero',
-   '{"headline":"Alex & Sam","date_label":"12 June 2027","location":"Bath, England"}', 1),
+   '{"headline":"Alex & Sam","date_label":"Saturday 12 June 2027","location":"Bath, England"}', 0),
+  ('11111111-1111-4111-8111-111111111111', 'countdown',
+   '{"enabled":true,"label":"until we say I do"}', 10),
+  ('11111111-1111-4111-8111-111111111111', 'story',
+   '{"body":"We met in a queue for a very average coffee in 2019, and have been arguing about where to get coffee ever since.\n\nTen years later we would like you all in one room, which is the whole idea.","milestones":[{"date":"August 2019","title":"The queue"},{"date":"March 2026","title":"The question","body":"Asked on a wet Tuesday, which we maintain was romantic."}]}', 20),
   ('11111111-1111-4111-8111-111111111111', 'schedule',
-   '{"intro":"The day, roughly."}', 2),
+   '{"intro":"Here is how the day runs. Come for all of it if you can.","events":[{"id":"e1111111-1111-4111-8111-111111111111","dress_code":"Lounge suits, summer dresses","hide_time":false}]}', 30),
   ('11111111-1111-4111-8111-111111111111', 'travel',
-   '{"body":"Bath Spa is the nearest station, 15 minutes by taxi."}', 3),
+   '{"intro":"Bath Spa is the nearest station, about fifteen minutes away by taxi.\n\nThere is parking at the venue and you are very welcome to leave a car overnight — we would rather that than anyone driving home."}', 40),
+  ('11111111-1111-4111-8111-111111111111', 'stays',
+   '{"intro":"A few places we would happily stay ourselves. Book early — it is a busy weekend locally."}', 50),
+  ('11111111-1111-4111-8111-111111111111', 'party',
+   '{"members":[{"name":"Jo","role":"Best woman","blurb":"Responsible for the speech, and for nothing else."},{"name":"Ravi","role":"Best man","blurb":"Has been told there is no microphone."}]}', 70),
+  ('11111111-1111-4111-8111-111111111111', 'things_to_do',
+   '{"intro":"If you are making a weekend of it.","items":[{"title":"The Roman Baths","body":"Touristy, and worth it anyway."}]}', 80),
   ('11111111-1111-4111-8111-111111111111', 'faq',
-   '{"items":[{"q":"Can I bring children?","a":"Children are welcome at the ceremony and reception."}]}', 4)
+   '{"items":[{"q":"What is the dress code?","a":"Lounge suits and summer dresses. Nothing black tie — we would feel silly.","featured":true,"tags":["The day"]},{"q":"Can I bring a plus one?","a":"Your invitation lists everyone we could fit. The venue caps us at ninety, which went faster than we expected.","featured":true,"tags":["Guests"]},{"q":"Are children invited?","a":"Yes, all of them, all day. There is a room upstairs for anyone who needs a nap, children included.","featured":true,"tags":["Guests"]},{"q":"Where do I park?","a":"There is parking at the venue and you can leave a car overnight.","featured":true,"tags":["Getting there"]},{"q":"What time does it finish?","a":"Carriages at midnight. Taxis need booking in advance around here.","featured":false,"tags":["The day"]},{"q":"What is the gift situation?","a":"You being there is genuinely the gift. We have all the toasters we need.","featured":false,"tags":["Guests"]}]}', 90),
+  ('11111111-1111-4111-8111-111111111111', 'rsvp',
+   '{"intro":"Your invitation has a link that is personal to your household — it is how we know who is replying.","closes_label":"Please reply by 30 April 2027"}', 100),
+  ('11111111-1111-4111-8111-111111111111', 'footer',
+   '{"note":"We cannot wait to see you","contact_email":"alexandsam@example.com","hashtag":"#alexandsam2027"}', 110)
 on conflict (wedding_id, block_key) do nothing;
 
 -- ---------------------------------------------------------------------------

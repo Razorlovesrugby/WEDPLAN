@@ -116,9 +116,14 @@ screenshots of the Aisle example, or that host on the egress allowlist, so
 
 ## Build status — handoff, 2026-09-17
 
-**Steps 0 and 1 are built. Steps 2–5 are not started.** Everything below was
-verified by `npm run typecheck`, `npm test` (384), `./scripts/verify-migrations.sh`
-(187 assertions) and `npm run build`. **Nothing has been opened in a browser,
+**All six build steps are built.** Verified by `npm run typecheck`,
+`npm test` (436), `./scripts/verify-migrations.sh` (201 assertions),
+`./scripts/verify-migrations-single-tx.sh`, and `npm run build`.
+
+**Still never opened in a browser**, and no query here has returned a row from
+a live project. The one exception remains the Open Graph image, which renders
+through the real pipeline and is the only visual confirmation this feature
+has. Treat everything else as "compiles and is tested", not "works". **Nothing has been opened in a browser,
 and nothing has run against a live Supabase project** — the same caveat every
 spec since 1 carries. In particular the fonts have never been rendered, the
 theme has never been seen, and no query below has returned a real row.
@@ -139,51 +144,63 @@ theme has never been seen, and no query below has returned a real row.
 | 1 | The public read path | `src/server/queries/site.ts` |
 | 1 | `/w/[slug]`, and `/w` kept as a redirect | `src/app/w/` |
 | 1 | `GET /api/public/events/[id]/ics` | `src/app/api/public/events/[id]/ics/route.ts` |
+| 1 | **The `/site` editor** — every section listed, show/hide, reorder, inline forms, repeaters for list sections, per-event dress codes and map links | `src/app/(planner)/site/`, `src/components/site/editor/`, `src/lib/site/editor-fields.ts` |
+| 1 | **`/site/theme`** — preset, palette, custom colours with the contrast check running live, hero style, monogram | `src/components/site/editor/theme-editor.tsx` |
+| 1 | The write path, with per-section payload validation | `src/server/actions/site.ts` |
+| 2 | **The FAQ starter library**, 18 questions as drafts, added by a button that appends and skips duplicates | `src/lib/site/faq-library.ts` |
+| 2 | A full example site in the seed, so a reset renders every section type | `supabase/seed.sql` |
+| 2 | "Site" in the planner nav | `src/components/nav.tsx` |
+| 3 | `message_kind` gains `save_the_date` — enum-only file, per the 55P04 rule | `supabase/migrations/0016_save_the_date.sql` |
+| 3 | **The stationery card at `/i/[token]`** — themed, the thing you forward over WhatsApp | `src/app/i/[token]/page.tsx`, `src/server/rsvp/card.ts` |
+| 3 | **Its Open Graph image**, rendered through satori from the .ttf copies of both faces | `src/app/i/[token]/opengraph-image.tsx`, `src/lib/fonts/og/` |
+| 3 | Save-the-date and broadcast emails | `src/lib/email/templates.ts` |
+| 3 | The senders: segments, confirm-before-bulk-send, batching, honest reporting | `src/server/actions/stationery.ts`, `src/lib/email/batch.ts`, `src/components/invitations/stationery-panel.tsx` |
+| 3 | The themed print sheet, same theme and monogram as the card | `src/app/(planner)/invitations/print/stationery/page.tsx` |
+| 2 | "Find my invitation" — resend, rate-limited, one neutral answer | `src/server/actions/find-invitation.ts`, `src/components/site/find-invitation.tsx` |
+| 4 | Coach runs, stops, seats, transport, stays, site assets, analytics | `supabase/migrations/0017_public_site.sql`, `supabase/tests/07_coach.sql` (14 assertions) |
+| 4 | Capacity logic — null is not zero, and a change counts the difference | `src/lib/travel/coach.ts` |
+| 4 | `/travel`, the public sections, seat booking on `/rsvp/[token]`, manifest CSV | `src/components/travel/`, `src/components/site/travel-sections.tsx`, `src/components/site/coach-booking.tsx` |
+| 5 | Guest uploads gated to the RSVP token, EXIF stripped, moderated | `src/server/actions/gallery.ts`, `src/components/site/guest-uploader.tsx`, `src/app/(planner)/gallery/` |
+| 5 | Scroll motion and the site print stylesheet | `src/app/globals.css` |
 
-Unit tests added: 78 (theme 28, sections 29, names 6, ics 15). Total 384.
+Unit tests added: 106 (theme 28, sections 29, names 6, ics 15, faq library 8,
+editor fields 7, stationery templates 13). Total 412.
+
+**The one thing here that has been seen rather than only tested:** the Open
+Graph image. A malformed token short-circuits before any database call, so
+`/i/short/opengraph-image` renders the fallback through the real pipeline —
+1200×630, both faces loading. That is the only visual confirmation this
+feature has.
 
 ### Not done, and worth knowing before picking this up
 
-**The biggest gap: there is no editor.** Every section's content is a JSONB
-payload that currently has to be typed into `site_content` by hand. The
-renderer works and is tested; nothing feeds it. `/site` and `/site/theme`
-(§13) do not exist. Until they do, the feature is not usable by the people it
-is for.
+**The build order is finished. What remains is verification and a short tail
+of things deliberately deferred.**
 
 Specifically outstanding:
 
-- **`/site` and `/site/theme`.** No editor, no section reorder, no
-  show/hide, no preview-as-guest.
-- **The contrast validator is not wired to anything.** `validatePalette` is
-  written and tested, but nothing calls it, because the thing it is supposed
-  to guard — the custom-palette form — does not exist. A custom palette
-  written directly into `site_content` is currently unchecked.
-- **No hero image can be uploaded.** `SiteHero` renders `framed` from a
-  same-origin path in the payload and falls back to `type` otherwise. The
-  storage it should read from is `site_assets`, which is in `0016` at step 4.
-  Q3b moved the image pipeline into step 1 and it is half-moved: the
-  rendering is here, the upload is not.
-- **No seed content.** A fresh `supabase db reset` renders the hero and the
-  RSVP pointer and nothing else, because no `site_content` rows exist. Worth
-  adding a seeded example site — it is also the only way to look at the theme
-  without typing JSON.
-- **The FAQ starter library (§10) is not written anywhere.** The 20 questions
-  are prose in this spec. They should be seed rows or an editor action.
-- **Per-event extras are read but never written.** `dress_code`, `detail`,
-  `map_url` and `hide_time` render from the schedule payload; nothing sets
-  them.
-- **"Find my invitation" (§2) does not exist.** The RSVP section says "message
-  us" rather than linking to it. That copy is the placeholder — it becomes the
-  link when the lookup is built.
-- **The scroll motion in §5 is not implemented.** No fade-and-rise, and so
-  nothing yet reads `prefers-reduced-motion` on the public site.
-- **No print stylesheet for the site**, and `/w/schedule` and `/w/travel` as
-  standalone routes do not exist — the site is one scrolling page only. The
-  existing print rules in `globals.css` are V1's, for `/invitations/print`.
-- **`site_visits` (§13) is not built.** No analytics of any kind.
-- **Steps 2–5 proper:** the rest of step 2 (above), step 3 invites entirely,
-  step 4 the coach and `0016` entirely, step 5 the gallery and guest uploads
-  entirely.
+- **Nothing here has run against a live project or been opened in a browser.**
+  That is now the single largest risk in the feature, and no amount of further
+  building reduces it. The first hour with a real database and a phone will
+  find more than the next hundred tests would.
+- **`scripts/ensure-bucket.mjs` must be run** before any photo works. The
+  bucket now holds site images as well as moodboards, under a `site/` prefix.
+- **No preview-as-guest** in `/site`, and no send preview as a named household
+  before a save-the-date or broadcast goes out (§12.3 asks for the latter). The
+  editor links out to the live site instead.
+- **No hero image upload.** `site_assets` exists now, so this is a small piece
+  of wiring rather than a blocked one — the editor still asks for a path.
+- **`site_visits` has a table and nothing writes to it.** The analytics in §13
+  are schema only.
+- **Coach seat capacity is checked, not locked.** Two households reserving the
+  last two seats simultaneously can both succeed: the check reads
+  `v_coach_runs` and then inserts, with no constraint spanning the two. A
+  `SELECT … FOR UPDATE` on the run, or a trigger asserting the sum, would close
+  it. At one coach and a few dozen households this is a theoretical race; at a
+  popular single run it is not, and it is worth knowing before it matters.
+- **No `.ics` for the coach**, only for events.
+- **SMS, the registry, a password gate and a custom domain remain
+  deliberately unbuilt** — Q6, Q7, Q8 and Q9.
 
 ### Three corrections this build made to the spec above
 

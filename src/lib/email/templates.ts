@@ -71,6 +71,87 @@ export function invitationEmail(options: {
   return { subject: `${weddingName} — you're invited`, text, html };
 }
 
+/**
+ * The save-the-date (spec 14 §12.1).
+ *
+ * Sent months before the invitation and asking nothing: no RSVP, no deadline,
+ * no form. Its whole job is to get the date into a calendar before somebody
+ * books a holiday over it, so it is short and it links to the card rather than
+ * to the RSVP page — the RSVP is not open yet, and sending people to a form
+ * that says "replies aren't open" is worse than not linking at all.
+ *
+ * Carries the same household token as everything else (§12.1), so the link in
+ * it keeps working when it becomes the invitation months later.
+ */
+export function saveTheDateEmail(options: {
+  weddingName: string;
+  householdName: string;
+  dateLabel: string;
+  location: string | null;
+  url: string;
+}) {
+  const { weddingName, householdName, dateLabel, location, url } = options;
+  const where = location ? ` in ${location}` : "";
+
+  const text = [
+    `${householdName},`,
+    "",
+    `We're getting married${where}, and we'd love you to be there.`,
+    "",
+    `${weddingName} — ${dateLabel}`,
+    "",
+    `Nothing to do yet — this is just so you can put it in the diary.`,
+    `The invitation, with all the details, follows nearer the time.`,
+    "",
+    url,
+  ].join("\n");
+
+  const html = layout(`
+    <p>${escapeHtml(householdName)},</p>
+    <p>We&rsquo;re getting married${escapeHtml(where)}, and we&rsquo;d love you to be there.</p>
+    <p style="font-size:20px;margin:24px 0 4px">${escapeHtml(weddingName)}</p>
+    <p style="color:#6b6560;margin:0">${escapeHtml(dateLabel)}</p>
+    ${button(url, "Save the date")}
+    <p style="font-size:13px;color:#6b6560">Nothing to do yet — this is just so you can put it
+    in the diary. The invitation, with all the details, follows nearer the time.</p>`);
+
+  return { subject: `Save the date — ${weddingName}, ${dateLabel}`, text, html };
+}
+
+/**
+ * A broadcast: one message the planner wrote, to a chosen group (spec 14 §12.3).
+ *
+ * Deliberately plain. The planner's own words carry it, and wrapping "the
+ * shuttle now leaves at two" in stationery makes an operational message harder
+ * to read, not easier.
+ */
+export function broadcastEmail(options: {
+  weddingName: string;
+  householdName: string;
+  subject: string;
+  body: string;
+  url: string;
+}) {
+  const { weddingName, householdName, subject, body, url } = options;
+
+  const text = [`${householdName},`, "", body, "", `Your details and RSVP:`, url, "", weddingName].join(
+    "\n",
+  );
+
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+
+  const html = layout(`
+    <p>${escapeHtml(householdName)},</p>
+    ${paragraphs}
+    ${button(url, "Your details and RSVP")}
+    <p style="font-size:13px;color:#6b6560">${escapeHtml(weddingName)}</p>`);
+
+  return { subject, text, html };
+}
+
 export function reminderEmail(options: {
   weddingName: string;
   householdName: string;

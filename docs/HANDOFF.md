@@ -22,18 +22,27 @@ Session 20's entry, below, is unchanged.
 Previously: session 20 — spec 14 (the public wedding site and the invites
 that point at it) was written from a discovery pass against
 [aisle.wedding](https://aisle.wedding), **all twelve of its questions were
-answered in the same session**, and **build steps 0 and 1 are now built**:
-`weddings.slug`, the Script theme system, and a themed `/w/[slug]` rendered
-from `site_content`. Steps 2–5 are not started. **Read
+answered in the same session**, and **build steps 0 to 2 are largely built**:
+`weddings.slug`, the Script theme system, a themed `/w/[slug]` rendered from
+`site_content`, and the `/site` editor behind it. Steps 3–5 are not started.
+**Read
 `docs/specs/14-public-site-and-invites.md`'s "Build status" section first** —
 it is the per-file handoff, including the three places the build corrected the
 spec and the environment traps that cost time here.
 
-**The one thing to know before picking it up: there is no editor.** The
-renderer works and is tested; every section's content is still a JSONB payload
-that has to be typed into `site_content` by hand, and `/site` does not exist.
-That is the next piece of work and it is what stands between this feature and
-being usable.
+**The editor now exists** (`/site` and `/site/theme`), so the site is editable
+end to end: every section, reordering, hide/show, theme, palette with a live
+contrast check, and an FAQ starter library. The seed carries a full example
+site, so `supabase db reset` renders every section type at `/w/alex-sam`.
+**All six build steps of spec 14 are now built** — the slug, the theme and
+renderer, the `/site` editor, the schedule and FAQ, the invitation card and
+senders, the coach, and guest photo uploads. **What it has never had is
+contact with reality:** nothing has run against a live project and nothing but
+the Open Graph image has been looked at. That is now the largest risk in the
+feature, and more building will not reduce it. The spec's "Build status"
+section lists the short tail of deliberate gaps, of which the one worth
+reading first is that **coach seat capacity is checked but not locked** —
+simultaneous reservations for the last seats can both succeed.
 
 **Also unread, still:** `aisle.wedding` is blocked by this environment's
 egress policy, so the design proportions in §5 are this session's judgement
@@ -295,6 +304,149 @@ than linking to an anchor that is not there. Steps 2–5 otherwise untouched.
 **Unrelated and still outstanding from session 19:** `0013`/`0014` have never
 been applied to the live project and `ensure-bucket.mjs` has never run against
 it. `0015` now joins that queue. `/api/health` confirms.
+
+## Session 20 (build, continued): the /site editor, the FAQ library, seed content
+
+**Green:** typecheck, `npm test` (399), `verify-migrations.sh` (187),
+`npm run build`. Still never opened in a browser and never run against a live
+project.
+
+`24a0318`. What changed:
+
+- **`/site`** — every section listed (including empty ones: the site drops
+  them, the editor must not or a blank section is unreachable), show/hide,
+  move up/down, an inline form each, repeaters for the list-shaped sections,
+  and per-event dress codes and map links keyed to real events.
+- **`/site/theme`** — and this is the first caller of `validatePalette`, which
+  until now was written, tested and wired to nothing. A custom palette that
+  fails on text does not save. The check also runs live while typing, because
+  a planner picking a pale grey should find out then rather than after
+  pressing a button; the server re-checks regardless, since the live one is a
+  client component.
+- **The forms are generated from a field spec** (`src/lib/site/editor-fields.ts`)
+  rather than written twelve times, which is what makes the useful test
+  possible: every payload key the renderer reads has somewhere to be typed,
+  and the array keys match what `sections.ts` actually reads. A key the
+  renderer supports and the editor never writes looks exactly like a broken
+  feature.
+- **The FAQ starter library** — 18 questions shipped as *drafts with the
+  specifics in [brackets]*, deliberately not plausible filled-in guesses. A
+  wrong answer that already reads like a sentence does not get proofread; an
+  obvious blank does. Adding appends and skips duplicates, so the button is
+  safe to press twice.
+- **Seed content** — a full example site. Without it a fresh reset showed a
+  hero and nothing else (empty sections do not render), which made a working
+  renderer look broken and made the theme impossible to see without writing
+  JSON by hand.
+- **"Site" added to the planner nav**, taking it from eight entries to nine.
+
+**One bug caught before it shipped:** saving a section wrote `sort_order` back
+as the designed default, silently undoing a planner's reordering the next time
+they edited any section's text. An upsert names every column it sets, so all
+three writers now read the current value first and only fall back to the
+default for a row that does not exist yet.
+
+**Two things the editor stores that do nothing yet**, with help text saying so
+rather than implying a working switch: `gallery.uploads_open` and
+`gallery.moderation` (guest uploads are step 5), and the hero photo path,
+which works but has no upload behind it until `site_assets` lands in `0016`.
+
+## Session 20 (build, continued): the invitation card, save-the-dates, broadcasts
+
+**Green:** typecheck, 412 tests, 187 SQL assertions, both migration verifiers,
+production build. `e457bf0`.
+
+**And for the first time, something here has been looked at.** The Open Graph
+image at `/i/[token]/opengraph-image` renders 1200×630 with Pinyon Script and
+EB Garamond loading correctly. A malformed token short-circuits before any
+database call, so the fallback path exercises satori and the fonts for real
+without a live project — worth knowing as a technique, because it is the only
+visual verification this feature has had.
+
+**Two bugs that check caught:**
+
+- **`/i` was not in `PUBLIC_PREFIXES`**, so the card 307'd to the login
+  screen. Every shared invitation would have previewed as a login page. This
+  is precisely the failure `src/lib/public-paths.ts` warns about in its own
+  header, which is worth re-reading whenever a public surface is added.
+- The fallback image read "YOU ARE INVITED / You're invited", because the
+  names fall back to the same phrase.
+
+**Things worth knowing about the shape of this:**
+
+- **Satori cannot read WOFF2**, only TTF/OTF/WOFF, and WOFF2 is what the site
+  uses because it is roughly half the size. So both families exist twice, in
+  two formats, for two renderers — `src/lib/fonts/` for the site and
+  `src/lib/fonts/og/` for the image. Deleting the `.ttf` copies as duplicates
+  breaks the preview silently and nothing else.
+- **`resolveCard` is deliberately not `resolveInvitation`.** The latter loads
+  guests, events, questions, every RSVP and every answer, and records a token
+  attempt against a hashed IP. The card is the page most likely to be
+  forwarded to a group chat, and forty people opening it behind one proxy
+  would have counted as forty failures and throttled that household out of
+  replying.
+- **Save-the-dates do not set `invitations.sent_at`.** That column, not the
+  message kind, is what gates the chasing cron — so setting it would have
+  started nagging people about a question nobody had put to them. The
+  migration's header records this.
+- `0016` is enum-only, following session 21's 55P04 lesson, and says in the
+  file why it contains nothing else.
+
+**Not done in step 3:** the print-ready sheet carrying the card's design and a
+household QR code (V1's `/invitations/print` does plain QR codes already; a
+real PDF would need a new dependency, and a themed print stylesheet is
+probably the better route), a send preview as a named household, and any
+batching — both senders currently loop over every household in one request,
+which will be slow and may time out at four hundred households.
+
+## Session 20 (build, continued): the coach, the gallery, and the rest of spec 14
+
+**Green:** typecheck, 436 tests, 201 SQL assertions, both migration verifiers,
+production build. `355c927`, `8352810`, and the stationery sheet.
+
+`0017_public_site.sql` carries the rest of the schema: coach runs, stops and
+seats, transport options, accommodations, `site_assets` and `site_visits`,
+seven tables all on the composite-key tenancy pattern with RLS asserted.
+
+**Things worth knowing, in the order they would bite:**
+
+- **Seat capacity is checked, not locked.** `reserveCoachSeats` reads
+  `v_coach_runs` and then inserts; nothing spans the two. Two households
+  taking the last two seats at once both succeed. A `SELECT … FOR UPDATE` on
+  the run or a trigger asserting the sum would close it. Left as it is
+  deliberately, and written down rather than hidden.
+- **`seats_taken` is a view, never a column.** A cached count drifts the first
+  time a reservation goes by cascade, and there is a SQL assertion for it.
+- **Null capacity is not zero capacity** — an uncounted run says "12 seats
+  reserved", not "0 left" (which stops people booking) and not "unlimited"
+  (which oversells it).
+- **`canReserve` counts the difference, not the request.** A household holding
+  4 seats on a full coach changing to 5 needs one more; changing to 3 needs
+  none. The naive check refuses a household shrinking its own booking.
+- **Guest uploads are gated to `/rsvp/[token]`.** The browser re-encodes to
+  WebP first, which strips EXIF GPS — a phone writes somebody's home address
+  into every photo. SVG is refused specifically: a document that can carry
+  script, served from our own origin. Approval is set at confirm, not request,
+  so a half-finished upload cannot become a live photo.
+- **`ensure-bucket.mjs` now matters for two features.** Site images share the
+  moodboard bucket behind a `site/` prefix, so there is one infrastructure
+  step rather than two half-done ones.
+
+**Three bugs caught during this stretch, none of which typecheck or the build
+would have found:**
+
+1. A **function passed from a Server Component to a Client Component** for
+   time formatting. React refuses to serialise one, so it throws at runtime.
+   The component takes the IANA zone now and formats there.
+2. The **coach CSV export fell through** to the guest export's `else` and had
+   its body overwritten. It returns early now, like the tasks export.
+3. My **first attempt at batching did not advance**: each call reloaded the
+   same household list, took the same first 25, skipped them all on dedupe and
+   reported the same `remaining` forever. Progress comes from the message log
+   now, which also makes a send resumable after a crash or a closed tab.
+
+**What is left is in the spec's Build status**, and the headline is not code:
+nothing has run against a live database or been opened in a browser.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 

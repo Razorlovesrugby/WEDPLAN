@@ -23,7 +23,7 @@ export function SiteSection({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-16 px-5 py-12 sm:py-16">
+    <section id={id} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
       <div className="mx-auto max-w-2xl">
         {rule ? <FloralRule className="mb-8" /> : null}
         <h2 className="text-center font-script text-4xl leading-tight text-ink sm:text-5xl">

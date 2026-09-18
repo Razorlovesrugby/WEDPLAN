@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Creates the moodboards storage bucket. Idempotent — run it as often as you
+ * Creates the private storage bucket. Idempotent — run it as often as you
  * like.
  *
  *   node scripts/ensure-bucket.mjs
@@ -12,6 +12,11 @@
  * Anything touching `storage` would fail there on every CI run, and the fix
  * would be teaching a test fixture to fake Supabase's storage schema — a
  * worse thing to own than this file.
+ *
+ * It holds BOTH moodboard images and the public site's own images (spec 14
+ * §9), kept apart by a `site/` path prefix. One bucket rather than two so
+ * there is a single infrastructure step and nobody deploys with half the
+ * storage set up.
  *
  * The bucket is PRIVATE and carries no policies. Every object in it is
  * written, signed and deleted by the service role, from code that has already

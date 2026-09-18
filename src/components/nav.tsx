@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 /**
- * Eight destinations (spec 13) — collapsed down from a flat fourteen.
+ * Nine destinations — spec 13's eight, plus "Site" for the public wedding
+ * site (spec 14). It earns its own entry rather than living under Settings:
+ * it is a thing the couple will open repeatedly while writing it, and it is
+ * the only screen here whose output strangers read.
  * "Guests" and "Tasks" each cover several routes underneath them; a page
  * living under one of `matchPrefixes` keeps that top-level entry lit even
  * though its own URL isn't the link's own `href` (spec 13 §1B/§1A's hub
@@ -20,6 +23,7 @@ const LINKS = [
   { href: "/questions", label: "Questions" },
   { href: "/lists", label: "Tasks", matchPrefixes: ["/lists", "/calendar", "/board", "/timeline"] },
   { href: "/moodboards", label: "Moodboards" },
+  { href: "/site", label: "Site", matchPrefixes: ["/site", "/travel", "/gallery"] },
   { href: "/settings", label: "Settings" },
 ] as const;
 
@@ -30,7 +34,7 @@ function isActive(pathname: string, link: { href: string; matchPrefixes?: readon
 }
 
 /**
- * Eight destinations still wraps into more than one row on a narrow phone,
+ * Nine destinations still wraps into more than one row on a narrow phone,
  * so below `sm:` this collapses behind a hamburger button into a dropdown
  * panel instead (spec 03, section 7, decision 5). `sm:` and up keeps a
  * plain wrapping link row.

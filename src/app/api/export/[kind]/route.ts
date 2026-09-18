@@ -5,7 +5,8 @@ import { listGuests } from "@/server/queries/guests";
 import { getItemsForExport } from "@/server/queries/lists";
 import { parseGuestFilters } from "@/lib/filters";
 import { csvDocument } from "@/lib/csv";
-import { guestName } from "@/lib/format";
+import { guestName, formatDateTime } from "@/lib/format";
+import { getCoachManifest } from "@/server/queries/travel";
 import type { ListItemStatus } from "@/lib/types/database";
 
 /**
@@ -21,7 +22,7 @@ import type { ListItemStatus } from "@/lib/types/database";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households", "tasks"] as const;
+const KINDS = ["guests", "catering", "households", "tasks", "coach"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -46,6 +47,36 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const stamp = new Date().toISOString().slice(0, 10);
   let body: string;
   let filename: string;
+
+  if (kind === "coach") {
+    // The manifest: who is on which coach, from which stop. Ordered the way it
+    // gets read aloud at a kerbside — run, then stop, then household.
+    //
+    // Returns here rather than falling through, like the tasks export above
+    // it: everything below this point loads the guest list and ends in an
+    // `else` that would overwrite whatever body was built.
+    const manifest = await getCoachManifest(wedding.id);
+    return new NextResponse(
+      csvDocument(
+        ["Coach", "Direction", "Stop", "Pickup", "Household", "Seats"],
+        manifest.map((row) => [
+          row.run,
+          row.direction === "to_venue" ? "To the venue" : "Back",
+          row.stop,
+          row.pickupAt ? formatDateTime(row.pickupAt, wedding.timezone) : "",
+          row.household,
+          row.seats,
+        ]),
+      ),
+      {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="coach-manifest-${stamp}.csv"`,
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
 
   if (kind === "tasks") {
     /*

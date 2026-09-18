@@ -174,6 +174,15 @@ describe("hasContent", () => {
     // one must not lose its section on upgrade.
     expect(hasContent("travel", { body: "Take the M5." })).toBe(true);
   });
+
+  it("shows travel and stays on their rows alone", () => {
+    // After 0017 the content lives in its own tables, so a coach run with no
+    // intro written is still a travel section worth rendering.
+    expect(hasContent("travel", null, { ...NO_COUNTS, travelOptions: 1 })).toBe(true);
+    expect(hasContent("stays", null, { ...NO_COUNTS, stays: 2 })).toBe(true);
+    expect(hasContent("travel", null, NO_COUNTS)).toBe(false);
+    expect(hasContent("stays", null, NO_COUNTS)).toBe(false);
+  });
 });
 
 describe("resolveSections", () => {

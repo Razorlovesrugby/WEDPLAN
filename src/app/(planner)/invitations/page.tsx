@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { InvitationsTable } from "@/components/invitations/invitations-table";
+import { StationeryPanel } from "@/components/invitations/stationery-panel";
+import { createClient } from "@/lib/supabase/server";
 import { SubTabs } from "@/components/sub-tabs";
 import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { listInvitations } from "@/server/queries/invitations";
@@ -31,7 +33,12 @@ export default async function InvitationsPage({
   const active = STATUSES.find((candidate) => candidate === status) ?? null;
 
   const wedding = await requireWedding();
-  const [allRows, events] = await Promise.all([listInvitations(wedding.id), getEvents(wedding.id)]);
+  const supabase = await createClient();
+  const [allRows, events, { data: tags }] = await Promise.all([
+    listInvitations(wedding.id),
+    getEvents(wedding.id),
+    supabase.from("tags").select("id, name").eq("wedding_id", wedding.id).order("name"),
+  ]);
 
   const rows = active
     ? allRows.filter((row) =>
@@ -55,8 +62,8 @@ export default async function InvitationsPage({
           <span className="text-sm text-muted">
             {sent} sent · {complete} fully answered · {allRows.length} households
           </span>
-          <Link href="/invitations/print" className="btn" prefetch={false}>
-            Print QR codes
+          <Link href="/invitations/print/stationery" className="btn" prefetch={false}>
+            Print invitations
           </Link>
         </div>
       </div>
@@ -80,6 +87,11 @@ export default async function InvitationsPage({
           Manage the RSVP questions households answer →
         </Link>
       </p>
+
+      <StationeryPanel
+        tags={(tags ?? []) as { id: string; name: string }[]}
+        weddingDateSet={wedding.wedding_date != null}
+      />
 
       <InvitationsTable
         rows={rows}

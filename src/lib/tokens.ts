@@ -118,6 +118,18 @@ export function invitationUrl(token: string): string {
   return absoluteUrl(`/rsvp/${token}`);
 }
 
+/**
+ * The stationery card for the same household (spec 14 §12.2).
+ *
+ * The same token, a different page: `/i` is the card you forward over
+ * WhatsApp, `/rsvp` is the form. Sharing one token across both is what makes
+ * "one link per household for the life of the wedding" true, so a QR code
+ * printed on paper and a link pasted into a chat lead to the same place.
+ */
+export function invitationCardUrl(token: string): string {
+  return absoluteUrl(`/i/${token}`);
+}
+
 // ---------------------------------------------------------------------------
 // Moodboard shares and clip tokens
 // ---------------------------------------------------------------------------
