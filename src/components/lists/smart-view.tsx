@@ -1,3 +1,5 @@
+"use client";
+
 import { sortCompletedLast } from "@/lib/lists/sort";
 import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow, type ItemWithList } from "./item-row";
