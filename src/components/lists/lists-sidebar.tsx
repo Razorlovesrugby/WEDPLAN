@@ -35,13 +35,25 @@ const SMART_VIEWS = [
 /**
  * The smart views sit alongside the wedding's own lists, and are never
  * edited directly — they're filters, not storage (spec 1, section 1). The
- * lists themselves, since spec 12, can be dragged (or moved with the
- * up/down buttons) into whatever order the planner wants under "Your
- * lists" — a new `reorderLists` action renumbers `lists.sort_order`, the
- * same column that already decided this order, just never user-editable
- * after creation until now.
+ * lists themselves, since spec 12, can be dragged into whatever order the
+ * planner wants under "Your lists" — `reorderLists` renumbers
+ * `lists.sort_order`, the same column that already decided this order, just
+ * never user-editable after creation until now.
+ *
+ * Spec 16 §1 drops the touch-friendly Move up/down buttons spec 12 built
+ * alongside the drag handle — the handle plus dnd-kit's own keyboard
+ * sortable interaction (already wired via `KeyboardSensor`) cover reordering
+ * without them — and puts a live outstanding-item count in the space they
+ * occupied instead.
  */
-export function ListsSidebar({ lists }: { lists: ListRow[] }) {
+export function ListsSidebar({
+  lists,
+  openCounts = {},
+}: {
+  lists: ListRow[];
+  /** list_id -> count of not-done items (including sub-items), spec 16 §1. Omitted counts render as 0. */
+  openCounts?: Record<string, number>;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -120,7 +132,7 @@ export function ListsSidebar({ lists }: { lists: ListRow[] }) {
         >
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
             <div className="space-y-0.5">
-              {order.map((id, index) => {
+              {order.map((id) => {
                 const list = listsById.get(id);
                 if (!list) return null;
                 return (
@@ -128,8 +140,7 @@ export function ListsSidebar({ lists }: { lists: ListRow[] }) {
                     key={id}
                     list={list}
                     active={pathname === `/lists/${list.id}`}
-                    onMoveUp={index > 0 ? () => applyMove(index, index - 1) : undefined}
-                    onMoveDown={index < order.length - 1 ? () => applyMove(index, index + 1) : undefined}
+                    openCount={openCounts[id] ?? 0}
                   />
                 );
               })}
@@ -146,13 +157,11 @@ export function ListsSidebar({ lists }: { lists: ListRow[] }) {
 function SortableListLink({
   list,
   active,
-  onMoveUp,
-  onMoveDown,
+  openCount,
 }: {
   list: ListRow;
   active: boolean;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
+  openCount: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: list.id });
 
@@ -178,35 +187,27 @@ function SortableListLink({
           active ? "bg-ink text-white" : "text-muted hover:bg-line/50 hover:text-ink"
         }`}
       >
-        <span
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
-          aria-hidden
-        />
-        {list.icon ? <span aria-hidden>{list.icon}</span> : null}
+        {/* A list is either a color or an emoji, never both — icon wins when set (spec 16 §2). */}
+        {list.icon ? (
+          <span aria-hidden>{list.icon}</span>
+        ) : (
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
+            aria-hidden
+          />
+        )}
         <span className="truncate">{list.title}</span>
       </Link>
-      {/* Touch-friendly fallback for drag reorder (spec 03 section 7, decision 6). */}
-      <div className="flex shrink-0 flex-col gap-0">
-        <button
-          type="button"
-          aria-label={`Move "${list.title}" up`}
-          disabled={!onMoveUp}
-          onClick={onMoveUp}
-          className="rounded px-0.5 text-[10px] leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          aria-label={`Move "${list.title}" down`}
-          disabled={!onMoveDown}
-          onClick={onMoveDown}
-          className="rounded px-0.5 text-[10px] leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
-        >
-          ↓
-        </button>
-      </div>
+      {/* Spec 16 §1 — replaces the old Move up/down buttons; the drag handle above is the only reorder control now. */}
+      <span
+        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
+          openCount > 0 ? "bg-line/60 text-muted" : "text-muted/50"
+        }`}
+        title={`${openCount} outstanding ${openCount === 1 ? "task" : "tasks"}`}
+      >
+        {openCount}
+      </span>
     </div>
   );
 }

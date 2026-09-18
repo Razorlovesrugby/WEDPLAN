@@ -15,8 +15,8 @@ import type {
   ListRow,
   PaymentRow,
 } from "@/lib/types/database";
-import type { LinkedList, LinkedTask } from "@/server/queries/budget-links";
-import type { ListItemWithList } from "@/server/queries/lists";
+import type { BudgetItemLinks } from "@/server/queries/budget-links";
+import type { ListItemWithList, SectionWithList } from "@/server/queries/lists";
 
 const BASIS_LABEL: Record<BudgetItemView["quantity_basis"], string> = {
   flat: "Flat",
@@ -40,6 +40,7 @@ export function BudgetItemRow({
   components,
   payments,
   lists,
+  sections,
   allTasks,
   links,
   timezone,
@@ -53,9 +54,11 @@ export function BudgetItemRow({
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
   lists: ListRow[];
+  /** Every section across every list, for the popup's "Link a section…" search (spec 16 §3). */
+  sections: SectionWithList[];
   /** Every task across every list, for the popup's "Link a task…" search (spec 6.1, part B). */
   allTasks: ListItemWithList[];
-  links: { lists: LinkedList[]; tasks: LinkedTask[] };
+  links: BudgetItemLinks;
   timezone: string;
   counts: { adult: number; child: number; seat: number };
   fxState: { rate: number | null; source: string } | null;
@@ -74,7 +77,7 @@ export function BudgetItemRow({
   const [prompt, setPrompt] = useState(false);
 
   const variance = item.contracted !== null ? item.contracted - (item.quoted ?? item.contracted) : null;
-  const linkedCount = links.lists.length + links.tasks.length;
+  const linkedCount = links.lists.length + links.sections.length + links.tasks.length;
 
   function onSave(value: BudgetItemFormValue) {
     startTransition(async () => {
@@ -174,6 +177,7 @@ export function BudgetItemRow({
         itemId={item.id}
         itemLabel={item.label}
         lists={lists}
+        sections={sections}
         allTasks={allTasks}
         links={links}
         timezone={timezone}

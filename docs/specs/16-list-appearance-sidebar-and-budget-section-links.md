@@ -1,9 +1,26 @@
 # Feature spec: List appearance, sidebar cleanup, and budget links at the section level
 
-**Status: proposed, not built.** Three requests about how lists and
-sections present themselves and connect to budget lines — bundled because
-all three are small, independent UI/data changes over already-built
-screens, none blocking on the others.
+**Status: built, same session.** `0017_budget_section_links.sql`
+(`budget_item_sections`, `v_budget_item_tasks`'s `linked_via_list` boolean
+replaced with a `link_source` enum-shaped text ranking direct > via_list >
+via_section, and `v_timeline_items` gaining `list_icon` for §2's
+calendar/timeline cards). The sidebar's Move up/down buttons are gone,
+replaced by a live outstanding-item count (`getOpenItemCounts`); a list's
+color and icon are mutually exclusive everywhere a list's identity renders
+(sidebar, `/lists/[id]`'s header and section-badge, `ItemRow`'s list badge,
+`TaskPreviewPopup`, `/calendar`, `/timeline`, `/board`, and
+`ListAppearanceEditor`, which now disables its swatch strip while an icon
+is set); the "Linked tasks" popup gained a "Link a section…" search and a
+"Linked sections" list, and a linked section badges its own `/lists/[id]`
+heading. `npm run typecheck`, `npm test` (384 tests), `verify-migrations.sh`
+(198 SQL assertions, +6 for this migration), `verify-bootstrap.sh`, and
+`npm run build` all pass. Not opened against a live project or a real
+browser. **One deliberate scope boundary beyond what's written below:** the
+reminder digest email's own list-color left-border accent
+(`src/lib/email/templates.ts`) is untouched — it isn't one of the sites §2
+names, and extending it would mean threading an icon through
+`v_reminders_due`/`DigestItem`, a separate, well-tested pipeline this pass
+didn't touch.
 
 **Depends on:** Spec 3 (`list.color`, `list.icon`), spec 6 / 6.1 (budget
 linking — `budget_item_tasks`, `budget_item_lists`,

@@ -11,6 +11,7 @@ import {
   getFlaggedItems,
   getListTemplates,
   getLists,
+  getOpenItemCounts,
   getScheduledItems,
   getTodayItems,
   type ListItemWithList,
@@ -60,10 +61,11 @@ export default async function ListsPage({
     }
   })();
 
-  const [lists, templates, collaborators, user, items] = await Promise.all([
+  const [lists, templates, collaborators, openCounts, user, items] = await Promise.all([
     getLists(wedding.id),
     getListTemplates(),
     getCollaborators(wedding.id),
+    getOpenItemCounts(wedding.id),
     userPromise,
     itemsPromise,
   ]);
@@ -76,7 +78,7 @@ export default async function ListsPage({
     <div className="space-y-4">
       <SubTabs tabs={TASKS_TABS} />
       <div className="flex flex-col gap-6 sm:flex-row">
-        <ListsSidebar lists={lists} />
+        <ListsSidebar lists={lists} openCounts={openCounts} />
         <div className="min-w-0 flex-1 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h1 className="font-serif text-2xl">{TITLES[view]}</h1>

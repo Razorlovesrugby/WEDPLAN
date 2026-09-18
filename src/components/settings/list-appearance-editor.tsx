@@ -45,13 +45,22 @@ function ListAppearanceRow({ list }: { list: ListRow }) {
     return result;
   }
 
+  const hasIcon = Boolean(list.icon);
+
   return (
     <li className="flex flex-wrap items-center gap-3 p-3">
-      <span
-        className="h-3 w-3 flex-none rounded-full"
-        style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
-        aria-hidden
-      />
+      {/* A list is either a color or an emoji, never both — icon wins when set (spec 16 §2). */}
+      {list.icon ? (
+        <span className="w-3 flex-none text-center" aria-hidden>
+          {list.icon}
+        </span>
+      ) : (
+        <span
+          className="h-3 w-3 flex-none rounded-full"
+          style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
+          aria-hidden
+        />
+      )}
       <span className="min-w-0 flex-1">
         <InlineText
           value={list.title}
@@ -61,17 +70,27 @@ function ListAppearanceRow({ list }: { list: ListRow }) {
         />
       </span>
 
-      <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`Color for ${list.title}`}>
+      <div
+        className={`flex flex-wrap items-center gap-1 ${hasIcon ? "opacity-40" : ""}`}
+        role="group"
+        aria-label={`Color for ${list.title}`}
+        title={hasIcon ? "Clear the icon to pick a color" : undefined}
+      >
         {LIST_COLOR_PALETTE.map((swatch) => (
           <button
             key={swatch.value}
             type="button"
             title={swatch.name}
-            disabled={pending}
-            aria-pressed={(list.color ?? DEFAULT_LIST_COLOR) === swatch.value}
-            onClick={() => save({ color: swatch.value })}
+            disabled={pending || hasIcon}
+            aria-pressed={!hasIcon && (list.color ?? DEFAULT_LIST_COLOR) === swatch.value}
+            // Clicking a swatch while an icon is set clears the icon too — otherwise the
+            // pick would be a silent no-op, since the icon still wins at render time.
+            onClick={() => {
+              setIcon("");
+              save({ color: swatch.value, icon: "" });
+            }}
             className={`h-6 w-6 rounded-full border-2 ${
-              (list.color ?? DEFAULT_LIST_COLOR) === swatch.value ? "border-ink" : "border-transparent"
+              !hasIcon && (list.color ?? DEFAULT_LIST_COLOR) === swatch.value ? "border-ink" : "border-transparent"
             }`}
             style={{ backgroundColor: swatch.value }}
           />

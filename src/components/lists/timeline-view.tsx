@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
-import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { listAccentBorderColor } from "@/lib/list-colors";
 import { TaskPreviewPopup } from "./task-preview-popup";
 import type { TimelineItemView } from "@/lib/types/database";
 
@@ -221,7 +221,7 @@ function TimelineCard({
       onClick={() => onPreview(item)}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.list_color ?? DEFAULT_LIST_COLOR,
+        borderLeftColor: listAccentBorderColor(item.list_color, item.list_icon),
       }}
       className={`cursor-grab rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm active:cursor-grabbing
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}
@@ -230,6 +230,7 @@ function TimelineCard({
     >
       <p className="truncate font-medium">{item.title}</p>
       <p className="truncate text-muted">
+        {item.list_icon ? <span aria-hidden>{item.list_icon} </span> : null}
         {item.list_title}
         {item.flagged ? " · ⚑" : ""}
         {item.priority > 0 ? ` · ${"!".repeat(item.priority)}` : ""}
