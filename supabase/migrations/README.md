@@ -11,10 +11,26 @@ script that can be pasted straight into the Supabase SQL editor.
 | 4 | `0004_lists.sql` | Lists, sections, items, list templates, `v_timeline_items` | 1, 2, 3 |
 | 5 | `0005_lists_status_assignment.sql` | Board status, one level of sub-items, recurrence, assignment | 1, 2, 3, 4 |
 | 6 | `0006_reminders.sql` | `message_log.kind` gains `'digest'` | 1 |
+| 7 | `0007_settings.sql` | One settings column | 1 |
+| 8 | `0008_multi_cut_lines.sql` | Multi-cut guest lines | 1, 3 |
+| 9 | `0009_run_sheet.sql` | Day-of run sheet | 1, 2 |
+| 10 | `0010_budget.sql` | Budget categories and line items | 1, 2 |
+| 11 | `0011_budget_manual_quantity.sql` then `0011_budget_manual_quantity_columns.sql` | Manual quantity × unit price costing basis (two-part — see below) | 10 |
+| 12 | `0012_budget_tier_position.sql` | Budget's guest-population helper follows spec 5's tier rewrite | 8, 10 |
+| 13 | `0013_moodboards.sql` | Moodboards | 1, 2 |
+| 14 | `0014_moodboard_clipper.sql` | Pinterest import, right-click clipper | 13 |
+| 15 | `0015_wedding_slug.sql` | `weddings.slug` | 1 |
+| 16 | `0016_list_content_and_calculated_dates.sql` | Collaborator display names, notes-kind list sections, calculated due dates | 4, 5 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
 with a collaborator row.
+
+**This table must stay in sync with the files in this directory.** A stale
+table that stops short of the newest migration is exactly how a column like
+`list_sections.kind` (added in `0016`) ends up missing from a real project —
+whoever applied migrations by hand followed this list and stopped where it
+stopped. Add a row here in the same commit that adds a migration file.
 
 ---
 
@@ -23,9 +39,9 @@ with a collaborator row.
 In the Supabase dashboard → **SQL Editor**:
 
 1. Open `0001_core_schema.sql`, copy the whole file, paste, **Run**.
-2. Repeat for `0002_row_level_security.sql`, then `0003_derived_views.sql`,
-   then `0004_lists.sql`, then `0005_lists_status_assignment.sql`, then
-   `0006_reminders.sql`.
+2. Repeat for every other file above, **in numerical order** (including both
+   halves of `0011`, in order), ending with the highest-numbered file in this
+   directory.
 3. Open `../bootstrap.sql`, edit the four values at the top, paste, **Run**.
 
 Run them one file at a time and read the result before moving on. Each script
