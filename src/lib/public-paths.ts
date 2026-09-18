@@ -15,12 +15,18 @@
  * longer doing it: an invitation token resolved to one household, a share
  * token resolved to one board, a clip token resolved to one wedding, a bearer
  * CRON_SECRET, or a page that is genuinely public (/w, /privacy).
+
+ *   /i is the stationery card (spec 14 §12.2) — the same household token as
+ *   /rsvp, resolved to one household, and the page people forward over
+ *   WhatsApp. Its Open Graph image lives underneath it, and a redirect there
+ *   turns every shared invitation into a preview of the login screen.
  */
 export const PUBLIC_PREFIXES = [
   "/login",
   "/forgot-password",
   "/auth",
   "/rsvp",
+  "/i",
   "/w",
   "/m",
   "/privacy",

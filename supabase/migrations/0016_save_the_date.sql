@@ -1,0 +1,36 @@
+-- ===========================================================================
+-- 0016: message_kind gains 'save_the_date' (spec 14 §12.1)
+-- ===========================================================================
+-- A save-the-date is its own kind, not an 'invitation' sent early. The
+-- distinction is load-bearing in three places:
+--
+--   * the chasing cron selects households from `v_household_rsvp` where
+--     `invitations.sent_at` is set and the response is incomplete. A
+--     save-the-date asks nothing, so `sendSaveTheDates` deliberately does not
+--     set `sent_at` — only sending the actual invitation does. Were a
+--     save-the-date to mark an invitation as sent, the cron would start
+--     nagging people about a question nobody has put to them yet;
+--   * `dedupe_key` is scoped by kind, so a household can receive a
+--     save-the-date and later an invitation without the second being
+--     swallowed as a duplicate of the first;
+--   * "have we sent the invitations yet" is a question the planner asks, and
+--     it has to survive the save-the-dates having gone out months earlier.
+--
+-- ---------------------------------------------------------------------------
+-- WHY THIS FILE CONTAINS NOTHING ELSE
+-- ---------------------------------------------------------------------------
+-- `alter type ... add value` cannot be followed by any use of the new value in
+-- the same transaction: PostgreSQL raises 55P04 "unsafe use of new value".
+-- `psql -f` and the Supabase CLI apply a file statement-by-statement, so they
+-- never see it — but the dashboard's SQL editor runs a whole pasted script as
+-- one implicit transaction, and that is how the planner applies these by hand.
+-- 0011 was split into two files for exactly this reason (see
+-- supabase/migrations/README.md).
+--
+-- So this migration adds the value and stops. Anything that needs to *use*
+-- 'save_the_date' in DDL belongs in a later file that runs after this one has
+-- committed. `scripts/verify-migrations-single-tx.sh` checks that property for
+-- every migration, including this one.
+-- ===========================================================================
+
+alter type public.message_kind add value if not exists 'save_the_date';

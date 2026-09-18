@@ -250,7 +250,15 @@ export type QuestionType =
   | "multi_select"
   | "number";
 export type QuestionScope = "guest" | "household";
-export type MessageKind = "invitation" | "reminder" | "update" | "test" | "digest";
+/** `save_the_date` added by 0016 — its own kind, not an early invitation, so
+ *  the chasing cron never counts it as a question somebody failed to answer. */
+export type MessageKind =
+  | "invitation"
+  | "save_the_date"
+  | "reminder"
+  | "update"
+  | "test"
+  | "digest";
 export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
 export type ListKind = "checklist" | "timeline" | "generic";
 export type ListItemStatus = "not_started" | "in_progress" | "done";
