@@ -34,8 +34,12 @@ spec and the environment traps that cost time here.
 end to end: every section, reordering, hide/show, theme, palette with a live
 contrast check, and an FAQ starter library. The seed carries a full example
 site, so `supabase db reset` renders every section type at `/w/alex-sam`.
-**The next piece of work is step 3, the invites** — and it is the only part of
-spec 14 carrying a date that cannot move.
+**Step 3 is now about half built**: the `/i/[token]` stationery card with a
+real Open Graph image, save-the-dates, and broadcasts. What is left of it is
+the paper half — a print-ready sheet carrying the card's design and each
+household's QR code — plus a send preview and batching on the bulk senders,
+which currently loop over every household in one request. **Step 4, the coach,
+is the next whole piece.**
 
 **Also unread, still:** `aisle.wedding` is blocked by this environment's
 egress policy, so the design proportions in §5 are this session's judgement
@@ -343,6 +347,54 @@ default for a row that does not exist yet.
 rather than implying a working switch: `gallery.uploads_open` and
 `gallery.moderation` (guest uploads are step 5), and the hero photo path,
 which works but has no upload behind it until `site_assets` lands in `0016`.
+
+## Session 20 (build, continued): the invitation card, save-the-dates, broadcasts
+
+**Green:** typecheck, 412 tests, 187 SQL assertions, both migration verifiers,
+production build. `e457bf0`.
+
+**And for the first time, something here has been looked at.** The Open Graph
+image at `/i/[token]/opengraph-image` renders 1200×630 with Pinyon Script and
+EB Garamond loading correctly. A malformed token short-circuits before any
+database call, so the fallback path exercises satori and the fonts for real
+without a live project — worth knowing as a technique, because it is the only
+visual verification this feature has had.
+
+**Two bugs that check caught:**
+
+- **`/i` was not in `PUBLIC_PREFIXES`**, so the card 307'd to the login
+  screen. Every shared invitation would have previewed as a login page. This
+  is precisely the failure `src/lib/public-paths.ts` warns about in its own
+  header, which is worth re-reading whenever a public surface is added.
+- The fallback image read "YOU ARE INVITED / You're invited", because the
+  names fall back to the same phrase.
+
+**Things worth knowing about the shape of this:**
+
+- **Satori cannot read WOFF2**, only TTF/OTF/WOFF, and WOFF2 is what the site
+  uses because it is roughly half the size. So both families exist twice, in
+  two formats, for two renderers — `src/lib/fonts/` for the site and
+  `src/lib/fonts/og/` for the image. Deleting the `.ttf` copies as duplicates
+  breaks the preview silently and nothing else.
+- **`resolveCard` is deliberately not `resolveInvitation`.** The latter loads
+  guests, events, questions, every RSVP and every answer, and records a token
+  attempt against a hashed IP. The card is the page most likely to be
+  forwarded to a group chat, and forty people opening it behind one proxy
+  would have counted as forty failures and throttled that household out of
+  replying.
+- **Save-the-dates do not set `invitations.sent_at`.** That column, not the
+  message kind, is what gates the chasing cron — so setting it would have
+  started nagging people about a question nobody had put to them. The
+  migration's header records this.
+- `0016` is enum-only, following session 21's 55P04 lesson, and says in the
+  file why it contains nothing else.
+
+**Not done in step 3:** the print-ready sheet carrying the card's design and a
+household QR code (V1's `/invitations/print` does plain QR codes already; a
+real PDF would need a new dependency, and a themed print stylesheet is
+probably the better route), a send preview as a named household, and any
+batching — both senders currently loop over every household in one request,
+which will be slow and may time out at four hundred households.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 

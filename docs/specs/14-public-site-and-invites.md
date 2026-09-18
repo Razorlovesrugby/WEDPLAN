@@ -116,10 +116,10 @@ screenshots of the Aisle example, or that host on the egress allowlist, so
 
 ## Build status — handoff, 2026-09-17
 
-**Steps 0 and 1 are built, and step 2 is most of the way there. Steps 3–5 are
-not started.** Everything below was verified by `npm run typecheck`,
-`npm test` (399), `./scripts/verify-migrations.sh` (187 assertions) and
-`npm run build`. **Nothing has been opened in a browser,
+**Steps 0 and 1 are built, step 2 is most of the way there, and step 3 is
+about half done. Steps 4–5 are not started.** Everything below was verified by
+`npm run typecheck`, `npm test` (412), `./scripts/verify-migrations.sh` (187
+assertions), `./scripts/verify-migrations-single-tx.sh`, and `npm run build`. **Nothing has been opened in a browser,
 and nothing has run against a live Supabase project** — the same caveat every
 spec since 1 carries. In particular the fonts have never been rendered, the
 theme has never been seen, and no query below has returned a real row.
@@ -146,16 +146,26 @@ theme has never been seen, and no query below has returned a real row.
 | 2 | **The FAQ starter library**, 18 questions as drafts, added by a button that appends and skips duplicates | `src/lib/site/faq-library.ts` |
 | 2 | A full example site in the seed, so a reset renders every section type | `supabase/seed.sql` |
 | 2 | "Site" in the planner nav | `src/components/nav.tsx` |
+| 3 | `message_kind` gains `save_the_date` — enum-only file, per the 55P04 rule | `supabase/migrations/0016_save_the_date.sql` |
+| 3 | **The stationery card at `/i/[token]`** — themed, the thing you forward over WhatsApp | `src/app/i/[token]/page.tsx`, `src/server/rsvp/card.ts` |
+| 3 | **Its Open Graph image**, rendered through satori from the .ttf copies of both faces | `src/app/i/[token]/opengraph-image.tsx`, `src/lib/fonts/og/` |
+| 3 | Save-the-date and broadcast emails | `src/lib/email/templates.ts` |
+| 3 | The senders: segments, confirm-before-bulk-send, honest reporting | `src/server/actions/stationery.ts`, `src/components/invitations/stationery-panel.tsx` |
 
-Unit tests added: 93 (theme 28, sections 29, names 6, ics 15, faq library 8,
-editor fields 7). Total 399.
+Unit tests added: 106 (theme 28, sections 29, names 6, ics 15, faq library 8,
+editor fields 7, stationery templates 13). Total 412.
+
+**The one thing here that has been seen rather than only tested:** the Open
+Graph image. A malformed token short-circuits before any database call, so
+`/i/short/opengraph-image` renders the fallback through the real pipeline —
+1200×630, both faces loading. That is the only visual confirmation this
+feature has.
 
 ### Not done, and worth knowing before picking this up
 
-**The biggest gap now is step 3, the invites.** The site itself is editable
-end to end: a planner can write every section, reorder them, hide them, pick a
-theme and a palette, and see the result. What nobody can do yet is send
-anything.
+**The biggest gap now is step 4, the coach.** The site is editable end to end
+and the invitation surface can send: a card per household, save-the-dates, and
+broadcasts to a segment. What is missing from step 3 is the paper half.
 
 Specifically outstanding:
 
@@ -181,10 +191,17 @@ Specifically outstanding:
   standalone routes do not exist — the site is one scrolling page only. The
   existing print rules in `globals.css` are V1's, for `/invitations/print`.
 - **`site_visits` (§13) is not built.** No analytics of any kind.
-- **Step 3, invites: nothing.** Save-the-date, the `/i/[token]` card, its
-  Open Graph image, the print-ready PDF with a household QR code, and
-  broadcasts. This is the only part of the spec carrying a date that cannot
-  move, and it is now the largest single piece left.
+- **Step 3, the paper half: not done.** The print-ready PDF carrying each
+  household's QR code (§12.2). V1's `/invitations/print` already prints QR
+  codes on a plain sheet; what this spec asks for is the same *design* as the
+  card, so the paper and the digital are one thing. Note that a real PDF needs
+  a new dependency — browser print-to-PDF off a themed print stylesheet is the
+  cheaper route and probably the right one.
+- **Also not done in step 3:** a preview of a save-the-date or broadcast as a
+  named household before sending (§12.3 asks for it), and any throttling on
+  the bulk senders — they loop over every household in one request, which will
+  be slow and may time out on a serverless function at four hundred
+  households. Worth a batched or queued send before a real list.
 - **Step 4, getting there: nothing.** `0016_public_site.sql`, the coach with
   its runs, stops, capacity and manifest export, parking, places to stay as
   structured rows rather than the free-text block the editor writes today,
