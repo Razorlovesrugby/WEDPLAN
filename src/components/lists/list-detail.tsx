@@ -34,7 +34,8 @@ import { InlineText } from "@/components/guests/inline-text";
 import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow } from "./item-row";
 import { QuickAdd } from "./quick-add";
-import type { CollaboratorRow, ListItemRow, ListRow, ListSectionKind, ListSectionRow } from "@/lib/types/database";
+import { SectionNotes } from "./section-notes";
+import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow } from "@/lib/types/database";
 
 /** A section's own droppable/container id, and back — dnd-kit ids are opaque strings, so a
  * "no section" bucket (which has no `list_sections` row) needs a stand-in of its own. */
@@ -82,7 +83,6 @@ export function ListDetail({
   const [error, setError] = useState<string | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [sectionTitle, setSectionTitle] = useState("");
-  const [newSectionKind, setNewSectionKind] = useState<ListSectionKind>("checklist");
   const [hideCompleted, setHideCompleted] = useHideCompleted(`list:${list.id}`);
 
   // Manual reordering, held locally until the next refresh confirms it —
@@ -112,10 +112,6 @@ export function ListDetail({
     const byId = new Map(sections.map((s) => [s.id, s]));
     return orderedSectionIds.map((id) => byId.get(id)).filter((s): s is ListSectionRow => !!s);
   }, [sections, orderedSectionIds]);
-
-  const sectionsById = useMemo(() => new Map(sections.map((s) => [s.id, s])), [sections]);
-  /** A "notes" section holds plain text lines, not tasks — never a drag/select destination for an ordinary checklist item (spec 15 §4). */
-  const checklistSections = useMemo(() => orderedSections.filter((s) => s.kind !== "notes"), [orderedSections]);
 
   const topLevel = useMemo(() => items.filter((i) => !i.parent_item_id), [items]);
   const itemsById = useMemo(() => new Map(topLevel.map((i) => [i.id, i])), [topLevel]);
@@ -196,11 +192,6 @@ export function ListDetail({
   /** Shared by the cross-section drag, the per-item "Section" select, and Move up/down — see rank-list.tsx for the same split. */
   function applyItemMove(sourceKey: string, destKey: string, itemId: string, overId: string) {
     const destSectionId = sectionIdFromContainerKey(destKey);
-    if (sourceKey !== destKey && destSectionId && sectionsById.get(destSectionId)?.kind === "notes") {
-      setError("Notes sections hold plain text lines, not tasks — pick a checklist section instead.");
-      return;
-    }
-
     const sourceOrder = orderByContainer[sourceKey] ?? [];
     const destCommitted = sourceKey === destKey ? sourceOrder : (orderByContainer[destKey] ?? []);
     const withoutItem = destCommitted.filter((id) => id !== itemId);
@@ -288,12 +279,11 @@ export function ListDetail({
   function onAddSection() {
     if (!sectionTitle.trim()) return;
     startTransition(async () => {
-      const result = await addSection(list.id, sectionTitle, newSectionKind);
+      const result = await addSection(list.id, sectionTitle);
       if (!result.ok) {
         setError(result.error);
       } else {
         setSectionTitle("");
-        setNewSectionKind("checklist");
         setAddingSection(false);
         router.refresh();
       }
@@ -360,7 +350,7 @@ export function ListDetail({
                 section={section}
                 order={order}
                 itemsById={itemsById}
-                allSections={checklistSections}
+                allSections={orderedSections}
                 subItemsByParent={subItemsByParent}
                 collaborators={collaborators}
                 currentUserId={currentUserId}
@@ -399,15 +389,6 @@ export function ListDetail({
             placeholder="Section title"
             className="field max-w-xs text-sm"
           />
-          <select
-            value={newSectionKind}
-            onChange={(e) => setNewSectionKind(e.target.value as ListSectionKind)}
-            aria-label="Section kind"
-            className="field w-auto text-sm"
-          >
-            <option value="checklist">Checklist</option>
-            <option value="notes">Notes (plain text lines, e.g. a brain dump)</option>
-          </select>
           <button type="button" className="btn-primary" onClick={onAddSection}>
             Add
           </button>
@@ -448,7 +429,6 @@ function SectionGroup({
   /** Already reconciled (server order + any pending local drag), done items sunk last. */
   order: string[];
   itemsById: Map<string, ListItemRow>;
-  /** Checklist-kind sections only — a "notes" section is never a move-to destination (spec 15 §4). */
   allSections: ListSectionRow[];
   subItemsByParent: Map<string, ListItemRow[]>;
   collaborators: CollaboratorRow[];
@@ -467,7 +447,6 @@ function SectionGroup({
   onMoveSectionDown?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: containerKey });
-  const notesOnly = section?.kind === "notes";
 
   /**
    * What's actually shown, and what drag-and-drop operates over: done items
@@ -529,6 +508,7 @@ function SectionGroup({
           </div>
         </div>
       ) : null}
+      {section ? <SectionNotes sectionId={section.id} notes={section.notes} /> : null}
       <div
         ref={setNodeRef}
         className={`card divide-y divide-line/60 px-3 ${isOver ? "outline outline-2 outline-accent/50" : ""}`}
@@ -546,10 +526,9 @@ function SectionGroup({
                 currentUserId={currentUserId}
                 budgetLinks={budgetLinksByItem[id] ?? []}
                 highlighted={id === highlightId}
-                sections={notesOnly ? undefined : allSections}
+                sections={allSections}
                 currentSectionId={section?.id ?? null}
                 onSelectSection={onSelectSection}
-                notesOnly={notesOnly}
                 onMoveUp={index > 0 && index !== firstDoneIndex ? () => onMoveItemUp(index) : undefined}
                 onMoveDown={
                   index < currentOrder.length - 1 && index !== firstDoneIndex - 1
@@ -567,7 +546,7 @@ function SectionGroup({
         ) : null}
       </div>
       <div className="mt-2">
-        <QuickAdd listId={listId} sectionId={section?.id ?? null} notesMode={notesOnly} />
+        <QuickAdd listId={listId} sectionId={section?.id ?? null} />
       </div>
     </section>
   );
@@ -583,7 +562,6 @@ function SortableItem({
   sections,
   currentSectionId,
   onSelectSection,
-  notesOnly,
   onMoveUp,
   onMoveDown,
 }: {
@@ -596,7 +574,6 @@ function SortableItem({
   sections?: ListSectionRow[];
   currentSectionId: string | null;
   onSelectSection: (itemId: string, sectionId: string | null) => void;
-  notesOnly: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
@@ -615,11 +592,10 @@ function SortableItem({
         currentUserId={currentUserId}
         budgetLinks={budgetLinks}
         highlighted={highlighted}
-        allowSubItems={!notesOnly}
+        allowSubItems
         sections={sections}
         currentSectionId={currentSectionId}
         onSelectSection={onSelectSection}
-        notesOnly={notesOnly}
         dragHandle={
           <div className="mt-1 flex shrink-0 flex-col items-center">
             <button

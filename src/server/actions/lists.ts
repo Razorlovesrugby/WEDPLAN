@@ -314,25 +314,10 @@ export async function generateTimelineTemplate(): Promise<ActionResult<{ listId:
 // Sections
 // ---------------------------------------------------------------------------
 
-const sectionKinds = ["checklist", "notes"] as const;
-
-/**
- * `kind` is fixed at creation (spec 15 §4) — there's no `renameSection`-style
- * action to change it afterward. A "notes" section holds plain text lines
- * (no checkbox, due date, flag, priority, or assignment); a "checklist"
- * section (the default, and every section before this) behaves exactly as
- * it always has.
- */
-export async function addSection(
-  listId: string,
-  title: string,
-  kind: (typeof sectionKinds)[number] = "checklist",
-): Promise<ActionResult<{ id: string }>> {
+export async function addSection(listId: string, title: string): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   const parsedTitle = z.string().trim().min(1, "Give the section a name").max(120).safeParse(title);
   if (!parsedTitle.success) return fail(parsedTitle.error.issues[0]?.message ?? "Invalid title");
-  const parsedKind = z.enum(sectionKinds).safeParse(kind);
-  if (!parsedKind.success) return fail("Invalid section kind");
 
   const supabase = await createClient();
   const { data: last } = await supabase
@@ -350,7 +335,6 @@ export async function addSection(
       wedding_id: wedding.id,
       list_id: listId,
       title: parsedTitle.data,
-      kind: parsedKind.data,
       sort_order: (last?.sort_order ?? 0) + 1,
     })
     .select("id")
@@ -370,6 +354,29 @@ export async function renameSection(sectionId: string, title: string): Promise<A
   const { error } = await supabase
     .from("list_sections")
     .update({ title: parsed.data })
+    .eq("id", sectionId)
+    .eq("wedding_id", wedding.id);
+  if (error) return fail(error.message);
+
+  revalidateLists();
+  return ok(undefined);
+}
+
+/**
+ * The free-text field under a section's own title (spec 15 §4, revised) —
+ * links, ideas, anything relevant to the section that isn't itself a task.
+ * Every section has one, independent of whatever checklist it also holds;
+ * this is not a section "kind" (0016's short-lived version of this was).
+ */
+export async function updateSectionNotes(sectionId: string, notes: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = z.string().trim().max(4000, "That's a lot for one section — trim it down a little").safeParse(notes);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid notes");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("list_sections")
+    .update({ notes: parsed.data || null })
     .eq("id", sectionId)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
@@ -455,35 +462,12 @@ export async function addItem(
  * "type a title, hit enter, it's in the list" — including a date typed
  * straight into the title, the way Apple Reminders reads "tomorrow" out of
  * what you typed instead of making you reach for a date picker.
- *
- * A "notes" section (spec 15 §4) never gets a date parsed out of what's
- * typed — a brain-dump line saying "tomorrow" means the word, not a due
- * date, since a notes-kind item never renders (or is meant to carry) a
- * due-date control at all.
  */
 export async function quickAddItem(
   listId: string,
   sectionId: string | null,
   rawTitle: string,
 ): Promise<ActionResult<{ id: string; due_date: string | null }>> {
-  if (sectionId) {
-    const wedding = await requireWedding();
-    const supabase = await createClient();
-    const { data: section } = await supabase
-      .from("list_sections")
-      .select("kind")
-      .eq("id", sectionId)
-      .eq("wedding_id", wedding.id)
-      .maybeSingle();
-    if (section?.kind === "notes") {
-      const title = rawTitle.trim();
-      if (!title) return fail("Type something first");
-      const result = await addItem(listId, { title, section_id: sectionId });
-      if (!result.ok) return result;
-      return ok({ id: result.data.id, due_date: null });
-    }
-  }
-
   const parsed = parseQuickAdd(rawTitle);
   if (!parsed.title) return fail("Type something first");
 

@@ -411,16 +411,15 @@ $$;
 rollback;
 
 -- ---------------------------------------------------------------------------
--- 10. Spec 15: collaborator display names, notes-kind sections, calculated due dates (0016)
+-- 10. Spec 15: collaborator display names, section notes, calculated due dates (0016, 0018)
 -- ---------------------------------------------------------------------------
 begin;
 set local role service_role;
 do $$
 declare
-  checklist_section_id uuid;
-  notes_section_id uuid;
+  section_id uuid;
   offset_item_id uuid;
-  got_kind text;
+  got_notes text;
   got_offset int;
   got_name text;
 begin
@@ -435,32 +434,27 @@ begin
   end if;
   raise notice '  ok  collaborators.display_name round-trips';
 
+  -- A section's free-text notes (0018) is independent of whatever checklist
+  -- it also holds — every section gets one, not a separate "kind" of
+  -- section (0016's short-lived version of this, retired the same
+  -- migration).
   insert into public.list_sections (wedding_id, list_id, title)
-  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Untyped section')
-  returning id into checklist_section_id;
-  select kind into got_kind from public.list_sections where id = checklist_section_id;
-  if got_kind <> 'checklist' then
-    raise exception 'FAIL — a section did not default to checklist kind, got %', got_kind;
+  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Tuxedo')
+  returning id into section_id;
+  select notes into got_notes from public.list_sections where id = section_id;
+  if got_notes is not null then
+    raise exception 'FAIL — a new section''s notes should start null, got %', got_notes;
   end if;
-  raise notice '  ok  list_sections.kind defaults to checklist';
+  raise notice '  ok  list_sections.notes starts null';
 
-  insert into public.list_sections (wedding_id, list_id, title, kind)
-  values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Brain dump', 'notes')
-  returning id into notes_section_id;
-  select kind into got_kind from public.list_sections where id = notes_section_id;
-  if got_kind <> 'notes' then
-    raise exception 'FAIL — a notes-kind section did not store its kind, got %', got_kind;
+  update public.list_sections
+    set notes = 'Tried: Moss Bros (liked the navy), Suit Supply (too slim)'
+    where id = section_id;
+  select notes into got_notes from public.list_sections where id = section_id;
+  if got_notes <> 'Tried: Moss Bros (liked the navy), Suit Supply (too slim)' then
+    raise exception 'FAIL — list_sections.notes did not round-trip, got %', got_notes;
   end if;
-  raise notice '  ok  list_sections.kind stores "notes"';
-
-  begin
-    insert into public.list_sections (wedding_id, list_id, title, kind)
-    values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111', 'Bogus kind', 'bogus');
-    raise exception 'FAIL — an invalid section kind was accepted';
-  exception
-    when invalid_text_representation then
-      raise notice '  ok  list_sections.kind rejects a value outside checklist/notes';
-  end;
+  raise notice '  ok  list_sections.notes round-trips, alongside the section''s own tasks';
 
   insert into public.list_items (wedding_id, list_id, title, due_date, due_date_offset_days)
   values ('11111111-1111-4111-8111-111111111111', 'b1111111-1111-4111-8111-111111111111',

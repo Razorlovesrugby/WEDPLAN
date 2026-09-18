@@ -22,6 +22,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 15 | `0015_wedding_slug.sql` | `weddings.slug` | 1 |
 | 16 | `0016_list_content_and_calculated_dates.sql` | Collaborator display names, notes-kind list sections, calculated due dates | 4, 5 |
 | 17 | `0017_budget_section_links.sql` | `budget_item_sections`, `v_budget_item_tasks.link_source`, `v_timeline_items.list_icon` | 4, 5, 10, 16 |
+| 18 | `0018_section_notes.sql` | `list_sections.notes` (free text per section); drops `list_sections.kind` and `list_section_kind` from 16 — see that file's own comment | 16 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
