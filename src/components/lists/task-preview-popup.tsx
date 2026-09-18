@@ -56,11 +56,15 @@ export function TaskPreviewPopup({
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
             <span className="inline-flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 flex-none rounded-full"
-                style={{ backgroundColor: item.list_color ?? DEFAULT_LIST_COLOR }}
-                aria-hidden
-              />
+              {item.list_icon ? (
+                <span aria-hidden>{item.list_icon}</span>
+              ) : (
+                <span
+                  className="h-2.5 w-2.5 flex-none rounded-full"
+                  style={{ backgroundColor: item.list_color ?? DEFAULT_LIST_COLOR }}
+                  aria-hidden
+                />
+              )}
               {item.list_title}
             </span>
             <span>{STATUS_LABEL[item.status]}</span>

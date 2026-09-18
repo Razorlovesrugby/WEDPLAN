@@ -15,7 +15,7 @@ import { setDueDate } from "@/server/actions/lists";
 import { buildDigest, type DigestItem } from "@/lib/reminders/digest";
 import { monthLabel, monthWeeks, shiftMonth, monthStart } from "@/lib/calendar";
 import { todayIso } from "@/lib/lists/generate";
-import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { listAccentBorderColor } from "@/lib/list-colors";
 import { TaskPreviewPopup } from "./task-preview-popup";
 import type { TimelineItemView } from "@/lib/types/database";
 
@@ -225,7 +225,7 @@ function CalendarCard({
       ref={setNodeRef}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.list_color ?? DEFAULT_LIST_COLOR,
+        borderLeftColor: listAccentBorderColor(item.list_color, item.list_icon),
       }}
       className={`rounded border border-l-4 bg-white px-1.5 py-1 text-[11px] shadow-sm
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}
@@ -241,7 +241,10 @@ function CalendarCard({
         {item.status === "done" ? <span className="line-through">{item.title}</span> : item.title}
       </div>
       <div className="flex items-center justify-between gap-1">
-        <span className="truncate text-muted">{item.list_title}</span>
+        <span className="truncate text-muted">
+          {item.list_icon ? <span aria-hidden>{item.list_icon} </span> : null}
+          {item.list_title}
+        </span>
         {/* Touch-friendly "move to…" fallback for drag (spec 03 section 7,
             decision 6) — a tap-to-reveal toggle rather than an always-open
             date field, which doesn't fit inside a day cell at phone width.

@@ -234,6 +234,21 @@ type BudgetItemListRelationships = [
   Rel<"budget_item_lists_list_id_wedding_id_fkey", ["list_id", "wedding_id"], "lists", ["id", "wedding_id"]>,
 ];
 
+type BudgetItemSectionRelationships = [
+  Rel<
+    "budget_item_sections_budget_item_id_wedding_id_fkey",
+    ["budget_item_id", "wedding_id"],
+    "budget_items",
+    ["id", "wedding_id"]
+  >,
+  Rel<
+    "budget_item_sections_section_id_wedding_id_fkey",
+    ["section_id", "wedding_id"],
+    "list_sections",
+    ["id", "wedding_id"]
+  >,
+];
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -640,6 +655,14 @@ export type BudgetItemListRow = {
   created_at: string;
 }
 
+/** A budget line linked to a single section, rather than a whole list or one task (spec 16, section 3). */
+export type BudgetItemSectionRow = {
+  wedding_id: string;
+  budget_item_id: string;
+  section_id: string;
+  created_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Run sheet (spec 5, part B)
 // ---------------------------------------------------------------------------
@@ -846,6 +869,8 @@ export type TimelineItemView = {
   snoozed_until: string | null;
   created_at: string;
   updated_at: string;
+  /** Spec 16 §2 — set only when the list's icon wins over its color (see DEFAULT_LIST_COLOR usage sites). */
+  list_icon: string | null;
 }
 
 /** `v_budget_items` — every budget_items row plus computed/derived money columns. See spec 6, section 3. */
@@ -885,7 +910,7 @@ export type ReminderDueView = {
   source: ReminderDueSource;
 }
 
-/** `v_budget_item_tasks` — every list_item linked to a budget line, directly or via its list, deduplicated. See spec 6, section 7. */
+/** `v_budget_item_tasks` — every list_item linked to a budget line, directly, via its list, or (spec 16 §3) via its section, deduplicated to its most specific source. See spec 6, section 7. */
 export type BudgetItemTaskView = {
   budget_item_id: string;
   list_item_id: string;
@@ -896,7 +921,7 @@ export type BudgetItemTaskView = {
   due_date: string | null;
   status: ListItemStatus;
   done_at: string | null;
-  linked_via_list: boolean;
+  link_source: "direct" | "via_list" | "via_section";
 }
 
 /** `v_run_sheet_items` — every run_sheet_items row plus computed starts_at/ends_at/conflict. See spec 5, part B, section 3. */
@@ -991,6 +1016,7 @@ export type Database = {
       fx_rates: Table<FxRateRow, "fetched_at">;
       budget_item_tasks: Table<BudgetItemTaskRow, "created_at", BudgetItemTaskRelationships>;
       budget_item_lists: Table<BudgetItemListRow, "created_at", BudgetItemListRelationships>;
+      budget_item_sections: Table<BudgetItemSectionRow, "created_at", BudgetItemSectionRelationships>;
       moodboards: Table<
         MoodboardRow,
         "id" | Timestamps | "layout" | "sort_order",

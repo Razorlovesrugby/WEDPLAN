@@ -8,7 +8,7 @@ import {
 } from "@/server/queries/budget";
 import { getBudgetItemLinksForItems, noBudgetItemLinks } from "@/server/queries/budget-links";
 import { getFxRate } from "@/server/queries/fx";
-import { getAllItems, getLists } from "@/server/queries/lists";
+import { getAllItems, getAllSections, getLists } from "@/server/queries/lists";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { CategoryHeader } from "@/components/budget/category-header";
 import { NewCategoryForm } from "@/components/budget/new-category-form";
@@ -26,7 +26,7 @@ export default async function BudgetPage({
 }) {
   const { item: openItemId } = await searchParams;
   const wedding = await requireWedding();
-  const [categories, items, components, payments, summary, events, lists, allTasks] = await Promise.all([
+  const [categories, items, components, payments, summary, events, lists, sections, allTasks] = await Promise.all([
     listBudgetCategories(wedding.id),
     listBudgetItems(wedding.id),
     listConsumptionComponents(wedding.id),
@@ -34,6 +34,7 @@ export default async function BudgetPage({
     getBudgetSummary(wedding.id),
     getEvents(wedding.id),
     getLists(wedding.id),
+    getAllSections(wedding.id),
     getAllItems(wedding.id),
   ]);
 
@@ -142,6 +143,7 @@ export default async function BudgetPage({
                         components={componentsByItem.get(item.id) ?? []}
                         payments={paymentsByItem.get(item.id) ?? []}
                         lists={lists}
+                        sections={sections}
                         allTasks={allTasks}
                         links={linksByItem.get(item.id) ?? noBudgetItemLinks()}
                         timezone={wedding.timezone}

@@ -17,7 +17,7 @@ import type {
  */
 
 export type ListItemWithList = ListItemRow & {
-  lists: Pick<ListRow, "title" | "color" | "kind"> | null;
+  lists: Pick<ListRow, "title" | "color" | "icon" | "kind"> | null;
 };
 
 export const getLists = cache(async (weddingId: string): Promise<ListRow[]> => {
@@ -32,6 +32,48 @@ export const getLists = cache(async (weddingId: string): Promise<ListRow[]> => {
 
   if (error) throw new Error(`Could not load lists: ${error.message}`);
   return data ?? [];
+});
+
+export type SectionWithList = ListSectionRow & { list_title: string };
+
+/** Every section across every active list, for the budget popup's "Link a section…" search (spec 16 §3) — the same "few hundred rows, filtered in memory" approach the existing "Link a task…" search already uses. */
+export const getAllSections = cache(async (weddingId: string): Promise<SectionWithList[]> => {
+  const supabase = await createClient();
+  const activeListIds = await getActiveListIds(weddingId);
+  if (activeListIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("list_sections")
+    .select("*, lists(title)")
+    .eq("wedding_id", weddingId)
+    .in("list_id", activeListIds);
+  if (error) throw new Error(`Could not load sections: ${error.message}`);
+  return (data ?? []).map(({ lists, ...section }) => ({
+    ...section,
+    list_title: (lists as { title: string } | null)?.title ?? "",
+  }));
+});
+
+/**
+ * Per-list count of not-done items, sub-items included — a sub-item is a
+ * real, separately completable thing, and excluding it would undercount a
+ * list that leans on sub-tasks (spec 16 §1). Backs the sidebar's badge,
+ * replacing the Move up/down buttons that used to sit in the same spot.
+ */
+export const getOpenItemCounts = cache(async (weddingId: string): Promise<Record<string, number>> => {
+  const supabase = await createClient();
+  const activeListIds = await getActiveListIds(weddingId);
+  if (activeListIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("list_items")
+    .select("list_id")
+    .eq("wedding_id", weddingId)
+    .in("list_id", activeListIds)
+    .neq("status", "done");
+  if (error) throw new Error(`Could not load open item counts: ${error.message}`);
+
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) counts[row.list_id] = (counts[row.list_id] ?? 0) + 1;
+  return counts;
 });
 
 /**
@@ -138,7 +180,7 @@ export const getTodayItems = cache(async (weddingId: string): Promise<ListItemWi
   if (activeListIds.length === 0) return [];
   const { data, error } = await supabase
     .from("list_items")
-    .select("*, lists(title, color, kind)")
+    .select("*, lists(title, color, icon, kind)")
     .eq("wedding_id", weddingId)
     .eq("due_date", todayIso())
     .neq("status", "done")
@@ -154,7 +196,7 @@ export const getScheduledItems = cache(async (weddingId: string): Promise<ListIt
   if (activeListIds.length === 0) return [];
   const { data, error } = await supabase
     .from("list_items")
-    .select("*, lists(title, color, kind)")
+    .select("*, lists(title, color, icon, kind)")
     .eq("wedding_id", weddingId)
     .not("due_date", "is", null)
     .neq("status", "done")
@@ -170,7 +212,7 @@ export const getFlaggedItems = cache(async (weddingId: string): Promise<ListItem
   if (activeListIds.length === 0) return [];
   const { data, error } = await supabase
     .from("list_items")
-    .select("*, lists(title, color, kind)")
+    .select("*, lists(title, color, icon, kind)")
     .eq("wedding_id", weddingId)
     .eq("flagged", true)
     .in("list_id", activeListIds)
@@ -192,7 +234,7 @@ export const getAllItems = cache(async (weddingId: string): Promise<ListItemWith
   if (activeListIds.length === 0) return [];
   const { data, error } = await supabase
     .from("list_items")
-    .select("*, lists(title, color, kind), list_sections(kind)")
+    .select("*, lists(title, color, icon, kind), list_sections(kind)")
     .eq("wedding_id", weddingId)
     .in("list_id", activeListIds)
     .order("due_date", { ascending: true, nullsFirst: false })
@@ -208,7 +250,7 @@ export const getAssignedToMeItems = cache(
     if (activeListIds.length === 0) return [];
     const { data, error } = await supabase
       .from("list_items")
-      .select("*, lists(title, color, kind)")
+      .select("*, lists(title, color, icon, kind)")
       .eq("wedding_id", weddingId)
       .eq("assigned_to", userId)
       .neq("status", "done")
@@ -310,7 +352,7 @@ export const getBoardItems = cache(
     if (activeListIds.length === 0) return [];
     const { data, error } = await supabase
       .from("list_items")
-      .select("*, lists(title, color, kind), list_sections(kind)")
+      .select("*, lists(title, color, icon, kind), list_sections(kind)")
       .eq("wedding_id", weddingId)
       .in("list_id", activeListIds)
       .order("sort_order", { ascending: true });

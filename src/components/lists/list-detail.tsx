@@ -63,6 +63,7 @@ export function ListDetail({
   collaborators,
   currentUserId,
   budgetLinksByItem = {},
+  budgetLinksBySection = {},
 }: {
   list: ListRow;
   sections: ListSectionRow[];
@@ -71,6 +72,8 @@ export function ListDetail({
   currentUserId?: string;
   /** Budget lines linked to each item, keyed by list_item_id — spec 6, section 7's reverse badge. */
   budgetLinksByItem?: Record<string, { id: string; label: string }[]>;
+  /** Budget lines linked to each section, keyed by section id — spec 16 §3's section-heading badge. */
+  budgetLinksBySection?: Record<string, { id: string; label: string }[]>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -307,12 +310,16 @@ export function ListDetail({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span
-            className="h-3 w-3 shrink-0 rounded-full"
-            style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
-            aria-hidden
-          />
-          {list.icon ? <span aria-hidden>{list.icon}</span> : null}
+          {/* A list is either a color or an emoji, never both — icon wins when set (spec 16 §2). */}
+          {list.icon ? (
+            <span aria-hidden>{list.icon}</span>
+          ) : (
+            <span
+              className="h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
+              aria-hidden
+            />
+          )}
           <h1>
             <InlineText
               value={list.title}
@@ -358,6 +365,7 @@ export function ListDetail({
                 collaborators={collaborators}
                 currentUserId={currentUserId}
                 budgetLinksByItem={budgetLinksByItem}
+                budgetLinks={section ? (budgetLinksBySection[section.id] ?? []) : []}
                 highlightId={highlightId}
                 hideCompleted={hideCompleted}
                 onMoveItemUp={(index) => applyIndexMove(key, index, index - 1)}
@@ -424,6 +432,7 @@ function SectionGroup({
   collaborators,
   currentUserId,
   budgetLinksByItem,
+  budgetLinks,
   highlightId,
   hideCompleted,
   onMoveItemUp,
@@ -445,6 +454,8 @@ function SectionGroup({
   collaborators: CollaboratorRow[];
   currentUserId?: string;
   budgetLinksByItem: Record<string, { id: string; label: string }[]>;
+  /** Budget lines linked to this section directly — spec 16 §3's section-heading badge. */
+  budgetLinks: { id: string; label: string }[];
   highlightId: string | null;
   /** Spec 15 §6 — a done item never leaves `order` (drag math still needs it), it's just not rendered. */
   hideCompleted: boolean;
@@ -485,6 +496,16 @@ function SectionGroup({
               onSave={(next) => onSaveSectionTitle(section.id, next)}
             />
           </h2>
+          {budgetLinks.map((link) => (
+            <a
+              key={link.id}
+              href={`/budget?item=${link.id}`}
+              className="rounded bg-tierA/10 px-1.5 py-0.5 text-xs normal-case text-tierA hover:underline"
+              title={`Linked budget line: ${link.label}`}
+            >
+              💰 {link.label}
+            </a>
+          ))}
           {/* Touch-friendly, and the only way, to reorder sections (spec 11 §1C) — no drag surface for this one. */}
           <div className="flex gap-0">
             <button

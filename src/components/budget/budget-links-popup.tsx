@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import {
   createLinkedTask,
   linkBudgetItemToList,
+  linkBudgetItemToSection,
   linkBudgetItemToTask,
   unlinkBudgetItemFromList,
+  unlinkBudgetItemFromSection,
   unlinkBudgetItemFromTask,
 } from "@/server/actions/budget-links";
 import { formatDate, pluralise } from "@/lib/format";
 import type { ListRow } from "@/lib/types/database";
-import type { LinkedList, LinkedTask } from "@/server/queries/budget-links";
-import type { ListItemWithList } from "@/server/queries/lists";
+import type { BudgetItemLinks } from "@/server/queries/budget-links";
+import type { ListItemWithList, SectionWithList } from "@/server/queries/lists";
 
 /**
  * Clicking a budget line's label opens this — a dialog, not a route (spec 6,
@@ -27,6 +29,7 @@ export function BudgetLinksPopup({
   itemId,
   itemLabel,
   lists,
+  sections,
   allTasks,
   links,
   timezone,
@@ -36,9 +39,11 @@ export function BudgetLinksPopup({
   itemId: string;
   itemLabel: string;
   lists: ListRow[];
+  /** Every section across every list, for the "Link a section…" search (spec 16 §3). */
+  sections: SectionWithList[];
   /** Every task across every list, filtered in memory as the planner types — same "few hundred rows, no round trip" approach spec 4's HouseholdPicker already uses. */
   allTasks: ListItemWithList[];
-  links: { lists: LinkedList[]; tasks: LinkedTask[] };
+  links: BudgetItemLinks;
   timezone: string;
   open: boolean;
   onClose: () => void;
@@ -48,6 +53,7 @@ export function BudgetLinksPopup({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
+  const [sectionQuery, setSectionQuery] = useState("");
   const [taskQuery, setTaskQuery] = useState("");
   const [newTaskListId, setNewTaskListId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -66,6 +72,15 @@ export function BudgetLinksPopup({
         .filter((l) => !linkedListIds.has(l.id) && l.title.toLowerCase().includes(query.toLowerCase()))
         .slice(0, 8),
     [lists, linkedListIds, query],
+  );
+
+  const linkedSectionIds = useMemo(() => new Set(links.sections.map((s) => s.id)), [links.sections]);
+  const candidateSections = useMemo(
+    () =>
+      sections
+        .filter((s) => !linkedSectionIds.has(s.id) && s.title.toLowerCase().includes(sectionQuery.toLowerCase()))
+        .slice(0, 8),
+    [sections, linkedSectionIds, sectionQuery],
   );
 
   const linkedTaskIds = useMemo(() => new Set(links.tasks.map((t) => t.list_item_id)), [links.tasks]);
@@ -95,6 +110,25 @@ export function BudgetLinksPopup({
   function onUnlinkList(listId: string) {
     startTransition(async () => {
       const result = await unlinkBudgetItemFromList(itemId, listId);
+      if (!result.ok) setError(result.error);
+      else refresh();
+    });
+  }
+
+  function onLinkSection(sectionId: string) {
+    startTransition(async () => {
+      const result = await linkBudgetItemToSection(itemId, sectionId);
+      if (!result.ok) setError(result.error);
+      else {
+        setSectionQuery("");
+        refresh();
+      }
+    });
+  }
+
+  function onUnlinkSection(sectionId: string) {
+    startTransition(async () => {
+      const result = await unlinkBudgetItemFromSection(itemId, sectionId);
       if (!result.ok) setError(result.error);
       else refresh();
     });
@@ -176,6 +210,34 @@ export function BudgetLinksPopup({
         </section>
 
         <section>
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Linked sections</h3>
+          {links.sections.length === 0 ? (
+            <p className="text-sm text-muted">No sections linked.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {links.sections.map((s) => (
+                <li key={s.id} className="flex items-center justify-between gap-2">
+                  <a href={`/lists/${s.listId}`} className="hover:underline">
+                    {s.title} <span className="text-xs text-muted">({s.listTitle})</span>
+                  </a>
+                  <span className="flex items-center gap-2 text-xs text-muted">
+                    {pluralise(s.doneCount, "done")} of {s.openCount + s.doneCount}
+                    <button
+                      type="button"
+                      disabled={pending}
+                      className="text-red-700 hover:underline"
+                      onClick={() => onUnlinkSection(s.id)}
+                    >
+                      Unlink
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
           <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Individually-linked tasks</h3>
           {links.tasks.length === 0 ? (
             <p className="text-sm text-muted">No individual tasks linked.</p>
@@ -226,6 +288,36 @@ export function BudgetLinksPopup({
                 </li>
               ))}
               {candidateLists.length === 0 ? <li className="px-2 py-1 text-xs text-muted">No matching lists.</li> : null}
+            </ul>
+          ) : null}
+        </section>
+
+        <section className="space-y-2 border-t border-line pt-3">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted">Link a section…</h3>
+          <input
+            value={sectionQuery}
+            onChange={(e) => setSectionQuery(e.target.value)}
+            placeholder="Search sections, in every list…"
+            className="field w-full text-sm"
+          />
+          {sectionQuery.trim() ? (
+            <ul className="max-h-32 divide-y divide-line/50 overflow-y-auto rounded border border-line text-sm">
+              {candidateSections.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    className="block w-full px-2 py-1 text-left hover:bg-paper"
+                    onClick={() => onLinkSection(s.id)}
+                  >
+                    {s.title}
+                    <span className="ml-2 text-xs text-muted">{s.list_title}</span>
+                  </button>
+                </li>
+              ))}
+              {candidateSections.length === 0 ? (
+                <li className="px-2 py-1 text-xs text-muted">No matching sections.</li>
+              ) : null}
             </ul>
           ) : null}
         </section>

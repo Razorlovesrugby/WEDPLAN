@@ -18,7 +18,7 @@ import { InlineText } from "@/components/guests/inline-text";
 import type { CollaboratorRow, ListItemRow, ListSectionRow } from "@/lib/types/database";
 
 export type ItemWithList = ListItemRow & {
-  lists?: { title: string; color: string | null; kind: string } | null;
+  lists?: { title: string; color: string | null; icon: string | null; kind: string } | null;
 };
 
 /** A collaborator's label for the assign picker: their own typed name (spec 15 §2) if they've set one, else the existing role fallback. */
@@ -257,12 +257,18 @@ export function ItemRow({
               </span>
             ) : null}
             {showListLabel && item.lists ? (
-              <span
-                className="rounded px-1.5 py-0.5 text-xs text-white"
-                style={{ backgroundColor: item.lists.color ?? DEFAULT_LIST_COLOR }}
-              >
-                {item.lists.title}
-              </span>
+              item.lists.icon ? (
+                <span className="rounded bg-line/60 px-1.5 py-0.5 text-xs text-ink">
+                  <span aria-hidden>{item.lists.icon}</span> {item.lists.title}
+                </span>
+              ) : (
+                <span
+                  className="rounded px-1.5 py-0.5 text-xs text-white"
+                  style={{ backgroundColor: item.lists.color ?? DEFAULT_LIST_COLOR }}
+                >
+                  {item.lists.title}
+                </span>
+              )
             ) : null}
             {budgetLinks.map((link) => (
               <a
