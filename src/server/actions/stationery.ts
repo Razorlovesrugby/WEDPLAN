@@ -9,6 +9,7 @@ import { broadcastEmail, saveTheDateEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
 import { text } from "@/lib/site/sections";
+import { SEND_BATCH } from "@/lib/email/batch";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -100,7 +101,14 @@ export type SendSummary = {
   skippedNoEmail: number;
   alreadySent: number;
   failed: number;
+  /**
+   * Households this call did not reach because it hit the batch limit. The UI
+   * calls again until this is zero.
+   */
+  remaining: number;
 };
+
+
 
 /** The shared send loop. Everything above it decides who; this decides how. */
 async function sendToTargets(
@@ -111,15 +119,41 @@ async function sendToTargets(
   build: (target: Target) => { subject: string; text: string; html: string },
   dedupeSuffix: string,
 ): Promise<SendSummary> {
+  // Which households this send has already reached, so the next batch starts
+  // where the last one stopped.
+  //
+  // Slicing `targets` alone would not advance: every call reloads the same
+  // list and would take the same first 25, skip them all on dedupe, and report
+  // the same `remaining` forever. The message log is the only durable record
+  // of progress, and reading it here is also what makes a send resumable after
+  // a crash, a timeout, or the browser tab being closed mid-way.
+  const { data: alreadyLogged } = await supabase
+    .from("message_log")
+    .select("dedupe_key")
+    .eq("wedding_id", weddingId)
+    .eq("kind", kind)
+    .like("dedupe_key", `${kind}:${dedupeSuffix}:%`);
+
+  const doneInvitations = new Set(
+    (alreadyLogged ?? [])
+      .map((row) => row.dedupe_key?.split(":")[2])
+      .filter((id): id is string => typeof id === "string" && id !== ""),
+  );
+
+  const outstanding = targets.filter((target) => !doneInvitations.has(target.invitationId));
+
   const summary: SendSummary = {
     sent: 0,
     households: 0,
     skippedNoEmail: 0,
-    alreadySent: 0,
+    // Households fully handled by an earlier batch are counted once here
+    // rather than re-attempted.
+    alreadySent: targets.length - outstanding.length,
     failed: 0,
+    remaining: Math.max(outstanding.length - SEND_BATCH, 0),
   };
 
-  for (const target of targets) {
+  for (const target of outstanding.slice(0, SEND_BATCH)) {
     if (target.recipients.length === 0) {
       summary.skippedNoEmail += 1;
       continue;

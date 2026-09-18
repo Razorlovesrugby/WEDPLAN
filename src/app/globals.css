@@ -62,6 +62,101 @@
 }
 
 /* ---------------------------------------------------------------------------
+   The public site's motion (spec 14 §5)
+   ---------------------------------------------------------------------------
+   Sections fade and rise 12px on first scroll into view, 300ms, once. The
+   countdown ticks. Nothing else moves.
+
+   CSS-only, via `animation-timeline: view()`, so there is no IntersectionObserver
+   and no JavaScript on the critical path of a guest site. Browsers without
+   scroll-driven animation support simply show the content — the @supports
+   guard means the starting state (opacity 0) is never applied unless the
+   animation that undoes it can actually run. Getting that backwards is how a
+   page renders permanently blank on an older phone.
+--------------------------------------------------------------------------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .site-reveal {
+      animation: site-reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+  }
+}
+
+@keyframes site-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion keeps the fade and drops the movement, rather than removing
+   the transition entirely: the request is about motion, not contrast. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: reduce) {
+    .site-reveal {
+      animation: site-fade-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+  }
+}
+
+@keyframes site-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Printing the public site (spec 14 §5)
+   ---------------------------------------------------------------------------
+   Somebody's parent will print the schedule. The planner shell's print rules
+   below hide `header` and `footer` outright, which is right for
+   /invitations/print and wrong here, so the site opts back in.
+--------------------------------------------------------------------------- */
+@media print {
+  .site-print header,
+  .site-print footer {
+    display: revert !important;
+  }
+
+  .site-print nav[aria-label="Sections"],
+  .site-print .no-print-site {
+    display: none !important;
+  }
+
+  .site-print section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  /* A URL after every link turns a two-page schedule into five. */
+  .site-print a[href]::after {
+    content: "";
+  }
+
+  .site-print details {
+    /* An FAQ printed with its answers collapsed is a printed list of
+       questions, which is worse than not printing it. */
+    display: block;
+  }
+  .site-print details > *:not(summary) {
+    display: block !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Print
    ---------------------------------------------------------------------------
    Only /invitations/print is designed to be printed, but the rules are global

@@ -5,6 +5,9 @@ import { PublicBoardView } from "@/components/moodboards/public-board";
 import { listPublishedBoards } from "@/server/moodboards/resolve";
 import { CoachBooking } from "@/components/site/coach-booking";
 import { getHouseholdSeats, getPublicTravel } from "@/server/queries/travel";
+import { GuestUploader } from "@/components/site/guest-uploader";
+import { getGallerySettings, getHouseholdUploads } from "@/server/queries/gallery";
+import { flag, text } from "@/lib/site/sections";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -48,10 +51,21 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
   // The coach is the one thing on this page that is not an RSVP answer, and it
   // belongs here rather than on the public site: reserving a seat needs to
   // know which household is asking, and this page already does.
-  const [travel, heldSeats] = await Promise.all([
+  const [travel, heldSeats, myUploads, galleryBlock] = await Promise.all([
     getPublicTravel(wedding.id),
     getHouseholdSeats(wedding.id, household.id),
+    getHouseholdUploads(wedding.id, household.id),
+    // Uploads are gated here rather than on the public site: this page already
+    // knows which household is asking, so every photo is attributable and the
+    // open internet cannot post into the gallery.
+    getGallerySettings(wedding.id),
   ]);
+
+  const uploadsOpen = flag(galleryBlock, "uploads_open");
+  const moderated =
+    !(typeof galleryBlock === "object" && galleryBlock !== null && !Array.isArray(galleryBlock)
+      ? (galleryBlock as Record<string, unknown>)["moderation"] === "auto"
+      : false);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
@@ -96,6 +110,19 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
         answers={answers}
         locked={locked}
       />
+
+      {uploadsOpen ? (
+        <section className="mt-12 border-t border-line pt-8">
+          <h2 className="font-serif text-xl">Photos</h2>
+          <p className="mt-1 text-sm text-muted">
+            If you took anything you&rsquo;d like us to have, add it here.{" "}
+            {text(galleryBlock, "intro") ?? ""}
+          </p>
+          <div className="mt-4">
+            <GuestUploader token={token} mine={myUploads} moderated={moderated} />
+          </div>
+        </section>
+      ) : null}
 
       {travel.runs.length > 0 ? (
         <section className="mt-12 border-t border-line pt-8">

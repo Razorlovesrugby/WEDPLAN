@@ -23,7 +23,7 @@ const LINKS = [
   { href: "/questions", label: "Questions" },
   { href: "/lists", label: "Tasks", matchPrefixes: ["/lists", "/calendar", "/board", "/timeline"] },
   { href: "/moodboards", label: "Moodboards" },
-  { href: "/site", label: "Site", matchPrefixes: ["/site", "/travel"] },
+  { href: "/site", label: "Site", matchPrefixes: ["/site", "/travel", "/gallery"] },
   { href: "/settings", label: "Settings" },
 ] as const;
 

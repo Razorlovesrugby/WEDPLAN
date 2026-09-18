@@ -36,6 +36,11 @@ function Summary({ summary }: { summary: SendSummary }) {
       {summary.failed > 0 ? (
         <p className="mt-1 text-tierB">{summary.failed} failed to send.</p>
       ) : null}
+      {summary.remaining > 0 ? (
+        <p className="mt-1 text-muted">
+          {summary.remaining} more to go — still sending…
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -59,16 +64,55 @@ export function StationeryPanel({
   const [tagId, setTagId] = useState<string>("");
   const [confirming, setConfirming] = useState(false);
 
+  /**
+   * Sends in batches until nothing is left.
+   *
+   * The action deliberately caps how many households one invocation reaches
+   * (SEND_BATCH), so a four-hundred-household list does not time out half way
+   * through and leave nobody knowing who got the email. Continuing is safe
+   * because `dedupe_key` turns an overlap into a skip rather than a second
+   * message; the totals accumulate so the count shown is the whole send, not
+   * the last slice of it.
+   */
   const run = (fn: () => Promise<Awaited<ReturnType<typeof sendSaveTheDates>>>) =>
     startTransition(async () => {
       setError(null);
       setSummary(null);
-      const result = await fn();
-      if (!result.ok) {
-        setError(result.error);
-        return;
+
+      const total: SendSummary = {
+        sent: 0,
+        households: 0,
+        skippedNoEmail: 0,
+        alreadySent: 0,
+        failed: 0,
+        remaining: 0,
+      };
+
+      // Bounded: even if the action somehow stopped making progress, this
+      // ends rather than looping against the email provider forever.
+      for (let pass = 0; pass < 100; pass += 1) {
+        const result = await fn();
+        if (!result.ok) {
+          setError(result.error);
+          // Whatever went out before the failure still went out.
+          if (total.sent > 0) setSummary(total);
+          return;
+        }
+
+        total.sent += result.data.sent;
+        total.households += result.data.households;
+        total.skippedNoEmail += result.data.skippedNoEmail;
+        // alreadySent is a running total from the log, not a per-batch delta,
+        // so it is taken rather than accumulated — adding it up would count
+        // the first batch again on every pass.
+        total.alreadySent = result.data.alreadySent;
+        total.failed += result.data.failed;
+        total.remaining = result.data.remaining;
+
+        setSummary({ ...total });
+        if (result.data.remaining === 0) break;
       }
-      setSummary(result.data);
+
       setConfirming(false);
       router.refresh();
     });
