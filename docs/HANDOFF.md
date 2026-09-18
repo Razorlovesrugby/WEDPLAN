@@ -34,12 +34,15 @@ spec and the environment traps that cost time here.
 end to end: every section, reordering, hide/show, theme, palette with a live
 contrast check, and an FAQ starter library. The seed carries a full example
 site, so `supabase db reset` renders every section type at `/w/alex-sam`.
-**Step 3 is now about half built**: the `/i/[token]` stationery card with a
-real Open Graph image, save-the-dates, and broadcasts. What is left of it is
-the paper half — a print-ready sheet carrying the card's design and each
-household's QR code — plus a send preview and batching on the bulk senders,
-which currently loop over every household in one request. **Step 4, the coach,
-is the next whole piece.**
+**All six build steps of spec 14 are now built** — the slug, the theme and
+renderer, the `/site` editor, the schedule and FAQ, the invitation card and
+senders, the coach, and guest photo uploads. **What it has never had is
+contact with reality:** nothing has run against a live project and nothing but
+the Open Graph image has been looked at. That is now the largest risk in the
+feature, and more building will not reduce it. The spec's "Build status"
+section lists the short tail of deliberate gaps, of which the one worth
+reading first is that **coach seat capacity is checked but not locked** —
+simultaneous reservations for the last seats can both succeed.
 
 **Also unread, still:** `aisle.wedding` is blocked by this environment's
 egress policy, so the design proportions in §5 are this session's judgement
@@ -395,6 +398,55 @@ real PDF would need a new dependency, and a themed print stylesheet is
 probably the better route), a send preview as a named household, and any
 batching — both senders currently loop over every household in one request,
 which will be slow and may time out at four hundred households.
+
+## Session 20 (build, continued): the coach, the gallery, and the rest of spec 14
+
+**Green:** typecheck, 436 tests, 201 SQL assertions, both migration verifiers,
+production build. `355c927`, `8352810`, and the stationery sheet.
+
+`0017_public_site.sql` carries the rest of the schema: coach runs, stops and
+seats, transport options, accommodations, `site_assets` and `site_visits`,
+seven tables all on the composite-key tenancy pattern with RLS asserted.
+
+**Things worth knowing, in the order they would bite:**
+
+- **Seat capacity is checked, not locked.** `reserveCoachSeats` reads
+  `v_coach_runs` and then inserts; nothing spans the two. Two households
+  taking the last two seats at once both succeed. A `SELECT … FOR UPDATE` on
+  the run or a trigger asserting the sum would close it. Left as it is
+  deliberately, and written down rather than hidden.
+- **`seats_taken` is a view, never a column.** A cached count drifts the first
+  time a reservation goes by cascade, and there is a SQL assertion for it.
+- **Null capacity is not zero capacity** — an uncounted run says "12 seats
+  reserved", not "0 left" (which stops people booking) and not "unlimited"
+  (which oversells it).
+- **`canReserve` counts the difference, not the request.** A household holding
+  4 seats on a full coach changing to 5 needs one more; changing to 3 needs
+  none. The naive check refuses a household shrinking its own booking.
+- **Guest uploads are gated to `/rsvp/[token]`.** The browser re-encodes to
+  WebP first, which strips EXIF GPS — a phone writes somebody's home address
+  into every photo. SVG is refused specifically: a document that can carry
+  script, served from our own origin. Approval is set at confirm, not request,
+  so a half-finished upload cannot become a live photo.
+- **`ensure-bucket.mjs` now matters for two features.** Site images share the
+  moodboard bucket behind a `site/` prefix, so there is one infrastructure
+  step rather than two half-done ones.
+
+**Three bugs caught during this stretch, none of which typecheck or the build
+would have found:**
+
+1. A **function passed from a Server Component to a Client Component** for
+   time formatting. React refuses to serialise one, so it throws at runtime.
+   The component takes the IANA zone now and formats there.
+2. The **coach CSV export fell through** to the guest export's `else` and had
+   its body overwritten. It returns early now, like the tasks export.
+3. My **first attempt at batching did not advance**: each call reloaded the
+   same household list, took the same first 25, skipped them all on dedupe and
+   reported the same `remaining` forever. Progress comes from the message log
+   now, which also makes a send resumable after a crash or a closed tab.
+
+**What is left is in the spec's Build status**, and the headline is not code:
+nothing has run against a live database or been opened in a browser.
 
 ## Session 19: the 500 diagnosed — migrations were never applied, and the guard for that was broken
 

@@ -62,8 +62,8 @@ export default async function InvitationsPage({
           <span className="text-sm text-muted">
             {sent} sent · {complete} fully answered · {allRows.length} households
           </span>
-          <Link href="/invitations/print" className="btn" prefetch={false}>
-            Print QR codes
+          <Link href="/invitations/print/stationery" className="btn" prefetch={false}>
+            Print invitations
           </Link>
         </div>
       </div>
