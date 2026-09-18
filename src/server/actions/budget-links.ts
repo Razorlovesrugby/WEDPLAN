@@ -79,6 +79,53 @@ export async function unlinkBudgetItemFromList(budgetItemId: string, listId: str
   return ok(undefined);
 }
 
+/** The one link grain spec 6 §7 scoped out — a section of a list, without pulling in the rest of it (spec 16 §3). */
+export async function linkBudgetItemToSection(budgetItemId: string, sectionId: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("budget_item_sections")
+    .upsert(
+      { wedding_id: wedding.id, budget_item_id: budgetItemId, section_id: sectionId },
+      { onConflict: "budget_item_id,section_id" },
+    );
+  if (error) return fail(error.message);
+
+  const listId = await listIdForSection(supabase, wedding.id, sectionId);
+  revalidateLinks(listId);
+  return ok(undefined);
+}
+
+export async function unlinkBudgetItemFromSection(budgetItemId: string, sectionId: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("budget_item_sections")
+    .delete()
+    .eq("wedding_id", wedding.id)
+    .eq("budget_item_id", budgetItemId)
+    .eq("section_id", sectionId);
+  if (error) return fail(error.message);
+
+  const listId = await listIdForSection(supabase, wedding.id, sectionId);
+  revalidateLinks(listId);
+  return ok(undefined);
+}
+
+async function listIdForSection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  weddingId: string,
+  sectionId: string,
+): Promise<string | undefined> {
+  const { data } = await supabase
+    .from("list_sections")
+    .select("list_id")
+    .eq("id", sectionId)
+    .eq("wedding_id", weddingId)
+    .maybeSingle();
+  return data?.list_id;
+}
+
 /** "+ Create a new task and link it here" — spec 4's HouseholdPicker's "create the destination inline" pattern, applied to a task. */
 export async function createLinkedTask(
   budgetItemId: string,

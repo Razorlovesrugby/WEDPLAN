@@ -1,4 +1,7 @@
+"use client";
+
 import { sortCompletedLast } from "@/lib/lists/sort";
+import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow, type ItemWithList } from "./item-row";
 import type { CollaboratorRow } from "@/lib/types/database";
 
@@ -26,6 +29,8 @@ export function SmartView({
   collaborators: CollaboratorRow[];
   currentUserId?: string;
 }) {
+  const [hideCompleted, setHideCompleted] = useHideCompleted(`view:${view}`);
+
   if (items.length === 0) {
     return <p className="card p-6 text-sm text-muted">{EMPTY_COPY[view]}</p>;
   }
@@ -33,18 +38,25 @@ export function SmartView({
   // Sinks done items to the bottom (spec 10) — a no-op for "today",
   // "scheduled", and "mine", which already exclude done items at the query.
   const orderedItems = sortCompletedLast(items, (item) => item.status === "done");
+  const visibleItems = hideCompleted ? orderedItems.filter((item) => item.status !== "done") : orderedItems;
 
   return (
-    <div className="card divide-y divide-line/60 px-3">
-      {orderedItems.map((item) => (
-        <ItemRow
-          key={item.id}
-          item={item}
-          collaborators={collaborators}
-          currentUserId={currentUserId}
-          showListLabel
-        />
-      ))}
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <HideCompletedToggle checked={hideCompleted} onChange={setHideCompleted} />
+      </div>
+      <div className="card divide-y divide-line/60 px-3">
+        {visibleItems.map((item) => (
+          <ItemRow
+            key={item.id}
+            item={item}
+            collaborators={collaborators}
+            currentUserId={currentUserId}
+            showListLabel
+          />
+        ))}
+        {visibleItems.length === 0 ? <p className="py-6 text-center text-sm text-muted">Everything is done.</p> : null}
+      </div>
     </div>
   );
 }

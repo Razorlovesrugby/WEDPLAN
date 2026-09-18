@@ -28,3 +28,17 @@ export const DEFAULT_LIST_COLOR = "#e8558f";
 export function isKnownListColor(value: string | null): boolean {
   return value !== null && LIST_COLOR_PALETTE.some((c) => c.value === value);
 }
+
+/**
+ * A left-border accent can't render an emoji, so a list whose icon wins
+ * (spec 16 §2) falls back to this neutral border instead of drawing its
+ * color — the icon itself renders inline in the card's text. Matches the
+ * app's own `--site-line` design token (src/app/globals.css) rather than a
+ * separate hardcoded gray.
+ */
+export const NEUTRAL_BORDER_COLOR = "rgb(var(--site-line))";
+
+/** What a card's border-left accent should be — the list's color, or neutral once an icon wins over it. */
+export function listAccentBorderColor(color: string | null, icon: string | null): string {
+  return icon ? NEUTRAL_BORDER_COLOR : (color ?? DEFAULT_LIST_COLOR);
+}

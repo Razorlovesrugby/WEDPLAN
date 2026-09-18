@@ -252,6 +252,21 @@ type BudgetItemListRelationships = [
   Rel<"budget_item_lists_list_id_wedding_id_fkey", ["list_id", "wedding_id"], "lists", ["id", "wedding_id"]>,
 ];
 
+type BudgetItemSectionRelationships = [
+  Rel<
+    "budget_item_sections_budget_item_id_wedding_id_fkey",
+    ["budget_item_id", "wedding_id"],
+    "budget_items",
+    ["id", "wedding_id"]
+  >,
+  Rel<
+    "budget_item_sections_section_id_wedding_id_fkey",
+    ["section_id", "wedding_id"],
+    "list_sections",
+    ["id", "wedding_id"]
+  >,
+];
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -414,6 +429,8 @@ export type CollaboratorRow = {
   wedding_id: string;
   user_id: string;
   role: CollaboratorRole;
+  /** A typed name for the assign picker and every place an assignee renders — falls back to the role label when unset (spec 15 §2). */
+  display_name: string | null;
   created_at: string;
 }
 
@@ -623,11 +640,15 @@ export type ListRow = {
   updated_at: string;
 }
 
+export type ListSectionKind = "checklist" | "notes";
+
 export type ListSectionRow = {
   id: string;
   wedding_id: string;
   list_id: string;
   title: string;
+  /** Fixed at creation (spec 15 §4) — a "notes" section holds plain text lines, no checkbox/due date/status. */
+  kind: ListSectionKind;
   sort_order: number;
   created_at: string;
 }
@@ -642,6 +663,13 @@ export type ListItemRow = {
   qty: number | null;
   url: string | null;
   due_date: string | null;
+  /**
+   * Non-null: due_date is calculated relative to the wedding date, kept in
+   * sync by updateWeddingSettings, not typed directly. Negative = before the
+   * wedding, positive = after, 0 = on the day. Mutually exclusive with a
+   * fixed due_date — setting one clears the other (spec 15 §5).
+   */
+  due_date_offset_days: number | null;
   done_at: string | null;
   done_by: string | null;
   flagged: boolean;
@@ -751,6 +779,14 @@ export type BudgetItemListRow = {
   wedding_id: string;
   budget_item_id: string;
   list_id: string;
+  created_at: string;
+}
+
+/** A budget line linked to a single section, rather than a whole list or one task (spec 16, section 3). */
+export type BudgetItemSectionRow = {
+  wedding_id: string;
+  budget_item_id: string;
+  section_id: string;
   created_at: string;
 }
 
@@ -960,6 +996,8 @@ export type TimelineItemView = {
   snoozed_until: string | null;
   created_at: string;
   updated_at: string;
+  /** Spec 16 §2 — set only when the list's icon wins over its color (see DEFAULT_LIST_COLOR usage sites). */
+  list_icon: string | null;
 }
 
 /** `v_budget_items` — every budget_items row plus computed/derived money columns. See spec 6, section 3. */
@@ -999,7 +1037,7 @@ export type ReminderDueView = {
   source: ReminderDueSource;
 }
 
-/** `v_budget_item_tasks` — every list_item linked to a budget line, directly or via its list, deduplicated. See spec 6, section 7. */
+/** `v_budget_item_tasks` — every list_item linked to a budget line, directly, via its list, or (spec 16 §3) via its section, deduplicated to its most specific source. See spec 6, section 7. */
 export type BudgetItemTaskView = {
   budget_item_id: string;
   list_item_id: string;
@@ -1010,7 +1048,7 @@ export type BudgetItemTaskView = {
   due_date: string | null;
   status: ListItemStatus;
   done_at: string | null;
-  linked_via_list: boolean;
+  link_source: "direct" | "via_list" | "via_section";
 }
 
 /** `v_run_sheet_items` — every run_sheet_items row plus computed starts_at/ends_at/conflict. See spec 5, part B, section 3. */
@@ -1085,7 +1123,7 @@ export type Database = {
       rsvp_token_attempts: Table<RsvpTokenAttemptRow, "id" | "succeeded" | "attempted_at">;
       list_templates: Table<ListTemplateRow, "id" | "created_at" | "kind" | "sort_order" | "payload">;
       lists: Table<ListRow, "id" | Timestamps | "kind" | "sort_order">;
-      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order", ListSectionRelationships>;
+      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order" | "kind", ListSectionRelationships>;
       list_items: Table<
         ListItemRow,
         | "id"
@@ -1112,6 +1150,7 @@ export type Database = {
       fx_rates: Table<FxRateRow, "fetched_at">;
       budget_item_tasks: Table<BudgetItemTaskRow, "created_at", BudgetItemTaskRelationships>;
       budget_item_lists: Table<BudgetItemListRow, "created_at", BudgetItemListRelationships>;
+      budget_item_sections: Table<BudgetItemSectionRow, "created_at", BudgetItemSectionRelationships>;
       moodboards: Table<
         MoodboardRow,
         "id" | Timestamps | "layout" | "sort_order",

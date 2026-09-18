@@ -20,13 +20,21 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { addSection, archiveList, moveItemToSection, reorderSections, updateList } from "@/server/actions/lists";
+import {
+  addSection,
+  archiveList,
+  moveItemToSection,
+  renameSection,
+  reorderSections,
+  updateList,
+} from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import { sortCompletedLast } from "@/lib/lists/sort";
 import { InlineText } from "@/components/guests/inline-text";
+import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow } from "./item-row";
 import { QuickAdd } from "./quick-add";
-import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow } from "@/lib/types/database";
+import type { CollaboratorRow, ListItemRow, ListRow, ListSectionKind, ListSectionRow } from "@/lib/types/database";
 
 /** A section's own droppable/container id, and back — dnd-kit ids are opaque strings, so a
  * "no section" bucket (which has no `list_sections` row) needs a stand-in of its own. */
@@ -55,6 +63,7 @@ export function ListDetail({
   collaborators,
   currentUserId,
   budgetLinksByItem = {},
+  budgetLinksBySection = {},
 }: {
   list: ListRow;
   sections: ListSectionRow[];
@@ -63,6 +72,8 @@ export function ListDetail({
   currentUserId?: string;
   /** Budget lines linked to each item, keyed by list_item_id — spec 6, section 7's reverse badge. */
   budgetLinksByItem?: Record<string, { id: string; label: string }[]>;
+  /** Budget lines linked to each section, keyed by section id — spec 16 §3's section-heading badge. */
+  budgetLinksBySection?: Record<string, { id: string; label: string }[]>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -71,6 +82,8 @@ export function ListDetail({
   const [error, setError] = useState<string | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [sectionTitle, setSectionTitle] = useState("");
+  const [newSectionKind, setNewSectionKind] = useState<ListSectionKind>("checklist");
+  const [hideCompleted, setHideCompleted] = useHideCompleted(`list:${list.id}`);
 
   // Manual reordering, held locally until the next refresh confirms it —
   // one entry per section (keyed by containerKeyFor) for tasks, one flat
@@ -99,6 +112,10 @@ export function ListDetail({
     const byId = new Map(sections.map((s) => [s.id, s]));
     return orderedSectionIds.map((id) => byId.get(id)).filter((s): s is ListSectionRow => !!s);
   }, [sections, orderedSectionIds]);
+
+  const sectionsById = useMemo(() => new Map(sections.map((s) => [s.id, s])), [sections]);
+  /** A "notes" section holds plain text lines, not tasks — never a drag/select destination for an ordinary checklist item (spec 15 §4). */
+  const checklistSections = useMemo(() => orderedSections.filter((s) => s.kind !== "notes"), [orderedSections]);
 
   const topLevel = useMemo(() => items.filter((i) => !i.parent_item_id), [items]);
   const itemsById = useMemo(() => new Map(topLevel.map((i) => [i.id, i])), [topLevel]);
@@ -178,6 +195,12 @@ export function ListDetail({
 
   /** Shared by the cross-section drag, the per-item "Section" select, and Move up/down — see rank-list.tsx for the same split. */
   function applyItemMove(sourceKey: string, destKey: string, itemId: string, overId: string) {
+    const destSectionId = sectionIdFromContainerKey(destKey);
+    if (sourceKey !== destKey && destSectionId && sectionsById.get(destSectionId)?.kind === "notes") {
+      setError("Notes sections hold plain text lines, not tasks — pick a checklist section instead.");
+      return;
+    }
+
     const sourceOrder = orderByContainer[sourceKey] ?? [];
     const destCommitted = sourceKey === destKey ? sourceOrder : (orderByContainer[destKey] ?? []);
     const withoutItem = destCommitted.filter((id) => id !== itemId);
@@ -197,7 +220,6 @@ export function ListDetail({
 
     setItemOrderOverride((prev) => ({ ...prev, [sourceKey]: newSource, [destKey]: newDest }));
 
-    const destSectionId = sectionIdFromContainerKey(destKey);
     startTransition(async () => {
       const result = await moveItemToSection(itemId, destSectionId, newDest);
       if (!result.ok) setError(result.error);
@@ -266,27 +288,38 @@ export function ListDetail({
   function onAddSection() {
     if (!sectionTitle.trim()) return;
     startTransition(async () => {
-      const result = await addSection(list.id, sectionTitle);
+      const result = await addSection(list.id, sectionTitle, newSectionKind);
       if (!result.ok) {
         setError(result.error);
       } else {
         setSectionTitle("");
+        setNewSectionKind("checklist");
         setAddingSection(false);
         router.refresh();
       }
     });
   }
 
+  async function saveSectionTitle(sectionId: string, next: string) {
+    const result = await renameSection(sectionId, next);
+    if (result.ok) router.refresh();
+    return result;
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span
-            className="h-3 w-3 shrink-0 rounded-full"
-            style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
-            aria-hidden
-          />
-          {list.icon ? <span aria-hidden>{list.icon}</span> : null}
+          {/* A list is either a color or an emoji, never both — icon wins when set (spec 16 §2). */}
+          {list.icon ? (
+            <span aria-hidden>{list.icon}</span>
+          ) : (
+            <span
+              className="h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: list.color ?? DEFAULT_LIST_COLOR }}
+              aria-hidden
+            />
+          )}
           <h1>
             <InlineText
               value={list.title}
@@ -296,9 +329,12 @@ export function ListDetail({
             />
           </h1>
         </div>
-        <button type="button" className="btn" onClick={onArchive}>
-          Archive list
-        </button>
+        <div className="flex items-center gap-3">
+          <HideCompletedToggle checked={hideCompleted} onChange={setHideCompleted} />
+          <button type="button" className="btn" onClick={onArchive}>
+            Archive list
+          </button>
+        </div>
       </div>
 
       {error ? (
@@ -324,16 +360,18 @@ export function ListDetail({
                 section={section}
                 order={order}
                 itemsById={itemsById}
-                allSections={orderedSections}
+                allSections={checklistSections}
                 subItemsByParent={subItemsByParent}
                 collaborators={collaborators}
                 currentUserId={currentUserId}
                 budgetLinksByItem={budgetLinksByItem}
+                budgetLinks={section ? (budgetLinksBySection[section.id] ?? []) : []}
                 highlightId={highlightId}
-                isEmpty={order.length === 0}
+                hideCompleted={hideCompleted}
                 onMoveItemUp={(index) => applyIndexMove(key, index, index - 1)}
                 onMoveItemDown={(index) => applyIndexMove(key, index, index + 1)}
                 onSelectSection={onSelectSection}
+                onSaveSectionTitle={saveSectionTitle}
                 onMoveSectionUp={
                   section && sectionIndex > 0 ? () => applySectionMove(sectionIndex, sectionIndex - 1) : undefined
                 }
@@ -361,6 +399,15 @@ export function ListDetail({
             placeholder="Section title"
             className="field max-w-xs text-sm"
           />
+          <select
+            value={newSectionKind}
+            onChange={(e) => setNewSectionKind(e.target.value as ListSectionKind)}
+            aria-label="Section kind"
+            className="field w-auto text-sm"
+          >
+            <option value="checklist">Checklist</option>
+            <option value="notes">Notes (plain text lines, e.g. a brain dump)</option>
+          </select>
           <button type="button" className="btn-primary" onClick={onAddSection}>
             Add
           </button>
@@ -385,11 +432,13 @@ function SectionGroup({
   collaborators,
   currentUserId,
   budgetLinksByItem,
+  budgetLinks,
   highlightId,
-  isEmpty,
+  hideCompleted,
   onMoveItemUp,
   onMoveItemDown,
   onSelectSection,
+  onSaveSectionTitle,
   onMoveSectionUp,
   onMoveSectionDown,
 }: {
@@ -399,20 +448,26 @@ function SectionGroup({
   /** Already reconciled (server order + any pending local drag), done items sunk last. */
   order: string[];
   itemsById: Map<string, ListItemRow>;
+  /** Checklist-kind sections only — a "notes" section is never a move-to destination (spec 15 §4). */
   allSections: ListSectionRow[];
   subItemsByParent: Map<string, ListItemRow[]>;
   collaborators: CollaboratorRow[];
   currentUserId?: string;
   budgetLinksByItem: Record<string, { id: string; label: string }[]>;
+  /** Budget lines linked to this section directly — spec 16 §3's section-heading badge. */
+  budgetLinks: { id: string; label: string }[];
   highlightId: string | null;
-  isEmpty: boolean;
+  /** Spec 15 §6 — a done item never leaves `order` (drag math still needs it), it's just not rendered. */
+  hideCompleted: boolean;
   onMoveItemUp: (index: number) => void;
   onMoveItemDown: (index: number) => void;
   onSelectSection: (itemId: string, sectionId: string | null) => void;
+  onSaveSectionTitle: (sectionId: string, next: string) => Promise<{ ok: boolean; error?: string }>;
   onMoveSectionUp?: () => void;
   onMoveSectionDown?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: containerKey });
+  const notesOnly = section?.kind === "notes";
 
   /**
    * What's actually shown, and what drag-and-drop operates over: done items
@@ -424,12 +479,33 @@ function SectionGroup({
   const currentOrder = sortCompletedLast(order, (id) => itemsById.get(id)?.status === "done");
   const doneStart = currentOrder.findIndex((id) => itemsById.get(id)?.status === "done");
   const firstDoneIndex = doneStart === -1 ? currentOrder.length : doneStart;
+  // Hiding never changes an item's index among the not-done ones above
+  // firstDoneIndex — it only drops the already-sunk done tail — so
+  // onMoveItemUp/Down's index math (computed against the full order below)
+  // stays correct with nothing rendered past the cut.
+  const visibleOrder = hideCompleted ? currentOrder.slice(0, firstDoneIndex) : currentOrder;
 
   return (
     <section>
       {section ? (
         <div className="mb-2 flex items-center gap-1">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted">{section.title}</h2>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted">
+            <InlineText
+              value={section.title}
+              ariaLabel="Section title"
+              onSave={(next) => onSaveSectionTitle(section.id, next)}
+            />
+          </h2>
+          {budgetLinks.map((link) => (
+            <a
+              key={link.id}
+              href={`/budget?item=${link.id}`}
+              className="rounded bg-tierA/10 px-1.5 py-0.5 text-xs normal-case text-tierA hover:underline"
+              title={`Linked budget line: ${link.label}`}
+            >
+              💰 {link.label}
+            </a>
+          ))}
           {/* Touch-friendly, and the only way, to reorder sections (spec 11 §1C) — no drag surface for this one. */}
           <div className="flex gap-0">
             <button
@@ -457,8 +533,8 @@ function SectionGroup({
         ref={setNodeRef}
         className={`card divide-y divide-line/60 px-3 ${isOver ? "outline outline-2 outline-accent/50" : ""}`}
       >
-        <SortableContext items={currentOrder} strategy={verticalListSortingStrategy}>
-          {currentOrder.map((id, index) => {
+        <SortableContext items={visibleOrder} strategy={verticalListSortingStrategy}>
+          {visibleOrder.map((id, index) => {
             const item = itemsById.get(id);
             if (!item) return null;
             return (
@@ -470,9 +546,10 @@ function SectionGroup({
                 currentUserId={currentUserId}
                 budgetLinks={budgetLinksByItem[id] ?? []}
                 highlighted={id === highlightId}
-                sections={allSections}
+                sections={notesOnly ? undefined : allSections}
                 currentSectionId={section?.id ?? null}
                 onSelectSection={onSelectSection}
+                notesOnly={notesOnly}
                 onMoveUp={index > 0 && index !== firstDoneIndex ? () => onMoveItemUp(index) : undefined}
                 onMoveDown={
                   index < currentOrder.length - 1 && index !== firstDoneIndex - 1
@@ -483,10 +560,14 @@ function SectionGroup({
             );
           })}
         </SortableContext>
-        {isEmpty ? <p className="py-3 text-sm text-muted">Nothing here yet.</p> : null}
+        {visibleOrder.length === 0 ? (
+          <p className="py-3 text-sm text-muted">
+            {order.length === 0 ? "Nothing here yet." : "Everything here is done."}
+          </p>
+        ) : null}
       </div>
       <div className="mt-2">
-        <QuickAdd listId={listId} sectionId={section?.id ?? null} />
+        <QuickAdd listId={listId} sectionId={section?.id ?? null} notesMode={notesOnly} />
       </div>
     </section>
   );
@@ -502,6 +583,7 @@ function SortableItem({
   sections,
   currentSectionId,
   onSelectSection,
+  notesOnly,
   onMoveUp,
   onMoveDown,
 }: {
@@ -511,9 +593,10 @@ function SortableItem({
   currentUserId?: string;
   budgetLinks: { id: string; label: string }[];
   highlighted: boolean;
-  sections: ListSectionRow[];
+  sections?: ListSectionRow[];
   currentSectionId: string | null;
   onSelectSection: (itemId: string, sectionId: string | null) => void;
+  notesOnly: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
@@ -532,10 +615,11 @@ function SortableItem({
         currentUserId={currentUserId}
         budgetLinks={budgetLinks}
         highlighted={highlighted}
-        allowSubItems
+        allowSubItems={!notesOnly}
         sections={sections}
         currentSectionId={currentSectionId}
         onSelectSection={onSelectSection}
+        notesOnly={notesOnly}
         dragHandle={
           <div className="mt-1 flex shrink-0 flex-col items-center">
             <button

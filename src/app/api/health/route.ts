@@ -34,15 +34,31 @@ const OPTIONAL = [
   "PINTEREST_APP_SECRET",
 ] as const;
 
-/** One table per migration that matters, oldest first. */
+/**
+ * One probe per migration that matters, oldest first. A brand-new table is
+ * enough to probe with `select("*")` — but a migration that only adds a
+ * column to a table that already exists (the common shape once the schema
+ * is past its first few migrations) needs `column` set to that column
+ * specifically, or `select("*")` succeeds against the table regardless of
+ * whether the migration ever ran. `0016` (list_sections.kind) is exactly
+ * this shape, and shipped without a probe entry at all — a project could
+ * (and did) apply everything through `0014` and still fail at `/budget`
+ * with no signal from this endpoint that anything was wrong.
+ */
 const SCHEMA_PROBE = [
   { table: "weddings", migration: "0001_core_schema" },
   { table: "lists", migration: "0004_lists" },
+  { table: "list_items", migration: "0005_lists_status_assignment", column: "status" },
+  { table: "weddings", migration: "0007_settings", column: "reminder_window_days" },
   { table: "cut_lines", migration: "0008_multi_cut_lines" },
   { table: "run_sheet_items", migration: "0009_run_sheet" },
   { table: "budget_items", migration: "0010_budget" },
+  { table: "budget_items", migration: "0011_budget_manual_quantity_columns", column: "quantity" },
   { table: "moodboards", migration: "0013_moodboards" },
   { table: "moodboard_clip_tokens", migration: "0014_moodboard_clipper" },
+  { table: "weddings", migration: "0015_wedding_slug", column: "slug" },
+  { table: "list_sections", migration: "0016_list_content_and_calculated_dates", column: "kind" },
+  { table: "budget_item_sections", migration: "0017_budget_section_links" },
 ] as const;
 
 function isSet(name: string): boolean {
@@ -88,7 +104,8 @@ export async function GET() {
       database = { reachable: true };
 
       for (const probe of SCHEMA_PROBE) {
-        const result = await supabase.from(probe.table).select("*", { head: true, count: "exact" });
+        const column = "column" in probe ? probe.column : "*";
+        const result = await supabase.from(probe.table).select(column, { head: true, count: "exact" });
         // Through PostgREST a missing table is PGRST205, not PostgreSQL's
         // 42P01 — the distinction this endpoint got wrong on its first pass,
         // which would have reported the very outage it was written for as an

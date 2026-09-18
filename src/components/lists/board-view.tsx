@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { setStatus } from "@/server/actions/lists";
-import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { listAccentBorderColor } from "@/lib/list-colors";
 import type { ListItemStatus } from "@/lib/types/database";
 import type { ItemWithList } from "./item-row";
 
@@ -130,7 +130,7 @@ function BoardCard({
       ref={setNodeRef}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        borderLeftColor: item.lists?.color ?? DEFAULT_LIST_COLOR,
+        borderLeftColor: listAccentBorderColor(item.lists?.color ?? null, item.lists?.icon ?? null),
       }}
       className={`rounded border border-l-4 bg-white px-2 py-1.5 text-xs shadow-sm
         ${isDragging ? "relative z-10 opacity-80 shadow-md" : ""}`}
@@ -138,6 +138,7 @@ function BoardCard({
       <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
         <p className="truncate font-medium">{item.title}</p>
         <p className="truncate text-muted">
+          {item.lists?.icon ? <span aria-hidden>{item.lists.icon} </span> : null}
           {item.lists?.title}
           {item.due_date ? ` · ${item.due_date}` : ""}
           {item.flagged ? " · ⚑" : ""}

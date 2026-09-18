@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { WeddingBasicsForm } from "@/components/settings/wedding-basics-form";
 import { CutLinePicker } from "@/components/settings/cut-line-picker";
+import { CollaboratorNamesEditor } from "@/components/settings/collaborator-names-editor";
 import { ListAppearanceEditor } from "@/components/settings/list-appearance-editor";
 import { CapacityControl } from "@/components/rank/capacity-control";
 import { listHouseholds } from "@/server/queries/guests";
 import { getLists } from "@/server/queries/lists";
-import { getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
+import { getCollaborators, getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
 import { ranksNeedRebalance } from "@/server/actions/rank";
 import { ClipTokensCard } from "@/components/moodboards/clip-tokens-card";
 import { PinterestCard } from "@/components/moodboards/pinterest-card";
@@ -16,12 +17,13 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, lists, cutLines, clipTokens, pinterest, moodboards] =
+  const [households, stats, rebalanceOffered, lists, collaborators, cutLines, clipTokens, pinterest, moodboards] =
     await Promise.all([
       listHouseholds(wedding.id),
       getWeddingStats(wedding.id),
       ranksNeedRebalance(),
       getLists(wedding.id),
+      getCollaborators(wedding.id),
       getCutLines(wedding.id),
       listClipTokens(wedding.id),
       getPinterestAccount(wedding.id),
@@ -56,6 +58,17 @@ export default async function SettingsPage() {
         ) : (
           <CutLinePicker households={households} cutLines={cutLines} />
         )}
+      </section>
+
+      <section aria-labelledby="collaborator-names" className="card space-y-4 p-4">
+        <h2 id="collaborator-names" className="text-sm font-medium uppercase tracking-wide text-muted">
+          Names
+        </h2>
+        <p className="text-sm text-muted">
+          Shown on the assign picker and everywhere a task's assignee appears — falls back to
+          &ldquo;Owner&rdquo;/&ldquo;Partner&rdquo; until set.
+        </p>
+        <CollaboratorNamesEditor collaborators={collaborators} />
       </section>
 
       <section aria-labelledby="list-appearance" className="card space-y-4 p-4">

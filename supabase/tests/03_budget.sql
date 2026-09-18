@@ -307,11 +307,88 @@ select pg_temp.expect(
   2, 'both the directly-linked item and the linked list''s second item show up');
 select pg_temp.expect(
   (select count(*) from public.v_budget_item_tasks
-    where budget_item_id = 'b0000000-0000-4000-8000-000000000001' and linked_via_list = false),
+    where budget_item_id = 'b0000000-0000-4000-8000-000000000001' and link_source = 'direct'),
   1, 'exactly one row is the direct link');
 select pg_temp.expect(
   (select count(*) from public.v_budget_item_tasks
     where budget_item_id = 'b0000000-0000-4000-8000-000000000001'
       and list_item_id = 'b3111111-1111-4111-8111-111111111111'),
   1, 'the directly-linked item is not duplicated even though its list is also linked');
+rollback;
+
+-- ---------------------------------------------------------------------------
+-- 5. budget_item_sections and link_source priority (spec 16 §3, 0017)
+-- ---------------------------------------------------------------------------
+begin;
+set local role service_role;
+
+insert into public.budget_categories (id, wedding_id, name) values
+  ('c1000000-0000-4000-8000-000000000002', :w1, 'Decor');
+insert into public.budget_items (id, wedding_id, category_id, label, currency, quantity_basis) values
+  ('b0000000-0000-4000-8000-000000000002', :w1, 'c1000000-0000-4000-8000-000000000002', 'Ceremony decor', 'GBP', 'flat');
+
+-- "Ceremony decor" (b2111111-...) has two items, per supabase/seed.sql:
+-- b3111111-...-111111111111 and b3111111-...-222222222222. Linking the
+-- section pulls in both, via_section.
+insert into public.budget_item_sections (wedding_id, budget_item_id, section_id) values
+  (:w1, 'b0000000-0000-4000-8000-000000000002', 'b2111111-1111-4111-8111-111111111111');
+
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+
+select pg_temp.expect(
+  (select count(*) from public.v_budget_item_tasks where budget_item_id = 'b0000000-0000-4000-8000-000000000002'),
+  2, 'both items in the linked section show up');
+select pg_temp.expect(
+  (select count(*) from public.v_budget_item_tasks
+    where budget_item_id = 'b0000000-0000-4000-8000-000000000002' and link_source <> 'via_section'),
+  0, 'both are sourced via_section, with nothing else linked yet');
+
+-- Now also link one of the section's own items directly — direct should win
+-- for that one row (same priority rule 0010 already used for direct vs.
+-- via_list, generalised to a third source), the sibling item stays
+-- via_section.
+set local role service_role;
+insert into public.budget_item_tasks (wedding_id, budget_item_id, list_item_id) values
+  (:w1, 'b0000000-0000-4000-8000-000000000002', 'b3111111-1111-4111-8111-111111111111');
+
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+select pg_temp.expect_text(
+  (select link_source from public.v_budget_item_tasks
+    where budget_item_id = 'b0000000-0000-4000-8000-000000000002'
+      and list_item_id = 'b3111111-1111-4111-8111-111111111111'),
+  'direct', 'direct wins over via_section for the same item');
+select pg_temp.expect_text(
+  (select link_source from public.v_budget_item_tasks
+    where budget_item_id = 'b0000000-0000-4000-8000-000000000002'
+      and list_item_id = 'b3111111-1111-4111-8111-222222222222'),
+  'via_section', 'the sibling item, only in the linked section, stays via_section');
+
+select pg_temp.expect(
+  (select count(*) from public.budget_item_sections where wedding_id = :w2), 0,
+  'alex sees no section links from wedding 2');
+
+-- Composite FK stops what RLS cannot, same shape as 01_tenancy.sql's
+-- cross-wedding list_item check: a wedding-2 section for a wedding-1
+-- budget item is refused even for service_role.
+set local role service_role;
+do $$
+declare
+  wedding2_section_id uuid;
+begin
+  insert into public.list_sections (wedding_id, list_id, title)
+  values ('22222222-2222-4222-8222-222222222222', 'b1111111-1111-4111-8111-0000000000ff', 'Secret section')
+  returning id into wedding2_section_id;
+
+  begin
+    insert into public.budget_item_sections (wedding_id, budget_item_id, section_id)
+    values ('11111111-1111-4111-8111-111111111111', 'b0000000-0000-4000-8000-000000000002', wedding2_section_id);
+    raise exception 'FAIL — section link across weddings was accepted';
+  exception
+    when foreign_key_violation then
+      raise notice '  ok  composite FK refused a cross-wedding section link';
+  end;
+end;
+$$;
 rollback;
