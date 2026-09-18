@@ -179,19 +179,26 @@ export const getFlaggedItems = cache(async (weddingId: string): Promise<ListItem
   return (data ?? []) as ListItemWithList[];
 });
 
+/** A checklist item joined to its section's kind, so a "notes" section's plain-text lines can be filtered out of a view that has no other reason to exclude them (spec 15 §4 — see getAllItems/getBoardItems). */
+type ListItemWithSectionKind = ListItemWithList & { list_sections: { kind: string } | null };
+
+function excludeNotes(items: ListItemWithSectionKind[]): ListItemWithList[] {
+  return items.filter((item) => item.list_sections?.kind !== "notes");
+}
+
 export const getAllItems = cache(async (weddingId: string): Promise<ListItemWithList[]> => {
   const supabase = await createClient();
   const activeListIds = await getActiveListIds(weddingId);
   if (activeListIds.length === 0) return [];
   const { data, error } = await supabase
     .from("list_items")
-    .select("*, lists(title, color, kind)")
+    .select("*, lists(title, color, kind), list_sections(kind)")
     .eq("wedding_id", weddingId)
     .in("list_id", activeListIds)
     .order("due_date", { ascending: true, nullsFirst: false })
     .order("sort_order", { ascending: true });
   if (error) throw new Error(`Could not load items: ${error.message}`);
-  return (data ?? []) as ListItemWithList[];
+  return excludeNotes((data ?? []) as ListItemWithSectionKind[]);
 });
 
 export const getAssignedToMeItems = cache(
@@ -303,11 +310,11 @@ export const getBoardItems = cache(
     if (activeListIds.length === 0) return [];
     const { data, error } = await supabase
       .from("list_items")
-      .select("*, lists(title, color, kind)")
+      .select("*, lists(title, color, kind), list_sections(kind)")
       .eq("wedding_id", weddingId)
       .in("list_id", activeListIds)
       .order("sort_order", { ascending: true });
     if (error) throw new Error(`Could not load the board: ${error.message}`);
-    return (data ?? []) as ListItemWithList[];
+    return excludeNotes((data ?? []) as ListItemWithSectionKind[]);
   },
 );

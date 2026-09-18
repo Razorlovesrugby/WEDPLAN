@@ -7,16 +7,24 @@ import {
   addSubItem,
   deleteItem,
   setDueDate as setDueDateAction,
+  setDueDateOffset,
   setPriority as setPriorityAction,
   setStatus,
   toggleFlag,
+  updateItem,
 } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
+import { InlineText } from "@/components/guests/inline-text";
 import type { CollaboratorRow, ListItemRow, ListSectionRow } from "@/lib/types/database";
 
 export type ItemWithList = ListItemRow & {
   lists?: { title: string; color: string | null; kind: string } | null;
 };
+
+/** A collaborator's label for the assign picker: their own typed name (spec 15 §2) if they've set one, else the existing role fallback. */
+function collaboratorLabel(c: CollaboratorRow, currentUserId?: string): string {
+  return c.display_name || (c.user_id === currentUserId ? "You" : c.role === "owner" ? "Owner" : "Partner");
+}
 
 /**
  * One list item, everywhere it shows up: a section on /lists/[id], a smart
@@ -38,6 +46,7 @@ export function ItemRow({
   sections,
   currentSectionId,
   onSelectSection,
+  notesOnly = false,
 }: {
   item: ItemWithList;
   subItems?: ListItemRow[];
@@ -50,10 +59,12 @@ export function ItemRow({
   budgetLinks?: { id: string; label: string }[];
   /** True when this is the `?highlight=` target from a budget popup's click-through. */
   highlighted?: boolean;
-  /** Every section in this item's own list — present only on `/lists/[id]`'s top-level rows (spec 11 §1B). */
+  /** Every checklist-kind section in this item's own list — present only on `/lists/[id]`'s top-level rows (spec 11 §1B). A "notes" section is never a selectable destination (spec 15 §4). */
   sections?: ListSectionRow[];
   currentSectionId?: string | null;
   onSelectSection?: (itemId: string, sectionId: string | null) => void;
+  /** This item lives in a "notes" section (spec 15 §4) — render a plain, editable text line instead of a task row: no checkbox, due date, flag, priority, assignment, section move, or sub-items. */
+  notesOnly?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -73,6 +84,14 @@ export function ItemRow({
   useEffect(() => {
     setChecked(item.status === "done");
   }, [item.status]);
+
+  const [dueMode, setDueMode] = useState<"fixed" | "relative">(item.due_date_offset_days !== null ? "relative" : "fixed");
+  const [offsetWeeks, setOffsetWeeks] = useState(
+    item.due_date_offset_days !== null ? Math.round(Math.abs(item.due_date_offset_days) / 7) : 0,
+  );
+  const [offsetDirection, setOffsetDirection] = useState<"before" | "after">(
+    item.due_date_offset_days !== null && item.due_date_offset_days > 0 ? "after" : "before",
+  );
 
   function onToggleDone() {
     const next = !checked;
@@ -114,6 +133,30 @@ export function ItemRow({
         setError(null);
       }
     });
+  }
+
+  /** Writes the offset right away — no separate save step, matching every other control on this row (spec 15 §5). */
+  function applyOffset(weeks: number, direction: "before" | "after") {
+    const days = direction === "before" ? -weeks * 7 : weeks * 7;
+    startTransition(async () => {
+      const result = await setDueDateOffset(item.id, days);
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setDueDate(result.data.due_date);
+        setError(null);
+      }
+    });
+  }
+
+  function switchToRelative() {
+    setDueMode("relative");
+    applyOffset(offsetWeeks, offsetDirection);
+  }
+
+  /** Client-side only — the item stays "relative" server-side until a fixed date is actually typed (setDueDate then clears the offset). */
+  function switchToFixed() {
+    setDueMode("fixed");
   }
 
   function onPriorityClick() {
@@ -169,6 +212,29 @@ export function ItemRow({
     });
   }
 
+  async function saveTitle(next: string) {
+    const result = await updateItem(item.id, { title: next });
+    if (result.ok) router.refresh();
+    return result;
+  }
+
+  if (notesOnly) {
+    return (
+      <div id={`list-item-${item.id}`} className={`py-2 ${highlighted ? "-mx-2 rounded bg-accent/10 px-2" : ""}`}>
+        <div className="flex items-center gap-2">
+          {dragHandle}
+          <div className="min-w-0 flex-1">
+            <InlineText value={item.title} ariaLabel="Line" onSave={saveTitle} />
+          </div>
+          <button type="button" onClick={onDelete} className="shrink-0 text-xs text-red-700 hover:underline">
+            Remove
+          </button>
+        </div>
+        {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
+      </div>
+    );
+  }
+
   return (
     <div id={`list-item-${item.id}`} className={`py-2 ${highlighted ? "-mx-2 rounded bg-accent/10 px-2" : ""}`}>
       <div className="flex items-start gap-2">
@@ -182,7 +248,9 @@ export function ItemRow({
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`text-sm ${checked ? "text-muted line-through" : ""}`}>{item.title}</span>
+            <span className={`min-w-[8rem] flex-1 text-sm ${checked ? "text-muted line-through" : ""}`}>
+              <InlineText value={item.title} ariaLabel="Task title" onSave={saveTitle} />
+            </span>
             {priority > 0 ? (
               <span className="text-xs font-medium text-amber-700" title={`Priority ${priority}`}>
                 {"!".repeat(priority)}
@@ -211,13 +279,64 @@ export function ItemRow({
           {item.notes ? <p className="mt-0.5 text-xs text-muted">{item.notes}</p> : null}
 
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-            <input
-              type="date"
-              value={dueDate ?? ""}
-              onChange={(e) => onDateChange(e.target.value)}
-              aria-label={`Due date for "${item.title}"`}
-              className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
-            />
+            {dueMode === "fixed" ? (
+              <>
+                <input
+                  type="date"
+                  value={dueDate ?? ""}
+                  onChange={(e) => onDateChange(e.target.value)}
+                  aria-label={`Due date for "${item.title}"`}
+                  className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
+                />
+                {dueDate ? (
+                  <button
+                    type="button"
+                    onClick={() => onDateChange("")}
+                    aria-label={`Clear due date for "${item.title}"`}
+                    className="text-muted hover:text-ink"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <span className="flex items-center gap-1 text-muted">
+                <input
+                  type="number"
+                  min={0}
+                  value={offsetWeeks}
+                  onChange={(e) => {
+                    const weeks = Math.max(0, Math.trunc(Number(e.target.value)) || 0);
+                    setOffsetWeeks(weeks);
+                    applyOffset(weeks, offsetDirection);
+                  }}
+                  aria-label={`Weeks ${offsetDirection} the wedding, for "${item.title}"`}
+                  className="w-12 rounded border border-line bg-transparent px-1 py-0.5"
+                />
+                weeks
+                <select
+                  value={offsetDirection}
+                  onChange={(e) => {
+                    const direction = e.target.value as "before" | "after";
+                    setOffsetDirection(direction);
+                    applyOffset(offsetWeeks, direction);
+                  }}
+                  aria-label={`Before or after the wedding, for "${item.title}"`}
+                  className="rounded border border-line bg-transparent px-1 py-0.5"
+                >
+                  <option value="before">before</option>
+                  <option value="after">after</option>
+                </select>
+                the wedding{dueDate ? ` → ${dueDate}` : ""}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={dueMode === "fixed" ? switchToRelative : switchToFixed}
+              className="text-[11px] text-muted underline hover:text-ink"
+            >
+              {dueMode === "fixed" ? "Calculate from the wedding date" : "Use a fixed date"}
+            </button>
             <button
               type="button"
               onClick={onToggleFlag}
@@ -245,7 +364,7 @@ export function ItemRow({
                 <option value="">Unassigned</option>
                 {collaborators.map((c) => (
                   <option key={c.user_id} value={c.user_id}>
-                    {c.user_id === currentUserId ? "You" : c.role === "owner" ? "Owner" : "Partner"}
+                    {collaboratorLabel(c, currentUserId)}
                   </option>
                 ))}
               </select>
