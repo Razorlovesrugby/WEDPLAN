@@ -9,12 +9,10 @@ import type { PaymentRow } from "@/lib/types/database";
 /** A line item's payment schedule — spec 6, section 2. Overdue (unpaid, past due) is highlighted the way /timeline highlights overdue items. */
 export function PaymentList({
   budgetItemId,
-  currency,
   payments,
   timezone,
 }: {
   budgetItemId: string;
-  currency: string;
   payments: PaymentRow[];
   timezone: string;
 }) {
@@ -57,7 +55,7 @@ export function PaymentList({
                 className={`flex flex-wrap items-center justify-between gap-2 rounded px-2 py-1 ${overdue ? "bg-red-50" : ""}`}
               >
                 <span>
-                  {formatMoney(p.amount, p.currency)}
+                  {formatMoney(p.amount)}
                   {p.due_date ? (
                     <span className={`ml-2 text-xs ${overdue ? "text-red-700" : "text-muted"}`}>
                       due {formatDate(p.due_date, timezone)}
@@ -91,12 +89,7 @@ export function PaymentList({
         </ul>
       )}
       {adding ? (
-        <AddPaymentForm
-          budgetItemId={budgetItemId}
-          defaultCurrency={currency}
-          onDone={() => setAdding(false)}
-          onError={setError}
-        />
+        <AddPaymentForm budgetItemId={budgetItemId} onDone={() => setAdding(false)} onError={setError} />
       ) : (
         <button type="button" className="btn px-2 py-1 text-xs" onClick={() => setAdding(true)}>
           + Record a payment
@@ -108,19 +101,16 @@ export function PaymentList({
 
 function AddPaymentForm({
   budgetItemId,
-  defaultCurrency,
   onDone,
   onError,
 }: {
   budgetItemId: string;
-  defaultCurrency: string;
   onDone: () => void;
   onError: (error: string | null) => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState(defaultCurrency);
   const [dueDate, setDueDate] = useState("");
   const [reference, setReference] = useState("");
 
@@ -128,7 +118,6 @@ function AddPaymentForm({
     startTransition(async () => {
       const result = await recordPayment(budgetItemId, {
         amount: Math.round(Number(amount || "0") * 100),
-        currency,
         due_date: dueDate,
         reference,
       });
@@ -147,15 +136,6 @@ function AddPaymentForm({
       <label className="text-xs text-muted">
         Amount
         <input value={amount} onChange={(e) => setAmount(e.target.value)} className="field mt-0.5 block w-24 text-sm" />
-      </label>
-      <label className="text-xs text-muted">
-        Currency
-        <input
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-          maxLength={3}
-          className="field mt-0.5 block w-16 text-sm uppercase"
-        />
       </label>
       <label className="text-xs text-muted">
         Due date

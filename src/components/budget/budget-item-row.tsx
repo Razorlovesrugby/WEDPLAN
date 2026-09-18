@@ -29,13 +29,13 @@ const BASIS_LABEL: Record<BudgetItemView["quantity_basis"], string> = {
 
 /**
  * One row of `/budget`'s four-column table: the four numbers plus the live
- * `computed_current` (in base_currency) and variance, expanding into the
- * full editor — fields, the consumption component editor when relevant, the
- * payment schedule, and the linked-tasks popup (spec 6, sections 4 and 7).
+ * `computed_current` (NZD, grossed up by 15% when the line is GST-exclusive
+ * — spec 18) and variance, expanding into the full editor — fields, the
+ * consumption component editor when relevant, the payment schedule, and the
+ * linked-tasks popup (spec 6, sections 4 and 7).
  */
 export function BudgetItemRow({
   item,
-  baseCurrency,
   events,
   components,
   payments,
@@ -45,11 +45,9 @@ export function BudgetItemRow({
   links,
   timezone,
   counts,
-  fxState,
   autoOpenLinks = false,
 }: {
   item: BudgetItemView;
-  baseCurrency: string;
   events: EventRow[];
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
@@ -61,7 +59,6 @@ export function BudgetItemRow({
   links: BudgetItemLinks;
   timezone: string;
   counts: { adult: number; child: number; seat: number };
-  fxState: { rate: number | null; source: string } | null;
   /** True when this is the `?item=` target navigated to from a linked task/list's reverse badge. */
   autoOpenLinks?: boolean;
 }) {
@@ -116,8 +113,8 @@ export function BudgetItemRow({
           {item.vendor_name ? <span className="ml-2 text-sm text-muted">{item.vendor_name}</span> : null}
           <div className="mt-0.5 text-xs text-muted">
             {BASIS_LABEL[item.quantity_basis]}
-            {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price, item.currency)}` : ""}
-            {item.currency !== baseCurrency ? ` · ${item.currency}` : ""}
+            {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price)}` : ""}
+            {item.gst_treatment === "exclusive" ? " · GST exclusive (+15%)" : ""}
             {linkedCount > 0 ? ` · ${linkedCount} linked` : ""}
           </div>
         </div>
@@ -132,19 +129,19 @@ export function BudgetItemRow({
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-5">
-        <Figure label="Estimated" value={formatMoney(item.estimated, item.currency)} />
-        <Figure label="Quoted" value={formatMoney(item.quoted, item.currency)} />
-        <Figure label="Contracted" value={formatMoney(item.contracted, item.currency)} />
-        <Figure label="Current" value={formatMoney(item.computed_current_base, baseCurrency)} strong />
+        <Figure label="Estimated" value={formatMoney(item.estimated)} />
+        <Figure label="Quoted" value={formatMoney(item.quoted)} />
+        <Figure label="Contracted" value={formatMoney(item.contracted)} />
+        <Figure label="Current" value={formatMoney(item.computed_current)} strong />
         <Figure
           label="Outstanding"
-          value={formatMoney(item.outstanding_base, baseCurrency)}
-          tone={item.outstanding_base > 0 ? "warn" : "good"}
+          value={formatMoney(item.outstanding)}
+          tone={item.outstanding > 0 ? "warn" : "good"}
         />
       </div>
       {variance !== null && variance !== 0 ? (
         <p className="text-xs text-muted">
-          {variance > 0 ? "Over" : "Under"} quote by {formatMoney(Math.abs(variance), item.currency)}
+          {variance > 0 ? "Over" : "Under"} quote by {formatMoney(Math.abs(variance))}
         </p>
       ) : null}
 
@@ -159,7 +156,6 @@ export function BudgetItemRow({
           <BudgetItemFields
             initial={item}
             events={events}
-            fxState={fxState}
             pending={pending}
             onSubmit={onSave}
             onCancel={() => setEditing(false)}
@@ -168,10 +164,10 @@ export function BudgetItemRow({
       ) : null}
 
       {item.quantity_basis === "consumption" ? (
-        <ConsumptionEditor budgetItemId={item.id} currency={item.currency} components={components} counts={counts} />
+        <ConsumptionEditor budgetItemId={item.id} components={components} counts={counts} />
       ) : null}
 
-      <PaymentList budgetItemId={item.id} currency={item.currency} payments={payments} timezone={timezone} />
+      <PaymentList budgetItemId={item.id} payments={payments} timezone={timezone} />
 
       <BudgetLinksPopup
         itemId={item.id}

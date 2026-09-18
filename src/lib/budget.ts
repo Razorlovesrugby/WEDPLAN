@@ -17,6 +17,15 @@
 
 export type QuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption" | "manual";
 export type GuestBasis = "per_adult" | "per_seat";
+export type GstTreatment = "inclusive" | "exclusive";
+
+/** Hardcoded NZ GST rate (spec 18) — not a per-wedding or per-line setting. */
+export const GST_RATE = 0.15;
+
+/** Grosses up an amount by GST_RATE when the line is entered excl. GST; a no-op when inclusive. */
+export function applyGst(amountMinor: number, treatment: GstTreatment): number {
+  return treatment === "exclusive" ? Math.round(amountMinor * (1 + GST_RATE)) : amountMinor;
+}
 
 /**
  * Whatever live guest counts a caller has already scoped — to the whole
@@ -52,6 +61,8 @@ export type BudgetItemInput = {
   contracted: number | null;
   /** Multiplier for `manual` (spec 6.1) — decimals allowed, defaults to 1 when null. Unused for every other basis. */
   quantity?: number | null;
+  /** Whether every money figure on this line was entered incl. or excl. GST (spec 18). Defaults to "inclusive" — today's behaviour. */
+  gstTreatment?: GstTreatment;
 };
 
 function countFor(basis: GuestBasis, counts: GuestCounts): number {
@@ -86,18 +97,21 @@ export function computeCurrent(
   counts: GuestCounts,
   components: ConsumptionComponentInput[] = [],
 ): number {
-  switch (item.quantityBasis) {
-    case "flat":
-      return item.contracted ?? item.quoted ?? item.estimated ?? 0;
-    case "per_adult":
-      return Math.round((item.unitPrice ?? 0) * counts.adult);
-    case "per_child":
-      return Math.round((item.unitPrice ?? 0) * counts.child);
-    case "per_seat":
-      return Math.round((item.unitPrice ?? 0) * counts.seat);
-    case "consumption":
-      return consumptionTotal(components, counts);
-    case "manual":
-      return Math.round((item.quantity ?? 1) * (item.unitPrice ?? 0));
-  }
+  const amount = (() => {
+    switch (item.quantityBasis) {
+      case "flat":
+        return item.contracted ?? item.quoted ?? item.estimated ?? 0;
+      case "per_adult":
+        return Math.round((item.unitPrice ?? 0) * counts.adult);
+      case "per_child":
+        return Math.round((item.unitPrice ?? 0) * counts.child);
+      case "per_seat":
+        return Math.round((item.unitPrice ?? 0) * counts.seat);
+      case "consumption":
+        return consumptionTotal(components, counts);
+      case "manual":
+        return Math.round((item.quantity ?? 1) * (item.unitPrice ?? 0));
+    }
+  })();
+  return applyGst(amount, item.gstTreatment ?? "inclusive");
 }

@@ -68,15 +68,15 @@ export default async function DashboardPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Committed"
-              value={formatMoney(budget.total_contracted, wedding.base_currency)}
+              value={formatMoney(budget.total_contracted)}
               href="/budget"
               hint="contracted across every line"
             />
             <Stat
               label="Paid"
-              value={formatMoney(budget.total_paid, wedding.base_currency)}
+              value={formatMoney(budget.total_paid)}
               href="/budget"
-              hint={`${formatMoney(budget.total_outstanding, wedding.base_currency)} outstanding`}
+              hint={`${formatMoney(budget.total_outstanding)} outstanding`}
               tone={budget.total_outstanding > 0 ? "warn" : "good"}
             />
             <Stat
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
             />
             <Stat
               label="Per seat"
-              value={budget.per_head_seat !== null ? formatMoney(budget.per_head_seat, wedding.base_currency) : "—"}
+              value={budget.per_head_seat !== null ? formatMoney(budget.per_head_seat) : "—"}
               href="/guests/rank"
               hint="from every per-unit and consumption line"
             />

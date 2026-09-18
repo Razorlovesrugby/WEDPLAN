@@ -28,10 +28,10 @@ $$;
 -- Wedding 1 — the one under test
 -- ---------------------------------------------------------------------------
 insert into public.weddings
-  (id, name, wedding_date, timezone, base_currency, capacity, rsvp_lock_at)
+  (id, name, wedding_date, timezone, capacity, rsvp_lock_at)
 values
   ('11111111-1111-4111-8111-111111111111', 'Alex & Sam', '2027-06-12', 'Europe/London',
-   'GBP', 90, '2027-04-30 23:59:00+01')
+   90, '2027-04-30 23:59:00+01')
 on conflict (id) do nothing;
 
 -- Cut lines (spec 5, part A) — same effective A/a6, B/a8, C split the fixed

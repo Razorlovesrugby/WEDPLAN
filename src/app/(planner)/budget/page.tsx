@@ -7,7 +7,6 @@ import {
   listConsumptionComponents,
 } from "@/server/queries/budget";
 import { getBudgetItemLinksForItems, noBudgetItemLinks } from "@/server/queries/budget-links";
-import { getFxRate } from "@/server/queries/fx";
 import { getAllItems, getAllSections, getLists } from "@/server/queries/lists";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { CategoryHeader } from "@/components/budget/category-header";
@@ -42,23 +41,11 @@ export default async function BudgetPage({
   // item (plus the whole-wedding "no event" scope) — not one per item.
   const eventIds = [...new Set(items.map((i) => i.event_id).filter((id): id is string => id !== null))];
 
-  // FX state, one lookup per distinct foreign currency in use — cached in
-  // fx_rates, so this is at most one external call per currency per day
-  // across the whole app, not per item and not per page load.
-  const foreignCurrencies = [...new Set(items.filter((i) => i.currency !== wedding.base_currency).map((i) => i.currency))];
-
-  // All three need `items` first, but none of them needs either of the other
-  // two — so they go out as one concurrent batch. They used to be three
-  // separate `await`s, which made the page wait for counts, then rates, then
-  // links, end to end, on top of the `Promise.all` above.
-  const [countsEntries, fxEntries, linksByItem] = await Promise.all([
+  // Both need `items` first, but neither needs the other — so they go out as
+  // one concurrent batch rather than two sequential `await`s.
+  const [countsEntries, linksByItem] = await Promise.all([
     Promise.all(
       [null, ...eventIds].map(async (eventId) => [eventId, await getGuestCounts(wedding.id, eventId)] as const),
-    ),
-    Promise.all(
-      foreignCurrencies.map(
-        async (currency) => [currency, await getFxRate(currency, wedding.id, wedding.base_currency)] as const,
-      ),
     ),
     getBudgetItemLinksForItems(
       wedding.id,
@@ -66,7 +53,6 @@ export default async function BudgetPage({
     ),
   ]);
   const countsByScope = new Map(countsEntries);
-  const fxByCurrency = new Map(fxEntries);
 
   const componentsByItem = new Map<string, typeof components>();
   for (const c of components) {
@@ -96,13 +82,13 @@ export default async function BudgetPage({
 
       {summary ? (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <SummaryFigure label="Estimated" value={formatMoney(summary.total_estimated, wedding.base_currency)} />
-          <SummaryFigure label="Quoted" value={formatMoney(summary.total_quoted, wedding.base_currency)} />
-          <SummaryFigure label="Contracted" value={formatMoney(summary.total_contracted, wedding.base_currency)} />
-          <SummaryFigure label="Paid" value={formatMoney(summary.total_paid, wedding.base_currency)} tone="good" />
+          <SummaryFigure label="Estimated" value={formatMoney(summary.total_estimated)} />
+          <SummaryFigure label="Quoted" value={formatMoney(summary.total_quoted)} />
+          <SummaryFigure label="Contracted" value={formatMoney(summary.total_contracted)} />
+          <SummaryFigure label="Paid" value={formatMoney(summary.total_paid)} tone="good" />
           <SummaryFigure
             label="Outstanding"
-            value={formatMoney(summary.total_outstanding, wedding.base_currency)}
+            value={formatMoney(summary.total_outstanding)}
             tone={summary.total_outstanding > 0 ? "warn" : "good"}
           />
         </section>
@@ -111,13 +97,9 @@ export default async function BudgetPage({
       {summary && (summary.per_head_adult !== null || summary.per_head_seat !== null) ? (
         <p className="text-sm text-muted">
           Per head, from every per-unit and consumption line:{" "}
-          {summary.per_head_adult !== null ? (
-            <strong>{formatMoney(summary.per_head_adult, wedding.base_currency)}/adult</strong>
-          ) : null}
+          {summary.per_head_adult !== null ? <strong>{formatMoney(summary.per_head_adult)}/adult</strong> : null}
           {summary.per_head_adult !== null && summary.per_head_seat !== null ? " · " : null}
-          {summary.per_head_seat !== null ? (
-            <strong>{formatMoney(summary.per_head_seat, wedding.base_currency)}/seat</strong>
-          ) : null}
+          {summary.per_head_seat !== null ? <strong>{formatMoney(summary.per_head_seat)}/seat</strong> : null}
         </p>
       ) : null}
 
@@ -138,7 +120,6 @@ export default async function BudgetPage({
                       <BudgetItemRow
                         key={item.id}
                         item={item}
-                        baseCurrency={wedding.base_currency}
                         events={events}
                         components={componentsByItem.get(item.id) ?? []}
                         payments={paymentsByItem.get(item.id) ?? []}
@@ -148,7 +129,6 @@ export default async function BudgetPage({
                         links={linksByItem.get(item.id) ?? noBudgetItemLinks()}
                         timezone={wedding.timezone}
                         counts={countsByScope.get(item.event_id) ?? { adult: 0, child: 0, seat: 0 }}
-                        fxState={item.currency !== wedding.base_currency ? (fxByCurrency.get(item.currency) ?? null) : null}
                         autoOpenLinks={item.id === openItemId}
                       />
                     ))}

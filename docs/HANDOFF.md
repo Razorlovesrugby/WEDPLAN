@@ -3,7 +3,29 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 21 — a migration bug, not a build session: `0011`
+Last updated: session 22 — spec 18 written, decided by the planner in the
+same conversation, and built the same session: **budget is NZD only now,
+full stop.** The planner asked to remove foreign currency as a concept
+entirely ("too much of a hassle") and replace it with a plain GST
+inclusive/exclusive tick-box that adds a hardcoded 15% when exclusive.
+`0019_budget_nzd_and_gst.sql` drops `fx_rates`, `budget_items.currency`,
+`budget_items.fx_rate`, `payments.currency`, `payments.fx_rate`, and
+`weddings.base_currency` outright, and adds `budget_items.gst_treatment`.
+`src/lib/fx.ts`, `src/lib/fx.test.ts` and `src/server/queries/fx.ts` are
+deleted — the external `api.frankfurter.app` call (this app's only
+third-party API call outside email) is gone with them. `v_budget_items` and
+`v_budget_summary` are recreated (dropped, not `CREATE OR REPLACE`, since
+Postgres won't let a view rename/drop an output column) with the GST uplift
+folded in and the `_base` suffix retired — `computed_current`, `paid` and
+`outstanding` are just the numbers now, there being only one currency
+left. `src/lib/budget.ts` gained `GST_RATE`/`applyGst`, unit-tested;
+`formatMoney` dropped its currency parameter entirely (always NZD,
+`en-NZ` locale). `./scripts/verify-migrations.sh` (211 assertions), `npm
+test` (437 tests) and `npm run build` all pass. Same live/browser caveat as
+every session since 12 — this has never touched a real Supabase project.
+See `docs/specs/18-budget-gst.md`.
+
+Previously: session 21 — a migration bug, not a build session: `0011`
 tried to add an enum value and use it in the same file, which works when
 applied statement-by-statement (`psql -f`, what `verify-migrations.sh` and
 the CLI do) but throws `55P04 unsafe use of new value` when pasted into the
@@ -72,6 +94,76 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 22: Spec 18 written, decided, and built — budget goes NZD-only, GST replaces FX
+
+**The planner asked for a GST spec** ("add to the budget, able to select if
+gst incl or gst excl, and if its excl it will add 15% to it when adding it
+up"). A first pass wrote `docs/specs/18-budget-gst.md` as a proposal with
+open questions, per the normal process (`docs/specs/README.md`) — since
+spec 6's multi-currency/FX mechanism was already built and this new toggle
+had to interact with it (does GST apply before or after FX conversion?
+per-line or per-field? etc).
+
+**The planner's next message changed the shape of the ask entirely:**
+"Can we please remove foreign currency as a concept generally? Everything's
+just going to be NZD... GST is just a tick box, include, exclude. If it's
+exclude, then add 15% hardcoded on top." That resolves every open question
+in one move by deleting the thing they were questions *about* — there is no
+FX-vs-GST ordering question once there is no FX.
+
+**What shipped, in one migration (`0019_budget_nzd_and_gst.sql`):**
+- Dropped entirely: the `fx_rates` table (and its RLS policies with it),
+  `budget_items.currency`, `budget_items.fx_rate`, `payments.currency`,
+  `payments.fx_rate`, `weddings.base_currency`.
+- Added: `budget_gst_treatment` enum (`inclusive` | `exclusive`),
+  `budget_items.gst_treatment` (default `inclusive` — every existing row's
+  number is unchanged the moment this ships).
+- `v_budget_items` and `v_budget_summary` **dropped and recreated**, not
+  `CREATE OR REPLACE VIEW`'d — Postgres refuses to let that rename or drop
+  an output column, and merging `computed_current`/`computed_current_base`
+  into one column is exactly that. The GST uplift (`× 1.15` when
+  `gst_treatment = 'exclusive'`) is applied once, inside `computed_current`,
+  after the basis math (flat/per_adult/per_child/per_seat/manual/
+  consumption — all six, one rule); `estimated`/`quoted`/`contracted` stay
+  exactly as typed, never grossed up, matching spec 6 §3's existing
+  "snapshot, never recomputed" rule for those three columns.
+
+**Application code, deleted outright:** `src/lib/fx.ts`,
+`src/lib/fx.test.ts`, `src/server/queries/fx.ts` — with them goes this
+app's only outbound third-party API call besides email
+(`api.frankfurter.app`), and the whole cache/fallback ladder
+(`resolveFxRate`, `getFxRate`) that existed to make that call resilient.
+`src/lib/budget.ts` gained `GST_RATE = 0.15` and `applyGst()`, both
+unit-tested in `budget.test.ts` alongside `computeCurrent`'s new
+`gstTreatment` parameter (one test per basis, confirming the uplift applies
+uniformly). `src/lib/format.ts`'s `formatMoney()` dropped its `currency`
+parameter — every amount is NZD now, formatted with `en-NZ`/`NZD` — which
+touched every call site across the budget components and the dashboard/
+`/guests/rank` pages. `budget-item-fields.tsx`'s currency input and the FX
+rate override UI are replaced by one GST select. `src/server/actions/
+budget.ts` lost `resolveFxRateFor`/the currency zod schema and gained
+`gst_treatment` validation.
+
+**Verification, all green:** `./scripts/verify-migrations.sh` — 211 SQL
+assertions across all seven test files (`03_budget.sql` rewritten: the old
+non-base-currency USD fixture is gone, replaced by two GST-exclusive
+fixtures — a flat item and a per_adult item, to prove the uplift isn't
+flat-basis-specific — with every total/per-head number in that file
+recalculated by hand and checked against the view). `npm test` — 437 tests
+(was 436: `fx.test.ts`'s 7 tests deleted, 8 new GST cases added to
+`budget.test.ts`, net +1). `npm run build` — clean. Same live/browser
+caveat as every session since 12: none of this has run against a real
+Supabase project or opened in a browser.
+
+**`docs/specs/18-budget-gst.md` rewritten** from its original
+open-questions form into a decided spec (same treatment 6.1 got) — Part A
+(NZD-only, dropping FX) and Part B (the GST tick-box), both marked built.
+`docs/specs/06-budget-management.md` and `06.1-...-linking.md` are left as
+the historical record of what was true when they were written (both still
+describe the FX mechanism this session removed) — the specs README's row
+for spec 18 is what points a reader to the current state of budget
+currency handling.
 
 ## Session 21: `0011`'s enum-in-the-same-transaction bug, fixed
 

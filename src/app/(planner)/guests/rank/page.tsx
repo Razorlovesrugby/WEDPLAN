@@ -65,7 +65,7 @@ export default async function RankPage() {
         <p className="text-sm text-muted">
           Each seat above the line currently costs about{" "}
           <Link href="/budget" className="font-medium text-ink hover:underline">
-            {formatMoney(perSeatCost, wedding.base_currency)}
+            {formatMoney(perSeatCost)}
           </Link>{" "}
           — from every per-unit and consumption budget line, on invited counts.
         </p>

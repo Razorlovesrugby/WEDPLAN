@@ -301,6 +301,8 @@ export type ListKind = "checklist" | "timeline" | "generic";
 export type ListItemStatus = "not_started" | "in_progress" | "done";
 export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat" | "consumption" | "manual";
 export type BudgetGuestBasis = "per_adult" | "per_seat";
+/** spec 18 — a per-line GST toggle; "exclusive" adds a hardcoded 15% to everything that sums the line. */
+export type BudgetGstTreatment = "inclusive" | "exclusive";
 export type ReminderDueSource = "list_item" | "payment";
 export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
 export type MoodboardShareChannel = "link" | "public_site" | "rsvp";
@@ -317,7 +319,6 @@ export type WeddingRow = {
   slug: string;
   wedding_date: string | null;
   timezone: string;
-  base_currency: string;
   capacity: number | null;
   rsvp_lock_at: string | null;
   invite_send_on: string | null;
@@ -712,15 +713,14 @@ export type BudgetItemRow = {
   event_id: string | null;
   label: string;
   vendor_name: string | null;
-  currency: string;
-  /** Units of weddings.base_currency per 1 unit of `currency`. Null/1 when currency already matches base_currency. */
-  fx_rate: number | null;
   quantity_basis: BudgetQuantityBasis;
   /** Minor units. Null for `consumption` — component rows carry their own pricing. */
   unit_price: number | null;
   estimated: number | null;
   quoted: number | null;
   contracted: number | null;
+  /** Whether estimated/quoted/contracted/unit_price were entered incl. or excl. GST (spec 18). Only the live computed_current grosses up when exclusive — these stay exactly as typed. */
+  gst_treatment: BudgetGstTreatment;
   contracted_task_created: boolean;
   notes: string | null;
   created_at: string;
@@ -753,23 +753,12 @@ export type PaymentRow = {
   due_date: string | null;
   /** Minor units. */
   amount: number;
-  currency: string;
-  fx_rate: number | null;
   paid_at: string | null;
   reference: string | null;
   paid_by: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
-}
-
-/** Global reference data — no wedding_id. Readable by every collaborator, writable only by getFxRate's server-role lookup path. */
-export type FxRateRow = {
-  base_currency: string;
-  quote_currency: string;
-  rate: number;
-  as_of: string;
-  fetched_at: string;
 }
 
 export type BudgetItemTaskRow = {
@@ -1004,19 +993,16 @@ export type TimelineItemView = {
   list_icon: string | null;
 }
 
-/** `v_budget_items` — every budget_items row plus computed/derived money columns. See spec 6, section 3. */
+/** `v_budget_items` — every budget_items row plus computed/derived money columns. See spec 6, section 3; spec 18 for the GST uplift. */
 export type BudgetItemView = BudgetItemRow & {
-  /** "The best number we currently have," in the row's own currency — never one of estimated/quoted/contracted stored as truth. */
+  /** "The best number we currently have" — never one of estimated/quoted/contracted stored as truth. Grossed up by 15% when gst_treatment is "exclusive" (spec 18). */
   computed_current: number;
-  computed_current_base: number;
-  /** sum(payments.amount) where paid_at is not null, in the item's own currency (assumes payments share the item's currency). */
+  /** sum(payments.amount) where paid_at is not null. */
   paid: number;
-  /** Same sum, converted via each payment's own fx_rate — correct even if a payment's currency differs from the item's. */
-  paid_base: number;
-  outstanding_base: number;
+  outstanding: number;
 }
 
-/** `v_budget_summary` — one row per wedding, every total in weddings.base_currency. */
+/** `v_budget_summary` — one row per wedding, every total in NZD. */
 export type BudgetSummaryView = {
   wedding_id: string;
   total_estimated: number;
@@ -1093,7 +1079,7 @@ export type Database = {
         WeddingRow,
         // `slug` is optional on insert: 0015's trigger derives one from the
         // name when it is absent, so callers that do not care never set it.
-        "id" | Timestamps | "timezone" | "base_currency" | "reminder_window_days" | "slug"
+        "id" | Timestamps | "timezone" | "reminder_window_days" | "slug"
       >;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
       events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
@@ -1142,7 +1128,7 @@ export type Database = {
       budget_categories: Table<BudgetCategoryRow, "id" | Timestamps | "sort_order">;
       budget_items: Table<
         BudgetItemRow,
-        "id" | Timestamps | "quantity_basis" | "contracted_task_created",
+        "id" | Timestamps | "quantity_basis" | "gst_treatment" | "contracted_task_created",
         BudgetItemRelationships
       >;
       consumption_components: Table<
@@ -1151,7 +1137,6 @@ export type Database = {
         ConsumptionComponentRelationships
       >;
       payments: Table<PaymentRow, "id" | Timestamps, PaymentRelationships>;
-      fx_rates: Table<FxRateRow, "fetched_at">;
       budget_item_tasks: Table<BudgetItemTaskRow, "created_at", BudgetItemTaskRelationships>;
       budget_item_lists: Table<BudgetItemListRow, "created_at", BudgetItemListRelationships>;
       budget_item_sections: Table<BudgetItemSectionRow, "created_at", BudgetItemSectionRelationships>;

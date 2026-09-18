@@ -21,12 +21,10 @@ import type { ConsumptionComponentRow } from "@/lib/types/database";
  */
 export function ConsumptionEditor({
   budgetItemId,
-  currency,
   components,
   counts,
 }: {
   budgetItemId: string;
-  currency: string;
   components: ConsumptionComponentRow[];
   counts: { adult: number; child: number; seat: number };
 }) {
@@ -84,7 +82,6 @@ export function ConsumptionEditor({
               <ComponentRow
                 key={c.id}
                 component={c}
-                currency={currency}
                 counts={counts}
                 pending={pending}
                 onRemove={() => onRemove(c.id)}
@@ -95,7 +92,7 @@ export function ConsumptionEditor({
         </table>
       )}
       <p className="text-sm">
-        Component total: <strong>{formatMoney(total, currency)}</strong>
+        Component total: <strong>{formatMoney(total)}</strong>
       </p>
       {adding ? (
         <AddComponentForm
@@ -114,14 +111,12 @@ export function ConsumptionEditor({
 
 function ComponentRow({
   component,
-  currency,
   counts,
   pending,
   onRemove,
   onError,
 }: {
   component: ConsumptionComponentRow;
-  currency: string;
   counts: { adult: number; child: number; seat: number };
   pending: boolean;
   onRemove: () => void;
@@ -163,9 +158,9 @@ function ComponentRow({
       <td className="py-1 pr-2">{component.guest_basis === "per_adult" ? "Per adult" : "Per seat"}</td>
       <td className="py-1 pr-2">{component.servings_per_guest_per_hour}</td>
       <td className="py-1 pr-2">{component.duration_hours}</td>
-      <td className="py-1 pr-2">{formatMoney(component.price_per_serving, currency)}</td>
+      <td className="py-1 pr-2">{formatMoney(component.price_per_serving)}</td>
       <td className="py-1 pr-2">{Math.round(component.wastage_buffer_pct * 100)}%</td>
-      <td className="py-1 pr-2 text-right tabular-nums">{formatMoney(total, currency)}</td>
+      <td className="py-1 pr-2 text-right tabular-nums">{formatMoney(total)}</td>
       <td className="py-1 text-right">
         <button type="button" className="text-xs text-accent hover:underline" onClick={() => setEditing(true)}>
           Edit
