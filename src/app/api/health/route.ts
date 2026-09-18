@@ -58,6 +58,7 @@ const SCHEMA_PROBE = [
   { table: "moodboard_clip_tokens", migration: "0014_moodboard_clipper" },
   { table: "weddings", migration: "0015_wedding_slug", column: "slug" },
   { table: "list_sections", migration: "0016_list_content_and_calculated_dates", column: "kind" },
+  { table: "budget_item_sections", migration: "0017_budget_section_links" },
 ] as const;
 
 function isSet(name: string): boolean {
