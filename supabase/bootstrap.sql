@@ -32,7 +32,6 @@ declare
   v_owner_email   text := 'you@example.com';         -- must already be a user
   v_partner_email text := 'them@example.com';        -- null for a single user
   v_timezone      text := 'Europe/London';           -- the VENUE's timezone
-  v_currency      char(3) := 'GBP';
   v_capacity      integer := 90;                     -- seats; null if unknown
   -- -------------------------------------------------------------------------
 
@@ -62,8 +61,8 @@ begin
       'delete the existing row first if you are starting over.';
   end if;
 
-  insert into public.weddings (name, wedding_date, timezone, base_currency, capacity)
-  values (v_wedding_name, v_wedding_date, v_timezone, v_currency, v_capacity)
+  insert into public.weddings (name, wedding_date, timezone, capacity)
+  values (v_wedding_name, v_wedding_date, v_timezone, v_capacity)
   returning id into v_wedding_id;
 
   insert into public.collaborators (wedding_id, user_id, role)

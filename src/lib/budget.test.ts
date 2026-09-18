@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentServings, componentTotal, computeCurrent, consumptionTotal } from "./budget";
+import { applyGst, componentServings, componentTotal, computeCurrent, consumptionTotal } from "./budget";
 
 // Mirrors the tier-A counts in the shared seed (supabase/seed.sql): 10
 // adults, 1 child, 11 seats in the wedding's top tier — see
@@ -92,6 +92,75 @@ describe("computeCurrent", () => {
     expect(
       computeCurrent({ quantityBasis: "consumption", unitPrice: null, estimated: 999, quoted: 999, contracted: 999 }, seedCounts, components),
     ).toBe(consumptionTotal(components, seedCounts));
+  });
+});
+
+describe("applyGst", () => {
+  it("leaves an inclusive amount unchanged", () => {
+    expect(applyGst(80000, "inclusive")).toBe(80000);
+  });
+
+  it("adds 15% to an exclusive amount", () => {
+    expect(applyGst(80000, "exclusive")).toBe(92000);
+  });
+
+  it("rounds to the nearest minor unit", () => {
+    expect(applyGst(333, "exclusive")).toBe(383); // 382.95 -> 383
+  });
+});
+
+describe("computeCurrent — GST (spec 18)", () => {
+  it("defaults to inclusive (no change) when gstTreatment is omitted", () => {
+    expect(
+      computeCurrent({ quantityBasis: "flat", unitPrice: null, estimated: null, quoted: null, contracted: 80000 }, seedCounts),
+    ).toBe(80000);
+  });
+
+  it("grosses up a flat item's contracted figure by 15% when exclusive", () => {
+    expect(
+      computeCurrent(
+        { quantityBasis: "flat", unitPrice: null, estimated: null, quoted: null, contracted: 80000, gstTreatment: "exclusive" },
+        seedCounts,
+      ),
+    ).toBe(92000);
+  });
+
+  it("grosses up a per_adult item's live total by 15% when exclusive", () => {
+    expect(
+      computeCurrent(
+        { quantityBasis: "per_adult", unitPrice: 6000, estimated: null, quoted: null, contracted: null, gstTreatment: "exclusive" },
+        seedCounts,
+      ),
+    ).toBe(69000); // 6000 * 10 adults = 60000, * 1.15 = 69000
+  });
+
+  it("grosses up a manual item's quantity * unit_price by 15% when exclusive", () => {
+    expect(
+      computeCurrent(
+        {
+          quantityBasis: "manual",
+          unitPrice: 2500,
+          estimated: null,
+          quoted: null,
+          contracted: null,
+          quantity: 12,
+          gstTreatment: "exclusive",
+        },
+        seedCounts,
+      ),
+    ).toBe(34500); // 30000 * 1.15
+  });
+
+  it("grosses up a consumption item's summed total by 15% when exclusive", () => {
+    const components = [
+      { guestBasis: "per_adult" as const, servingsPerGuestPerHour: 1.5, durationHours: 4, pricePerServing: 500, wastageBufferPct: 0 },
+    ];
+    const exclTotal = computeCurrent(
+      { quantityBasis: "consumption", unitPrice: null, estimated: null, quoted: null, contracted: null, gstTreatment: "exclusive" },
+      seedCounts,
+      components,
+    );
+    expect(exclTotal).toBe(applyGst(consumptionTotal(components, seedCounts), "exclusive"));
   });
 });
 

@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
-import { getFxRate } from "@/server/queries/fx";
 import { createList, addItem } from "./lists";
 import { fail, ok, type ActionResult } from "./result";
 import type { BudgetItemRow, PaymentRow } from "@/lib/types/database";
@@ -51,12 +50,6 @@ const optionalQuantity = () =>
     .union([z.coerce.number().min(0), z.literal("")])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "" ? null : v));
-
-const currencyCode = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z]{3}$/, "Use a 3-letter currency code, e.g. GBP");
 
 // ---------------------------------------------------------------------------
 // Categories
@@ -174,7 +167,6 @@ const budgetItemFields = z.object({
   event_id: optionalUuid(),
   label: z.string().trim().min(1, "Give the line a name").max(200),
   vendor_name: optionalText(200),
-  currency: currencyCode,
   quantity_basis: z.enum(["flat", "per_adult", "per_child", "per_seat", "consumption", "manual"]),
   unit_price: optionalMinorUnits(),
   estimated: optionalMinorUnits(),
@@ -183,13 +175,9 @@ const budgetItemFields = z.object({
   notes: optionalText(2000),
   /** Multiplier for `manual` (spec 6.1) — unused for every other basis. */
   quantity: optionalQuantity(),
+  /** Whether the line's money figures were entered incl. or excl. GST (spec 18). */
+  gst_treatment: z.enum(["inclusive", "exclusive"]),
 });
-
-/** Looks up (and snapshots) an fx_rate for `currency` against the wedding's base_currency, unless they already match. */
-async function resolveFxRateFor(currency: string, weddingId: string): Promise<number | null> {
-  const result = await getFxRate(currency, weddingId);
-  return result.rate;
-}
 
 export async function createBudgetItem(
   fields: Record<string, unknown>,
@@ -206,12 +194,10 @@ export async function createBudgetItem(
   const quantity =
     parsed.data.quantity_basis === "manual" ? (parsed.data.quantity ?? 1) : parsed.data.quantity;
 
-  const fxRate = await resolveFxRateFor(parsed.data.currency, wedding.id);
-
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("budget_items")
-    .insert({ ...parsed.data, quantity, wedding_id: wedding.id, fx_rate: fxRate === 1 ? null : fxRate })
+    .insert({ ...parsed.data, quantity, wedding_id: wedding.id })
     .select("id")
     .single();
   if (error) return fail(error.message);
@@ -238,7 +224,7 @@ export async function updateBudgetItem(
   const supabase = await createClient();
   const { data: current, error: readError } = await supabase
     .from("budget_items")
-    .select("currency, contracted, contracted_task_created, quantity_basis")
+    .select("contracted, contracted_task_created, quantity_basis")
     .eq("id", itemId)
     .eq("wedding_id", wedding.id)
     .maybeSingle();
@@ -252,19 +238,6 @@ export async function updateBudgetItem(
   const effectiveBasis = parsed.data.quantity_basis ?? current.quantity_basis;
   if (effectiveBasis === "manual" && "quantity" in parsed.data && parsed.data.quantity === null) {
     update.quantity = 1;
-  }
-
-  // A currency change (and only a currency change — an explicit fx_rate in
-  // the patch is a manual override that must stick, not be silently
-  // refetched) re-snapshots the rate.
-  if ("currency" in parsed.data && parsed.data.currency !== current.currency && !("fx_rate" in patch)) {
-    update.fx_rate = await resolveFxRateFor(parsed.data.currency!, wedding.id);
-    if (update.fx_rate === 1) update.fx_rate = null;
-  }
-  if ("fx_rate" in patch) {
-    const fxParsed = z.coerce.number().positive().nullable().safeParse(patch.fx_rate === "" ? null : patch.fx_rate);
-    if (!fxParsed.success) return fail("That exchange rate doesn't look right");
-    update.fx_rate = fxParsed.data;
   }
 
   const { error } = await supabase.from("budget_items").update(update).eq("id", itemId).eq("wedding_id", wedding.id);
@@ -382,7 +355,6 @@ const paymentFields = z.object({
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "" ? null : v)),
   amount: minorUnits(),
-  currency: currencyCode,
   reference: optionalText(200),
   paid_by: optionalText(200),
   notes: optionalText(2000),
@@ -396,8 +368,6 @@ export async function recordPayment(
   const parsed = paymentFields.safeParse(fields);
   if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
 
-  const fxRate = await resolveFxRateFor(parsed.data.currency, wedding.id);
-
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("payments")
@@ -405,7 +375,6 @@ export async function recordPayment(
       ...parsed.data,
       wedding_id: wedding.id,
       budget_item_id: budgetItemId,
-      fx_rate: fxRate === 1 ? null : fxRate,
     })
     .select("id")
     .single();
@@ -423,10 +392,6 @@ export async function updatePayment(paymentId: string, patch: Record<string, unk
   const supabase = await createClient();
 
   const update: Partial<PaymentRow> = { ...parsed.data };
-  if ("currency" in parsed.data) {
-    const fxRate = await resolveFxRateFor(parsed.data.currency!, wedding.id);
-    update.fx_rate = fxRate === 1 ? null : fxRate;
-  }
 
   const { error } = await supabase.from("payments").update(update).eq("id", paymentId).eq("wedding_id", wedding.id);
   if (error) return fail(error.message);

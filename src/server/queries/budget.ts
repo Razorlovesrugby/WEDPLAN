@@ -2,7 +2,6 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { computeCurrent } from "@/lib/budget";
-import { convertAmount } from "@/lib/fx";
 import type {
   BudgetCategoryRow,
   BudgetItemView,
@@ -109,16 +108,17 @@ export const getPerSeatCostInvited = cache(async (weddingId: string): Promise<nu
     componentsByItem.set(c.budget_item_id, list);
   }
 
-  let totalBase = 0;
+  let total = 0;
   for (const item of nonFlat) {
     const counts = countsByEvent.get(item.event_id) ?? { adult: 0, child: 0, seat: 0 };
-    const current = computeCurrent(
+    total += computeCurrent(
       {
         quantityBasis: item.quantity_basis,
         unitPrice: item.unit_price,
         estimated: item.estimated,
         quoted: item.quoted,
         contracted: item.contracted,
+        gstTreatment: item.gst_treatment,
       },
       counts,
       (componentsByItem.get(item.id) ?? []).map((c) => ({
@@ -129,12 +129,11 @@ export const getPerSeatCostInvited = cache(async (weddingId: string): Promise<nu
         wastageBufferPct: c.wastage_buffer_pct,
       })),
     );
-    totalBase += convertAmount(current, item.fx_rate);
   }
 
   const { seat } = await getGuestCounts(weddingId, null, true);
   if (seat === 0) return null;
-  return Math.round((totalBase / seat) * 100) / 100;
+  return Math.round((total / seat) * 100) / 100;
 });
 
 export const getBudgetSummary = cache(async (weddingId: string): Promise<BudgetSummaryView | null> => {

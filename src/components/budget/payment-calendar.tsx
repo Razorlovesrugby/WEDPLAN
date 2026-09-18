@@ -34,7 +34,7 @@ export function PaymentCalendar({ payments, timezone }: { payments: UpcomingPaym
               — {p.item_vendor_name || p.item_label}
             </span>
             <span className="flex items-center gap-2">
-              <span className="tabular-nums">{formatMoney(p.amount, p.currency)}</span>
+              <span className="tabular-nums">{formatMoney(p.amount)}</span>
               {p.paid_at ? (
                 <span className="text-xs text-tierA">paid</span>
               ) : overdue ? (

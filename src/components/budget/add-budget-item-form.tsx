@@ -36,7 +36,7 @@ export function AddBudgetItemForm({ categoryId, events }: { categoryId: string; 
   return (
     <div className="rounded border border-line bg-paper/40 p-3">
       {error ? <p className="mb-2 text-sm text-red-700">{error}</p> : null}
-      <BudgetItemFields events={events} fxState={null} pending={pending} onSubmit={onSubmit} onCancel={() => setOpen(false)} />
+      <BudgetItemFields events={events} pending={pending} onSubmit={onSubmit} onCancel={() => setOpen(false)} />
     </div>
   );
 }

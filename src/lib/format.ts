@@ -59,10 +59,10 @@ export function daysUntil(value: string | null | undefined): number | null {
   return Math.ceil((target.getTime() - Date.now()) / 86_400_000);
 }
 
-/** Minor units (pence/cents) to a currency string, e.g. formatMoney(460000, "GBP") -> "£4,600.00". */
-export function formatMoney(minorUnits: number | null | undefined, currency: string): string {
+/** Minor units (cents) to an NZD string — every wedding is NZD only (spec 18), e.g. formatMoney(460000) -> "$4,600.00". */
+export function formatMoney(minorUnits: number | null | undefined): string {
   if (minorUnits === null || minorUnits === undefined) return "—";
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(minorUnits / 100);
+  return new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(minorUnits / 100);
 }
 
 export function pluralise(count: number, singular: string, plural = `${singular}s`): string {
