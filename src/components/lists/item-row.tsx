@@ -46,7 +46,6 @@ export function ItemRow({
   sections,
   currentSectionId,
   onSelectSection,
-  notesOnly = false,
 }: {
   item: ItemWithList;
   subItems?: ListItemRow[];
@@ -59,12 +58,10 @@ export function ItemRow({
   budgetLinks?: { id: string; label: string }[];
   /** True when this is the `?highlight=` target from a budget popup's click-through. */
   highlighted?: boolean;
-  /** Every checklist-kind section in this item's own list — present only on `/lists/[id]`'s top-level rows (spec 11 §1B). A "notes" section is never a selectable destination (spec 15 §4). */
+  /** Every section in this item's own list — present only on `/lists/[id]`'s top-level rows (spec 11 §1B). */
   sections?: ListSectionRow[];
   currentSectionId?: string | null;
   onSelectSection?: (itemId: string, sectionId: string | null) => void;
-  /** This item lives in a "notes" section (spec 15 §4) — render a plain, editable text line instead of a task row: no checkbox, due date, flag, priority, assignment, section move, or sub-items. */
-  notesOnly?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -216,23 +213,6 @@ export function ItemRow({
     const result = await updateItem(item.id, { title: next });
     if (result.ok) router.refresh();
     return result;
-  }
-
-  if (notesOnly) {
-    return (
-      <div id={`list-item-${item.id}`} className={`py-2 ${highlighted ? "-mx-2 rounded bg-accent/10 px-2" : ""}`}>
-        <div className="flex items-center gap-2">
-          {dragHandle}
-          <div className="min-w-0 flex-1">
-            <InlineText value={item.title} ariaLabel="Line" onSave={saveTitle} />
-          </div>
-          <button type="button" onClick={onDelete} className="shrink-0 text-xs text-red-700 hover:underline">
-            Remove
-          </button>
-        </div>
-        {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
-      </div>
-    );
   }
 
   return (

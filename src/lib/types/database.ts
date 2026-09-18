@@ -640,15 +640,19 @@ export type ListRow = {
   updated_at: string;
 }
 
-export type ListSectionKind = "checklist" | "notes";
-
 export type ListSectionRow = {
   id: string;
   wedding_id: string;
   list_id: string;
   title: string;
-  /** Fixed at creation (spec 15 §4) — a "notes" section holds plain text lines, no checkbox/due date/status. */
-  kind: ListSectionKind;
+  /**
+   * Free text below the section's own title (spec 15 §4, revised) — links,
+   * ideas, anything relevant to the section that isn't itself a task.
+   * Every section has one; it's independent of whatever tasks the section
+   * also holds, not a replacement for them. Collapsed in the UI until
+   * clicked (ItemRow's sibling, `SectionNotes`).
+   */
+  notes: string | null;
   sort_order: number;
   created_at: string;
 }
@@ -1123,7 +1127,7 @@ export type Database = {
       rsvp_token_attempts: Table<RsvpTokenAttemptRow, "id" | "succeeded" | "attempted_at">;
       list_templates: Table<ListTemplateRow, "id" | "created_at" | "kind" | "sort_order" | "payload">;
       lists: Table<ListRow, "id" | Timestamps | "kind" | "sort_order">;
-      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order" | "kind", ListSectionRelationships>;
+      list_sections: Table<ListSectionRow, "id" | "created_at" | "sort_order", ListSectionRelationships>;
       list_items: Table<
         ListItemRow,
         | "id"

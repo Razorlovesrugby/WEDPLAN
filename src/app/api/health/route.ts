@@ -57,8 +57,12 @@ const SCHEMA_PROBE = [
   { table: "moodboards", migration: "0013_moodboards" },
   { table: "moodboard_clip_tokens", migration: "0014_moodboard_clipper" },
   { table: "weddings", migration: "0015_wedding_slug", column: "slug" },
-  { table: "list_sections", migration: "0016_list_content_and_calculated_dates", column: "kind" },
+  // 0016 also added list_sections.kind, but 0018 drops that column again — a
+  // column this probe can no longer check for is not a safe probe for 0016,
+  // so this checks a column of 0016's that outlives it instead.
+  { table: "collaborators", migration: "0016_list_content_and_calculated_dates", column: "display_name" },
   { table: "budget_item_sections", migration: "0017_budget_section_links" },
+  { table: "list_sections", migration: "0018_section_notes", column: "notes" },
 ] as const;
 
 function isSet(name: string): boolean {

@@ -1,23 +1,23 @@
 # Feature spec: List content — inline editing everywhere, notes sections, calculated due dates, and hiding completed tasks
 
-**Status: built, same session.** `0016_list_content_and_calculated_dates.sql`
-(`collaborators.display_name`, the `list_section_kind` enum +
-`list_sections.kind`, `list_items.due_date_offset_days`); section, task, and
-sub-task titles are now `InlineText` (reusing `renameSection`/`updateItem`);
-a "Names" section in `/settings` (`CollaboratorNamesEditor`); a due-date ×
-clear button; a fixed/relative toggle on every date row (`setDueDateOffset`,
-recomputed in `updateWeddingSettings` whenever the wedding date changes); a
-section-kind picker ("Checklist" / "Notes") on "Add a section," with
-notes-kind sections rendering plain editable lines (no checkbox/date/flag/
-priority/assignment) and excluded from `getAllItems`/`getBoardItems` so a
-brain-dump line never shows up as a task; and a client-persisted "Hide
-completed" toggle on `/lists/[id]` and every smart view. A checklist item
-can no longer be dragged or selected into a notes section (`list-detail.tsx`'s
-`applyItemMove` guard). `npm run typecheck`, `npm test` (384 tests),
-`scripts/verify-migrations.sh` (192 SQL assertions, +5 for this migration),
-`scripts/verify-bootstrap.sh`, and `npm run build` all pass. Not opened
-against a live project or a real browser — same caveat every prior spec in
-this rebase carries.
+**Status: built, then corrected, same round.** `0016_list_content_and_calculated_dates.sql`
+built `collaborators.display_name`, `list_items.due_date_offset_days`, and
+(§4's first draft) a `list_section_kind` enum + `list_sections.kind` for a
+separate "Checklist vs. Notes" section type. Section, task, and sub-task
+titles are `InlineText` (reusing `renameSection`/`updateItem`); a "Names"
+section in `/settings` (`CollaboratorNamesEditor`); a due-date × clear
+button; a fixed/relative toggle on every date row (`setDueDateOffset`,
+recomputed in `updateWeddingSettings` whenever the wedding date changes);
+and a client-persisted "Hide completed" toggle on `/lists/[id]` and every
+smart view. **§4's section-kind picker was then replaced, same round, once
+the planner described the actual want in full — see §4a.**
+`0018_section_notes.sql` retires `kind`/`list_section_kind` outright and adds
+`list_sections.notes`: every section, new or already existing, now carries
+one free-text field alongside its checklist, not a choice between the two.
+`npm run typecheck`, `npm test`, `scripts/verify-migrations.sh`,
+`scripts/verify-bootstrap.sh`, and `npm run build` all pass on both
+migrations in sequence. Not opened against a live project or a real
+browser — same caveat every prior spec in this rebase carries.
 
 **Depends on:** Spec 1 (lists/sections/items, `assigned_to`,
 `due_date`), spec 10 (`sortCompletedLast`), spec 11 (`InlineText`, already
@@ -66,7 +66,12 @@ affordance at all, and Chrome's is easy to miss once a date is showing.
 Adds an explicit × button next to the date input, visible only when a
 date is set, calling the same clear path already wired.
 
-## 4. "Notes" sections — the "brain dump" / research request
+## 4. Section notes — the "brain dump" / research request (corrected — see §4a)
+
+**Superseded, same round, once the planner described the actual use case in
+full — see §4a for what shipped instead.** The paragraphs below are the
+original build, kept for the record rather than deleted, per this repo's own
+convention (spec 12 §4 does the same for its own reversed draft).
 
 A section today is only ever a checklist — every item in it has a
 checkbox, a due date, a status. What's being asked for (both "add research
@@ -104,6 +109,46 @@ list_sections   kind text not null default 'checklist'  -- 'checklist' | 'notes'
   items ever carry a due date, flag, priority, or assignment — no filter
   changes needed anywhere but the section's own rendering in
   `list-detail.tsx`.
+
+## 4a. What shipped instead: a free-text field on every section
+
+The build above shipped, then the planner asked to revisit it: a separate
+"Notes" *kind* of section — pick Checklist or Notes at creation, mutually
+exclusive — is not what was meant. The real want, given in full with a
+worked example: an existing section like "Tuxedo" (under a "Suit" list)
+already has real tasks in it, and *also* needs somewhere to keep reference
+links and notes ("tried three tuxedo places, liked this one") that aren't
+themselves a task — as part of that same section, not walled off in a
+separate one. Every section should carry both a checklist **and** a notes
+field, not a choice between them.
+
+```
+list_sections   notes text, nullable  -- replaces 0016's kind column/enum
+```
+
+- `0018_section_notes.sql` adds `list_sections.notes` and drops `0016`'s
+  `kind` column and its `list_section_kind` enum outright — the "kind"
+  concept is retired, not deprecated alongside the new field. Nothing needed
+  migrating: no section had notes text before this column existed, whatever
+  its old kind was, and a `kind = 'notes'` section's existing plain-text
+  items are unaffected — they just render with full task controls again
+  once `kind` (and the notesOnly rendering path it drove) is gone.
+- **Every section — new or already existing — gets the field**, not a
+  subset chosen at creation. `SectionNotes` (`section-notes.tsx`) renders
+  directly under a section's own title: collapsed to a single line (`+ Add
+  notes`, or a truncated preview of what's there) until clicked, then an
+  editable, multi-line `<textarea>` that saves on blur via a new
+  `updateSectionNotes(sectionId, notes)` action. Escape reverts and
+  collapses without saving; Enter inserts a newline (this is prose, not a
+  title — `InlineText`'s Enter-commits shape doesn't fit here).
+- No filtering needed anywhere: since notes now live on the *section* row
+  itself rather than as `list_items` rows, `getAllItems`/`getBoardItems`
+  need no special-casing (the `excludeNotes` helper §4's build added is
+  gone), and there's no longer a "can a task move into this section"
+  question either — every section is a normal move-to destination again
+  (the `applyItemMove` guard §4's build added is gone too).
+- The "Add a section" form drops the Checklist/Notes picker entirely —
+  `addSection` goes back to taking just a title.
 
 ## 5. Calculated due dates ("Event − 2 weeks") instead of only a fixed date
 
@@ -167,8 +212,8 @@ the other is on).
 - `collaborators.display_name text`, an update action, and every
   assignee-rendering surface reading it with the role-label fallback.
 - A × clear button on the due-date input.
-- `list_sections.kind` (`checklist | notes`), `addSection`'s new
-  parameter, and notes-mode rendering in `list-detail.tsx`.
+- `list_sections.notes` and `SectionNotes` — see §4a, which superseded the
+  `kind`-based version originally listed here.
 - `list_items.due_date_offset_days`, the fixed/relative toggle in
   `ItemRow`, and the recompute call in the wedding-date-saving action.
 - A "Hide completed" toggle, localStorage-persisted, on `/lists/[id]` and
@@ -177,8 +222,8 @@ the other is on).
 **Out:**
 - No per-event anchor for calculated dates (§5) — wedding date only, this
   pass.
-- No converting an existing checklist section to notes mode, or vice
-  versa (§4).
+- No separate "kind" of section (§4's original build) — every section has
+  the same notes field now (§4a).
 - No avatar/initials/per-person color for assignment (§2) — just the
   label text.
 - No server-side (shared) "hide completed" preference — client-only,
@@ -186,15 +231,21 @@ the other is on).
 
 ## 8. Data model
 
+As shipped (§4a supersedes §4's `kind` column):
+
 ```
 collaborators   display_name text, nullable
-list_sections   kind text not null default 'checklist'  -- 'checklist' | 'notes'
+list_sections   notes text, nullable
 list_items      due_date_offset_days integer, nullable
 ```
 
-One migration, additive — no backfill needed for any of the three
-(`kind` defaults every existing section to `'checklist'`, its current
-behavior; the other two are nullable with no prior data to reconcile).
+Two migrations: `0016` (this spec's original build — `display_name`,
+`due_date_offset_days`, and `kind`/`list_section_kind`, additive) and
+`0018` (§4a's correction — adds `notes`, drops `kind` and the enum
+outright). No backfill needed for any of it: `display_name` and
+`due_date_offset_days` are nullable with no prior data to reconcile, and no
+section had notes text before `0018`'s column existed, whatever its old
+`kind` was.
 
 ## 9. Test plan
 
@@ -204,13 +255,14 @@ behavior; the other two are nullable with no prior data to reconcile).
   localStorage-persisted hide-completed filter's interaction with
   `sortCompletedLast`.
 - SQL: extend `supabase/tests/01_tenancy.sql`'s `list_sections`/
-  `list_items`/`collaborators` coverage for the three new columns.
+  `list_items`/`collaborators` coverage for the new columns (updated for
+  `notes` once §4a replaced `kind`).
 - `npm run typecheck`, `npm test`, `npm run build`.
 - Browser pass: rename a section, a task, and a sub-task inline; set a
   display name and confirm it shows on an assigned item and the reminder
-  digest; set then clear a due date with the new × control; create a
-  "Brain dump" notes section, add a few plain lines, confirm none of them
-  show up on `/timeline` or `/board`; set an item to "2 weeks before the
+  digest; set then clear a due date with the new × control; open an
+  existing section's notes field, type something, confirm it saves and
+  the section's tasks are untouched; set an item to "2 weeks before the
   wedding," change the wedding date in `/settings`, confirm the item's due
   date moved with it; toggle "Hide completed" and confirm done items
   disappear and reappear.
