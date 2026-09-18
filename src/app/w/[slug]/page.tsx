@@ -20,6 +20,8 @@ import { Monogram } from "@/components/site/monogram";
 import { FloralRule } from "@/components/site/rule";
 import { Faq, Party, Prose, RsvpPointer, Schedule, Story, ThingsToDo } from "@/components/site/content";
 import { PublicBoardView } from "@/components/moodboards/public-board";
+import { CoachSection, StaysList, TransportList } from "@/components/site/travel-sections";
+import { getPublicTravel } from "@/server/queries/travel";
 
 /**
  * The public site (spec 14).
@@ -53,11 +55,14 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
   if (!site) notFound();
 
   const { wedding, theme, blocks, events, boards } = site;
+  const travel = await getPublicTravel(wedding.id);
 
   const sections = resolveSections(blocks, {
     ...NO_COUNTS,
     events: events.length,
     boards: boards.length,
+    travelOptions: travel.runs.length + travel.transport.length,
+    stays: travel.stays.length,
   });
 
   const payloadFor = (key: SectionKey) =>
@@ -143,14 +148,33 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
                 </SiteSection>
               );
 
-            case "travel":
-            case "stays": {
-              // `body` is V1's original free-text travel payload, kept so a
-              // site already carrying one does not lose its section.
+            case "travel": {
+              // `body` is V1's original free-text payload, kept so a site
+              // already carrying one does not lose its words on upgrade.
               const prose = text(payload, "intro") ?? text(payload, "body");
               return (
                 <SiteSection key={key} id={key} heading={def.label}>
-                  {prose ? <Prose body={prose} /> : null}
+                  <div className="space-y-10">
+                    {prose ? <Prose body={prose} /> : null}
+                    <CoachSection
+                      runs={travel.runs}
+                      timeZone={wedding.timezone}
+                      bookable={false}
+                    />
+                    <TransportList options={travel.transport} />
+                  </div>
+                </SiteSection>
+              );
+            }
+
+            case "stays": {
+              const prose = text(payload, "intro");
+              return (
+                <SiteSection key={key} id={key} heading={def.label}>
+                  <div className="space-y-10">
+                    {prose ? <Prose body={prose} /> : null}
+                    <StaysList stays={travel.stays} />
+                  </div>
                 </SiteSection>
               );
             }

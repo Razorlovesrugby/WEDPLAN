@@ -3,6 +3,8 @@ import Link from "next/link";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { listPublishedBoards } from "@/server/moodboards/resolve";
+import { CoachBooking } from "@/components/site/coach-booking";
+import { getHouseholdSeats, getPublicTravel } from "@/server/queries/travel";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -42,6 +44,14 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
   // The household's own token has already done the authenticating, so a board
   // published to this channel needs no credential of its own.
   const boards = await listPublishedBoards(wedding.id, "rsvp");
+
+  // The coach is the one thing on this page that is not an RSVP answer, and it
+  // belongs here rather than on the public site: reserving a seat needs to
+  // know which household is asking, and this page already does.
+  const [travel, heldSeats] = await Promise.all([
+    getPublicTravel(wedding.id),
+    getHouseholdSeats(wedding.id, household.id),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
@@ -86,6 +96,29 @@ export default async function RsvpPage({ params }: { params: Promise<{ token: st
         answers={answers}
         locked={locked}
       />
+
+      {travel.runs.length > 0 ? (
+        <section className="mt-12 border-t border-line pt-8">
+          <h2 className="font-serif text-xl">The coach</h2>
+          <p className="mt-1 text-sm text-muted">
+            Tell us if you&rsquo;d like seats and where you&rsquo;ll get on. You can change this any
+            time — it&rsquo;s a reservation, not a payment.
+          </p>
+          <div className="mt-6">
+            <CoachBooking
+              token={token}
+              runs={travel.runs}
+              held={Object.fromEntries(
+                [...heldSeats.entries()].map(([runId, seat]) => [
+                  runId,
+                  { coach_stop_id: seat.coach_stop_id, seats: seat.seats },
+                ]),
+              )}
+              timeZone={wedding.timezone}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {/* Moodboards published to the RSVP channel. Below the form, never
           between a guest and the submit button — but on this page rather than

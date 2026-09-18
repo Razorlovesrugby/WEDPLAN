@@ -193,6 +193,24 @@ type RunSheetItemRelationships = [
   >,
 ];
 
+type CoachStopRelationships = [
+  Rel<"coach_stops_coach_run_id_wedding_id_fkey", ["coach_run_id", "wedding_id"], "coach_runs", ["id", "wedding_id"]>,
+];
+
+type CoachSeatRelationships = [
+  Rel<"coach_seats_coach_run_id_wedding_id_fkey", ["coach_run_id", "wedding_id"], "coach_runs", ["id", "wedding_id"]>,
+  Rel<"coach_seats_coach_stop_id_wedding_id_fkey", ["coach_stop_id", "wedding_id"], "coach_stops", ["id", "wedding_id"]>,
+  Rel<"coach_seats_household_id_wedding_id_fkey", ["household_id", "wedding_id"], "households", ["id", "wedding_id"]>,
+];
+
+type SiteAssetRelationships = [
+  Rel<"site_assets_uploaded_by_household_wedding_id_fkey", ["uploaded_by_household", "wedding_id"], "households", ["id", "wedding_id"]>,
+];
+
+type AccommodationRelationships = [
+  Rel<"accommodations_image_fk", ["image_id", "wedding_id"], "site_assets", ["id", "wedding_id"]>,
+];
+
 type MoodboardRelationships = [
   Rel<"moodboards_event_id_wedding_id_fkey", ["event_id", "wedding_id"], "events", ["id", "wedding_id"]>,
 ];
@@ -252,6 +270,10 @@ export type QuestionType =
 export type QuestionScope = "guest" | "household";
 /** `save_the_date` added by 0016 — its own kind, not an early invitation, so
  *  the chasing cron never counts it as a question somebody failed to answer. */
+export type TransportKind = "parking" | "taxi" | "train" | "walk" | "other";
+export type CoachDirection = "to_venue" | "from_venue";
+export type SiteAssetKind = "hero" | "gallery" | "story" | "party" | "stay";
+
 export type MessageKind =
   | "invitation"
   | "save_the_date"
@@ -289,6 +311,103 @@ export type WeddingRow = {
   created_at: string;
   updated_at: string;
 }
+
+export type TransportOptionRow = {
+  id: string;
+  wedding_id: string;
+  kind: TransportKind;
+  name: string;
+  detail: string | null;
+  url: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CoachRunRow = {
+  id: string;
+  wedding_id: string;
+  direction: CoachDirection;
+  label: string;
+  departs_at: string | null;
+  /** Null means "not counted yet", which is not the same as zero. */
+  capacity: number | null;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CoachStopRow = {
+  id: string;
+  wedding_id: string;
+  coach_run_id: string;
+  name: string;
+  address: string | null;
+  map_url: string | null;
+  pickup_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CoachSeatRow = {
+  id: string;
+  wedding_id: string;
+  coach_run_id: string;
+  coach_stop_id: string;
+  household_id: string;
+  seats: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AccommodationRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  address: string | null;
+  url: string | null;
+  distance_label: string | null;
+  notes: string | null;
+  image_id: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SiteAssetRow = {
+  id: string;
+  wedding_id: string;
+  kind: SiteAssetKind;
+  storage_path: string;
+  width: number | null;
+  height: number | null;
+  blurhash: string | null;
+  alt: string | null;
+  credit: string | null;
+  /** Null = the couple uploaded it; set = a guest did, from their RSVP link. */
+  uploaded_by_household: string | null;
+  /** Null = waiting for approval. Default moderation is 'review'. */
+  approved_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SiteVisitRow = {
+  wedding_id: string;
+  day: string;
+  section: string;
+  count: number;
+};
+
+/** coach_runs plus seats taken and left, both computed (spec 14 §7.1). */
+export type CoachRunView = CoachRunRow & {
+  seats_taken: number;
+  /** Null when the run has no capacity set — not zero. */
+  seats_left: number | null;
+};
 
 export type CollaboratorRow = {
   id: string;
@@ -954,6 +1073,13 @@ export type Database = {
       >;
       rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at" | "value", RsvpAnswerRelationships>;
       message_log: Table<MessageLogRow, "id" | "created_at" | "channel" | "status">;
+      transport_options: Table<TransportOptionRow, "id" | Timestamps | "kind" | "sort_order">;
+      coach_runs: Table<CoachRunRow, "id" | Timestamps | "sort_order">;
+      coach_stops: Table<CoachStopRow, "id" | Timestamps | "sort_order", CoachStopRelationships>;
+      coach_seats: Table<CoachSeatRow, "id" | Timestamps, CoachSeatRelationships>;
+      accommodations: Table<AccommodationRow, "id" | Timestamps | "sort_order", AccommodationRelationships>;
+      site_assets: Table<SiteAssetRow, "id" | Timestamps | "kind" | "sort_order", SiteAssetRelationships>;
+      site_visits: Table<SiteVisitRow, "count">;
       site_content: Table<SiteContentRow, "id" | "updated_at" | "payload" | "sort_order" | "visible">;
       saved_views: Table<SavedViewRow, "id" | "created_at" | "filters">;
       rsvp_token_attempts: Table<RsvpTokenAttemptRow, "id" | "succeeded" | "attempted_at">;
@@ -1031,6 +1157,7 @@ export type Database = {
       v_budget_item_tasks: View<BudgetItemTaskView>;
       v_run_sheet_items: View<RunSheetItemView>;
       v_moodboards: View<MoodboardView>;
+      v_coach_runs: View<CoachRunView>;
     };
     Functions: {
       budget_guest_counts: {

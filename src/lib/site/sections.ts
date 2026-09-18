@@ -165,9 +165,18 @@ export type SectionCounts = {
   events: number;
   boards: number;
   galleryImages: number;
+  /** Coach runs plus parking/taxi/train entries (spec 14 §7). */
+  travelOptions: number;
+  stays: number;
 };
 
-export const NO_COUNTS: SectionCounts = { events: 0, boards: 0, galleryImages: 0 };
+export const NO_COUNTS: SectionCounts = {
+  events: 0,
+  boards: 0,
+  galleryImages: 0,
+  travelOptions: 0,
+  stays: 0,
+};
 
 export function hasContent(
   key: SectionKey,
@@ -185,10 +194,14 @@ export function hasContent(
       return text(payload, "body") !== null || rows(payload, "milestones").length > 0;
     case "schedule":
       return counts.events > 0;
+    // Travel and stays each have their own tables now (0017), so a row is
+    // enough on its own — the intro is optional garnish, not the content.
     case "travel":
-      return text(payload, "intro") !== null || text(payload, "body") !== null;
+      return (
+        counts.travelOptions > 0 || text(payload, "intro") !== null || text(payload, "body") !== null
+      );
     case "stays":
-      return text(payload, "intro") !== null;
+      return counts.stays > 0 || text(payload, "intro") !== null;
     case "gallery":
       return counts.galleryImages > 0 || counts.boards > 0;
     case "faq":
