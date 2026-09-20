@@ -1,0 +1,339 @@
+# Spec 22 — Inviting per event, answering, and knowing they looked
+
+**Status: proposed, the shape decided (2026-09-20 — see "Decided" below).
+Nothing is built, schema included.** Six open questions remain in §10; none of
+them blocks the build order, but three of them change what a screen says to
+the planner, so they want answering before step 3.
+
+**Depends on:** V1's guest list (`guests`, `households`, `invitations`,
+`invitation_events`, `rsvps`), spec 14 (the site and the senders) and spec 21
+(the household address, which is now the only link there is), all built.
+
+**Sibling:** [spec 23](23-site-builder-and-widgets.md), the builder. The two
+were one request and were split deliberately: this half is mostly wiring
+things that already exist and can ship on its own; that half is a design
+project. Where they touch — which blocks are personalised, what a guest sees
+of an event they are not invited to — this spec owns the rule and 23 owns the
+rendering.
+
+---
+
+## 1. What was asked
+
+In the planner's words, condensed:
+
+- **In Guests, tick whether a person is included in a particular event**, with
+  more than two states: **Invite sent · Yes · No**.
+- **If they are in one of those states, that event's details appear on their
+  invite.** The event content itself is managed in the site details.
+- **The wedding site and the wedding invite are the same thing** — one URL,
+  carrying RSVP, maps, details, what to wear, music.
+- **Every invite has RSVP buttons that feed back into the app**, so the
+  planner can see who has replied.
+- **See when they open the link.**
+
+Points three and four are already true as of spec 21 — one address per
+household, the RSVP form on it, answers landing in `rsvps`. What is missing is
+the *per-event, per-person* control over who is invited, "invite sent" as a
+visible state, and anything beyond a single first-open timestamp.
+
+## 2. What exists today
+
+| Piece | Where | State |
+| --- | --- | --- |
+| A per-event column per guest on `/guests` | `src/components/guests/guests-table.tsx` | **Read-only.** It renders `rsvps.status` — pending / yes / no / maybe — and nothing is clickable |
+| Who is invited to what | `invitation_events` (invitation → event) | **Per household, set once.** It is written when invitations are created on `/invitations` and there is no screen anywhere that changes it afterwards |
+| "Invite sent" | `invitations.sent_at` | Set by the email senders only. A card handed over in person leaves it null forever, and the chase logic then treats that household as never asked |
+| RSVP answers | `rsvps` (guest × event, `pending`/`yes`/`no`/`maybe`) | Built. Answered on the household page, rolled up by `v_household_rsvp` |
+| Opens | `invitations.opened_at` | **First open only.** Written once by `resolveInvitation()`, and never updated again |
+| Section-level analytics | `site_visits` | Table exists, nothing writes to it (spec 14's known gap) |
+
+Three consequences worth stating before designing on top:
+
+1. **Invited-ness is a household fact and answers are a person fact.** The
+   grid already shows one column per event per *guest*, so the screen already
+   implies a per-person model that the data does not have.
+2. **"Sent" is a household fact too**, and it is not an RSVP status — it lives
+   in a different table from Yes/No. Any control that offers both in one
+   dropdown is writing to two places, and should say so in its own code.
+3. **Nothing is removable.** The platform rule is no destructive writes to
+   guest data. Un-inviting somebody who has already answered must leave the
+   answer reconstructable, which §5 takes seriously.
+
+## 3. Decided — 2026-09-20
+
+**Granularity: household default, per-guest override.** Ticking a household
+into an event invites everyone in it; individuals can then be excluded (the
+kids are not at the evening do) or added (only Grandma comes to the brunch).
+The planner chose this over a pure per-guest model knowing the cost: two
+sources of truth that can disagree, which §4 resolves with one view and one
+rule rather than by hoping.
+
+**"Invite sent" is automatic with a manual override.** The senders set it, and
+a "mark as sent" on the row does the same for anything posted or handed over,
+so the grid never claims somebody has not been asked when they have.
+
+**A mixed household sees per-person lines under each event.** The event is
+listed once, with who it is for spelled out underneath, and the RSVP form
+offers only the people actually invited. Nothing is hidden and nothing is
+implied.
+
+**The invitation email carries one-tap Yes / No buttons** that open the
+household's page with the answer applied, ready to adjust.
+
+**Opens are logged individually** — first, last and how many — because the
+difference between "never looked" and "looked five times and still has not
+replied" is the difference between two entirely different chasing decisions.
+
+## 4. The model: one effective answer to "is this person invited?"
+
+Two tables, one view, one rule.
+
+- **`invitation_events` stays as it is**: the household's invitation, per
+  event. Editing it is the normal case — "the Okonkwos are coming to the
+  evening do" — and it keeps meaning what it means today.
+- **A new `guest_event_overrides`** records the exceptions, and only the
+  exceptions: `(wedding_id, guest_id, event_id, invited boolean)`. A row
+  saying `false` removes one person from an event their household is invited
+  to; a row saying `true` adds one person to an event it is not.
+- **`v_guest_event_invites`** resolves the two into the single fact every
+  other query should read:
+
+```
+invited := coalesce(override.invited, household_is_invited)
+```
+
+Why an exceptions table rather than materialising a row per guest per event:
+changing the household's invitation has to keep working on everybody who has
+not been singled out. With materialised rows, "add the Okonkwos to the
+brunch" becomes a fan-out write that silently re-invites the child somebody
+deliberately removed last week. With exceptions, the deliberate act survives
+the bulk one, which is the behaviour a planner expects and the one that is
+hard to reconstruct once it is wrong.
+
+**Everything downstream reads the view, never the two tables.** The RSVP page,
+the pending-row creation, the chase logic, the exports, the counts on
+`/guests/rank` and the budget's per-head figures. A second place computing
+`coalesce()` by hand is how the screen and the caterer's number start
+disagreeing.
+
+## 5. The status ladder, and what a cell does
+
+One cell in the `/guests` grid, one guest, one event. Its state is derived,
+in this order:
+
+| State | Where it comes from | Reads as |
+| --- | --- | --- |
+| **Not invited** | not invited per §4 | An empty cell — deliberately the quietest thing on the screen |
+| **Invited** | invited, household's invitation not sent | "Invited" |
+| **Invite sent** | invited, `invitations.sent_at` set | "Sent · 12 Mar" |
+| **Yes / No / Maybe** | `rsvps.status` for that guest and event | The answer, in the colours the grid already uses |
+
+**Clicking a cell opens a small menu, it does not cycle.** Six states behind a
+cycling click is a guessing game, and two of the transitions (un-inviting
+somebody who has answered; marking as sent) are not things to do by accident.
+
+The menu offers: Invite / Remove from this event / Mark invitation as sent /
+Yes / No / Maybe / Clear their answer. Which of those appear depends on the
+current state, and two of them carry a confirm (§7).
+
+**Bulk, because 80 households is the real case:** the column header invites or
+removes everyone for that event; the existing selection bar on `/guests` does
+the same for the selected rows; and the household screen keeps a checkbox per
+event as the "everyone here" control. The spec is deliberately not adding a
+second grid — the one on `/guests` becomes the thing that was always implied.
+
+**Where "sent" is written.** `sent_at` is per household, not per event, so
+"Mark invitation as sent" on any cell sets it for the household and every cell
+of theirs changes at once. The menu says so in as many words ("Marks the whole
+invitation as sent"), because a per-event control that quietly writes a
+household fact is exactly the kind of thing that erodes trust in a screen.
+
+## 6. What the guest sees
+
+The rule this spec owns, which spec 23 renders:
+
+> An event's details appear on a household's page when at least one person in
+> that household is invited to it, and the page names who it is for whenever
+> that is not everybody.
+
+Concretely, on `/w/<wedding>/<household>`:
+
+- **Nobody invited → the event does not exist.** No line, no "not invited"
+  marker. This *changes spec 14 §6's decision* to list every event and mark
+  the ones the household is not invited to. That decision was made when
+  invited-ness was a household fact and the alternative was a guest hearing
+  about the dinner from somebody else; with per-person invites the marked-list
+  approach produces the worse artefact — a page that tells a child, by name,
+  which party they are not at.
+- **Everybody in the household invited → today's rendering**, unchanged.
+- **Some of them invited → the event, then a line naming who it is for**, and
+  an RSVP form offering exactly those people:
+
+```
+Evening party        8:00pm
+The Old Barn
+For Chidi and Ada
+
+  Chidi Okonkwo   [ Yes ] [ No ]
+  Ada Okonkwo     [ Yes ] [ No ]
+```
+
+Whether the page says anything at all about the people *not* invited to that
+event is §10 question 2 — there is a real argument each way, and it is the
+planner's call about their own guests rather than a technical one.
+
+**The on-the-day notes (spec 21 §5.4) follow the same rule**, per person: a
+note attached to an event is only ever read by somebody invited to it.
+
+## 7. Un-inviting somebody who has already answered
+
+The case the platform rule exists for. A guest says yes to the evening do, the
+numbers come back from the venue, and they have to come off it.
+
+- **The RSVP row is kept.** It stops being counted, because every count reads
+  `v_guest_event_invites`, but it is not deleted and not overwritten. A guest
+  cut after invitations went out has to remain reconstructable — that is the
+  rule from `docs/wedding-platform-spec.md`, and this is precisely the
+  situation it was written for.
+- **The action carries a confirm** naming what they said: "Ada answered Yes to
+  the evening party on 3 April. Remove her from it anyway?"
+- **Pending rows are created and removed freely**, since a `pending` row
+  carries no statement from a guest. They are derived from the view.
+- **Nothing is sent automatically.** Telling somebody they are uninvited is
+  not a job for a cron.
+
+## 8. One-tap RSVP from the email
+
+The email's buttons link to the household's own address carrying an intent:
+
+```
+/w/ray-and-olivia/okonkwo-4f7ak?reply=yes
+```
+
+Three rules, each preventing a specific way this goes wrong:
+
+1. **It only fills what is unanswered.** A pending row becomes the tapped
+   answer; a row that already says something keeps saying it. A forwarded
+   email tapped by the wrong person cannot overwrite a considered reply.
+2. **It applies to every event that person is invited to, and to every guest
+   in the household who has not answered** — then the page says exactly what
+   it did, in a banner, with everything editable underneath: "We've marked
+   Chidi and Ada as coming to all three. Change anything below."
+3. **It is idempotent and it is not a credential.** `?reply=` is a hint
+   applied to a page the reader already had the address for; it grants
+   nothing, and re-tapping changes nothing.
+
+A "No" tap does the same in reverse and — question 4 — may or may not offer a
+message box on the way through.
+
+## 9. Knowing they looked
+
+**A new `invitation_views` table**, one row per open:
+
+```sql
+create table public.invitation_views (
+  id            uuid primary key default gen_random_uuid(),
+  wedding_id    uuid not null,
+  household_id  uuid not null,
+  viewed_at     timestamptz not null default now(),
+  source        text not null     -- 'address' | 'token' | 'email'
+);
+```
+
+What it deliberately does not hold: no IP address, no user agent, no
+fingerprint. The question being answered is "has this household looked at
+their invitation", and everything beyond that is data held on named guests for
+no reason anybody could defend at the time it leaked.
+
+Three rules make the number honest:
+
+- **A refresh is not a second open.** Views from the same household inside 30
+  minutes collapse into one.
+- **The planner's own preview never counts.** "Preview as them" on the
+  household screen opens the page in a mode that logs nothing. Without this
+  the feature reports the planner back to themselves, which is both useless
+  and, the first time it happens, actively misleading.
+- **`invitations.opened_at` stays** as the first-open stamp, so nothing that
+  reads it today changes. `last_viewed_at` and `view_count` are derived.
+
+**Where it shows:** the household row on `/invitations` gains "Opened 4 times ·
+last 2 days ago"; the household screen gains the short timeline; and the
+dashboard's existing invitation tiles gain a "sent, opened, never replied"
+segment, which is the list worth chasing and is currently impossible to
+produce.
+
+Per-section analytics (`site_visits`) stay unbuilt — question 5.
+
+## 10. Open questions
+
+1. **Does "Maybe" survive?** The enum has it and the grid shows it. It is
+   useful to a guest and useless to a caterer, and "maybe" answers tend to
+   never resolve. Keep it, or reduce the ladder to Yes / No and let the
+   uncertain stay unanswered?
+2. **Does a shared page mention who is *not* invited to an event?** "For Chidi
+   and Ada" is factual. Adding "(Zara isn't invited to this one)" is clearer
+   for the parent reading it and blunter for the child. Recommended: name only
+   who it is for, and say nothing about who it is not.
+3. **Do reminders become per event?** Today chasing is per household and stops
+   when everything is answered. With per-event invites, "answered the ceremony
+   but not the evening do" is a state worth chasing specifically — or worth
+   leaving alone until the whole household is complete, as now.
+4. **Does a one-tap "No" ask why, or offer a message?** A message box catches
+   "we'd love to but we're away" and gives the couple something kind to read.
+   It also asks somebody who just declined to write something.
+5. **Per-section analytics at all?** `site_visits` exists. "Did anybody read
+   the FAQ" is genuinely useful when deciding whether to send an update;
+   counting which sections named households read is a different kind of data
+   from "did they open it".
+6. **Does the grid group by household?** The `/guests` grid is a flat list of
+   people. With household-level invites doing most of the work, a collapsed
+   household row with its members under it may be the better shape — or it may
+   be a second navigation model on a screen that already works.
+
+## 11. Schema sketch — not to be built yet
+
+```sql
+-- 00NN_per_event_invites.sql
+create table public.guest_event_overrides (
+  wedding_id  uuid not null,
+  guest_id    uuid not null,
+  event_id    uuid not null,
+  invited     boolean not null,
+  created_at  timestamptz not null default now(),
+  primary key (guest_id, event_id),
+  foreign key (guest_id, wedding_id) references public.guests (id, wedding_id) on delete cascade,
+  foreign key (event_id, wedding_id) references public.events (id, wedding_id) on delete cascade
+);
+
+create view public.v_guest_event_invites as ...   -- the coalesce, once
+-- + RLS on the table, keyed to wedding_id, tested with a second account
+-- + v_household_rsvp recreated to count from the view, not from invitation_events
+
+create table public.invitation_views (...);       -- §9
+-- + index (wedding_id, household_id, viewed_at desc)
+-- + v_household_rsvp (or a sibling view) gaining last_viewed_at, view_count
+```
+
+Both tables carry `wedding_id` and RLS, per the platform rules, leaf tables
+included.
+
+## 12. Build order, if it is authorized
+
+0. Migration: `guest_event_overrides`, `v_guest_event_invites`,
+   `invitation_views`, and the rebuild of `v_household_rsvp` onto the view.
+   SQL tests for the coalesce rule, the RLS, and "an answered row survives an
+   un-invite".
+1. `src/lib/invites.ts`: the effective-state function (§5's ladder) as pure
+   logic over rows, unit-tested, used by both the grid and the page.
+2. The grid: clickable cells, the menu, the column-header bulk action, the
+   confirms. The selection-bar path reuses the same action.
+3. The page: per-person lines under each event, the RSVP form narrowed to the
+   invited, the on-the-day notes narrowed the same way.
+4. One-tap replies: `?reply=` on the household address, the banner, the fill
+   rules, and the buttons in the invitation email.
+5. Open logging: the write, the 30-minute collapse, the preview exclusion, and
+   the three places it shows.
+
+Steps 0–3 are the feature. 4 and 5 are each independently useful and can ship
+in either order.
