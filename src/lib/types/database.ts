@@ -303,6 +303,8 @@ export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat
 export type BudgetGuestBasis = "per_adult" | "per_seat";
 /** spec 18 — a per-line GST toggle; "exclusive" adds a hardcoded 15% to everything that sums the line. */
 export type BudgetGstTreatment = "inclusive" | "exclusive";
+/** spec 19 — where a line's working estimate came from: typed, derived from its allocation, or nowhere yet. */
+export type EstimateSource = "entered" | "allocation" | "none";
 export type ReminderDueSource = "list_item" | "payment";
 export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
 export type MoodboardShareChannel = "link" | "public_site" | "rsvp";
@@ -324,6 +326,8 @@ export type WeddingRow = {
   invite_send_on: string | null;
   /** Digest urgency window in days — "overdue + due within this many days". Send day/time stays vercel.json's fixed cron. */
   reminder_window_days: number;
+  /** The overall wedding budget in minor units, NZD (spec 19). Null means none set — every allocation-derived figure is then null and every budget line behaves as it did before spec 19. */
+  total_budget: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -702,6 +706,8 @@ export type BudgetCategoryRow = {
   wedding_id: string;
   name: string;
   sort_order: number;
+  /** This category's target share of weddings.total_budget, as a percentage (spec 19). Null when unallocated. */
+  allocation_pct: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -727,6 +733,8 @@ export type BudgetItemRow = {
   updated_at: string;
   /** Planner-entered multiplier for the `manual` basis (spec 6.1) — decimals allowed, defaults to 1 when blank. Null and unused for every other basis. */
   quantity: number | null;
+  /** This line's target share of its CATEGORY's target amount, as a percentage (spec 19) — 80% of Drinks, not 80% of the wedding. */
+  allocation_pct: number | null;
 }
 
 export type ConsumptionComponentRow = {
@@ -1000,6 +1008,12 @@ export type BudgetItemView = BudgetItemRow & {
   /** sum(payments.amount) where paid_at is not null. */
   paid: number;
   outstanding: number;
+  /** This line's target in minor units: its allocation_pct of its category's own target (spec 19). Null unless the overall budget, the category's % and the line's % all exist. */
+  allocated_amount: number | null;
+  /** The estimate being worked to: `estimated` when typed, else the allocation (÷1.15 first on a GST-exclusive line, so the line lands on its allocation). Computed on read — never written into `estimated`. */
+  effective_estimated: number | null;
+  /** Which of those two `effective_estimated` came from, so a screen can mark a figure nobody typed. */
+  estimate_source: EstimateSource;
 }
 
 /** `v_budget_summary` — one row per wedding, every total in NZD. */
@@ -1010,8 +1024,45 @@ export type BudgetSummaryView = {
   total_contracted: number;
   total_paid: number;
   total_outstanding: number;
+  /** Spec 19: the overall budget, echoed from weddings.total_budget. Null when none is set. */
+  total_budget: number | null;
+  /** Sum of every category's allocation_pct — 97 means 3% of the budget is still unallocated. Null when no category has one. */
+  total_allocated_pct: number | null;
+  /** Sum of every category's target amount. Null without an overall budget. */
+  total_allocated_amount: number | null;
+  /** total_budget minus total_allocated_amount — from the amounts, not the percentages, so rounding remainders land here. */
+  unallocated_amount: number | null;
+  /** Every line's computed_current, summed: the wedding's current spend-or-forecast. */
+  total_current: number;
+  /** total_current minus total_budget: positive is over. Null without an overall budget. */
+  budget_variance: number | null;
   per_head_adult: number | null;
   per_head_seat: number | null;
+}
+
+/** `v_budget_category_totals` — spec 19's rollup: what a category was meant to cost, what it currently costs, and the gap both ways. */
+export type BudgetCategoryTotalsView = {
+  wedding_id: string;
+  category_id: string;
+  name: string;
+  sort_order: number;
+  allocation_pct: number | null;
+  /** allocation_pct of the overall budget, in minor units. Null without both. */
+  allocated_amount: number | null;
+  /** Sums effective_estimated — so a line still on its allocation counts here (spec 19 §12, decision 1). */
+  total_estimated: number;
+  total_current: number;
+  total_paid: number;
+  total_outstanding: number;
+  /** total_current minus allocated_amount: positive is over. */
+  variance_amount: number | null;
+  /** That variance as a percentage of this category's own allocation. */
+  variance_pct: number | null;
+  /** What this category is ACTUALLY taking of the overall budget, against the allocation_pct it was meant to take. */
+  share_of_budget_pct: number | null;
+  item_count: number;
+  /** How many of those lines are still showing their allocation because nobody has typed an estimate — what stops a forecast reading as a firm number. */
+  allocation_only_count: number;
 }
 
 /** `v_reminders_due` — spec 1's v_timeline_items unioned with unpaid payments. What the digest and dashboard tiles read; /timeline stays on v_timeline_items directly. */
@@ -1181,6 +1232,7 @@ export type Database = {
       v_timeline_items: View<TimelineItemView>;
       v_budget_items: View<BudgetItemView>;
       v_budget_summary: View<BudgetSummaryView>;
+      v_budget_category_totals: View<BudgetCategoryTotalsView>;
       v_reminders_due: View<ReminderDueView>;
       v_budget_item_tasks: View<BudgetItemTaskView>;
       v_run_sheet_items: View<RunSheetItemView>;

@@ -397,3 +397,177 @@ begin
 end;
 $$;
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- 5. Allocations (spec 19) — an overall budget, a percentage per category,
+--    a percentage per line, and the derived estimate that falls out of them
+-- ---------------------------------------------------------------------------
+-- The fixture is the spec's own worked example: a $40,000 budget with Venue
+-- allocated 12% ($4,800) and currently totalling $5,100 — 6.25% over its own
+-- allocation, taking 12.75% of the budget against the 12% planned.
+begin;
+set local role service_role;
+
+update public.weddings set total_budget = 4000000 where id = :w1;
+
+insert into public.budget_categories (id, wedding_id, name, allocation_pct) values
+  ('c1000000-0000-4000-8000-000000000001', :w1, 'Venue',  12),
+  ('c1000000-0000-4000-8000-000000000002', :w1, 'Drinks',  8),
+  -- No percentage: every derived figure below it must stay null rather than
+  -- defaulting to zero.
+  ('c1000000-0000-4000-8000-000000000003', :w1, 'Extras', null);
+
+insert into public.budget_items
+  (id, wedding_id, category_id, label, quantity_basis, unit_price, estimated, gst_treatment, allocation_pct)
+values
+  -- Venue: 90% of $4,800 = $4,320, nothing typed — the allocation IS the estimate.
+  ('b0000000-0000-4000-8000-000000000001', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Venue hire', 'flat', null, null, 'inclusive', 90),
+  -- A typed estimate wins over the 5% allocation ($240).
+  ('b0000000-0000-4000-8000-000000000002', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Ceremony chairs', 'flat', null, 30000, 'inclusive', 5),
+  -- GST-exclusive: allocated $480 all-in, so the derived estimate divides by
+  -- 1.15 first and computed_current lands back on $480.
+  ('b0000000-0000-4000-8000-000000000003', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Photographer', 'flat', null, null, 'exclusive', 10),
+  -- Drinks: a per_adult line with an allocation — the allocation is a
+  -- comparison target only and must NOT feed computed_current.
+  ('b0000000-0000-4000-8000-000000000004', :w1, 'c1000000-0000-4000-8000-000000000002',
+   'Alcohol', 'per_adult', 6000, null, 'inclusive', 80),
+  ('b0000000-0000-4000-8000-000000000005', :w1, 'c1000000-0000-4000-8000-000000000002',
+   'Glassware hire', 'flat', null, null, 'inclusive', 10),
+  -- In the unallocated category: no target, but a typed estimate still works.
+  ('b0000000-0000-4000-8000-000000000006', :w1, 'c1000000-0000-4000-8000-000000000003',
+   'Fireworks', 'flat', null, 15000, 'inclusive', 50);
+
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+
+-- v_budget_items: the two-step percentage, and the derived estimate.
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  432000, 'a line''s allocation is its % of its category''s % of the overall budget (90% of 12% of 4000000)');
+select pg_temp.expect(
+  (select effective_estimated from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  432000, 'with nothing typed, the allocation IS the effective estimate');
+select pg_temp.expect_text(
+  (select estimate_source from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  'allocation', 'and estimate_source says so');
+select pg_temp.expect(
+  (select estimated from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  null, 'nothing was written into the stored estimated column');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  432000, 'a flat line with no real number falls back to its allocation rather than zero');
+
+select pg_temp.expect(
+  (select effective_estimated from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000002'),
+  30000, 'a typed estimate wins over the allocation');
+select pg_temp.expect_text(
+  (select estimate_source from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000002'),
+  'entered', 'and estimate_source says entered');
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000002'),
+  24000, 'the allocation is still computed alongside it, as the comparison target');
+
+-- spec 19 section 12, decision 4: the overall budget is GST-inclusive, so an
+-- exclusive line's derived estimate divides by 1.15 and grosses back up onto
+-- its allocation instead of sitting 15% over it.
+select pg_temp.expect(
+  (select effective_estimated from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000003'),
+  41739, 'a GST-exclusive line''s derived estimate is its allocation (48000) / 1.15');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000003'),
+  48000, 'which grosses back up onto the allocation itself, not 15% above it');
+
+-- The allocation never feeds a basis that recomputes live.
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000004'),
+  256000, 'a per_adult line still gets an allocation (80% of Drinks'' 320000)');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000004'),
+  60000, 'but its computed_current is still unit_price * 10 adults — a target, not an input');
+
+-- An unallocated category leaves every derived figure null, not zero.
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000006'),
+  null, 'a line in a category with no % has no allocation, even with a % of its own');
+select pg_temp.expect_text(
+  (select estimate_source from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000006'),
+  'entered', 'its typed estimate is still its estimate');
+
+-- v_budget_category_totals — the spec's worked example, both readings of
+-- "over or under as a %".
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  480000, 'Venue''s target is 12% of the 4000000 budget');
+select pg_temp.expect(
+  (select total_current from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  510000, 'Venue currently totals 432000 + 30000 + 48000');
+select pg_temp.expect(
+  (select total_estimated from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  503739, 'total_estimated sums effective_estimated, derived figures included (432000 + 30000 + 41739)');
+select pg_temp.expect(
+  (select variance_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  30000, 'Venue is 30000 over its allocation');
+select pg_temp.expect_num(
+  (select variance_pct from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  6.25, 'which is 6.25% over its own allocation');
+select pg_temp.expect_num(
+  (select share_of_budget_pct from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  12.75, 'and 12.75% of the whole budget, against the 12% planned');
+select pg_temp.expect(
+  (select allocation_only_count from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  2, 'two of Venue''s three lines are still running on their allocation');
+select pg_temp.expect(
+  (select item_count from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  3, 'out of three lines in the category');
+
+select pg_temp.expect(
+  (select total_current from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000002'),
+  92000, 'Drinks totals the live per_adult figure (60000) plus the derived glassware estimate (32000)');
+select pg_temp.expect(
+  (select variance_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000002'),
+  -228000, 'Drinks is well under its 320000 target');
+
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000003'),
+  null, 'an unallocated category has no target');
+select pg_temp.expect(
+  (select variance_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000003'),
+  null, 'and so no variance — null, never zero');
+select pg_temp.expect(
+  (select total_current from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000003'),
+  15000, 'though its lines still total normally');
+
+-- v_budget_summary — the wedding-level figures.
+select pg_temp.expect((select total_budget from public.v_budget_summary where wedding_id = :w1), 4000000, 'summary echoes the overall budget');
+select pg_temp.expect_num((select total_allocated_pct from public.v_budget_summary where wedding_id = :w1), 20.00, 'the categories have claimed 20% between them');
+select pg_temp.expect((select total_allocated_amount from public.v_budget_summary where wedding_id = :w1), 800000, 'which is 800000 of the budget');
+select pg_temp.expect((select unallocated_amount from public.v_budget_summary where wedding_id = :w1), 3200000, 'leaving 3200000 unallocated — from the amounts, not the percentages');
+select pg_temp.expect((select total_current from public.v_budget_summary where wedding_id = :w1), 617000, 'total_current sums every line''s computed_current (510000 + 92000 + 15000)');
+select pg_temp.expect((select budget_variance from public.v_budget_summary where wedding_id = :w1), -3383000, 'the wedding is 3383000 under its overall budget');
+
+-- Removing the overall budget degrades every line to its pre-spec-19
+-- behaviour rather than to zeroes.
+set local role service_role;
+update public.weddings set total_budget = null where id = :w1;
+set local role authenticated;
+
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  null, 'with no overall budget, a line has no allocation');
+select pg_temp.expect_text(
+  (select estimate_source from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  'none', 'and no estimate at all');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  0, 'so its computed_current is 0 again — exactly what it was before this feature');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000002'),
+  30000, 'a line with a typed estimate is untouched by any of it');
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  null, 'and the category rollup has no target to compare against');
+select pg_temp.expect((select unallocated_amount from public.v_budget_summary where wedding_id = :w1), null, 'nor does the summary');
+rollback;

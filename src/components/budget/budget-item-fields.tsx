@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { allocationEstimate, itemAllocation } from "@/lib/budget";
+import { formatMoney } from "@/lib/format";
 import type { BudgetItemView, BudgetQuantityBasis, EventRow } from "@/lib/types/database";
 
 export type BudgetItemFormValue = {
@@ -15,6 +17,7 @@ export type BudgetItemFormValue = {
   contracted: string;
   notes: string;
   gst_treatment: "inclusive" | "exclusive";
+  allocation_pct: string;
 };
 
 const BASIS_OPTIONS: { value: BudgetQuantityBasis; label: string }[] = [
@@ -28,20 +31,26 @@ const BASIS_OPTIONS: { value: BudgetQuantityBasis; label: string }[] = [
 
 /**
  * Shared fields for creating and editing a budget line — label, vendor,
- * event scope, the basis picker, the GST toggle (spec 18), and the four
- * money snapshots. Used by both the "Add item" form and a row's "Edit"
- * expansion.
+ * event scope, the basis picker, the GST toggle (spec 18), the allocation
+ * percentage (spec 19), and the four money snapshots. Used by both the
+ * "Add item" form and a row's "Edit" expansion.
  */
 export function BudgetItemFields({
   initial,
   events,
   pending,
+  categoryName,
+  categoryAllocatedAmount,
   onSubmit,
   onCancel,
 }: {
   initial?: BudgetItemView;
   events: EventRow[];
   pending: boolean;
+  /** This line's category, named in the allocation hint ("10% of Drinks"). */
+  categoryName: string;
+  /** The category's own target in minor units, or null when the wedding or the category has no percentage yet. */
+  categoryAllocatedAmount: number | null;
   onSubmit: (value: BudgetItemFormValue) => void;
   onCancel: () => void;
 }) {
@@ -56,6 +65,16 @@ export function BudgetItemFields({
   const [contracted, setContracted] = useState(initial?.contracted ? String(initial.contracted / 100) : "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [gstTreatment, setGstTreatment] = useState<"inclusive" | "exclusive">(initial?.gst_treatment ?? "inclusive");
+  const [allocationPct, setAllocationPct] = useState(
+    initial?.allocation_pct !== null && initial?.allocation_pct !== undefined ? String(initial.allocation_pct) : "",
+  );
+
+  // The same math v_budget_items does, live while typing — src/lib/budget.ts
+  // exists so the preview and the server can't disagree.
+  const pctNumber = allocationPct.trim() === "" ? null : Number(allocationPct);
+  const allocated =
+    pctNumber !== null && Number.isFinite(pctNumber) ? itemAllocation(categoryAllocatedAmount, pctNumber) : null;
+  const derivedEstimate = allocationEstimate(allocated, gstTreatment);
 
   function submit() {
     const value: BudgetItemFormValue = {
@@ -70,6 +89,7 @@ export function BudgetItemFields({
       contracted: contracted ? String(Math.round(Number(contracted) * 100)) : "",
       notes,
       gst_treatment: gstTreatment,
+      allocation_pct: allocationPct.trim(),
     };
     onSubmit(value);
   }
@@ -153,6 +173,32 @@ export function BudgetItemFields({
           </label>
         </div>
       ) : null}
+
+      <div className="space-y-1">
+        <label className="block text-xs text-muted">
+          Allocation (% of {categoryName})
+          <input
+            value={allocationPct}
+            onChange={(e) => setAllocationPct(e.target.value)}
+            placeholder="10"
+            className="field mt-0.5 block w-24 text-sm"
+          />
+        </label>
+        {pctNumber !== null && allocated !== null && derivedEstimate !== null ? (
+          <p className="text-xs text-muted">
+            {allocationPct.trim()}% of {categoryName} ({formatMoney(categoryAllocatedAmount)}) ={" "}
+            <strong className="text-ink">{formatMoney(allocated)}</strong>
+            {gstTreatment === "exclusive" ? ` — ${formatMoney(derivedEstimate)} excl. GST` : ""}
+            {estimated.trim() === ""
+              ? " · used as this line's estimate until you type one"
+              : " · your typed estimate wins; clear it to fall back to this"}
+          </p>
+        ) : pctNumber !== null ? (
+          <p className="text-xs text-muted">
+            Set an overall budget and a % on {categoryName} to turn this into an amount.
+          </p>
+        ) : null}
+      </div>
 
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="text-xs text-muted">

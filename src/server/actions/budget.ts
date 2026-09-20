@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { createList, addItem } from "./lists";
+import { suggestAllocations } from "@/lib/budget-allocations";
 import { fail, ok, type ActionResult } from "./result";
 import type { BudgetItemRow, PaymentRow } from "@/lib/types/database";
 
@@ -50,6 +51,94 @@ const optionalQuantity = () =>
     .union([z.coerce.number().min(0), z.literal("")])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "" ? null : v));
+
+/**
+ * A percentage of a budget (spec 19). Blank clears it — an unallocated
+ * category or line is a first-class state, not an error, so "" is a real
+ * answer rather than a validation failure.
+ */
+const optionalPercent = () =>
+  z
+    .union([z.coerce.number().min(0, "0% or more").max(100, "100% or less"), z.literal("")])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "" ? null : v));
+
+// ---------------------------------------------------------------------------
+// The overall budget, and category allocations (spec 19)
+// ---------------------------------------------------------------------------
+
+/**
+ * Its own action rather than a field on updateWeddingSettings: that action
+ * validates the whole settings form at once (name, timezone and reminder
+ * window all required), so it can't take a partial write from /budget. Same
+ * reasoning setCapacity/setCutLine live in rank.ts rather than settings.ts —
+ * see that file's header comment.
+ */
+export async function setTotalBudget(amountMinor: number | string | null): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = optionalMinorUnits().safeParse(amountMinor === null ? "" : amountMinor);
+  if (!parsed.success) return fail("That doesn't look like an amount");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("weddings")
+    .update({ total_budget: parsed.data ?? null })
+    .eq("id", wedding.id);
+  if (error) return fail(error.message);
+
+  revalidateBudget();
+  return ok(undefined);
+}
+
+export async function setCategoryAllocation(
+  categoryId: string,
+  pct: number | string | null,
+): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = optionalPercent().safeParse(pct === null ? "" : pct);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That doesn't look like a percentage");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("budget_categories")
+    .update({ allocation_pct: parsed.data ?? null })
+    .eq("id", categoryId)
+    .eq("wedding_id", wedding.id);
+  if (error) return fail(error.message);
+
+  revalidateBudget();
+  return ok(undefined);
+}
+
+/**
+ * Fills the categories that have no percentage yet from the starter table
+ * (spec 19 section 8), leaving every allocated category — and every category
+ * the table doesn't recognise — untouched. The matching itself is pure and
+ * unit-tested in src/lib/budget-allocations.ts.
+ */
+export async function applySuggestedAllocations(): Promise<ActionResult<{ applied: number }>> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+
+  const { data: categories, error: readError } = await supabase
+    .from("budget_categories")
+    .select("id, name, allocation_pct")
+    .eq("wedding_id", wedding.id);
+  if (readError) return fail(readError.message);
+
+  const suggestions = suggestAllocations(categories ?? []);
+  for (const suggestion of suggestions) {
+    const { error } = await supabase
+      .from("budget_categories")
+      .update({ allocation_pct: suggestion.pct })
+      .eq("id", suggestion.id)
+      .eq("wedding_id", wedding.id);
+    if (error) return fail(error.message);
+  }
+
+  revalidateBudget();
+  return ok({ applied: suggestions.length });
+}
 
 // ---------------------------------------------------------------------------
 // Categories
@@ -177,6 +266,8 @@ const budgetItemFields = z.object({
   quantity: optionalQuantity(),
   /** Whether the line's money figures were entered incl. or excl. GST (spec 18). */
   gst_treatment: z.enum(["inclusive", "exclusive"]),
+  /** This line's share of its category's target (spec 19) — a planning target, never written into `estimated`. */
+  allocation_pct: optionalPercent(),
 });
 
 export async function createBudgetItem(

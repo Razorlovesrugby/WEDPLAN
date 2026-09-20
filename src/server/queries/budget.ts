@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { computeCurrent } from "@/lib/budget";
 import type {
   BudgetCategoryRow,
+  BudgetCategoryTotalsView,
   BudgetItemView,
   BudgetSummaryView,
   ConsumptionComponentRow,
@@ -24,6 +25,22 @@ export const listBudgetCategories = cache(async (weddingId: string): Promise<Bud
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) throw new Error(`Could not load budget categories: ${error.message}`);
+  return data ?? [];
+});
+
+/**
+ * Reads v_budget_category_totals (spec 19) — one row per category: what it
+ * was meant to cost, what it currently costs, and the gap both ways. Ordered
+ * to match listBudgetCategories so the two zip together on /budget.
+ */
+export const listBudgetCategoryTotals = cache(async (weddingId: string): Promise<BudgetCategoryTotalsView[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("v_budget_category_totals")
+    .select("*")
+    .eq("wedding_id", weddingId)
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(`Could not load budget category totals: ${error.message}`);
   return data ?? [];
 });
 
@@ -119,6 +136,11 @@ export const getPerSeatCostInvited = cache(async (weddingId: string): Promise<nu
         quoted: item.quoted,
         contracted: item.contracted,
         gstTreatment: item.gst_treatment,
+        // Ignored for every basis this function keeps (spec 19 §4: an
+        // allocation only reaches computed_current through `flat`, which is
+        // filtered out above) — passed so this mirror stays faithful to the
+        // view it duplicates.
+        allocatedAmount: item.allocated_amount,
       },
       counts,
       (componentsByItem.get(item.id) ?? []).map((c) => ({

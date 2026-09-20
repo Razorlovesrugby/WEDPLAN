@@ -3,12 +3,14 @@ import {
   getUpcomingPayments,
   getGuestCounts,
   listBudgetCategories,
+  listBudgetCategoryTotals,
   listBudgetItems,
   listConsumptionComponents,
 } from "@/server/queries/budget";
 import { getBudgetItemLinksForItems, noBudgetItemLinks } from "@/server/queries/budget-links";
 import { getAllItems, getAllSections, getLists } from "@/server/queries/lists";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
+import { BudgetHeader } from "@/components/budget/budget-header";
 import { CategoryHeader } from "@/components/budget/category-header";
 import { NewCategoryForm } from "@/components/budget/new-category-form";
 import { AddBudgetItemForm } from "@/components/budget/add-budget-item-form";
@@ -25,8 +27,9 @@ export default async function BudgetPage({
 }) {
   const { item: openItemId } = await searchParams;
   const wedding = await requireWedding();
-  const [categories, items, components, payments, summary, events, lists, sections, allTasks] = await Promise.all([
+  const [categories, categoryTotals, items, components, payments, summary, events, lists, sections, allTasks] = await Promise.all([
     listBudgetCategories(wedding.id),
+    listBudgetCategoryTotals(wedding.id),
     listBudgetItems(wedding.id),
     listConsumptionComponents(wedding.id),
     getUpcomingPayments(wedding.id),
@@ -66,6 +69,7 @@ export default async function BudgetPage({
     list.push(p);
     paymentsByItem.set(p.budget_item_id, list);
   }
+  const totalsByCategory = new Map(categoryTotals.map((t) => [t.category_id, t]));
   const itemsByCategory = new Map<string, typeof items>();
   for (const item of items) {
     const list = itemsByCategory.get(item.category_id) ?? [];
@@ -79,6 +83,13 @@ export default async function BudgetPage({
         <h1 className="font-serif text-2xl">Budget</h1>
         <NewCategoryForm />
       </div>
+
+      {summary ? (
+        <BudgetHeader
+          summary={summary}
+          suggestableCategoryCount={categories.filter((c) => c.allocation_pct === null).length}
+        />
+      ) : null}
 
       {summary ? (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -109,9 +120,15 @@ export default async function BudgetPage({
         <div className="space-y-6">
           {categories.map((category) => {
             const categoryItems = itemsByCategory.get(category.id) ?? [];
+            const totals = totalsByCategory.get(category.id);
+            const categoryAllocatedAmount = totals?.allocated_amount ?? null;
             return (
               <section key={category.id} className="card p-4">
-                <CategoryHeader category={category} />
+                <CategoryHeader
+                  category={category}
+                  totals={totals}
+                  hasTotalBudget={summary?.total_budget !== null && summary?.total_budget !== undefined}
+                />
                 {categoryItems.length === 0 ? (
                   <p className="py-2 text-sm text-muted">No items yet.</p>
                 ) : (
@@ -120,6 +137,8 @@ export default async function BudgetPage({
                       <BudgetItemRow
                         key={item.id}
                         item={item}
+                        categoryName={category.name}
+                        categoryAllocatedAmount={categoryAllocatedAmount}
                         events={events}
                         components={componentsByItem.get(item.id) ?? []}
                         payments={paymentsByItem.get(item.id) ?? []}
@@ -135,7 +154,12 @@ export default async function BudgetPage({
                   </div>
                 )}
                 <div className="mt-3">
-                  <AddBudgetItemForm categoryId={category.id} events={events} />
+                  <AddBudgetItemForm
+                    categoryId={category.id}
+                    categoryName={category.name}
+                    categoryAllocatedAmount={categoryAllocatedAmount}
+                    events={events}
+                  />
                 </div>
               </section>
             );
