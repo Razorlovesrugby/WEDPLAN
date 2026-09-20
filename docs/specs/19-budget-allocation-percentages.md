@@ -1,10 +1,14 @@
 # Feature spec: Budget — an overall budget, percentage allocations, and allocation-derived estimates
 
-**Status: proposed, not built. Nothing here has been built, schema
-included** — per `docs/specs/README.md`, nothing beyond schema is built
-until §9's Open Questions are answered, and question 1 and question 4
-change what the headline "over or under" number actually means, so the
-migration should wait for them too.
+**Status: decided, not built.** All six of §9's questions were answered
+on 2026-09-20 — the planner took the recommendation on every one — and
+those answers are recorded in §12. **Nothing has been built, schema
+included**, and nothing should be until the planner says to build it in
+so many words (`CLAUDE.md`: answering a spec's questions is not
+authorization to write code). One thing inside decision 6 is still
+genuinely open and is not a blocker for the rest: §8's suggested
+percentages are in, but the specific numbers in that table are this
+session's placeholder and want the planner's eye before they ship.
 
 **Depends on:** spec 6 / 6.1 (budget) and spec 18 (NZD-only + GST), all
 built. Reads spec 6's `budget_categories` / `budget_items` /
@@ -394,9 +398,12 @@ Nothing else in this spec depends on it.
 
 ## 9. Open questions
 
-These are the decisions only the planner can make. **Nothing gets built
-until they're answered** (`docs/specs/README.md`); questions 1 and 4
-change what the headline number means, so they block the migration too,
+**All six were answered on 2026-09-20 — see §12.** They're left here as
+originally written, rather than rewritten into statements, so the
+reasoning behind each answer stays legible next to the answer itself.
+
+These were the decisions only the planner could make; questions 1 and 4
+change what the headline number means, so they blocked the migration too,
 not just the screens.
 
 1. **Should an allocation-derived estimate count toward a category's
@@ -506,3 +513,57 @@ shippable, so the feature is useful before all of it exists.
   overall budget and confirm every target, estimate and variance moves
   with it; delete a category's percentage and confirm its lines degrade to
   today's behaviour rather than to zeroes.
+
+## 12. Answered (2026-09-20)
+
+The planner's answer to §9 was *"go with recommended for all."* Each
+decision below is therefore the recommendation as §9 stated it, recorded
+here as settled.
+
+Because every recommendation was the one this spec's body was already
+written around, **§2 through §8 need no changes** — the data model, the
+precedence rule, the rollup columns and the screens all already describe
+the decided behaviour. This section is the record of the decision, not a
+correction to the body.
+
+1. **An allocation-derived estimate counts toward its category's current
+   total, and so toward the over/under.** `v_budget_items.effective_estimated`
+   feeds `computed_current`'s flat branch (§4), and
+   `v_budget_category_totals.total_current` sums it like any other figure.
+   `allocation_only_count` is shipped alongside it and shown on screen
+   ("4 of 7 lines still using their allocation"), so a forecast is never
+   mistaken for a firm number. This is the version that shows the plan's
+   shape before any quotes exist.
+2. **Over/under is shown both ways**, per category: `variance_pct`
+   (against that category's own allocation) and `share_of_budget_pct`
+   (what it's actually taking, against the percentage it was meant to
+   take). §5's worked example is the reference — +6.25% over, and 12.75%
+   against 12% planned.
+3. **Percentages are never enforced.** Sums over or under 100% save
+   normally; the only feedback is the wedding-level "allocated 97% ·
+   $1,200 unallocated" figure. No save is ever blocked by an allocation —
+   same warn-don't-block posture as spec 5 Part B and spec 6 §5.
+4. **The overall budget is a GST-inclusive figure, and a GST-exclusive
+   line's derived estimate divides by 1.15** so the line's
+   `computed_current` lands exactly on its allocation rather than 15%
+   above it (§4's `allocation_estimate` formula). Nothing else about spec
+   18's GST handling changes.
+5. **Category targets are entered as a percentage only**, with the dollar
+   amount shown live as it's typed. No dollar-amount entry that
+   back-computes a percentage — a single stored representation is what
+   makes changing the overall budget move every target coherently. The
+   reverse entry mode stays a possible later addition.
+6. **The starter percentages (§8) are in**, as a static list in
+   `src/lib/budget-allocations.ts` applied only to categories with no
+   percentage yet, via a "Suggest percentages" control on `/budget`.
+   **The numbers in §8's table are still a placeholder.** The
+   recommendation this answer accepted was "in, with the planner
+   correcting the table first," and that correction hasn't happened yet:
+   this session had no live source to cite, and NZ splits differ from the
+   US breakdowns most of that content assumes. Build steps 1–7 don't
+   depend on it; build step 8 should not ship the table unreviewed.
+
+**What this does not authorize.** Per `CLAUDE.md`, these answers are
+content for this spec, not a green light to write code. The build order
+in §10 stands ready, and nothing in it starts until the planner says to
+build it.
