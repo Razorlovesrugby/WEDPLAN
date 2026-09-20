@@ -5,10 +5,10 @@ import { useMemo, useState, useTransition } from "react";
 import { InlineText } from "./inline-text";
 import { HouseholdPicker } from "./household-picker";
 import { moveGuests, setGuestTags, updateGuest } from "@/server/actions/guests";
-import { guestName } from "@/lib/format";
+import { guestName, sideLabel } from "@/lib/format";
 import { tierBadgeClass } from "@/lib/tier-colors";
 import type { GuestListItem } from "@/server/queries/guests";
-import type { EventRow, HouseholdView, RsvpStatus, TagRow } from "@/lib/types/database";
+import type { CollaboratorRow, EventRow, HouseholdView, RsvpStatus, TagRow } from "@/lib/types/database";
 
 const RSVP_LABEL: Record<RsvpStatus, string> = {
   yes: "Yes",
@@ -29,11 +29,13 @@ export function GuestsTable({
   tags,
   events,
   households,
+  collaborators,
 }: {
   guests: GuestListItem[];
   tags: TagRow[];
   events: EventRow[];
   households: HouseholdView[];
+  collaborators: CollaboratorRow[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTag, setBulkTag] = useState("");
@@ -131,9 +133,11 @@ export function GuestsTable({
                   }
                 />
               </th>
-              <th scope="col" className="px-3 py-2">Name</th>
+              <th scope="col" className="px-3 py-2">First name</th>
+              <th scope="col" className="px-3 py-2">Last name</th>
               <th scope="col" className="px-3 py-2">Household</th>
               <th scope="col" className="px-3 py-2">Tier</th>
+              <th scope="col" className="px-3 py-2">Side</th>
               <th scope="col" className="px-3 py-2">Email</th>
               <th scope="col" className="px-3 py-2">Dietary</th>
               <th scope="col" className="px-3 py-2">Tags</th>
@@ -159,11 +163,19 @@ export function GuestsTable({
                   </td>
                   <td className="px-3 py-1.5">
                     <Link href={`/guests/${guest.id}`} className="font-medium hover:underline">
-                      {guestName(guest)}
+                      {guest.preferred_name?.trim() || guest.first_name}
                     </Link>
                     {guest.age_band !== "adult" ? (
                       <span className="ml-1.5 text-xs text-muted">({guest.age_band})</span>
                     ) : null}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <InlineText
+                      value={guest.last_name}
+                      placeholder="—"
+                      ariaLabel={`Last name for ${guestName(guest)}`}
+                      onSave={(next) => updateGuest(guest.id, { last_name: next })}
+                    />
                   </td>
                   <td className="px-3 py-1.5">
                     <Link href={`/households/${guest.household_id}`} className="text-muted hover:underline">
@@ -176,6 +188,15 @@ export function GuestsTable({
                     >
                       {guest.tier}
                     </span>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {guest.side ? (
+                      <span className="rounded bg-paper px-1.5 py-0.5 text-xs font-medium">
+                        {sideLabel(guest.side, collaborators)}
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-1.5">
                     <InlineText
@@ -226,8 +247,8 @@ export function GuestsTable({
       </div>
 
       <p className="text-xs text-muted">
-        {guests.length} {guests.length === 1 ? "guest" : "guests"} shown. Email and dietary are
-        editable here; everything else is on the guest page.
+        {guests.length} {guests.length === 1 ? "guest" : "guests"} shown. Last name, email, and
+        dietary are editable here; everything else is on the guest page.
       </p>
     </div>
   );

@@ -6,18 +6,19 @@ import { AnswerList } from "@/components/questions/answer-list";
 import { getGuest, listHouseholds } from "@/server/queries/guests";
 import { moveGuest } from "@/server/actions/guests";
 import { getGuestAnswers } from "@/server/queries/questions";
-import { getEvents, requireWedding } from "@/server/queries/wedding";
+import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName } from "@/lib/format";
 import type { RsvpStatus } from "@/lib/types/database";
 
 export default async function GuestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [guest, events, answers, households] = await Promise.all([
+  const [guest, events, answers, households, collaborators] = await Promise.all([
     getGuest(wedding.id, id),
     getEvents(wedding.id),
     getGuestAnswers(wedding.id, id),
     listHouseholds(wedding.id),
+    getCollaborators(wedding.id),
   ]);
 
   if (!guest) notFound();
@@ -57,7 +58,7 @@ export default async function GuestPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[2fr,1fr]">
-        <GuestForm guest={guest} householdId={guest.household_id} />
+        <GuestForm guest={guest} householdId={guest.household_id} collaborators={collaborators} />
 
         <div className="space-y-5">
           <aside className="card h-fit p-4">
