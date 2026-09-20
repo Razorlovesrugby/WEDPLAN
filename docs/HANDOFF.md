@@ -3,27 +3,40 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 22 — spec 18 written, decided by the planner in the
+Last updated: session 23 — spec 19 written, answered and built: **the
+budget now has a top-down half.** One overall budget on the wedding, a
+percentage per category, a percentage per line of its own category's
+target, and the rule the planner actually asked for — "an allocation field
+that would feed into the estimate unless the estimate is filled in itself."
+That fallback is computed on read in `v_budget_items`
+(`effective_estimated`, `estimate_source`), never written into
+`estimated`, which is what makes changing the overall budget move every
+derived estimate at once and clearing a typed estimate fall straight back
+to its allocation. `0020_budget_allocations.sql` adds
+`weddings.total_budget`, `budget_categories.allocation_pct`,
+`budget_items.allocation_pct` and `v_budget_category_totals`, and
+recreates `v_budget_items` / `v_budget_summary`. `src/lib/budget.ts` gained
+the allocation math; `src/lib/budget-allocations.ts` is a starter table of
+typical percentages **whose numbers are an unreviewed placeholder the
+planner still has to correct** (spec 19 §8, §12 decision 6). `npm test`
+(473, up from 437), `./scripts/verify-migrations.sh` (250 assertions, up
+from 211), `npm run typecheck` and `npm run build` all pass. Same live/
+browser caveat as every session since 12. See
+`docs/specs/19-budget-allocation-percentages.md`, §13 for the build notes.
+
+**Process note worth keeping:** this one went spec → answers → build as
+three separate turns, with the build starting only when the planner said
+"build it" in those words. Session 22's entry below records the time that
+went wrong (spec'd and built off a decisive-sounding tone, never an
+instruction) and is why `CLAUDE.md` says what it says.
+
+Previously: session 22 — spec 18 written, decided by the planner in the
 same conversation, and built the same session: **budget is NZD only now,
-full stop.** The planner asked to remove foreign currency as a concept
-entirely ("too much of a hassle") and replace it with a plain GST
-inclusive/exclusive tick-box that adds a hardcoded 15% when exclusive.
-`0019_budget_nzd_and_gst.sql` drops `fx_rates`, `budget_items.currency`,
-`budget_items.fx_rate`, `payments.currency`, `payments.fx_rate`, and
-`weddings.base_currency` outright, and adds `budget_items.gst_treatment`.
-`src/lib/fx.ts`, `src/lib/fx.test.ts` and `src/server/queries/fx.ts` are
-deleted — the external `api.frankfurter.app` call (this app's only
-third-party API call outside email) is gone with them. `v_budget_items` and
-`v_budget_summary` are recreated (dropped, not `CREATE OR REPLACE`, since
-Postgres won't let a view rename/drop an output column) with the GST uplift
-folded in and the `_base` suffix retired — `computed_current`, `paid` and
-`outstanding` are just the numbers now, there being only one currency
-left. `src/lib/budget.ts` gained `GST_RATE`/`applyGst`, unit-tested;
-`formatMoney` dropped its currency parameter entirely (always NZD,
-`en-NZ` locale). `./scripts/verify-migrations.sh` (211 assertions), `npm
-test` (437 tests) and `npm run build` all pass. Same live/browser caveat as
-every session since 12 — this has never touched a real Supabase project.
-See `docs/specs/18-budget-gst.md`.
+full stop.** `0019_budget_nzd_and_gst.sql` dropped `fx_rates`, every
+`currency`/`fx_rate` column and `weddings.base_currency`, added
+`budget_items.gst_treatment`, and deleted `src/lib/fx.ts` and its live
+`api.frankfurter.app` lookup with them. `formatMoney` lost its currency
+parameter (always NZD, `en-NZ`). See `docs/specs/18-budget-gst.md`.
 
 Previously: session 21 — a migration bug, not a build session: `0011`
 tried to add an enum value and use it in the same file, which works when
@@ -94,6 +107,86 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 23: Spec 19 — an overall budget, percentage allocations, and allocation-derived estimates
+
+**What the planner asked for**, in three turns and in this order: a spec
+("Can u write the spec plz"), then the open questions listed out, then
+"go with recommended for all", then — separately — "Build it baby." The
+first three produced only documentation. Only the fourth produced code.
+That sequencing is the point; see `CLAUDE.md`.
+
+**The feature.** Spec 6 built the budget bottom-up: type what a thing
+costs, totals add up. This is the top-down direction that was missing —
+"we have $40,000, roughly what should flowers be?" — and the join between
+the two:
+
+- `weddings.total_budget` — one figure, minor units, NZD. Null is a
+  first-class state: every derived figure below is then null and every
+  budget line behaves exactly as it did before this migration.
+- `budget_categories.allocation_pct` — a share of that budget. Venue 12%
+  of $40,000 = $4,800.
+- `budget_items.allocation_pct` — a share of **its category's** target.
+  Drinks is 8% of the wedding ($3,200); alcohol is 80% of Drinks ($2,560).
+- **The core rule (spec 19 §4):** a line with an allocation and no typed
+  `estimated` uses its allocation as its estimate, resolved in the view as
+  `effective_estimated`, with `estimate_source` (`entered` | `allocation` |
+  `none`) saying which. It reaches `computed_current` only through the
+  `flat` branch's `contracted → quoted → effective_estimated` ladder —
+  a `per_adult` or `consumption` line still recomputes live, and its
+  allocation is a comparison target only. That's the right behaviour for
+  the planner's own drinks example, where "alcohol" is naturally a
+  consumption line.
+- **Nothing is ever written into `estimated`.** The allocation is a
+  fallback computed on read. This is why there is no "detached" state to
+  reason about, no backfill, and no stale copy when the overall budget
+  changes.
+
+**Decisions that shaped it** (all six recorded in the spec's §12):
+derived estimates *do* count toward a category's current total, with
+`allocation_only_count` shown so a forecast never reads as firm; over/under
+is shown both as a percentage of the category's own allocation and as the
+share of the whole budget it's actually taking; percentages are never
+enforced (103% saves fine — the unallocated figure is the only feedback);
+the overall budget is GST-inclusive, so a GST-exclusive line's derived
+estimate divides by 1.15 first; category targets are percentage-entry only.
+
+**One thing the build corrected in the spec:** "lands exactly on its
+allocation" is, in integer minor units, "lands within a cent" — ÷1.15 then
+×1.15 doesn't always round-trip. Documented in the lib, the migration, the
+test, and spec 19 §13.
+
+**Files:** `supabase/migrations/0020_budget_allocations.sql`;
+`src/lib/budget.ts` (+`pctOf`, `categoryTarget`, `itemAllocation`,
+`allocationEstimate`, `effectiveEstimated`, `estimateSource`, `variance`);
+`src/lib/budget-allocations.ts` + test; `src/server/actions/budget.ts`
+(+`setTotalBudget`, `setCategoryAllocation`, `applySuggestedAllocations`,
+`allocation_pct` on the item schema); `src/server/queries/budget.ts`
+(+`listBudgetCategoryTotals`); `src/components/budget/budget-header.tsx`
+(new), `category-header.tsx`, `budget-item-fields.tsx`,
+`budget-item-row.tsx`, `add-budget-item-form.tsx`;
+`src/app/(planner)/budget/page.tsx`; `src/app/(planner)/page.tsx`;
+`src/lib/types/database.ts`; `supabase/tests/03_budget.sql` (new section 5).
+
+**`setTotalBudget` is its own action** rather than a field on
+`updateWeddingSettings`, because that action's zod schema validates the
+whole settings form at once and can't take a partial write from `/budget`
+— the same reason `setCapacity`/`setCutLine` live in `rank.ts`, as
+`settings.ts`'s own header comment explains.
+
+**The one loose end:** `src/lib/budget-allocations.ts`'s percentages (venue
+20%, catering 20%, drinks 10%, photography 12%…) are a placeholder written
+without a live source, and most published breakdowns assume US weddings.
+The planner accepted the recommendation "in, with the planner correcting
+the table first"; the correction has not happened. It is one array, the
+file says so at the top, and nothing else in the feature depends on those
+values.
+
+**Environment notes for the next session:** `node_modules` was absent in a
+fresh container (`npm install` first), and `npm run build` needs a
+`.env.local` — placeholder values are enough, it only validates shape.
+`./scripts/verify-migrations.sh` still needs a non-root user (`useradd
+pgtest`, then `su pgtest -c ...`); `initdb` refuses to run as root.
 
 ## Session 22: Spec 18 written, decided, and built — budget goes NZD-only, GST replaces FX
 

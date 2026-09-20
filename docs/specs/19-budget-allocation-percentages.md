@@ -1,14 +1,16 @@
 # Feature spec: Budget — an overall budget, percentage allocations, and allocation-derived estimates
 
-**Status: decided, not built.** All six of §9's questions were answered
-on 2026-09-20 — the planner took the recommendation on every one — and
-those answers are recorded in §12. **Nothing has been built, schema
-included**, and nothing should be until the planner says to build it in
-so many words (`CLAUDE.md`: answering a spec's questions is not
-authorization to write code). One thing inside decision 6 is still
-genuinely open and is not a blocker for the rest: §8's suggested
-percentages are in, but the specific numbers in that table are this
-session's placeholder and want the planner's eye before they ship.
+**Status: built end to end, session 23 (2026-09-20).** All six of §9's
+questions were answered the same day — the planner took the recommendation
+on every one (§12) — and then said to build it.
+`0020_budget_allocations.sql`, the allocation math in `src/lib/budget.ts`,
+the starter table in `src/lib/budget-allocations.ts`, three new server
+actions, `listBudgetCategoryTotals`, and all four `/budget` surfaces plus
+the dashboard line. See §13 for what shipped, the one place the build
+corrected this spec, and what was actually verified. **§8's suggested
+percentages shipped as written and are still the placeholder §12 decision 6
+describes** — the mechanism is agreed, those specific numbers are not, and
+they are one array to edit.
 
 **Depends on:** spec 6 / 6.1 (budget) and spec 18 (NZD-only + GST), all
 built. Reads spec 6's `budget_categories` / `budget_items` /
@@ -567,3 +569,59 @@ correction to the body.
 content for this spec, not a green light to write code. The build order
 in §10 stands ready, and nothing in it starts until the planner says to
 build it.
+
+## 13. Build status (2026-09-20)
+
+Built in §10's order, in one session, immediately after §12's answers.
+
+**Schema** — `supabase/migrations/0020_budget_allocations.sql`: three
+nullable columns (`weddings.total_budget`, `budget_categories.allocation_pct`,
+`budget_items.allocation_pct`), `v_budget_items` and `v_budget_summary`
+dropped and recreated, and the new `v_budget_category_totals`. No new
+tables, so the RLS `tenant_tables` array is untouched. Append-only: nothing
+already landed was edited.
+
+**Pure logic** — `src/lib/budget.ts` gained `pctOf`, `categoryTarget`,
+`itemAllocation`, `allocationEstimate`, `effectiveEstimated`,
+`estimateSource` and `variance`, plus an optional `allocatedAmount` on
+`BudgetItemInput` that `computeCurrent` consults in its `flat` branch only.
+`src/lib/budget-allocations.ts` holds §8's starter table and its matcher.
+
+**Server** — `setTotalBudget`, `setCategoryAllocation` and
+`applySuggestedAllocations` in `src/server/actions/budget.ts` (the first is
+its own action for the reason §7 gives: `updateWeddingSettings` validates
+the whole settings form and can't take a partial write);
+`allocation_pct` added to the item create/patch schema;
+`listBudgetCategoryTotals` in `src/server/queries/budget.ts`.
+
+**Screens** — a new `BudgetHeader` (overall budget, allocated, unallocated,
+current vs. budget, "Suggest percentages"); `CategoryHeader` gained the `%`
+input and the rollup bar with both variance readings and the
+"n of m lines still using their allocation" note; `BudgetItemFields` gained
+the allocation field and its live hint; `BudgetItemRow` gained an
+"Allocated" figure, the greyed "from allocation" estimate, and the
+per-line variance; the dashboard's Budget tile gained an "Against budget"
+stat that only appears once an overall budget exists.
+
+**One correction to this spec.** §4 and §12 decision 4 said a GST-exclusive
+line's derived estimate "lands **on** its allocation". In integer minor
+units it lands *within a cent*: ÷1.15 then ×1.15 doesn't always round-trip
+(an allocation of $1,000.00 derives an estimate of $869.57, which grosses
+back up to $1,000.01). The behaviour is right and the discrepancy is one
+cent at most; `src/lib/budget.ts` and the migration both say so where it
+matters, and `budget.test.ts` asserts the bound rather than pretending to
+exactness.
+
+**Verification actually run this session:** `npm run typecheck` (clean),
+`npm test` (473 tests, up from 437 — 36 new across `budget.test.ts` and the
+new `budget-allocations.test.ts`), `./scripts/verify-migrations.sh` (250
+SQL assertions, up from 211 — `03_budget.sql` gained a section 5 covering
+the two-step percentage, the derived estimate and its GST divide, the
+allocation deliberately *not* feeding a `per_adult` line, both variance
+readings against §5's worked example, every null path, and removing the
+overall budget degrading every line to its pre-spec-19 behaviour), and
+`npm run build` (clean, all 30 routes).
+
+**Not verified, same caveat as every session since 12:** none of this has
+run against a live Supabase project, and nothing has been opened in a
+browser. §11's browser pass is still outstanding in full.

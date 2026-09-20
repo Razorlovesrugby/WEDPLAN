@@ -6,7 +6,18 @@ import { createBudgetItem } from "@/server/actions/budget";
 import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields";
 import type { EventRow } from "@/lib/types/database";
 
-export function AddBudgetItemForm({ categoryId, events }: { categoryId: string; events: EventRow[] }) {
+export function AddBudgetItemForm({
+  categoryId,
+  categoryName,
+  categoryAllocatedAmount,
+  events,
+}: {
+  categoryId: string;
+  categoryName: string;
+  /** The category's target in minor units (spec 19), for the allocation field's live hint. Null when unallocated. */
+  categoryAllocatedAmount: number | null;
+  events: EventRow[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +47,14 @@ export function AddBudgetItemForm({ categoryId, events }: { categoryId: string; 
   return (
     <div className="rounded border border-line bg-paper/40 p-3">
       {error ? <p className="mb-2 text-sm text-red-700">{error}</p> : null}
-      <BudgetItemFields events={events} pending={pending} onSubmit={onSubmit} onCancel={() => setOpen(false)} />
+      <BudgetItemFields
+        events={events}
+        pending={pending}
+        categoryName={categoryName}
+        categoryAllocatedAmount={categoryAllocatedAmount}
+        onSubmit={onSubmit}
+        onCancel={() => setOpen(false)}
+      />
     </div>
   );
 }

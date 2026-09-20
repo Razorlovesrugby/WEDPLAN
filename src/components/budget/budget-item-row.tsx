@@ -8,6 +8,8 @@ import { PaymentList } from "./payment-list";
 import { BudgetLinksPopup } from "./budget-links-popup";
 import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields";
 import { formatMoney } from "@/lib/format";
+import { variance as computeVariance } from "@/lib/budget";
+import { trimPct } from "./budget-header";
 import type {
   BudgetItemView,
   ConsumptionComponentRow,
@@ -36,6 +38,8 @@ const BASIS_LABEL: Record<BudgetItemView["quantity_basis"], string> = {
  */
 export function BudgetItemRow({
   item,
+  categoryName,
+  categoryAllocatedAmount,
   events,
   components,
   payments,
@@ -48,6 +52,10 @@ export function BudgetItemRow({
   autoOpenLinks = false,
 }: {
   item: BudgetItemView;
+  /** This line's category, named in the allocation hint in the editor (spec 19). */
+  categoryName: string;
+  /** The category's own target in minor units, or null when the wedding or the category has no percentage. */
+  categoryAllocatedAmount: number | null;
   events: EventRow[];
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
@@ -74,6 +82,9 @@ export function BudgetItemRow({
   const [prompt, setPrompt] = useState(false);
 
   const variance = item.contracted !== null ? item.contracted - (item.quoted ?? item.contracted) : null;
+  // Against the line's own allocation (spec 19) — a different question from
+  // the contracted-vs-quoted variance above, so both can show at once.
+  const allocationVariance = computeVariance(item.computed_current, item.allocated_amount);
   const linkedCount = links.lists.length + links.sections.length + links.tasks.length;
 
   function onSave(value: BudgetItemFormValue) {
@@ -115,6 +126,7 @@ export function BudgetItemRow({
             {BASIS_LABEL[item.quantity_basis]}
             {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price)}` : ""}
             {item.gst_treatment === "exclusive" ? " · GST exclusive (+15%)" : ""}
+            {item.allocation_pct !== null ? ` · ${trimPct(item.allocation_pct)}% of ${categoryName}` : ""}
             {linkedCount > 0 ? ` · ${linkedCount} linked` : ""}
           </div>
         </div>
@@ -128,8 +140,19 @@ export function BudgetItemRow({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-5">
-        <Figure label="Estimated" value={formatMoney(item.estimated)} />
+      <div className={`grid grid-cols-2 gap-x-4 gap-y-1 text-sm ${item.allocated_amount !== null ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
+        {item.allocated_amount !== null ? (
+          <Figure label="Allocated" value={formatMoney(item.allocated_amount)} />
+        ) : null}
+        {/* A derived estimate is shown greyed and marked: it's a number
+            nobody typed (spec 19 §4), and the row should never let that pass
+            for a real one. */}
+        <Figure
+          label="Estimated"
+          value={formatMoney(item.estimate_source === "allocation" ? item.effective_estimated : item.estimated)}
+          muted={item.estimate_source === "allocation"}
+          note={item.estimate_source === "allocation" ? "from allocation" : undefined}
+        />
         <Figure label="Quoted" value={formatMoney(item.quoted)} />
         <Figure label="Contracted" value={formatMoney(item.contracted)} />
         <Figure label="Current" value={formatMoney(item.computed_current)} strong />
@@ -142,6 +165,19 @@ export function BudgetItemRow({
       {variance !== null && variance !== 0 ? (
         <p className="text-xs text-muted">
           {variance > 0 ? "Over" : "Under"} quote by {formatMoney(Math.abs(variance))}
+        </p>
+      ) : null}
+      {allocationVariance !== null ? (
+        <p className="text-xs text-muted">
+          {allocationVariance.amount === 0 ? (
+            "Exactly on its allocation"
+          ) : (
+            <span className={allocationVariance.amount > 0 ? "text-tierB" : "text-tierA"}>
+              {formatMoney(Math.abs(allocationVariance.amount))} {allocationVariance.amount > 0 ? "over" : "under"} its
+              allocation
+              {allocationVariance.pct !== null ? ` (${trimPct(Math.abs(allocationVariance.pct))}%)` : ""}
+            </span>
+          )}
         </p>
       ) : null}
 
@@ -157,6 +193,8 @@ export function BudgetItemRow({
             initial={item}
             events={events}
             pending={pending}
+            categoryName={categoryName}
+            categoryAllocatedAmount={categoryAllocatedAmount}
             onSubmit={onSave}
             onCancel={() => setEditing(false)}
           />
@@ -189,17 +227,23 @@ function Figure({
   value,
   strong,
   tone,
+  muted,
+  note,
 }: {
   label: string;
   value: string;
   strong?: boolean;
   tone?: "warn" | "good";
+  /** A figure nobody typed — spec 19's allocation-derived estimate. */
+  muted?: boolean;
+  note?: string;
 }) {
-  const toneClass = tone === "warn" ? "text-tierB" : tone === "good" ? "text-tierA" : "text-ink";
+  const toneClass = muted ? "text-muted" : tone === "warn" ? "text-tierB" : tone === "good" ? "text-tierA" : "text-ink";
   return (
     <div>
       <div className="text-xs text-muted">{label}</div>
       <div className={`tabular-nums ${strong ? "font-medium" : ""} ${toneClass}`}>{value}</div>
+      {note ? <div className="text-[0.65rem] uppercase tracking-wide text-muted">{note}</div> : null}
     </div>
   );
 }

@@ -65,7 +65,7 @@ export default async function DashboardPage() {
           <h2 id="budget" className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
             Budget
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={`grid gap-3 sm:grid-cols-2 ${budget.total_budget !== null ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
             <Stat
               label="Committed"
               value={formatMoney(budget.total_contracted)}
@@ -91,6 +91,23 @@ export default async function DashboardPage() {
               href="/guests/rank"
               hint="from every per-unit and consumption line"
             />
+            {/* Spec 19: the top-down number, only once there is an overall
+                budget to be over or under. */}
+            {budget.total_budget !== null ? (
+              <Stat
+                label="Against budget"
+                value={formatMoney(budget.total_current)}
+                href="/budget"
+                hint={
+                  budget.budget_variance === null || budget.budget_variance === 0
+                    ? `of ${formatMoney(budget.total_budget)} — exactly on budget`
+                    : `of ${formatMoney(budget.total_budget)} — ${formatMoney(Math.abs(budget.budget_variance))} ${
+                        budget.budget_variance > 0 ? "over" : "under"
+                      }`
+                }
+                tone={budget.budget_variance !== null && budget.budget_variance > 0 ? "warn" : "good"}
+              />
+            ) : null}
           </div>
         </section>
       ) : null}
