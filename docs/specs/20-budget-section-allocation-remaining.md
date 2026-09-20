@@ -1,9 +1,11 @@
 # Feature spec: Budget — how much of a section's allocation is spoken for, and one estimate column instead of two
 
-**Status: proposed, not built.** Nothing here has been built. Per
+**Status: proposed, not built. One of five questions answered.** Question 5
+was answered on 2026-09-20 (§11); questions 1-4 are still open. Per
 `docs/specs/README.md`, nothing beyond schema is built until §8's Open
 Questions are answered — and this spec's recommendation is that there is no
-schema to build at all (§3), so the questions gate the whole thing.
+schema to build at all (§3), so the questions gate the whole thing. Answers
+are content for this spec, not authorization to build it (`CLAUDE.md`).
 
 **Two halves, from one round of feedback on the same screen**, shippable
 independently: §1-§6 add a per-section allocation total ("does 38+30+42 add
@@ -257,7 +259,8 @@ rather than a rewrite: its model is right, only its row layout changes.
    mid-edit is normal.
 
 5. **When a line has both a typed estimate and an allocation, does the
-   target still show anywhere on the row?** *Recommend yes, as §7's small
+   target still show anywhere on the row?** **Answered 2026-09-20 — yes,
+   the secondary note. See §11.** *Recommended yes, as §7's small
    secondary note* (`allocated $320`). Dropping it entirely is simpler and
    is what the feedback literally asks for, but then a line you have quoted
    no longer shows what it was *meant* to cost — the comparison the whole
@@ -319,3 +322,29 @@ Small enough to be one sitting, but it splits cleanly if it needs to:
   derived figure and its marker come back; on a GST-exclusive line, confirm
   the column shows the pre-GST estimate and the note says what the
   allocation is all-in.
+
+## 11. Answered (2026-09-20)
+
+**Question 5 — the target stays on the row, as a secondary note.** The
+planner agreed with the recommendation as §7 and §8 state it:
+
+- A line with a **typed estimate and an allocation** shows one Estimate
+  figure (the typed one) with a small secondary note beneath it —
+  `allocated $320`. No second column, and no loss of the number the line is
+  being measured against, which is what the variance line beneath it
+  already refers to.
+- A line whose estimate **is** the allocation shows the derived figure with
+  spec 19's existing "from allocation" marker and no note — the note would
+  restate the figure directly above it, which is the duplication §7 exists
+  to remove.
+- On a **GST-exclusive** line the note reads `allocated $480 all-in`,
+  reconciling in words the 15% gap between the pre-GST estimate in the
+  column and the all-in allocation it was derived from.
+
+Nothing else in the spec changes: §7's column collapse is otherwise as
+written, and no figure's computation moves.
+
+**Still open: questions 1, 2, 3 and 4** — what counts toward a section's
+allocated percentage, where the summary line sits, pure function versus
+four view columns, and how loud an over-allocated section should be. Each
+carries a recommendation in §8. The build waits on them.
