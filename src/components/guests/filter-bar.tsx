@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
-import type { CutLineRow, EventRow, TagRow } from "@/lib/types/database";
+import { sideLabel } from "@/lib/format";
+import type { CollaboratorRow, CutLineRow, EventRow, TagRow } from "@/lib/types/database";
 
 const RSVP_OPTIONS = [
   { value: "yes", label: "Attending" },
@@ -10,6 +11,8 @@ const RSVP_OPTIONS = [
   { value: "maybe", label: "Maybe" },
   { value: "pending", label: "No answer" },
 ] as const;
+
+const SIDE_VALUES = ["partner_a", "partner_b", "both", "other"] as const;
 
 const MISSING_OPTIONS = [
   { value: "email", label: "No email" },
@@ -26,11 +29,13 @@ export function FilterBar({
   tags,
   events,
   cutLines,
+  collaborators,
   activeCount,
 }: {
   tags: TagRow[];
   events: EventRow[];
   cutLines: CutLineRow[];
+  collaborators: CollaboratorRow[];
   activeCount: number;
 }) {
   const router = useRouter();
@@ -106,6 +111,18 @@ export function FilterBar({
                 {line.position === 0 ? " — above the cut" : ""}
               </option>
             ))}
+        </select>
+      </label>
+
+      <label>
+        <span className="mb-1 block text-xs text-muted">Side</span>
+        <select value={current("side")} onChange={(e) => setParam("side", e.target.value)} className="field">
+          <option value="">Any</option>
+          {SIDE_VALUES.map((value) => (
+            <option key={value} value={value}>
+              {sideLabel(value, collaborators)}
+            </option>
+          ))}
         </select>
       </label>
 

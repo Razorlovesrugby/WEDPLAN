@@ -7,19 +7,21 @@ import { AnswerList } from "@/components/questions/answer-list";
 import { getHousehold, listHouseholds } from "@/server/queries/guests";
 import { moveGuest, moveGuests } from "@/server/actions/guests";
 import { getHouseholdAnswers } from "@/server/queries/questions";
-import { getEvents, requireWedding } from "@/server/queries/wedding";
+import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName, pluralise } from "@/lib/format";
 import { tierTextClass } from "@/lib/tier-colors";
 
 export default async function HouseholdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [{ household, guests, invitation, summary }, events, answers, households] = await Promise.all([
-    getHousehold(wedding.id, id),
-    getEvents(wedding.id),
-    getHouseholdAnswers(wedding.id, id),
-    listHouseholds(wedding.id),
-  ]);
+  const [{ household, guests, invitation, summary }, events, answers, households, collaborators] =
+    await Promise.all([
+      getHousehold(wedding.id, id),
+      getEvents(wedding.id),
+      getHouseholdAnswers(wedding.id, id),
+      listHouseholds(wedding.id),
+      getCollaborators(wedding.id),
+    ]);
 
   if (!household) notFound();
 
@@ -95,7 +97,7 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
             <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
               Add someone
             </h2>
-            <GuestForm householdId={household.id} />
+            <GuestForm householdId={household.id} collaborators={collaborators} />
           </section>
         </div>
 
