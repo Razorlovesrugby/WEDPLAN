@@ -160,6 +160,23 @@ function EventFields({
         <input name="address" defaultValue={event?.address ?? ""} className="field" />
       </label>
 
+      {/* Spec 21 §5.4 — this is the couple talking to a guest, not the run
+          sheet. It appears under "On the day" on the pages of the households
+          invited to this event, and nowhere else. */}
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium">On the day (guests see this)</span>
+        <textarea
+          name="guest_note"
+          rows={3}
+          defaultValue={event?.guest_note ?? ""}
+          className="field"
+          placeholder="Park on the street — the gates shut at 2. Drinks on the lawn straight after."
+        />
+        <span className="mt-1 block text-xs text-muted">
+          Only shown to households invited to this event.
+        </span>
+      </label>
+
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="is_public" defaultChecked={event?.is_public ?? true} />
         Show on the public site

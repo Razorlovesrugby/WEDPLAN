@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentWedding } from "@/server/queries/wedding";
-import { decryptToken, invitationUrl } from "@/lib/tokens";
+import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { qrPng, qrSvg } from "@/lib/qr";
 
 /**
@@ -40,7 +40,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("invitations")
-    .select("id, token_encrypted, households(display_name)")
+    .select("id, token_encrypted, households(display_name, slug, slug_suffix)")
     .eq("wedding_id", wedding.id)
     .eq("id", invitationId)
     .is("deleted_at", null)
@@ -49,22 +49,28 @@ export async function GET(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "No such invitation" }, { status: 404 });
 
+  // The code points at the household's address (spec 21 Q6), which does not
+  // need the token — but the RSVP form on that page does, so a household whose
+  // token cannot be reconstructed still must not be printed.
   const token = decryptToken(data.token_encrypted);
-  if (!token) {
+  if (!token || !data.households) {
     // The pepper was rotated, so this token cannot be reconstructed. Say so
-    // rather than rendering a QR code that leads nowhere — a dead code
-    // printed onto 90 cards is discovered by a guest, not by the planner.
+    // rather than rendering a QR code that leads somewhere useless — a dead
+    // code printed onto 90 cards is discovered by a guest, not by the planner.
     return NextResponse.json(
       { error: "This invitation's link can't be recovered. Reissue it, then print again." },
       { status: 409 },
     );
   }
 
-  const url = invitationUrl(token);
+  const url = householdSiteUrl(wedding.slug, {
+    slug: data.households.slug,
+    suffix: data.households.slug_suffix,
+  });
   const wantsSvg = request.nextUrl.searchParams.get("format") === "svg";
 
   // A filename the stationer can work with, rather than a row of uuids.
-  const name = (data.households?.display_name ?? "invitation")
+  const name = (data.households.display_name ?? "invitation")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")

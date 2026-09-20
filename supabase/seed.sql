@@ -47,13 +47,19 @@ insert into public.collaborators (wedding_id, user_id, role) values
   ('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-0000-4000-8000-000000000002', 'partner')
 on conflict do nothing;
 
-insert into public.events (id, wedding_id, name, starts_at, venue, address, is_public, sort_order) values
+-- guest_note is the on-the-day run-down (spec 21 §5.4): the couple talking to
+-- a guest, stitched into the pages of the households invited to that event.
+-- Not the run sheet, which carries supplier phone numbers.
+insert into public.events (id, wedding_id, name, starts_at, venue, address, is_public, sort_order, guest_note) values
   ('e1111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111',
-   'Ceremony', '2027-06-12 13:00:00+01', 'St Mary''s Church', 'Church Lane, Bath', true, 1),
+   'Ceremony', '2027-06-12 13:00:00+01', 'St Mary''s Church', 'Church Lane, Bath', true, 1,
+   'Park on Church Lane or in the square behind it. Please be seated by ten to — the doors close on the hour.'),
   ('e2222222-2222-4222-8222-222222222222', '11111111-1111-4111-8111-111111111111',
-   'Reception', '2027-06-12 17:00:00+01', 'The Old Barn', 'Barn Road, Bath', true, 2),
+   'Reception', '2027-06-12 17:00:00+01', 'The Old Barn', 'Barn Road, Bath', true, 2,
+   'Drinks on the lawn while we disappear for photographs. Dinner is at seven; the barn is a five minute walk up the track, and the ground is uneven in heels.'),
   ('e3333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111',
-   'Evening party', '2027-06-12 20:00:00+01', 'The Old Barn', 'Barn Road, Bath', true, 3)
+   'Evening party', '2027-06-12 20:00:00+01', 'The Old Barn', 'Barn Road, Bath', true, 3,
+   'Bacon rolls at midnight. The last coach back into town leaves at half past twelve from the top of the track.')
 on conflict (id) do nothing;
 
 insert into public.tags (id, wedding_id, name, colour) values

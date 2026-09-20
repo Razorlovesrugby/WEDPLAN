@@ -1,25 +1,28 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hashInviteToken, looksLikeToken } from "@/lib/tokens";
+import { parseAddress } from "@/lib/site/household-slug";
 import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
 import { text } from "@/lib/site/sections";
 
 /**
- * Resolving a token for the stationery card at `/i/[token]` (spec 14 §12.2).
+ * The little that a household's page needs before it can say whose it is:
+ * the couple's names, the date, the theme and the household's own name.
  *
- * Deliberately *not* `resolveInvitation()`. That one loads guests, events,
- * questions, every RSVP and every answer, because the RSVP form needs them —
- * the card needs a household's name and the wedding's own details, and the
- * card is the page most likely to be opened by half a WhatsApp group at once.
+ * Deliberately *not* `resolveInvitation()` or `resolveHouseholdAddress()`.
+ * Those load guests, events, questions, every RSVP and every answer, because
+ * the form needs them. This is for the `<title>`, the Open Graph image and
+ * anything else that renders before — or instead of — the page body, and it
+ * is the query most likely to be run by half a WhatsApp group at once.
  *
- * It also does not record a token attempt. The throttle on
- * `rsvp_token_attempts` exists to make enumeration of the RSVP surface
- * expensive; a card that leaks only what is already printed on the invitation
- * does not need it, and a forwarded link opened forty times would otherwise
- * count as forty failures against whichever proxy IP they share and lock the
- * household out of replying. That is a real risk for the page most likely to
- * be forwarded, and it is why this is a separate function rather than a flag
- * on the other one.
+ * It also does not record a token attempt or consult the throttle. That
+ * counter exists to make enumerating the RSVP surface expensive; a forwarded
+ * link opened forty times would otherwise spend forty slots against whichever
+ * proxy IP the group shares and lock the household out of replying. The page
+ * body still resolves through `resolveHouseholdAddress()`, which does count.
+ *
+ * Spec 21 moved this from a token to an address. It was `resolveCard(token)`
+ * for `/i/[token]`; that route is now a redirect (Q6) and the card is the top
+ * of the household's own page.
  */
 
 export type CardContext = {
@@ -29,46 +32,50 @@ export type CardContext = {
   hero: { headline: string | null; dateLabel: string | null; location: string | null };
 };
 
-export async function resolveCard(rawToken: string): Promise<CardContext | null> {
-  if (!looksLikeToken(rawToken)) return null;
+export async function resolveCardByAddress(
+  weddingSlug: string,
+  segment: string,
+): Promise<CardContext | null> {
+  const address = parseAddress(segment);
+  if (!address) return null;
 
   const supabase = createAdminClient();
-  const { data: invitation } = await supabase
-    .from("invitations")
-    .select("wedding_id, household_id")
-    .eq("token_hash", hashInviteToken(rawToken))
-    .is("deleted_at", null)
+
+  const { data: wedding } = await supabase
+    .from("weddings")
+    .select("id, name, slug, wedding_date, timezone")
+    .eq("slug", weddingSlug)
     .maybeSingle();
 
-  if (!invitation) return null;
+  if (!wedding) return null;
 
-  const [{ data: wedding }, { data: household }, { data: blocks }] = await Promise.all([
-    supabase
-      .from("weddings")
-      .select("id, name, slug, wedding_date, timezone")
-      .eq("id", invitation.wedding_id)
-      .maybeSingle(),
+  const [{ data: household }, { data: blocks }] = await Promise.all([
     supabase
       .from("households")
       .select("display_name")
-      .eq("id", invitation.household_id)
-      .eq("wedding_id", invitation.wedding_id)
+      .eq("wedding_id", wedding.id)
+      .eq("slug", address.slug)
+      .eq("slug_suffix", address.suffix)
+      .is("deleted_at", null)
       .maybeSingle(),
     supabase
       .from("site_content")
       .select("block_key, payload")
-      .eq("wedding_id", invitation.wedding_id)
+      .eq("wedding_id", wedding.id)
       .in("block_key", ["theme", "hero"]),
   ]);
 
-  if (!wedding) return null;
+  // No household at that address: the caller renders the fallback rather than
+  // naming the wedding, which would confirm the couple exists at this slug to
+  // anyone trying addresses.
+  if (!household) return null;
 
   const byKey = new Map((blocks ?? []).map((row) => [row.block_key, row.payload]));
   const heroPayload = byKey.get("hero") ?? null;
 
   return {
     wedding,
-    householdName: household?.display_name ?? "Friends",
+    householdName: household.display_name,
     theme: resolveTheme(byKey.get("theme") ?? null),
     hero: {
       headline: text(heroPayload, "headline"),

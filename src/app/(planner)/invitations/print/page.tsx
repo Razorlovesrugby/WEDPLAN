@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
-import { decryptToken, invitationUrl } from "@/lib/tokens";
+import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { qrDataUri } from "@/lib/qr";
 
 export const metadata = { title: "Print QR codes" };
@@ -33,7 +33,7 @@ export default async function PrintCodesPage() {
 
   const { data, error } = await supabase
     .from("invitations")
-    .select("id, token_encrypted, households(display_name, rank)")
+    .select("id, token_encrypted, households(display_name, rank, slug, slug_suffix)")
     .eq("wedding_id", wedding.id)
     .is("deleted_at", null);
 
@@ -41,8 +41,11 @@ export default async function PrintCodesPage() {
 
   const cards = await Promise.all(
     (data ?? []).map(async (invitation) => {
+      // The printed code carries the household's address (spec 21 Q6). The
+      // token is still checked, because the RSVP form behind that address
+      // needs it and a card is printed once.
       const token = decryptToken(invitation.token_encrypted);
-      if (!token) {
+      if (!token || !invitation.households) {
         return {
           id: invitation.id,
           name: invitation.households?.display_name ?? "Unknown household",
@@ -51,7 +54,10 @@ export default async function PrintCodesPage() {
           qr: null,
         };
       }
-      const url = invitationUrl(token);
+      const url = householdSiteUrl(wedding.slug, {
+        slug: invitation.households.slug,
+        suffix: invitation.households.slug_suffix,
+      });
       return {
         id: invitation.id,
         name: invitation.households?.display_name ?? "Unknown household",

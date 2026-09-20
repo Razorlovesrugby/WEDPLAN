@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSchemaMissing } from "./db-errors";
+import { isSchemaMissing, isUniqueViolation } from "./db-errors";
 
 describe("isSchemaMissing", () => {
   /**
@@ -44,5 +44,25 @@ describe("isSchemaMissing", () => {
     expect(isSchemaMissing({ message: "fetch failed" })).toBe(false);
     // "Could not find" about a row, not the schema, must not match.
     expect(isSchemaMissing({ code: "PGRST116", message: "Could not find any rows" })).toBe(false);
+  });
+});
+
+describe("isUniqueViolation", () => {
+  it("catches the code PostgREST passes through", () => {
+    expect(isUniqueViolation({ code: "23505", message: "duplicate key" })).toBe(true);
+  });
+
+  it("falls back to the message when a driver drops the code", () => {
+    expect(
+      isUniqueViolation({
+        message: 'duplicate key value violates unique constraint "households_address_key"',
+      }),
+    ).toBe(true);
+  });
+
+  it("is not fooled by any other failure", () => {
+    expect(isUniqueViolation({ code: "23503", message: "foreign key" })).toBe(false);
+    expect(isUniqueViolation({ code: "PGRST205", message: "could not find the table" })).toBe(false);
+    expect(isUniqueViolation(null)).toBe(false);
   });
 });

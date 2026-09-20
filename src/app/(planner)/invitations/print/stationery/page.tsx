@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
-import { decryptToken, invitationUrl } from "@/lib/tokens";
+import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { qrDataUri } from "@/lib/qr";
 import { body, script } from "@/lib/fonts";
 import { resolveTheme, themeCssVars } from "@/lib/theme/presets";
@@ -25,9 +25,10 @@ export const metadata = { title: "Print invitations" };
  * changed. Print-to-PDF from the browser produces the same file from the same
  * HTML, and the print stylesheet below is what makes it come out right.
  *
- * The QR points at `/rsvp`, not `/i`: somebody scanning a paper invitation is
- * holding the card already, so sending them to a digital copy of it costs a
- * tap on the way to the thing they actually came to do.
+ * The QR points at the household's own page (spec 21 Q6), which is now the
+ * only link there is — card and RSVP form on one address, so a scan lands on
+ * the thing the guest came to do rather than on a digital copy of the card
+ * they are already holding.
  *
  * Codes are inlined as data URIs for the three reasons V1's sheet documents —
  * all-or-nothing printing, not existing as separately fetchable credentials,
@@ -42,7 +43,7 @@ export default async function PrintStationeryPage() {
   const [{ data, error }, { data: blocks }] = await Promise.all([
     supabase
       .from("invitations")
-      .select("id, token_encrypted, households(display_name, rank)")
+      .select("id, token_encrypted, households(display_name, rank, slug, slug_suffix)")
       .eq("wedding_id", wedding.id)
       .is("deleted_at", null),
     supabase
@@ -66,8 +67,16 @@ export default async function PrintStationeryPage() {
 
   const cards = await Promise.all(
     (data ?? []).map(async (invitation) => {
+      // As on the QR sheet: the address is what is printed, the token is what
+      // makes the form behind it work, and both have to be there.
       const token = decryptToken(invitation.token_encrypted);
-      const url = token ? invitationUrl(token) : null;
+      const url =
+        token && invitation.households
+          ? householdSiteUrl(wedding.slug, {
+              slug: invitation.households.slug,
+              suffix: invitation.households.slug_suffix,
+            })
+          : null;
       return {
         id: invitation.id,
         name: invitation.households?.display_name ?? "Unknown household",

@@ -449,6 +449,12 @@ export type EventRow = {
   address: string | null;
   is_public: boolean;
   sort_order: number;
+  /**
+   * Guest-facing note for this event (spec 21 §5.4). Shown on a household's
+   * own page for the events they are invited to — never the run sheet, which
+   * carries supplier phone numbers.
+   */
+  guest_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -461,9 +467,22 @@ export type HouseholdRow = {
   rank: string;
   reminders_muted: boolean;
   notes: string | null;
+  /** Readable half of /w/<wedding>/<slug>-<suffix>. Editable (spec 21 §4). */
+  slug: string;
+  /** Unguessable half. Minted once; an edit never changes it (spec 21 §3). */
+  slug_suffix: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+/** A household address that has been replaced, kept so old links still land (spec 21 §4). */
+export type HouseholdSlugAliasRow = {
+  wedding_id: string;
+  household_id: string;
+  slug: string;
+  slug_suffix: string;
+  retired_at: string;
 }
 
 /** Spec 5, part A. Replaces weddings.cut_rank/tier_b_rank — "how many lines" is now data. */
@@ -939,6 +958,10 @@ export type HouseholdView = {
   tier: string;
   /** 0-indexed position of that cut line. 0 = the top tier, the one that counts toward capacity. */
   tier_position: number;
+  /** Readable half of the household's address (spec 21). */
+  slug: string;
+  /** Unguessable half of it. */
+  slug_suffix: string;
 }
 
 export type HouseholdRsvpView = {
@@ -1133,8 +1156,9 @@ export type Database = {
         "id" | Timestamps | "timezone" | "reminder_window_days" | "slug"
       >;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
-      events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order">;
-      households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted">;
+      events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order" | "guest_note">;
+      households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted" | "slug" | "slug_suffix">;
+      household_slug_aliases: Table<HouseholdSlugAliasRow, "retired_at">;
       cut_lines: Table<CutLineRow, "id" | Timestamps>;
       guests: Table<
         GuestRow,

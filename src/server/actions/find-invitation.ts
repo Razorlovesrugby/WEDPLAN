@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { headers } from "next/headers";
-import { decryptToken, hashClientIp, invitationCardUrl } from "@/lib/tokens";
+import { decryptToken, hashClientIp, householdSiteUrl } from "@/lib/tokens";
 import { invitationEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
@@ -93,29 +93,32 @@ export async function findMyInvitation(
       .maybeSingle(),
     supabase
       .from("weddings")
-      .select("name, wedding_date, timezone")
+      .select("name, slug, wedding_date, timezone")
       .eq("id", guest.wedding_id)
       .maybeSingle(),
     supabase
       .from("households")
-      .select("display_name")
+      .select("display_name, slug, slug_suffix")
       .eq("id", guest.household_id)
       .eq("wedding_id", guest.wedding_id)
       .maybeSingle(),
   ]);
 
-  if (!invitation || !wedding) return ok({ message: NEUTRAL });
+  if (!invitation || !wedding || !household) return ok({ message: NEUTRAL });
 
   const token = decryptToken(invitation.token_encrypted);
   if (!token) return ok({ message: NEUTRAL });
 
   const message = invitationEmail({
     weddingName: wedding.name,
-    householdName: household?.display_name ?? "Friends",
+    householdName: household.display_name,
     dateLabel: wedding.wedding_date
       ? formatDate(wedding.wedding_date, wedding.timezone)
       : "date to be confirmed",
-    url: invitationCardUrl(token),
+    url: householdSiteUrl(wedding.slug, {
+      slug: household.slug,
+      suffix: household.slug_suffix,
+    }),
   });
 
   // Sent to the address on file, never to whatever was typed — they are the

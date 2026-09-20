@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
-import { decryptToken, invitationCardUrl, invitationUrl } from "@/lib/tokens";
+import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { broadcastEmail, saveTheDateEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
@@ -34,6 +34,8 @@ type Target = {
   householdId: string;
   householdName: string;
   token: string;
+  /** The household's own page — one link per household (spec 21 Q6). */
+  url: string;
   recipients: string[];
 };
 
@@ -48,11 +50,12 @@ type Target = {
 async function loadTargets(
   supabase: Awaited<ReturnType<typeof createClient>>,
   weddingId: string,
+  weddingSlug: string,
   householdIds: string[] | null,
 ): Promise<Target[]> {
   let query = supabase
     .from("invitations")
-    .select("id, household_id, token_encrypted, households(display_name)")
+    .select("id, household_id, token_encrypted, households(display_name, slug, slug_suffix)")
     .eq("wedding_id", weddingId)
     .is("deleted_at", null);
   if (householdIds) query = query.in("household_id", householdIds);
@@ -83,12 +86,18 @@ async function loadTargets(
     // right — sending a broken link is worse than sending nothing — and
     // `reissueInvitation` is the documented fix.
     if (!token) return [];
+    const household = invitation.households;
+    if (!household) return [];
     return [
       {
         invitationId: invitation.id,
         householdId: invitation.household_id,
-        householdName: invitation.households?.display_name ?? "Friends",
+        householdName: household.display_name,
         token,
+        url: householdSiteUrl(weddingSlug, {
+          slug: household.slug,
+          suffix: household.slug_suffix,
+        }),
         recipients: emails.get(invitation.household_id) ?? [],
       },
     ];
@@ -240,7 +249,12 @@ export async function sendSaveTheDates(
   const dateLabel = formatDate(wedding.wedding_date, wedding.timezone);
   const location = text(heroRow?.payload ?? null, "location");
 
-  const targets = await loadTargets(supabase, wedding.id, parsed.data.household_ids ?? null);
+  const targets = await loadTargets(
+    supabase,
+    wedding.id,
+    wedding.slug,
+    parsed.data.household_ids ?? null,
+  );
   if (targets.length === 0) return fail("No households have an invitation link yet");
 
   const summary = await sendToTargets(
@@ -254,9 +268,10 @@ export async function sendSaveTheDates(
         householdName: target.householdName,
         dateLabel,
         location,
-        // The card, not the RSVP form: replies are not open yet, and sending
-        // people to a form that refuses them is worse than not linking at all.
-        url: invitationCardUrl(target.token),
+        // Their own page. It opens on the card — the couple's names and the
+        // date — with the RSVP form further down, which is the right thing to
+        // send before replies are open (spec 21 Q6 merged the two surfaces).
+        url: target.url,
       }),
     // Scoped to the date, so moving the wedding lets a corrected save-the-date
     // go out rather than being swallowed as a duplicate of the old one.
@@ -350,7 +365,7 @@ export async function sendBroadcast(
     return fail("Nobody matches that group");
   }
 
-  const targets = await loadTargets(supabase, wedding.id, householdIds);
+  const targets = await loadTargets(supabase, wedding.id, wedding.slug, householdIds);
   if (targets.length === 0) return fail("Nobody in that group has an invitation link yet");
 
   const summary = await sendToTargets(
@@ -364,7 +379,7 @@ export async function sendBroadcast(
         householdName: target.householdName,
         subject: parsed.data.subject,
         body: parsed.data.body,
-        url: invitationUrl(target.token),
+        url: target.url,
       }),
     parsed.data.send_key,
   );

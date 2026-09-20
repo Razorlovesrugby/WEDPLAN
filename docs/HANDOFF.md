@@ -3,7 +3,42 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 25 — a real bug, found by the planner in the running
+Last updated: session 26 — **spec 21 written, answered and built: every
+household now has its own readable address on the wedding site.**
+`/w/ray-and-olivia/okonkwo-4f7ak` is the household's own page — the couple's
+hero, only the events that household is invited to, the per-event "on the day"
+notes for those events, the RSVP form, the coach and photo uploads, in the
+wedding's own theme. It replaces both `/i/<token>` and `/rsvp/<token>`, which
+are now 308s so that every invitation already sent, and every printed QR code,
+still lands in the right place.
+
+**The one thing to understand before touching this feature** is why the
+address has five random characters on the end. `okonkwo` alone is guessable by
+anyone who knows the couple, and the site publishes their names; behind that
+URL sit guest names, dietary notes, an RSVP form that can decline on a
+family's behalf, coach seats and photo uploads. So the readable half is the
+label and `slug_suffix` is the credential: minted once, never changed by a
+rename, redrawn only by `reissueInvitation` (which deliberately writes no
+alias — forwarding a leaked address is what reissuing exists to prevent).
+Anyone proposing to drop the suffix should read spec 21 §3 first.
+
+`0022_household_slugs.sql` adds `households.slug`/`slug_suffix` with their
+derivation functions, insert trigger and backfill, `household_slug_aliases`
+(so an edited address keeps working), `events.guest_note`, and two columns on
+`v_households`. **It has not been applied to the live project**, and nothing
+degrades gracefully without it. 513 tests (up from 487), 304 SQL assertions
+(up from 261), typecheck and build clean. See
+`docs/specs/21-per-household-site-addresses.md`.
+
+**What has been seen, and what has not.** The Open Graph image moved from
+`/i/[token]` to the new route and was rendered and looked at — 1200×630, both
+faces loading. That is the only pixel anyone has inspected. The page itself,
+the address panel on `/households/[id]` and the per-event note field have
+never been opened in a browser, and no query in this session returned a row
+from a live project. The live/browser caveat below still holds for everything
+except `/budget`, which the planner is running against real data.
+
+Previously: session 25 — a real bug, found by the planner in the running
 app and fixed: **a zero in `estimated`/`quoted`/`contracted` was outranking
 every real figure beneath it.** A line quoted at $7,700 with a typed 0 in
 `contracted` reported a current figure of $0, and therefore "$4,900 under
@@ -164,6 +199,70 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 26: Spec 21 — a page of their own, written, answered and built
+
+**The ask, in the planner's words:** every guest gets a customised site with
+their name on it and the events they are ticked for; the slug should read like
+"Ray and Olivia's wedding / name of household"; it starts from the guest side;
+the site itself is still managed in the Site tab; the URL is live and
+editable.
+
+**What the discovery pass found:** four of those six things already existed.
+`/rsvp/<token>` was *already* the customised page — household name, their
+guests, only their invited events, the RSVP, the questions, the coach, the
+uploads — and `/site` already edited the shared content. The gap was the
+address, plus one piece of content (the on-the-day run-down). The feature was
+therefore much smaller than it looked, and its only real decision was not a
+routing one.
+
+**That decision, spec 21 §3: a readable URL over a guest list is a change of
+credential, not a change of route.** Three options went to the planner and
+they chose the recommended one — the readable name *plus* five random
+Crockford base32 characters — with the correction that the slug is the
+household's own name and nothing appended (`okonkwo`, not
+`the-okonkwo-family`). So spec 14 Q1's decision survives in substance: the
+link says whose it is, and is still not reachable by guessing a surname.
+
+All eight questions were answered in one round, then the build was authorized
+in a separate turn. Same three-turn shape as session 23, and for the same
+reason — see the process note in session 23 below.
+
+**The answers, and what each cost:** per-event guest notes rather than one
+shared block (a column on `events` and a field in the events editor, so a
+ceremony-only household reads only the ceremony's note); an alias table so an
+edited address keeps resolving; `/w` kept; `/i` and `/rsvp` retired into 308s;
+the filler stripped from the derivation; every household given an address on
+insert rather than by a button.
+
+**Files.** `supabase/migrations/0022_household_slugs.sql` +
+`supabase/tests/08_household_slugs.sql` (43 assertions);
+`src/lib/site/household-slug.ts` + tests (the same derivation in TypeScript,
+for the editor's suggestion — the two implementations are tested against the
+same cases on purpose); `src/server/rsvp/address.ts` (resolution, alias
+redirect, `addressForToken`); `src/server/rsvp/card.ts` (rekeyed from token to
+address); `src/app/w/[slug]/[household]/` (page + the moved OG image);
+`src/components/site/on-the-day.tsx`; `src/components/guests/household-address.tsx`
+and `setHouseholdSlug()` in `src/server/actions/guests.ts`;
+`isUniqueViolation()` in `src/lib/db-errors.ts`; `householdSiteUrl()` in
+`src/lib/tokens.ts` replacing `invitationUrl`/`invitationCardUrl` **and every
+caller** — invitation email, save-the-date, broadcast, the reminder cron,
+find-my-invitation, `/api/qr`, both print sheets.
+
+**Three judgement calls worth knowing about**, all recorded in the spec's
+build status: a supplied address is never silently redrawn (the first version
+of the trigger did, which would have handed back an address nobody asked for);
+`reissueInvitation` redraws the suffix as well as the token, because otherwise
+a leaked URL keeps working; and the page renders before an invitation exists,
+saying the invitation is on its way, rather than 404ing on a link the planner
+has just copied.
+
+**Loose ends, in the order they would bite:** `0022` is not applied to the
+live project and nothing degrades gracefully without it; nothing here has been
+opened in a browser; the invitations table shows "Copy link" but not the
+address; `revalidatePath("/rsvp/<token>")` in the gallery and travel actions
+now points at a redirect (harmless — the new page is `force-dynamic` — but it
+reads as a leftover); alias rows are never cleaned up, by design.
 
 ## Session 25: A zero is not a figure — the first bug reported from real use
 

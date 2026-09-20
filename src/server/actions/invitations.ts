@@ -9,8 +9,9 @@ import {
   encryptToken,
   generateInviteToken,
   hashInviteToken,
-  invitationUrl,
+  householdSiteUrl,
 } from "@/lib/tokens";
+import { generateSuffix } from "@/lib/site/household-slug";
 import { invitationEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
@@ -128,7 +129,14 @@ async function seedRsvps(
   return ok(undefined);
 }
 
-/** The link itself, decrypted on demand, for copying or printing. */
+/**
+ * The household's link, for copying or printing.
+ *
+ * Spec 21 turned this from "decrypt the token" into "read the address", which
+ * is why it can no longer fail with "this link can't be recovered": the
+ * address is stored in the clear because it is not the whole credential on
+ * its own — `slug_suffix` is, and it is not derived from the pepper.
+ */
 export async function revealInvitationLink(
   invitationId: string,
 ): Promise<ActionResult<{ url: string }>> {
@@ -137,22 +145,21 @@ export async function revealInvitationLink(
 
   const { data, error } = await supabase
     .from("invitations")
-    .select("token_encrypted")
+    .select("households(slug, slug_suffix)")
     .eq("wedding_id", wedding.id)
     .eq("id", invitationId)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (error) return fail(error.message);
-  if (!data) return fail("That invitation no longer exists");
+  if (!data?.households) return fail("That invitation no longer exists");
 
-  const token = decryptToken(data.token_encrypted);
-  if (!token) {
-    return fail(
-      "This link can't be recovered — the token pepper has changed since it was issued. Reissue the invitation.",
-    );
-  }
-  return ok({ url: invitationUrl(token) });
+  return ok({
+    url: householdSiteUrl(wedding.slug, {
+      slug: data.households.slug,
+      suffix: data.households.slug_suffix,
+    }),
+  });
 }
 
 export async function sendInvitation(
@@ -163,7 +170,7 @@ export async function sendInvitation(
 
   const { data: invitation, error } = await supabase
     .from("invitations")
-    .select("id, household_id, token_encrypted, sent_at, households(display_name)")
+    .select("id, household_id, token_encrypted, sent_at, households(display_name, slug, slug_suffix)")
     .eq("wedding_id", wedding.id)
     .eq("id", invitationId)
     .is("deleted_at", null)
@@ -172,6 +179,10 @@ export async function sendInvitation(
   if (error) return fail(error.message);
   if (!invitation) return fail("That invitation no longer exists");
 
+  // The link itself no longer needs the token — the address is stored in the
+  // clear — but a token that will not decrypt means the RSVP form on the other
+  // end cannot take an answer. Sending someone to a page that refuses them is
+  // worse than refusing to send.
   const token = decryptToken(invitation.token_encrypted);
   if (!token) return fail("This invitation's link can't be recovered. Reissue it.");
 
@@ -196,7 +207,10 @@ export async function sendInvitation(
     dateLabel: wedding.wedding_date
       ? formatDate(wedding.wedding_date, wedding.timezone)
       : "date to be confirmed",
-    url: invitationUrl(token),
+    url: householdSiteUrl(wedding.slug, {
+      slug: invitation.households?.slug ?? "",
+      suffix: invitation.households?.slug_suffix ?? "",
+    }),
   });
 
   const sentTo: string[] = [];
@@ -249,10 +263,21 @@ export async function sendInvitation(
 }
 
 /**
- * A new token for a household, invalidating the old link. For the case where
- * an invitation went to the wrong address, or a link was posted somewhere
- * public. The old invitation is soft-deleted rather than overwritten so the
- * history of what was sent survives.
+ * A new link for a household, invalidating the old one. For the case where an
+ * invitation went to the wrong address, or a link was posted somewhere public.
+ * The old invitation is soft-deleted rather than overwritten so the history of
+ * what was sent survives.
+ *
+ * **Spec 21 made this bigger than a new token.** The address is now what a
+ * guest holds, so a reissue that only rotated the token would leave the leaked
+ * URL working — `/w/ray-and-olivia/okonkwo-4f7ak` would still resolve, still
+ * to this household. So the credential half of the address is redrawn too.
+ *
+ * And deliberately **no alias row**: everywhere else an old address is
+ * forwarded to the new one so a link sent in March keeps working, but
+ * forwarding a *leaked* address is precisely what this function exists to
+ * prevent. The readable half is untouched, so the new link still says who it
+ * belongs to.
  */
 export async function reissueInvitation(
   invitationId: string,
@@ -262,7 +287,7 @@ export async function reissueInvitation(
 
   const { data: old, error } = await supabase
     .from("invitations")
-    .select("household_id, invitation_events(event_id)")
+    .select("household_id, invitation_events(event_id), households(slug)")
     .eq("wedding_id", wedding.id)
     .eq("id", invitationId)
     .is("deleted_at", null)
@@ -302,8 +327,22 @@ export async function reissueInvitation(
     if (eventError) return fail(eventError.message);
   }
 
+  // The address's credential half, redrawn. The unique index is on the pair,
+  // and a redraw that collided would be rejected rather than silently shared —
+  // at 33 million per readable name that is not a case worth retrying.
+  const suffix = generateSuffix();
+  const { error: suffixError } = await supabase
+    .from("households")
+    .update({ slug_suffix: suffix })
+    .eq("wedding_id", wedding.id)
+    .eq("id", old.household_id);
+  if (suffixError) return fail(suffixError.message);
+
   revalidatePath("/invitations");
-  return ok({ url: invitationUrl(token) });
+  revalidatePath(`/households/${old.household_id}`);
+  return ok({
+    url: householdSiteUrl(wedding.slug, { slug: old.households?.slug ?? "", suffix }),
+  });
 }
 
 export async function setRemindersMuted(

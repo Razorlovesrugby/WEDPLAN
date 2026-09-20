@@ -1,11 +1,11 @@
 # Spec 21 — A page of their own: per-household addresses on the wedding site
 
-**Status: proposed, fully answered (2026-09-20 — see the next section).
-Nothing is built, schema included.** All eight questions in §9 are settled and
-§§4–8 are rewritten around the answers. This spec revisits a decision spec 14
-already made (Q1: the opaque household token) and the answer to question 1
-keeps that decision's substance — the credential stays unguessable — while
-changing what it looks like.
+**Status: built end to end, 2026-09-20.** All eight questions answered and the
+build authorized the same day. See "Build status" below for what exists and
+what was deliberately left. This spec revisits a decision spec 14 already made
+(Q1: the opaque household token) and the answer to question 1 keeps that
+decision's substance — the credential stays unguessable — while changing what
+it looks like.
 
 **Depends on:** spec 14, built (`weddings.slug`, `/w/[slug]`, the Script theme
 and renderer, `/i/[token]`, `/rsvp/[token]`, the `/site` editor) and V1's
@@ -64,6 +64,79 @@ screen, sender and export would otherwise have to handle.
 
 **Net effect:** nothing here waits on anything outside. The build order in §8
 is unblocked end to end, and the schema is one migration.
+
+
+---
+
+## Build status — 2026-09-20
+
+**All five steps of §8 are built.** `npm run typecheck`, `npm test` (513, up
+from 487), `./scripts/verify-migrations.sh` (304 assertions, up from 261) and
+`npm run build` all pass. The Open Graph image was rendered and looked at; see
+below.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 0 | `households.slug` + `slug_suffix`, `household_slugify()`, `household_slug_base()`, `household_slug_suffix()`, the insert trigger, the backfill, both shape checks, the partial unique index on the pair, `household_slug_aliases` with RLS, `events.guest_note`, `v_households` gaining the address | `supabase/migrations/0022_household_slugs.sql`, `supabase/tests/08_household_slugs.sql` (43 assertions) |
+| 0 | The same derivation in TypeScript, for the editor's suggestion — filler strip, fallbacks, length floor, address parsing, `generateSuffix()` | `src/lib/site/household-slug.ts`, `.test.ts` (18 tests) |
+| 1 | `resolveHouseholdAddress()` — parse, throttle, one household, alias redirect, the token for the form | `src/server/rsvp/address.ts` |
+| 1 | `addressForToken()`, which is what the two retired routes redirect through | same file |
+| 2 | `/w/[slug]/[household]` — hero, countdown, their events, On the day, RSVP, coach, FAQ, photos, boards, in the wedding's theme | `src/app/w/[slug]/[household]/page.tsx` |
+| 2 | Its Open Graph image, moved from `/i` | `src/app/w/[slug]/[household]/opengraph-image.tsx` |
+| 2 | The card resolver, now address-keyed | `src/server/rsvp/card.ts` |
+| 3 | The address on the household screen: copy, edit with a derived suggestion, preview as them | `src/components/guests/household-address.tsx`, `/households/[id]` |
+| 3 | `setHouseholdSlug()` — validate, rename, write the alias, never touch the suffix | `src/server/actions/guests.ts` |
+| 4 | The per-event guest note, in the events editor and on the page | `src/server/actions/events.ts`, `src/components/invitations/events-editor.tsx`, `src/components/site/on-the-day.tsx` |
+| 5 | `/i/[token]` and `/rsvp/[token]` as 308s | those two `page.tsx` files |
+| 5 | `householdSiteUrl()` replacing `invitationUrl()`/`invitationCardUrl()`, and every sender switched: invitation email, save-the-date, broadcast, reminder cron, find-my-invitation, the QR route, both print sheets | `src/lib/tokens.ts` and callers |
+| 5 | `reissueInvitation()` redrawing `slug_suffix` as well as the token, with **no** alias row | `src/server/actions/invitations.ts` |
+
+### Three things the build decided that the spec above did not
+
+1. **A supplied address is never silently changed.** The first version of the
+   insert trigger redrew a colliding suffix even when the caller had supplied
+   one, which meant a deliberate address could come back as a different one.
+   It now redraws only a suffix it drew itself; a supplied collision is
+   rejected by the unique index. `08_household_slugs.sql` §5 pins this.
+2. **`reissueInvitation` is bigger than a new token.** Spec §4 said the suffix
+   is minted once and never changed by an *edit* — but a reissue exists for
+   "this link leaked", and rotating only the token would leave the leaked
+   address working. It redraws the suffix too, and deliberately writes no
+   alias: forwarding a leaked address is exactly what the function prevents.
+3. **The page renders before an invitation exists.** Every household has an
+   address from creation (Q8), so the address can be opened before anything
+   has been sent. Rather than 404 on a link the planner has just copied, the
+   RSVP section says the invitation is on its way. The same branch covers a
+   token that will not decrypt after a pepper rotation.
+
+### Not done, and worth knowing
+
+- **Nothing here has been opened in a browser**, and no query in it has
+  returned a row from a live project. The one exception is the Open Graph
+  image, which was rendered through the real pipeline at
+  `/w/x/short/opengraph-image` (a malformed address short-circuits before any
+  database call) and looked at: 1200×630, both faces loading, the fallback
+  wording correct. That is the same single visual confirmation spec 14 had,
+  carried over to its new home rather than re-earned.
+- **`0022` has not been applied to the live project.** It needs running like
+  any other migration, and until it is, `/households/[id]` and every sender
+  will fail on the missing columns — this is not a graceful degradation like
+  `isSchemaMissing()` covers elsewhere.
+- **The invitations table still says "Copy link" without showing the
+  address.** `revealInvitationLink()` returns the new URL, so the flow is
+  correct; the column that would let the planner scan all of them at once is
+  not built.
+- **`revalidatePath("/rsvp/<token>")` in the gallery and travel actions now
+  points at a redirect.** Harmless — the household page is `force-dynamic`, so
+  there is nothing to invalidate — but it reads as a leftover, because it is.
+- **No bulk rename**, and no way to reissue every address at once. Q8 made
+  minting automatic, so the only bulk operation anyone might want is a
+  break-glass "rotate everything", which is not built.
+- **Alias rows are never cleaned up.** A household renamed five times keeps
+  five rows resolving forever. That is the intended behaviour (Q4) and is
+  worth restating before somebody adds a tidy-up job.
 
 ---
 

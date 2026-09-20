@@ -5,6 +5,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { rankAfter, rankFirst } from "@/lib/rank";
+import { isUniqueViolation } from "@/lib/db-errors";
+import { isValidHouseholdSlug } from "@/lib/site/household-slug";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -196,6 +198,90 @@ export async function updateHousehold(
   revalidatePath("/guests");
   revalidatePath(`/households/${householdId}`);
   return ok(undefined);
+}
+
+/**
+ * Rename the readable half of a household's address (spec 21 §4).
+ *
+ * Three rules, and the first two are why this is its own action rather than a
+ * field on `updateHousehold`:
+ *
+ *   The suffix is never touched. It is the credential; changing it here would
+ *   mean a typo fix silently invalidated an invitation that is already in the
+ *   post. `reissueInvitation` is the deliberate way to change it.
+ *
+ *   The old address is kept, in `household_slug_aliases`, and keeps resolving.
+ *   Without that, "editable" would only be true before anybody had the link.
+ *
+ *   Renaming the household does not rename the address. The editor offers the
+ *   new derivation as a suggestion; taking it is this action, by hand.
+ */
+export async function setHouseholdSlug(
+  householdId: string,
+  rawSlug: string,
+): Promise<ActionResult<{ slug: string }>> {
+  const wedding = await requireWedding();
+  const slug = rawSlug.trim().toLowerCase();
+
+  if (!isValidHouseholdSlug(slug)) {
+    return fail(
+      "That address can only use lowercase letters, numbers and hyphens — and can't be one of the app's own names.",
+      { slug: ["Lowercase letters, numbers and hyphens, 2–64 characters"] },
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: household, error: readError } = await supabase
+    .from("households")
+    .select("slug, slug_suffix")
+    .eq("id", householdId)
+    .eq("wedding_id", wedding.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (readError) return fail(readError.message);
+  if (!household) return fail("That household no longer exists");
+  if (household.slug === slug) return ok({ slug });
+
+  const { error } = await supabase
+    .from("households")
+    .update({ slug })
+    .eq("id", householdId)
+    .eq("wedding_id", wedding.id);
+
+  if (error) {
+    // The unique index is on (wedding_id, slug, slug_suffix), so this only
+    // fires when another household holds the same pair — rare enough that
+    // redrawing behind the planner's back would be more confusing than saying
+    // so.
+    if (isUniqueViolation(error)) {
+      return fail("Another household already has that exact address. Try a different name.");
+    }
+    return fail(error.message);
+  }
+
+  // Recorded after the rename succeeds: an alias for an address the household
+  // never gave up would send people to the wrong page.
+  const { error: aliasError } = await supabase.from("household_slug_aliases").insert({
+    wedding_id: wedding.id,
+    household_id: householdId,
+    slug: household.slug,
+    slug_suffix: household.slug_suffix,
+  });
+
+  // A failed alias insert is not a failed rename. The new address works; the
+  // old one stops working, which is the pre-spec-21 behaviour rather than a
+  // broken state — so it is reported, not rolled back.
+  if (aliasError && !isUniqueViolation(aliasError)) {
+    return fail(
+      `The address is now ${slug}, but the old one could not be kept working: ${aliasError.message}`,
+    );
+  }
+
+  revalidatePath("/guests");
+  revalidatePath("/invitations");
+  revalidatePath(`/households/${householdId}`);
+  return ok({ slug });
 }
 
 export async function removeHousehold(householdId: string): Promise<ActionResult> {
