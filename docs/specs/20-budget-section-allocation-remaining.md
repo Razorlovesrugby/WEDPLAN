@@ -1,9 +1,14 @@
-# Feature spec: Budget — how much of a section's allocation is spoken for
+# Feature spec: Budget — how much of a section's allocation is spoken for, and one estimate column instead of two
 
 **Status: proposed, not built.** Nothing here has been built. Per
-`docs/specs/README.md`, nothing beyond schema is built until §7's Open
+`docs/specs/README.md`, nothing beyond schema is built until §8's Open
 Questions are answered — and this spec's recommendation is that there is no
 schema to build at all (§3), so the questions gate the whole thing.
+
+**Two halves, from one round of feedback on the same screen**, shippable
+independently: §1-§6 add a per-section allocation total ("does 38+30+42 add
+to 100?"), and §7 collapses spec 19's duplicated "Allocated" and
+"Estimated" figures into one column.
 
 **Depends on:** spec 19 (overall budget, percentage allocations,
 allocation-derived estimates), built session 23 and currently unmerged on
@@ -52,6 +57,10 @@ to replace.
   un-percentaged lines are also drawing on the same money.
 - A **live hint while typing a percentage** in the item editor: what this
   line's percentage would take the section to.
+- **Collapsing spec 19's "Allocated" and "Estimated" figures into one
+  column** (§7) — the same number printed twice on any line with no typed
+  estimate. A display fix; the underlying `effective_estimated` model is
+  already exactly what the planner describes.
 
 **Out, explicitly:**
 - **No enforcement, no auto-balancing, no "distribute the remainder"
@@ -90,7 +99,7 @@ its keep only when something *other* than `/budget` needs the figure: the
 dashboard tile, an export, a digest line. Nothing does today.
 
 This is the "prefer the smallest correct change" rule in `CLAUDE.md` applied
-literally, and §7 question 3 is where the planner can overrule it if they
+literally, and §8 question 3 is where the planner can overrule it if they
 already know a second surface is coming.
 
 **What gets added:**
@@ -167,7 +176,56 @@ No new route, no new component file — `CategoryHeader` and
 `BudgetItemFields` both already exist and already receive what this needs,
 except for the category's own line list (§3).
 
-## 7. Open questions
+## 7. One estimate column, not two
+
+A second piece of feedback from the same round, on the same screen:
+
+> Also tbh can combine the "estimate" with the "allocated" — don't need
+> both showing. Estimate should only override if typed in, otherwise it
+> shows the calculation from allocated.
+
+**This is correct and the current row is the mistake.** Spec 19 shipped
+`/budget`'s line as six figures — Allocated, Estimated, Quoted, Contracted,
+Current, Outstanding — and on a line with no typed estimate, the first two
+are *the same number printed twice*. Worse on a GST-exclusive line, where
+they are the same number twice with a 15% gap between them (allocated $480,
+derived estimate $417.39), which reads as a discrepancy rather than as the
+deliberate ÷1.15 of spec 19 §4.
+
+The planner's rule is already exactly how the data works — spec 19's
+`effective_estimated` *is* "typed if typed, else derived from the
+allocation", resolved in the view. The row just failed to show it that way:
+it put the source and the result side by side instead of showing one
+figure. So this is a display fix, not a model change — nothing about
+`allocated_amount`, `effective_estimated` or `estimate_source` moves, and
+no SQL is touched.
+
+**What changes:**
+
+- The **Allocated column is removed.** The row goes back to five figures:
+  Estimate, Quoted, Contracted, Current, Outstanding — the shape it had
+  before spec 19, which is also why the six-column variant never sat right.
+- The **Estimate column shows `effective_estimated`**: what was typed, else
+  what the allocation implies, marked "from allocation" when derived. Spec
+  19 already ships that marker and its muted styling; both stay.
+- **The target is not lost when an estimate is typed.** A line with both
+  gets a small secondary note under the figure — `allocated $320` — so the
+  number being worked against stays on screen without a column of its own.
+  See §8 question 5.
+- On a **GST-exclusive line**, the column shows the estimate figure
+  ($417.39), not the all-in allocation, because it sits in a row with
+  Quoted and Contracted, which are all as-typed, pre-GST figures on such a
+  line. The note then reads `allocated $480 all-in`, reconciling the two in
+  words rather than leaving them looking wrong.
+- The per-line variance line ("$320 over its allocation") is unchanged, and
+  the basis note already carries "10% of Drinks" — so the allocation stays
+  visible in two other places regardless.
+
+**This amends spec 19's §6 screens table** (the "Allocated" figure it added
+to `BudgetItemRow`). Spec 19 needs a one-line pointer to this section
+rather than a rewrite: its model is right, only its row layout changes.
+
+## 8. Open questions
 
 1. **Does the section summary count only lines with a percentage, or should
    an un-percentaged line's estimate count against the section's
@@ -198,23 +256,36 @@ except for the category's own line list (§3).
    settled warn-don't-block for the wedding level, and being over 100% while
    mid-edit is normal.
 
-## 8. Build order
+5. **When a line has both a typed estimate and an allocation, does the
+   target still show anywhere on the row?** *Recommend yes, as §7's small
+   secondary note* (`allocated $320`). Dropping it entirely is simpler and
+   is what the feedback literally asks for, but then a line you have quoted
+   no longer shows what it was *meant* to cost — the comparison the whole
+   allocation feature exists to make — and the variance line beneath it
+   would reference a number that is not on screen.
+
+## 9. Build order
 
 Small enough to be one sitting, but it splits cleanly if it needs to:
 
-1. `sectionAllocation` in `src/lib/budget.ts`, with unit tests (§9) — the
+1. `sectionAllocation` in `src/lib/budget.ts`, with unit tests (§10) — the
    planner's 38/30/42, an exactly-100 case, an under case, lines with no
    percentage, an empty section, and no category target at all.
 2. The summary line in `CategoryHeader`, with the category's lines passed in
    from `/budget`'s existing `itemsByCategory` grouping.
 3. The live "takes Drinks to 110%" clause in `BudgetItemFields`.
 4. The header block's wording alignment (§6, last row).
-5. `npm run typecheck`, `npm test`, `npm run build`. **No
-   `verify-migrations.sh` run is needed if §7 question 3 keeps the pure
+5. §7's column collapse: drop the Allocated figure from `BudgetItemRow`,
+   point the Estimate figure at `effective_estimated`, add the secondary
+   `allocated $320` note, and add the pointer to spec 19's §6 screens
+   table. Independent of steps 1-4 — it can ship first, and is the smaller
+   of the two halves.
+6. `npm run typecheck`, `npm test`, `npm run build`. **No
+   `verify-migrations.sh` run is needed if §8 question 3 keeps the pure
    function** — nothing touches SQL. That flips the moment the answer is
    "the view".
 
-## 9. Test plan
+## 10. Test plan
 
 - **Unit (`src/lib/budget.test.ts`)**: `sectionAllocation` over the
   planner's own three lines (38 + 30 + 42 → 110%, $3,520 of $3,200, $320
@@ -228,7 +299,10 @@ Small enough to be one sitting, but it splits cleanly if it needs to:
   test harness (`docs/HANDOFF.md` §8 — pure logic is where tests live), so
   the rendering is covered by the browser pass rather than by a new testing
   dependency added for this.
-- `npm run typecheck`, `npm test`, `npm run build`.
+- `npm run typecheck`, `npm test`, `npm run build`. §7 adds no logic —
+  `effective_estimated` and `estimate_source` are spec 19's, already
+  asserted in `budget.test.ts` and `supabase/tests/03_budget.sql` — so it
+  needs no new unit test, only the browser check below.
 - **Browser pass** (still never yet possible — no live Supabase project has
   ever been connected): set Drinks to 8% of a $40,000 budget, add the three
   lines at 38/30/42, confirm the top of the section reads 110% and $320
@@ -238,3 +312,10 @@ Small enough to be one sitting, but it splits cleanly if it needs to:
   clear the wedding's overall budget, confirm the percentage half survives
   and the money half disappears; type 50 into a line's allocation field and
   confirm the "takes Drinks to …%" hint updates before saving.
+- **Browser pass, §7**: on a line with an allocation and no typed estimate,
+  confirm one Estimate figure marked "from allocation" and no Allocated
+  column anywhere; type an estimate, confirm it replaces the figure and the
+  `allocated $320` note appears beneath it; clear it again, confirm the
+  derived figure and its marker come back; on a GST-exclusive line, confirm
+  the column shows the pre-GST estimate and the note says what the
+  allocation is all-in.
