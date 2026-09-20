@@ -10,12 +10,16 @@ import { householdPath } from "@/lib/site/household-slug";
 import { themeCssVars } from "@/lib/theme/presets";
 import { NO_COUNTS, flag, resolveSections, text, type SectionKey } from "@/lib/site/sections";
 import { formatDate, daysUntil } from "@/lib/format";
+import { listNames } from "@/lib/invites";
 import { SiteHero } from "@/components/site/hero";
 import { SiteSection } from "@/components/site/section";
 import { Countdown } from "@/components/site/countdown";
 import { Monogram } from "@/components/site/monogram";
 import { FloralRule } from "@/components/site/rule";
-import { Faq, Schedule } from "@/components/site/content";
+import { Faq } from "@/components/site/content";
+import { InvitedEvents } from "@/components/site/invited-events";
+import { ReplyBanner } from "@/components/site/reply-banner";
+import { ViewLogger } from "@/components/site/view-logger";
 import { OnTheDay } from "@/components/site/on-the-day";
 import { CoachBooking } from "@/components/site/coach-booking";
 import { GuestUploader } from "@/components/site/guest-uploader";
@@ -46,6 +50,7 @@ import { getGallerySettings, getHouseholdUploads } from "@/server/queries/galler
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ slug: string; household: string }>;
+type Search = Promise<{ reply?: string; preview?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug, household } = await params;
@@ -101,8 +106,15 @@ function Unavailable({ throttled }: { throttled: boolean }) {
   );
 }
 
-export default async function HouseholdSitePage({ params }: { params: Params }) {
+export default async function HouseholdSitePage({
+  params,
+  searchParams,
+}: {
+  params: Params;
+  searchParams: Search;
+}) {
   const { slug, household: segment } = await params;
+  const { reply, preview } = await searchParams;
 
   const site = await loadSite(slug);
   if (!site) notFound();
@@ -150,6 +162,20 @@ export default async function HouseholdSitePage({ params }: { params: Params }) 
   const countdownDays = wedding.wedding_date ? daysUntil(wedding.wedding_date) : null;
 
   const events = context?.events ?? [];
+  const invites = context?.invites ?? [];
+
+  // Who, in this household, is invited to each event (spec 22 §6). Built once
+  // here and handed down, so the page and the form cannot disagree.
+  const members = (context?.guests ?? []).map((guest) => ({
+    id: guest.id,
+    name: guest.preferred_name?.trim() || guest.first_name,
+  }));
+  const invitedByEvent = new Map(
+    events.map((event) => [
+      event.id,
+      new Set(invites.filter((row) => row.event_id === event.id).map((row) => row.guest_id)),
+    ]),
+  );
   const uploadsOpen = flag(galleryBlock, "uploads_open");
   const moderated =
     !(typeof galleryBlock === "object" && galleryBlock !== null && !Array.isArray(galleryBlock)
@@ -171,10 +197,26 @@ export default async function HouseholdSitePage({ params }: { params: Params }) 
         monogramName={monogramName}
       />
 
+      {/* Counted from the browser, and never when the planner is previewing
+          (spec 22 §9). */}
+      {token ? <ViewLogger token={token} enabled={preview !== "1"} /> : null}
+
       {/* Whose page this is. The one line that makes the address true. */}
       <p className="px-5 pt-10 text-center text-[0.78rem] uppercase tracking-[0.2em] text-muted">
         {household.display_name}
       </p>
+
+      {/* Arrived from the email's Yes or No button (spec 22 §8). The reply is
+          applied client-side by this component, never during the render — mail
+          scanners fetch every link in a message and would otherwise answer on
+          the guest's behalf. */}
+      {token && context && !context.locked && (reply === "yes" || reply === "no") ? (
+        <ReplyBanner
+          token={token}
+          reply={reply}
+          names={listNames(members.map((member) => member.name))}
+        />
+      ) : null}
 
       {showCountdown && countdownDays !== null && wedding.wedding_date ? (
         <Countdown
@@ -187,13 +229,11 @@ export default async function HouseholdSitePage({ params }: { params: Params }) 
       <main>
         {events.length > 0 ? (
           <SiteSection id="schedule" heading="You're invited to">
-            <Schedule
+            <InvitedEvents
               events={events}
-              payload={payloadFor("schedule")}
+              members={members}
+              invitedByEvent={invitedByEvent}
               timeZone={wedding.timezone}
-              // Every event listed here is one they are invited to, so there
-              // is nothing to mark as not-theirs.
-              invitedEventIds={null}
             />
           </SiteSection>
         ) : null}
@@ -222,6 +262,7 @@ export default async function HouseholdSitePage({ params }: { params: Params }) 
               rsvps={context.rsvps}
               answers={context.answers}
               locked={context.locked}
+              invites={context.invites}
             />
           ) : (
             // Every household has an address from the moment it exists (Q8),

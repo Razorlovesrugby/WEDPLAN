@@ -1,9 +1,8 @@
 # Spec 22 — Inviting per event, answering, and knowing they looked
 
-**Status: proposed, fully answered (2026-09-20 — see "Decided" and
-"Answered" below). Nothing is built, schema included.** All six questions in
-§10 are settled and the sections around them are rewritten to match. The
-build order is unblocked end to end.
+**Status: built end to end, 2026-09-20.** All six questions answered and the
+build authorized the same day. See "Build status" below for what exists, the
+three things the build corrected, and what was deliberately left.
 
 **Depends on:** V1's guest list (`guests`, `households`, `invitations`,
 `invitation_events`, `rsvps`), spec 14 (the site and the senders) and spec 21
@@ -15,6 +14,75 @@ things that already exist and can ship on its own; that half is a design
 project. Where they touch — which blocks are personalised, what a guest sees
 of an event they are not invited to — this spec owns the rule and 23 owns the
 rendering.
+
+
+---
+
+## Build status — 2026-09-20
+
+**All five steps of §12 are built.** `npm run typecheck`, `npm test` (540, up
+from 513), `./scripts/verify-migrations.sh` (333 assertions, up from 304),
+`./scripts/verify-migrations-single-tx.sh` and `npm run build` all pass.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 0 | `guest_event_overrides`, `invitation_views`, `rsvp_questions.builtin_key` with its backfill and an insert trigger on `weddings`, `v_guest_event_invites`, `v_household_rsvp` recounted onto it plus `last_viewed_at`/`view_count`, `v_wedding_stats` recounted plus `silent_households` | `supabase/migrations/0023_per_event_invites.sql`, `supabase/tests/09_per_event_invites.sql` (29 assertions) |
+| 0 | **`budget_guest_population` rewritten onto the view** — see correction 1 | same migration |
+| 1 | The state ladder, the menu's actions, what needs confirming, "For Chidi and Ada", the household's event list, outstanding-ness | `src/lib/invites.ts`, `.test.ts` (23 tests) |
+| 2 | Clickable cells with a menu, the override dot, the column-header bulk action, the confirms | `src/components/guests/invite-cell.tsx`, `guests-table.tsx` |
+| 2 | `setHouseholdEventInvite`, `setGuestEventInvite`, `clearGuestEventOverride`, `setEventInviteForHouseholds`, `markInvitationSent`, `setRsvpStatus`, and the pending-row reconciler behind all of them | `src/server/actions/invites.ts` |
+| 2 | The household screen's "everyone here" tick per event, naming anyone singled out | `src/components/guests/household-events.tsx` |
+| 3 | Per-person lines under each event, the RSVP form narrowed per guest, the write path validating per pair | `src/components/site/invited-events.tsx`, `rsvp-form.tsx`, `src/server/actions/rsvp.ts` |
+| 3 | `RsvpContext.invites` — the resolver reads the view instead of `invitation_events` | `src/server/rsvp/resolve.ts` |
+| 4 | One-tap Yes/No in the invitation email, the banner that applies it, the optional decline note | `src/lib/email/templates.ts`, `src/components/site/reply-banner.tsx`, `src/server/actions/reply.ts` |
+| 5 | Open logging with the 30-minute collapse and the preview exclusion; counts on `/invitations`, the household screen and a "Read, no reply" dashboard tile | `src/server/actions/views.ts`, `src/components/site/view-logger.tsx`, `/invitations`, `/households/[id]`, `/` |
+
+### Three corrections the build made
+
+1. **The budget was computing invited-ness itself.** Spec 6's
+   `budget_guest_population` joined `invitations` and `invitation_events`
+   directly to decide who counts toward a per-head cost. Correct when
+   invited-ness was a household fact; with overrides it counts a child taken
+   off the evening do, and the caterer's number disagrees with the guest list
+   screen. It now reads `v_guest_event_invites`, which is what §4's "nothing
+   outside the view does this arithmetic" was for. The catering CSV had the
+   same flaw in TypeScript and was fixed with it.
+2. **The view reported no invitation for events it did not cover.** The first
+   version joined the invitation through `invitation_events`, so
+   `invitation_id` was null exactly when a household was *not* invited to an
+   event — which made the grid say "no invitation yet" and refuse to invite
+   them, on precisely the cell the planner had clicked. Split into two
+   laterals: the household's invitation, and whether it covers this event.
+   Test 12 pins it.
+3. **One-tap replies and open logging both happen in the browser, not on the
+   GET.** A link in an email is fetched by corporate mail scanners and link
+   previewers. A write during the server render would record answers nobody
+   gave and opens nobody made — the number the planner chases on. Scanners do
+   not run JavaScript, so both are applied by a mounted client component.
+   This is not a detail; it is the difference between the feature working and
+   the feature lying.
+
+### Not done, and worth knowing
+
+- **Nothing here has been opened in a browser**, and no query in it has
+  returned a row from a live project. Every claim above is "typechecks,
+  tested, builds".
+- **`0023` has not been applied to the live project** — nor has `0022` from
+  the session before it. They apply in order and both are needed.
+- **The seed carries no invitations**, so a local `supabase db reset` shows a
+  grid of empty cells and a menu that says "create an invitation first". The
+  SQL tests build their own fixture rather than depending on one; making the
+  seed carry invitations would be a good half-hour and would make the feature
+  demonstrable locally.
+- **`site_visits` is still empty**, deliberately (Q5).
+- **The reminder cron was not touched.** It reads `v_household_rsvp`, which
+  now counts per event, so per-event chasing corrected itself — but that path
+  has never run against real data and the change is untested end to end.
+- **No undo on a bulk column action.** "Invite all shown" over eighty
+  households is one confirm and then eighty writes; getting it wrong means
+  clicking "none" and re-ticking, and any per-guest overrides survive both.
 
 ---
 

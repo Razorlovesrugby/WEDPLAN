@@ -36,6 +36,7 @@ export function RsvpForm({
   rsvps,
   answers,
   locked,
+  invites,
 }: {
   token: string;
   guests: GuestRow[];
@@ -44,7 +45,17 @@ export function RsvpForm({
   rsvps: RsvpRow[];
   answers: RsvpAnswerRow[];
   locked: boolean;
+  /**
+   * Who is invited to what, within this household (spec 22 §6). A household
+   * where the kids are not at the evening do gets a form that offers the
+   * evening do to their parents and to nobody else.
+   */
+  invites: { guest_id: string; event_id: string }[];
 }) {
+  // One lookup rather than a filter per guest per event.
+  const invitedPairs = new Set(invites.map((row) => `${row.guest_id}:${row.event_id}`));
+  const eventsFor = (guestId: string) =>
+    events.filter((event) => invitedPairs.has(`${guestId}:${event.id}`));
   const [state, setState] = useState<GuestState[]>(() =>
     guests.map((guest) => ({
       guestId: guest.id,
@@ -52,11 +63,13 @@ export function RsvpForm({
       dietary: guest.dietary ?? "",
       accessibility: guest.accessibility ?? "",
       responses: Object.fromEntries(
-        events.map((event) => [
-          event.id,
-          (rsvps.find((r) => r.guest_id === guest.id && r.event_id === event.id)?.status ??
-            "pending") as RsvpStatus,
-        ]),
+        events
+          .filter((event) => invites.some((i) => i.guest_id === guest.id && i.event_id === event.id))
+          .map((event) => [
+            event.id,
+            (rsvps.find((r) => r.guest_id === guest.id && r.event_id === event.id)?.status ??
+              "pending") as RsvpStatus,
+          ]),
       ),
       answers: Object.fromEntries(
         questions
@@ -157,7 +170,7 @@ export function RsvpForm({
             ) : null}
 
             <div className="mt-4 space-y-3">
-              {events.map((event) => (
+              {eventsFor(guest.id).map((event) => (
                 <div key={event.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm">{event.name}</span>
                   <div className="flex gap-1" role="radiogroup" aria-label={`${guestName(guest)} — ${event.name}`}>

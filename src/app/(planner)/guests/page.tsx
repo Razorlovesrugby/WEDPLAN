@@ -5,6 +5,7 @@ import { SubTabs } from "@/components/sub-tabs";
 import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { countActiveFilters, guestFiltersToQuery, parseGuestFilters } from "@/lib/filters";
 import { listGuests, listHouseholds } from "@/server/queries/guests";
+import { listInvites } from "@/server/queries/invites";
 import { getCollaborators, getCutLines, getEvents, getTags, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Guests" };
@@ -19,13 +20,14 @@ export default async function GuestsPage({
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
 
-  const [guests, tags, events, households, cutLines, collaborators] = await Promise.all([
+  const [guests, tags, events, households, cutLines, collaborators, invites] = await Promise.all([
     listGuests(wedding.id, filters),
     getTags(wedding.id),
     getEvents(wedding.id),
     listHouseholds(wedding.id),
     getCutLines(wedding.id),
     getCollaborators(wedding.id),
+    listInvites(wedding.id),
   ]);
 
   return (
@@ -66,6 +68,7 @@ export default async function GuestsPage({
         events={events}
         households={households}
         collaborators={collaborators}
+        invites={invites}
       />
     </div>
   );

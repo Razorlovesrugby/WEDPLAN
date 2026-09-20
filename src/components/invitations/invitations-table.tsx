@@ -146,7 +146,21 @@ export function InvitationsTable({
                     {row.summary?.sent_at ? formatRelative(row.summary.sent_at) : "—"}
                   </td>
                   <td className="px-3 py-2 text-muted">
-                    {row.summary?.opened_at ? formatRelative(row.summary.opened_at) : "—"}
+                    {/* Every open, not just the first (spec 22 §9): "opened
+                        four times and still hasn't replied" is a different
+                        chasing decision from "never looked". */}
+                    {row.summary?.last_viewed_at ? (
+                      <>
+                        {formatRelative(row.summary.last_viewed_at)}
+                        {(row.summary.view_count ?? 0) > 1 ? (
+                          <span className="ml-1 text-xs">×{row.summary.view_count}</span>
+                        ) : null}
+                      </>
+                    ) : row.summary?.opened_at ? (
+                      formatRelative(row.summary.opened_at)
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {row.summary ? (

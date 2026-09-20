@@ -4,10 +4,12 @@ import { GuestForm } from "@/components/guests/guest-form";
 import { HouseholdForm } from "@/components/guests/household-form";
 import { HouseholdPicker } from "@/components/guests/household-picker";
 import { HouseholdAddress } from "@/components/guests/household-address";
+import { HouseholdEvents } from "@/components/guests/household-events";
 import { AnswerList } from "@/components/questions/answer-list";
 import { getHousehold, listHouseholds } from "@/server/queries/guests";
 import { moveGuest, moveGuests } from "@/server/actions/guests";
 import { getHouseholdAnswers } from "@/server/queries/questions";
+import { listHouseholdInvites } from "@/server/queries/invites";
 import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatRelative, guestName, pluralise } from "@/lib/format";
 import { tierTextClass } from "@/lib/tier-colors";
@@ -15,14 +17,21 @@ import { tierTextClass } from "@/lib/tier-colors";
 export default async function HouseholdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [{ household, guests, invitation, summary }, events, answers, households, collaborators] =
-    await Promise.all([
-      getHousehold(wedding.id, id),
-      getEvents(wedding.id),
-      getHouseholdAnswers(wedding.id, id),
-      listHouseholds(wedding.id),
-      getCollaborators(wedding.id),
-    ]);
+  const [
+    { household, guests, invitation, summary },
+    events,
+    answers,
+    households,
+    collaborators,
+    invites,
+  ] = await Promise.all([
+    getHousehold(wedding.id, id),
+    getEvents(wedding.id),
+    getHouseholdAnswers(wedding.id, id),
+    listHouseholds(wedding.id),
+    getCollaborators(wedding.id),
+    listHouseholdInvites(wedding.id, id),
+  ]);
 
   if (!household) notFound();
 
@@ -31,6 +40,23 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
   const invitedEventIds = new Set(
     ((invitation?.invitation_events ?? []) as { event_id: string }[]).map((e) => e.event_id),
   );
+
+  // Who in this household is set differently from it (spec 22 §5). Named on
+  // the screen rather than hidden: a ticked box with a child excluded
+  // underneath it is otherwise a checkbox that lies.
+  const nameById = new Map(
+    guests.map((guest) => [guest.id, guest.preferred_name?.trim() || guest.first_name]),
+  );
+  const exceptions = new Map<string, { added: string[]; removed: string[] }>();
+  for (const invite of invites) {
+    if (invite.override === null) continue;
+    const name = nameById.get(invite.guest_id);
+    if (!name) continue;
+    const entry = exceptions.get(invite.event_id) ?? { added: [], removed: [] };
+    if (invite.override) entry.added.push(name);
+    else entry.removed.push(name);
+    exceptions.set(invite.event_id, entry);
+  }
 
   return (
     <div className="space-y-5">
@@ -125,20 +151,28 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
                   )}
                 </p>
                 <p className="text-sm text-muted">
-                  {invitation.opened_at
-                    ? `Opened ${formatRelative(invitation.opened_at)}`
-                    : "Not opened yet"}
+                  {summary?.last_viewed_at ? (
+                    <>
+                      Opened {pluralise(summary.view_count, "time")} · last{" "}
+                      {formatRelative(summary.last_viewed_at)}
+                    </>
+                  ) : invitation.opened_at ? (
+                    `Opened ${formatRelative(invitation.opened_at)}`
+                  ) : (
+                    "Not opened yet"
+                  )}
                 </p>
                 <div>
                   <h3 className="text-xs uppercase tracking-wide text-muted">Invited to</h3>
-                  <ul className="mt-1 text-sm">
-                    {events
-                      .filter((event) => invitedEventIds.has(event.id))
-                      .map((event) => (
-                        <li key={event.id}>{event.name}</li>
-                      ))}
-                    {invitedEventIds.size === 0 ? <li className="text-muted">No events yet</li> : null}
-                  </ul>
+                  <div className="mt-1">
+                    <HouseholdEvents
+                      householdId={household.id}
+                      events={events}
+                      invitedEventIds={invitedEventIds}
+                      exceptions={exceptions}
+                      hasInvitation={invitation !== null}
+                    />
+                  </div>
                 </div>
                 {summary ? (
                   <p className="text-sm">

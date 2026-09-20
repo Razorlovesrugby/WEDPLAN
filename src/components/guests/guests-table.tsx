@@ -4,25 +4,20 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { InlineText } from "./inline-text";
 import { HouseholdPicker } from "./household-picker";
+import { InviteCell } from "./invite-cell";
 import { moveGuests, setGuestTags, updateGuest } from "@/server/actions/guests";
+import { setEventInviteForHouseholds } from "@/server/actions/invites";
+import { inviteState } from "@/lib/invites";
 import { guestName, sideLabel } from "@/lib/format";
 import { tierBadgeClass } from "@/lib/tier-colors";
 import type { GuestListItem } from "@/server/queries/guests";
-import type { CollaboratorRow, EventRow, HouseholdView, RsvpStatus, TagRow } from "@/lib/types/database";
-
-const RSVP_LABEL: Record<RsvpStatus, string> = {
-  yes: "Yes",
-  no: "No",
-  maybe: "Maybe",
-  pending: "—",
-};
-
-const RSVP_STYLE: Record<RsvpStatus, string> = {
-  yes: "text-tierA",
-  no: "text-muted line-through",
-  maybe: "text-tierB",
-  pending: "text-muted",
-};
+import type {
+  CollaboratorRow,
+  EventRow,
+  GuestEventInviteView,
+  HouseholdView,
+  TagRow,
+} from "@/lib/types/database";
 
 export function GuestsTable({
   guests,
@@ -30,12 +25,15 @@ export function GuestsTable({
   events,
   households,
   collaborators,
+  invites,
 }: {
   guests: GuestListItem[];
   tags: TagRow[];
   events: EventRow[];
   households: HouseholdView[];
   collaborators: CollaboratorRow[];
+  /** `v_guest_event_invites` for this wedding — who is invited to what. */
+  invites: GuestEventInviteView[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTag, setBulkTag] = useState("");
@@ -43,6 +41,43 @@ export function GuestsTable({
   const [pending, startTransition] = useTransition();
 
   const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+
+  // Keyed lookup rather than a filter per cell: a hundred guests by five
+  // events is five hundred cells, and each one asks this question once.
+  const inviteByPair = useMemo(
+    () => new Map(invites.map((row) => [`${row.guest_id}:${row.event_id}`, row])),
+    [invites],
+  );
+
+  /**
+   * The column header invites or removes every household currently on screen
+   * — which is the filtered set, deliberately: "invite tier A to the evening
+   * do" is the filter plus this button, and doing it to households the
+   * planner cannot see would be a surprise.
+   */
+  function inviteEveryoneShown(event: EventRow, invited: boolean) {
+    const householdIds = [...new Set(guests.map((guest) => guest.household_id))];
+    const verb = invited ? "Invite" : "Remove";
+    if (
+      !window.confirm(
+        `${verb} all ${householdIds.length} households shown ${invited ? "to" : "from"} ${event.name}? Anyone singled out individually keeps the setting you gave them.`,
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const result = await setEventInviteForHouseholds(householdIds, event.id, invited);
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      setMessage(
+        result.data.skipped > 0
+          ? `${result.data.changed} updated · ${result.data.skipped} skipped (no invitation yet)`
+          : `${result.data.changed} households updated`,
+      );
+    });
+  }
   const allSelected = guests.length > 0 && selected.size === guests.length;
 
   function toggle(id: string) {
@@ -143,7 +178,26 @@ export function GuestsTable({
               <th scope="col" className="px-3 py-2">Tags</th>
               {events.map((event) => (
                 <th key={event.id} scope="col" className="px-3 py-2" title={event.name}>
-                  {event.name}
+                  <span className="block">{event.name}</span>
+                  <span className="mt-0.5 block text-[0.65rem] font-normal text-muted">
+                    <button
+                      type="button"
+                      className="hover:underline disabled:opacity-50"
+                      disabled={pending || guests.length === 0}
+                      onClick={() => inviteEveryoneShown(event, true)}
+                    >
+                      invite all
+                    </button>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="hover:underline disabled:opacity-50"
+                      disabled={pending || guests.length === 0}
+                      onClick={() => inviteEveryoneShown(event, false)}
+                    >
+                      none
+                    </button>
+                  </span>
                 </th>
               ))}
             </tr>
@@ -232,11 +286,19 @@ export function GuestsTable({
                     </span>
                   </td>
                   {events.map((event) => {
-                    const status = rsvpByEvent.get(event.id) ?? "pending";
+                    const invite = inviteByPair.get(`${guest.id}:${event.id}`);
                     return (
-                      <td key={event.id} className={`px-3 py-1.5 ${RSVP_STYLE[status]}`}>
-                        {RSVP_LABEL[status]}
-                      </td>
+                      <InviteCell
+                        key={event.id}
+                        guestId={guest.id}
+                        householdId={guest.household_id}
+                        eventId={event.id}
+                        guestName={guestName(guest)}
+                        eventName={event.name}
+                        state={inviteState(invite, rsvpByEvent.get(event.id))}
+                        overridden={invite?.override != null}
+                        hasInvitation={invite?.invitation_id != null}
+                      />
                     );
                   })}
                 </tr>
@@ -248,7 +310,9 @@ export function GuestsTable({
 
       <p className="text-xs text-muted">
         {guests.length} {guests.length === 1 ? "guest" : "guests"} shown. Last name, email, and
-        dietary are editable here; everything else is on the guest page.
+        dietary are editable here; everything else is on the guest page. Click an event cell to
+        invite someone, mark their invitation as sent, or record an answer — a dot means that
+        person is set differently from their household.
       </p>
     </div>
   );

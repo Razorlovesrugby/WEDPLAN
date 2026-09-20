@@ -35,7 +35,19 @@ export type RsvpContext = {
   household: { id: string; display_name: string };
   invitationId: string;
   guests: GuestRow[];
+  /**
+   * Events at least one member of this household is invited to (spec 22 §6).
+   * An event nobody here is invited to does not appear at all — not listed
+   * and marked, as spec 14 §6 had it, because with per-person invites that
+   * rendering prints a named child beside the party they are not at.
+   */
   events: EventRow[];
+  /**
+   * Who, in this household, is invited to which of those events. One row per
+   * invited pair, from `v_guest_event_invites` — the only place the
+   * household-versus-override rule is computed.
+   */
+  invites: { guest_id: string; event_id: string }[];
   questions: RsvpQuestionRow[];
   rsvps: RsvpRow[];
   answers: RsvpAnswerRow[];
@@ -99,7 +111,7 @@ export async function resolveInvitation(rawToken: string): Promise<ResolveResult
   const supabase = createAdminClient();
   const { data: invitation } = await supabase
     .from("invitations")
-    .select("id, wedding_id, household_id, opened_at, invitation_events(event_id)")
+    .select("id, wedding_id, household_id, opened_at")
     .eq("token_hash", hashInviteToken(rawToken))
     .is("deleted_at", null)
     .maybeSingle();
@@ -111,7 +123,20 @@ export async function resolveInvitation(rawToken: string): Promise<ResolveResult
   await recordAttempt(ipHash, true);
 
   const { wedding_id: weddingId, household_id: householdId } = invitation;
-  const invitedEventIds = (invitation.invitation_events ?? []).map((row) => row.event_id);
+
+  // Per person, not per household (spec 22 §4). `invitation_events` still
+  // says what the household is invited to; the view applies the per-guest
+  // exceptions on top, and it is the only thing that does.
+  const { data: inviteRows } = await supabase
+    .from("v_guest_event_invites")
+    .select("guest_id, event_id, invited")
+    .eq("wedding_id", weddingId)
+    .eq("household_id", householdId);
+
+  const invites = (inviteRows ?? [])
+    .filter((row) => row.invited)
+    .map((row) => ({ guest_id: row.guest_id, event_id: row.event_id }));
+  const invitedEventIds = [...new Set(invites.map((row) => row.event_id))];
 
   const [wedding, household, guests, events, questions, rsvps, answers] = await Promise.all([
     supabase
@@ -178,6 +203,9 @@ export async function resolveInvitation(rawToken: string): Promise<ResolveResult
       invitationId: invitation.id,
       guests: guests.data ?? [],
       events: (events.data ?? []) as EventRow[],
+      // Narrowed to the guests still on the list: a soft-deleted guest keeps
+      // their rows, and the form must not offer them.
+      invites: invites.filter((row) => householdGuestIds.has(row.guest_id)),
       questions: questions.data ?? [],
       // Narrowed to this household's own guests. The query above is scoped by
       // wedding and invited events, which is not the same thing.

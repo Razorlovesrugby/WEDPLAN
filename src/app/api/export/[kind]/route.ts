@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCollaborators, getCurrentWedding } from "@/server/queries/wedding";
 import { listGuests } from "@/server/queries/guests";
+import { listInvites } from "@/server/queries/invites";
 import { getItemsForExport } from "@/server/queries/lists";
 import { parseGuestFilters } from "@/lib/filters";
 import { csvDocument } from "@/lib/csv";
@@ -128,8 +129,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
      * dietary and allergy notes attached and children separated out, because
      * children are charged and fed differently. Anyone who has not said yes
      * is not on this list — a caterer counting maybes will over-order.
+     *
+     * A yes only counts for an event they are still invited to (spec 22 §7):
+     * an answer given before somebody was taken off an event survives in the
+     * database on purpose, and it must not walk into the caterer's numbers.
      */
-    const attending = guests.filter((guest) => guest.rsvps.some((r) => r.status === "yes"));
+    const invites = await listInvites(wedding.id);
+    const invitedPairs = new Set(
+      invites.filter((row) => row.invited).map((row) => `${row.guest_id}:${row.event_id}`),
+    );
+    const attending = guests.filter((guest) =>
+      guest.rsvps.some((r) => r.status === "yes" && invitedPairs.has(`${guest.id}:${r.event_id}`)),
+    );
     body = csvDocument(
       ["Name", "Household", "Age band", "Needs a seat", "Dietary", "Accessibility"],
       attending.map((guest) => [

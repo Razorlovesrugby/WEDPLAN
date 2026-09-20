@@ -3,7 +3,54 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 26 — **spec 21 written, answered and built: every
+Last updated: session 27 — **spec 22 written, answered and built: inviting is
+now per person per event, and every open of an invitation is logged.**
+
+`/guests` was already a grid of guests by events with a read-only RSVP status
+in each cell. Those cells are now clickable: invite, remove, mark the
+invitation as sent, or record an answer somebody gave by text message. Who is
+invited is a household fact with per-guest exceptions — `invitation_events`
+still says what the household is invited to, `guest_event_overrides` records
+the deliberate departures, and `v_guest_event_invites` computes
+`coalesce(override, household)` in **one place, which is the rule the whole
+feature turns on**. A bulk household change therefore cannot silently
+re-invite the child somebody removed last week.
+
+**Two earlier decisions were corrected while building, both worth knowing.**
+Spec 6's `budget_guest_population` was computing invited-ness itself by
+joining `invitation_events` — correct when that was a household fact, and
+wrong the moment a child is taken off the evening do, because the caterer's
+number then disagrees with the guest list screen. It reads the view now, and
+the catering CSV had the same flaw in TypeScript. And spec 14 §6's "list every
+event and mark the ones you are not invited to" is replaced: with per-person
+invites that rendering prints a named child beside the party they are not at,
+so an event nobody in the household is invited to is simply not shown.
+
+**The thing most likely to be undone by accident:** one-tap replies and open
+logging both apply from the browser, on mount, never during the server render.
+Corporate mail scanners and link previewers fetch every URL in a message; a
+write on GET would record answers nobody gave and opens nobody made. Scanners
+do not run JavaScript, so that client component is the entire defence. Anybody
+"simplifying" it into the page body breaks the numbers silently.
+
+`0023_per_event_invites.sql` also adds `invitation_views` (no IP, no user
+agent), the built-in decline-note question — stored as a household-scope
+`rsvp_answers` row so it lands where the planner already looks — and recounts
+`v_household_rsvp` and `v_wedding_stats` onto the invites view so an answer
+kept from before an un-invite stops inflating every total. **Neither `0022`
+nor `0023` has been applied to the live project; they apply in order.** 540
+tests (up from 513), 333 SQL assertions (up from 304), typecheck, single-
+transaction check and build all clean. See
+`docs/specs/22-per-event-invite-status-and-tracking.md`.
+
+**Spec 23, the site builder, is written and fully answered but NOT built.**
+It is the other half of the same request and is a design project: a block
+model replacing the twelve fixed sections, draft-then-publish, photo uploads,
+and four widget families. One of its answers reopens spec 14 §11's
+third-party ban (embeds, per block, opt-in) — read §3a there before touching
+it.
+
+Previously: session 26 — **spec 21 written, answered and built: every
 household now has its own readable address on the wedding site.**
 `/w/ray-and-olivia/okonkwo-4f7ak` is the household's own page — the couple's
 hero, only the events that household is invited to, the per-event "on the day"
@@ -199,6 +246,62 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 27: Spec 22 — inviting per event, per person, and knowing they looked
+
+**What was asked:** tick, in Guests, whether a person is included in a
+particular event, with more states than yes/no — "invite sent" among them;
+show the event's details only to people in one of those states; RSVP buttons
+that feed back; and see when they open the link.
+
+**What the discovery pass found:** the grid already had a column per event per
+guest, showing RSVP status and doing nothing when clicked. Invited-ness was a
+household fact set once, at invitation-creation time, with no screen anywhere
+to change it afterwards. "Invite sent" lived in a different table from Yes/No.
+Opens were a single first-open timestamp. So the shape of the work was: make
+the implied model real, and make the cells do what they look like they do.
+
+**The design decision, and why it is not the obvious one.** The planner chose
+household-default-with-per-guest-overrides over a pure per-guest model. The
+naive implementation of that is a materialised row per guest per event — and
+it is wrong, because "add the Okonkwos to the brunch" then becomes a fan-out
+write that silently re-invites the child somebody deliberately removed last
+week. An exceptions table plus one view means the deliberate act survives the
+bulk one. `supabase/tests/09_per_event_invites.sql` §4 is that assertion, and
+it is the test to keep if all the others go.
+
+**Files.** `0023_per_event_invites.sql` (+ 29 SQL assertions);
+`src/lib/invites.ts` + tests (the ladder, the menu's actions, what needs
+confirming, "For Chidi and Ada"); `src/server/queries/invites.ts`;
+`src/server/actions/invites.ts` (six actions and the pending-row reconciler);
+`src/server/actions/reply.ts` and `views.ts`;
+`src/components/guests/invite-cell.tsx` and `household-events.tsx`;
+`src/components/site/invited-events.tsx`, `reply-banner.tsx`,
+`view-logger.tsx`; the resolver, the RSVP form and `submitRsvp` narrowed per
+guest; the invitation email's Yes/No pair; `/invitations` gaining a `silent`
+filter and the dashboard a "Read, no reply" tile.
+
+**Three judgement calls:** a menu rather than a cycling click (six states
+behind one click is a guessing game, and two transitions should never happen
+by accident); an un-invite keeps the answer and stops counting, with a confirm
+naming what they said; and marking as sent from a per-event cell says out loud
+that it covers the whole invitation, because a control that quietly writes a
+household fact erodes trust in the screen.
+
+**A bug caught by its own test, worth repeating.** The first version of
+`v_guest_event_invites` joined the household's invitation *through*
+`invitation_events`, so `invitation_id` was null exactly when the household
+was not invited to that event — the grid then said "no invitation yet" and
+refused to invite them, on precisely the cell the planner had clicked. Two
+laterals now: the invitation, and whether it covers this event. Test 12 pins
+it.
+
+**Loose ends, in the order they would bite:** `0022` and `0023` are not
+applied to the live project; nothing here has been opened in a browser; the
+seed carries no invitations, so a local reset shows an empty grid and the SQL
+tests build their own fixture; the reminder cron corrected itself through the
+recounted view but has never run against real data; and a bulk column action
+has no undo.
 
 ## Session 26: Spec 21 — a page of their own, written, answered and built
 

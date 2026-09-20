@@ -476,6 +476,25 @@ export type HouseholdRow = {
   deleted_at: string | null;
 }
 
+/** A per-guest exception to their household's invitation (spec 22 §4). */
+export type GuestEventOverrideRow = {
+  wedding_id: string;
+  guest_id: string;
+  event_id: string;
+  invited: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One open of a household's invitation. No IP, no user agent (spec 22 §9). */
+export type InvitationViewRow = {
+  id: string;
+  wedding_id: string;
+  household_id: string;
+  viewed_at: string;
+  source: "address" | "token" | "email";
+}
+
 /** A household address that has been replaced, kept so old links still land (spec 21 §4). */
 export type HouseholdSlugAliasRow = {
   wedding_id: string;
@@ -578,6 +597,11 @@ export type RsvpQuestionRow = {
   options: Json;
   sort_order: number;
   active: boolean;
+  /**
+   * Set on questions the app owns rather than the planner — today only
+   * `decline_note` (spec 22 §3a). Null for everything a planner wrote.
+   */
+  builtin_key: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -936,6 +960,22 @@ export type PinterestAccountRow = {
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
+/**
+ * The effective answer to "is this person invited to this event" (spec 22 §4)
+ * — `coalesce(override, household_invited)`, computed in one place.
+ */
+export type GuestEventInviteView = {
+  wedding_id: string;
+  household_id: string;
+  guest_id: string;
+  event_id: string;
+  invited: boolean;
+  household_invited: boolean;
+  override: boolean | null;
+  invitation_id: string | null;
+  sent_at: string | null;
+}
+
 export type HouseholdView = {
   id: string;
   wedding_id: string;
@@ -977,6 +1017,10 @@ export type HouseholdRsvpView = {
   rsvp_no: number;
   rsvp_maybe: number;
   response_state: "none" | "partial" | "complete";
+  /** Most recent open of this household's invitation, or null (spec 22 §9). */
+  last_viewed_at: string | null;
+  /** How many opens in total. Zero, never null. */
+  view_count: number;
 }
 
 export type WeddingStatsView = {
@@ -996,6 +1040,8 @@ export type WeddingStatsView = {
   maybe_guests: number;
   outstanding_guests: number;
   seats_remaining: number | null;
+  /** Sent, opened, and still no answer — the list worth chasing (spec 22 §9). */
+  silent_households: number;
 }
 
 /** `v_timeline_items` — every list_items row with a due_date, joined to its list. See spec 1, section 3. */
@@ -1159,6 +1205,8 @@ export type Database = {
       events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order" | "guest_note">;
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted" | "slug" | "slug_suffix">;
       household_slug_aliases: Table<HouseholdSlugAliasRow, "retired_at">;
+      guest_event_overrides: Table<GuestEventOverrideRow, Timestamps>;
+      invitation_views: Table<InvitationViewRow, "id" | "viewed_at" | "source">;
       cut_lines: Table<CutLineRow, "id" | Timestamps>;
       guests: Table<
         GuestRow,
@@ -1172,7 +1220,15 @@ export type Database = {
       rsvps: Table<RsvpRow, "id" | Timestamps | "status", RsvpRelationships>;
       rsvp_questions: Table<
         RsvpQuestionRow,
-        "id" | Timestamps | "type" | "scope" | "required" | "options" | "sort_order" | "active"
+        | "id"
+        | Timestamps
+        | "type"
+        | "scope"
+        | "required"
+        | "options"
+        | "sort_order"
+        | "active"
+        | "builtin_key"
       >;
       rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at" | "value", RsvpAnswerRelationships>;
       message_log: Table<MessageLogRow, "id" | "created_at" | "channel" | "status">;
@@ -1252,6 +1308,7 @@ export type Database = {
     Views: {
       v_households: View<HouseholdView>;
       v_household_rsvp: View<HouseholdRsvpView>;
+      v_guest_event_invites: View<GuestEventInviteView>;
       v_wedding_stats: View<WeddingStatsView>;
       v_timeline_items: View<TimelineItemView>;
       v_budget_items: View<BudgetItemView>;
