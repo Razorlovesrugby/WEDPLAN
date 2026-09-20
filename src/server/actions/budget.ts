@@ -39,6 +39,19 @@ const optionalUuid = () =>
     .transform((v) => (v === undefined ? undefined : v === "" ? null : v));
 
 const minorUnits = () => z.coerce.number().int().min(0);
+
+/**
+ * One of estimated/quoted/contracted. Blank *and* a typed 0 both store null:
+ * the item editor renders a stored 0 as an empty field, so the two states are
+ * indistinguishable to the planner, and a stored 0 used to outrank every real
+ * number below it in `computed_current`'s ladder (0021, spec 19 §14). A line
+ * that genuinely costs nothing is recorded by leaving the field empty.
+ */
+const optionalSnapshot = () =>
+  z
+    .union([minorUnits(), z.literal("")])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "" || v === 0 ? null : v));
 const optionalMinorUnits = () =>
   z
     .union([minorUnits(), z.literal("")])
@@ -258,9 +271,9 @@ const budgetItemFields = z.object({
   vendor_name: optionalText(200),
   quantity_basis: z.enum(["flat", "per_adult", "per_child", "per_seat", "consumption", "manual"]),
   unit_price: optionalMinorUnits(),
-  estimated: optionalMinorUnits(),
-  quoted: optionalMinorUnits(),
-  contracted: optionalMinorUnits(),
+  estimated: optionalSnapshot(),
+  quoted: optionalSnapshot(),
+  contracted: optionalSnapshot(),
   notes: optionalText(2000),
   /** Multiplier for `manual` (spec 6.1) — unused for every other basis. */
   quantity: optionalQuantity(),

@@ -8,7 +8,7 @@ import { PaymentList } from "./payment-list";
 import { BudgetLinksPopup } from "./budget-links-popup";
 import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields";
 import { formatMoney } from "@/lib/format";
-import { variance as computeVariance } from "@/lib/budget";
+import { variance as computeVariance, filled } from "@/lib/budget";
 import { trimPct } from "./budget-header";
 import type {
   BudgetItemView,
@@ -84,7 +84,11 @@ export function BudgetItemRow({
   const [pending, startTransition] = useTransition();
   const [prompt, setPrompt] = useState(false);
 
-  const variance = item.contracted !== null ? item.contracted - (item.quoted ?? item.contracted) : null;
+  // A zero in either column is not a figure (0021) — comparing against one
+  // produced "Under quote by $7,700.00" on a line that had no contract yet.
+  const contracted = filled(item.contracted);
+  const quoted = filled(item.quoted);
+  const variance = contracted !== null ? contracted - (quoted ?? contracted) : null;
   // Against the line's own allocation (spec 19) — a different question from
   // the contracted-vs-quoted variance above, so both can show at once.
   const allocationVariance = computeVariance(item.computed_current, item.allocated_amount);
@@ -162,8 +166,8 @@ export function BudgetItemRow({
                 : undefined
           }
         />
-        <Figure label="Quoted" value={formatMoney(item.quoted)} />
-        <Figure label="Contracted" value={formatMoney(item.contracted)} />
+        <Figure label="Quoted" value={formatMoney(quoted)} />
+        <Figure label="Contracted" value={formatMoney(contracted)} />
         <Figure label="Current" value={formatMoney(item.computed_current)} strong />
         <Figure
           label="Outstanding"

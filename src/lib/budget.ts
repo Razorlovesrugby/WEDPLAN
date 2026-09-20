@@ -81,6 +81,26 @@ export type BudgetItemInput = {
 // ---------------------------------------------------------------------------
 
 /**
+ * A money snapshot that has actually been filled in — zero is not a figure.
+ *
+ * `estimated`/`quoted`/`contracted` are nullable, but a typed "0" stores a
+ * real 0, and a 0 sitting in the ladder below outranks every genuine number
+ * under it: a line quoted at $7,700 with `contracted = 0` reported a current
+ * figure of $0, which then read as "$4,900 under its allocation" when the
+ * line was in fact $2,800 over it. The rest of the app already treats 0 as
+ * unset — the item editor renders a stored 0 as an empty field, and saving
+ * that empty field writes null — so the ladder was the one place disagreeing.
+ *
+ * A deliberately free line is recorded by leaving the field empty, not by
+ * typing 0; "this vendor charges nothing" and "I haven't got a number yet"
+ * are not worth distinguishing here, and the editor cannot tell them apart
+ * anyway.
+ */
+export function filled(amount: number | null | undefined): number | null {
+  return amount === null || amount === undefined || amount === 0 ? null : amount;
+}
+
+/**
  * A percentage of an amount, in whole minor units. Rounded at every step
  * (never accumulated as a float), so a category's line allocations can land
  * a cent or two off the category's own target — that remainder is real and
@@ -127,11 +147,11 @@ export function allocationEstimate(
  * ever written into `estimated` (spec 19 §2, §4).
  */
 export function effectiveEstimated(item: BudgetItemInput): number | null {
-  return item.estimated ?? allocationEstimate(item.allocatedAmount, item.gstTreatment ?? "inclusive");
+  return filled(item.estimated) ?? allocationEstimate(item.allocatedAmount, item.gstTreatment ?? "inclusive");
 }
 
 export function estimateSource(item: BudgetItemInput): EstimateSource {
-  if (item.estimated !== null && item.estimated !== undefined) return "entered";
+  if (filled(item.estimated) !== null) return "entered";
   if (item.allocatedAmount !== null && item.allocatedAmount !== undefined) return "allocation";
   return "none";
 }
@@ -231,7 +251,10 @@ export function computeCurrent(
   const amount = (() => {
     switch (item.quantityBasis) {
       case "flat":
-        return item.contracted ?? item.quoted ?? effectiveEstimated(item) ?? 0;
+        // Each rung is skipped when it is null OR zero (`filled`) — "the best
+        // number we currently have" means the best REAL number, so a 0 left
+        // in `contracted` can't mask a live quote beneath it.
+        return filled(item.contracted) ?? filled(item.quoted) ?? effectiveEstimated(item) ?? 0;
       case "per_adult":
         return Math.round((item.unitPrice ?? 0) * counts.adult);
       case "per_child":

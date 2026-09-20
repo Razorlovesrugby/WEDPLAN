@@ -571,3 +571,79 @@ select pg_temp.expect(
   null, 'and the category rollup has no target to compare against');
 select pg_temp.expect((select unallocated_amount from public.v_budget_summary where wedding_id = :w1), null, 'nor does the summary');
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- 6. A zero in estimated/quoted/contracted is not a figure (0021)
+-- ---------------------------------------------------------------------------
+-- Reported from the running app: a line quoted at $7,700 with a typed 0 in
+-- `contracted` reported a current figure of $0 and read as "$4,900 under its
+-- allocation (100%)" when it was in fact $2,800 over. The 0 outranked the
+-- quote in coalesce(contracted, quoted, estimated).
+begin;
+set local role service_role;
+
+update public.weddings set total_budget = 5000000 where id = :w1;
+
+insert into public.budget_categories (id, wedding_id, name, allocation_pct) values
+  ('c1000000-0000-4000-8000-000000000001', :w1, 'Venue', 14);
+
+insert into public.budget_items
+  (id, wedding_id, category_id, label, quantity_basis, estimated, quoted, contracted, allocation_pct)
+values
+  -- The screenshot's line, exactly: 70% of Venue's 14% of 5000000 = 490000.
+  ('b0000000-0000-4000-8000-000000000001', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Reception', 'flat', 770000, 770000, 0, 70),
+  -- A zero quote must not mask a real estimate either.
+  ('b0000000-0000-4000-8000-000000000002', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Ceremony', 'flat', 300000, 0, null, null),
+  -- A zero estimate falls through to the line's allocation, exactly as an
+  -- empty one does: 10% of 700000.
+  ('b0000000-0000-4000-8000-000000000003', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Signage', 'flat', 0, null, null, 10),
+  -- Everything genuinely empty still totals zero, not something invented.
+  ('b0000000-0000-4000-8000-000000000004', :w1, 'c1000000-0000-4000-8000-000000000001',
+   'Undecided', 'flat', 0, 0, 0, null);
+
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  770000, 'a zero contracted does not mask the quote beneath it');
+select pg_temp.expect(
+  (select contracted from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  0, 'the stored 0 is left exactly as it was — this is a read-side fix, not a write');
+select pg_temp.expect(
+  (select outstanding from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  770000, 'outstanding follows the corrected current figure');
+select pg_temp.expect(
+  (select allocated_amount from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000001'),
+  490000, 'and its allocation is unchanged at 70% of 700000');
+
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000002'),
+  300000, 'a zero quote does not mask the estimate beneath it');
+
+select pg_temp.expect_text(
+  (select estimate_source from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000003'),
+  'allocation', 'a zero estimate is not an entered estimate');
+select pg_temp.expect(
+  (select effective_estimated from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000003'),
+  70000, 'so the line falls through to its allocation (10% of 700000)');
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000003'),
+  70000, 'and its current figure is that allocation');
+
+select pg_temp.expect(
+  (select computed_current from public.v_budget_items where id = 'b0000000-0000-4000-8000-000000000004'),
+  0, 'a line where every figure really is empty still totals zero');
+
+-- The category rollup the screenshot showed as "$0.00 of $7,000.00 ·
+-- $7,000.00 under (100%)" now reports the line as over its target.
+select pg_temp.expect(
+  (select total_current from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  1140000, 'the category totals the corrected figures (770000 + 300000 + 70000 + 0)');
+select pg_temp.expect(
+  (select variance_amount from public.v_budget_category_totals where category_id = 'c1000000-0000-4000-8000-000000000001'),
+  440000, 'and is over its 700000 target, not 100% under it');
+rollback;

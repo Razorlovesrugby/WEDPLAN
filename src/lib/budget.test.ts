@@ -9,6 +9,7 @@ import {
   consumptionTotal,
   effectiveEstimated,
   estimateSource,
+  filled,
   itemAllocation,
   pctOf,
   sectionAllocation,
@@ -474,5 +475,45 @@ describe("sectionAllocation", () => {
     );
     expect(result.allocatedAmount).toBe(1111 * 3);
     expect(result.allocatedPct).toBe(99.99);
+  });
+});
+
+describe("zero is not a figure", () => {
+  const seedCountsLocal = { adult: 10, child: 1, seat: 11 };
+  const flat = { quantityBasis: "flat" as const, unitPrice: null, estimated: null, quoted: null, contracted: null };
+
+  it("treats a stored 0 as unset", () => {
+    expect(filled(0)).toBeNull();
+    expect(filled(null)).toBeNull();
+    expect(filled(undefined)).toBeNull();
+    expect(filled(7700)).toBe(7700);
+  });
+
+  it("does not let a zero contracted mask a real quote", () => {
+    // The reported bug: quoted $7,700, contracted typed as 0, current read $0.
+    expect(
+      computeCurrent({ ...flat, estimated: 770_000, quoted: 770_000, contracted: 0 }, seedCountsLocal),
+    ).toBe(770_000);
+  });
+
+  it("does not let a zero quote mask a real estimate", () => {
+    expect(computeCurrent({ ...flat, estimated: 500_000, quoted: 0 }, seedCountsLocal)).toBe(500_000);
+  });
+
+  it("falls through a zero estimate to the line's allocation", () => {
+    const item = { ...flat, estimated: 0, allocatedAmount: 256_000 };
+    expect(effectiveEstimated(item)).toBe(256_000);
+    expect(estimateSource(item)).toBe("allocation");
+    expect(computeCurrent(item, seedCountsLocal)).toBe(256_000);
+  });
+
+  it("still reports zero when every figure really is empty", () => {
+    expect(computeCurrent({ ...flat, estimated: 0, quoted: 0, contracted: 0 }, seedCountsLocal)).toBe(0);
+  });
+
+  it("reports the line over its allocation once the quote is the current figure", () => {
+    // The screenshot's line: allocated $4,900, quoted $7,700, contracted 0.
+    const current = computeCurrent({ ...flat, quoted: 770_000, contracted: 0, allocatedAmount: 490_000 }, seedCountsLocal);
+    expect(variance(current, 490_000)).toEqual({ amount: 280_000, pct: 57.14 });
   });
 });

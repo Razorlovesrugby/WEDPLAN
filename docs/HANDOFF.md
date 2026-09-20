@@ -3,7 +3,41 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 24 — spec 20 written, answered and built, on branch
+Last updated: session 25 — a real bug, found by the planner in the running
+app and fixed: **a zero in `estimated`/`quoted`/`contracted` was outranking
+every real figure beneath it.** A line quoted at $7,700 with a typed 0 in
+`contracted` reported a current figure of $0, and therefore "$4,900 under
+its allocation (100%)" on a line that was $2,800 OVER. Spec 6 §3's
+`coalesce(contracted, quoted, estimated)` counted 0 as a perfectly good
+number; the rest of the app already treated 0 as unset (the item editor
+renders a stored 0 as an empty field and saves it back as null), so the
+ladder was the one place disagreeing. `0021_budget_zero_is_not_a_figure.sql`
+is a `CREATE OR REPLACE` of `v_budget_items` adding `nullif(x, 0)` to the
+flat ladder and to `estimate_source` — no column changes, so
+`v_budget_category_totals` and `v_budget_summary` pick up the corrected
+figures without being rebuilt, and no table is written to. `filled()` in
+`src/lib/budget.ts` mirrors it; `optionalSnapshot()` in the actions stops a
+typed 0 being stored at all from now on; `BudgetItemRow` shows a stored 0 as
+"—". 487 tests (up from 481), 261 SQL assertions (up from 250), typecheck
+and build clean. See `docs/specs/19-budget-allocation-percentages.md` §14.
+
+**THE LIVE/BROWSER CAVEAT NO LONGER HOLDS.** Every session since 12 has said
+this app had never run against a real Supabase project or been opened in a
+browser. That changed this session: the planner is running `/budget` against
+real data and sent a screenshot of it. The migrations through `0020` are
+evidently applied. Two things follow — first, `0021` needs applying like any
+other migration; second, **this is now a live app with real data in it**, and
+"the checks pass" stops being a sufficient claim for anything user-facing.
+The bug above is exactly the kind automated checks could not have caught:
+every figure was computed correctly from the data it was given, and the data
+said something nobody meant.
+
+Note the branch topology: session 23's spec 19 work is on
+`claude/wedding-budget-percentages-o0v9kw`, and sessions 24-25 are on
+`claude/budget-section-allocation-remaining`, branched from it. Neither is
+merged. This fix is on the second branch, so it arrives only when both do.
+
+Previously: session 24 — spec 20 written, answered and built, on branch
 `claude/budget-section-allocation-remaining` (which sits on top of session
 23's still-unmerged spec 19 branch, not on `main`). **Two presentation
 fixes to `/budget`, no schema:** (1) every category now shows how much of
@@ -130,6 +164,51 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 25: A zero is not a figure — the first bug reported from real use
+
+**What happened.** The planner sent a screenshot of `/budget` showing a line
+called Reception: allocated $4,900, estimated $7,700, quoted $7,700,
+contracted $0.00, current $0.00, and beneath it "$4,900.00 under its
+allocation (100%)". Their words: "THIS IS SAYING ITS UNDER ITS ALLOCATION.
+BUT ITS NOT, ITS OVER."
+
+**The tell** is that Contracted rendered as `$0.00` rather than `—`, so the
+column held a real 0 rather than a null — the planner had typed one. Spec 6
+§3's ladder, `coalesce(contracted, quoted, estimated)`, treats 0 as a
+perfectly good number, so the zero masked a live $7,700 quote.
+`computed_current` came out $0 and every figure derived from it inherited
+the error: the line's allocation variance, the category rollup above it
+("$0.00 of $7,000.00 · $7,000.00 under (100%)"), the wedding total, the
+per-head figures, `outstanding`.
+
+**The fix, and why it is not the fix that was asked for.** The planner
+prescribed a ladder for the comparison — "if current is filled in use that,
+if not contracted, if not quoted". That is exactly what `computed_current`
+already is; it just counted a zero as filled in. So the rule went one level
+deeper instead: every rung now skips a value that is null **or** zero, which
+corrects the Current column itself and therefore every total at once, rather
+than giving the allocation comparison a private ladder that would disagree
+with the Current figure printed beside it.
+
+**Files:** `0021_budget_zero_is_not_a_figure.sql` (CREATE OR REPLACE of
+`v_budget_items`, `nullif(x, 0)` in the flat ladder and `estimate_source`);
+`filled()` in `src/lib/budget.ts`, applied in `computeCurrent`,
+`effectiveEstimated`, `estimateSource`; `optionalSnapshot()` in
+`src/server/actions/budget.ts` (a typed 0 now saves as null, so the state
+stops being reachable — existing 0s stay and behave as unset);
+`BudgetItemRow` (a stored 0 reads "—", and the contracted-vs-quoted variance
+line no longer fires on one — it was claiming "Under quote by $7,700.00" for
+a line with no contract). `supabase/tests/03_budget.sql` gained a section 6
+that rebuilds the screenshot's exact line as a fixture.
+
+**The judgement call worth knowing about:** a line that genuinely costs
+nothing is now recorded by leaving the field empty, not by typing 0. The
+editor cannot distinguish "this vendor charges nothing" from "I haven't got
+a number yet" — it renders both as blank — and the cost of guessing the
+other way is a real quote silently reading as $0, which is the bug this
+fixes. If a comped line ever needs to be explicitly $0 rather than empty,
+that needs a deliberate mechanism, not a typed zero.
 
 ## Session 24: Spec 20 — section allocation totals, and one estimate column instead of two
 
