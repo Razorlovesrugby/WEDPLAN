@@ -4,13 +4,18 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteBudgetCategory, renameBudgetCategory, setCategoryAllocation } from "@/server/actions/budget";
 import { formatMoney } from "@/lib/format";
+import { sectionAllocation } from "@/lib/budget";
 import { trimPct } from "./budget-header";
-import type { BudgetCategoryRow, BudgetCategoryTotalsView } from "@/lib/types/database";
+import type { BudgetCategoryRow, BudgetCategoryTotalsView, BudgetItemView } from "@/lib/types/database";
 
 /**
  * Rename/delete for one category header on /budget, plus spec 19's
  * allocation: the percentage of the overall budget this category is meant to
  * take, and the rollup of what it currently costs against that target.
+ *
+ * Spec 20 adds the line above that rollup: how much of this section's
+ * allocation its own lines have claimed between them — does 38 + 30 + 42 add
+ * to 100? It does not, and nothing on the page used to say so.
  *
  * Deleting is allowed even with items in it — they fall back to
  * "Uncategorised" (spec 6, section 10, decision 6).
@@ -18,11 +23,14 @@ import type { BudgetCategoryRow, BudgetCategoryTotalsView } from "@/lib/types/da
 export function CategoryHeader({
   category,
   totals,
+  lines,
   hasTotalBudget,
 }: {
   category: BudgetCategoryRow;
   /** This category's row from v_budget_category_totals — absent only if the view and the table disagree. */
   totals?: BudgetCategoryTotalsView;
+  /** This category's own lines, for spec 20's section allocation summary. */
+  lines: BudgetItemView[];
   /** False when the wedding has no overall budget yet: a percentage saves fine, it just has no amount to be a percentage of. */
   hasTotalBudget: boolean;
 }) {
@@ -149,7 +157,82 @@ export function CategoryHeader({
         <p className="text-xs text-muted">Set an overall budget above to turn this percentage into an amount.</p>
       ) : null}
 
+      <SectionAllocationSummary
+        categoryName={category.name}
+        lines={lines}
+        categoryTarget={totals?.allocated_amount ?? null}
+      />
+
       {totals && totals.allocated_amount !== null ? <CategoryRollup totals={totals} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Spec 20: what this section's lines have claimed of its allocation. A
+ * different question from the rollup below it — this one is "how much of the
+ * target has no line claimed yet", not "are we on track to spend it" — so it
+ * gets its own line and its own vocabulary ("left to allocate", never
+ * "under").
+ *
+ * Warn, never block (spec 20 §11, decision 4): 110% shows in the warning
+ * colour and saves exactly like any other number.
+ */
+function SectionAllocationSummary({
+  categoryName,
+  lines,
+  categoryTarget,
+}: {
+  categoryName: string;
+  lines: BudgetItemView[];
+  categoryTarget: number | null;
+}) {
+  const section = sectionAllocation(
+    lines.map((line) => ({ allocationPct: line.allocation_pct })),
+    categoryTarget,
+  );
+  // Nothing to say about a section nobody has given a percentage to.
+  if (section.withPct === 0) return null;
+
+  const over = section.remainingPct < 0;
+  const exact = section.remainingPct === 0;
+
+  return (
+    <div className="text-xs text-muted">
+      <p>
+        <span className={over ? "font-medium text-tierB" : "font-medium text-ink"}>
+          {trimPct(section.allocatedPct)}% of {categoryName} allocated
+        </span>
+        {section.allocatedAmount !== null && categoryTarget !== null ? (
+          <>
+            {" · "}
+            <span className="tabular-nums">
+              {formatMoney(section.allocatedAmount)} of {formatMoney(categoryTarget)}
+            </span>
+          </>
+        ) : null}
+        {exact ? (
+          " · fully allocated"
+        ) : (
+          <>
+            {" · "}
+            <span className={over ? "text-tierB" : ""}>
+              {section.remainingAmount !== null ? `${formatMoney(Math.abs(section.remainingAmount))} ` : ""}
+              {over ? (
+                <>({trimPct(Math.abs(section.remainingPct))}%) over-allocated</>
+              ) : (
+                <>({trimPct(section.remainingPct)}%) left to allocate</>
+              )}
+            </span>
+          </>
+        )}
+      </p>
+      {section.withoutPct > 0 ? (
+        <p>
+          {section.withoutPct} {section.withoutPct === 1 ? "line has" : "lines have"} no % set —{" "}
+          {section.withoutPct === 1 ? "its estimate isn't" : "their estimates aren't"} counted above.
+        </p>
+      ) : null}
     </div>
   );
 }

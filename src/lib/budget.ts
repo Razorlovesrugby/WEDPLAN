@@ -81,6 +81,26 @@ export type BudgetItemInput = {
 // ---------------------------------------------------------------------------
 
 /**
+ * A money snapshot that has actually been filled in — zero is not a figure.
+ *
+ * `estimated`/`quoted`/`contracted` are nullable, but a typed "0" stores a
+ * real 0, and a 0 sitting in the ladder below outranks every genuine number
+ * under it: a line quoted at $7,700 with `contracted = 0` reported a current
+ * figure of $0, which then read as "$4,900 under its allocation" when the
+ * line was in fact $2,800 over it. The rest of the app already treats 0 as
+ * unset — the item editor renders a stored 0 as an empty field, and saving
+ * that empty field writes null — so the ladder was the one place disagreeing.
+ *
+ * A deliberately free line is recorded by leaving the field empty, not by
+ * typing 0; "this vendor charges nothing" and "I haven't got a number yet"
+ * are not worth distinguishing here, and the editor cannot tell them apart
+ * anyway.
+ */
+export function filled(amount: number | null | undefined): number | null {
+  return amount === null || amount === undefined || amount === 0 ? null : amount;
+}
+
+/**
  * A percentage of an amount, in whole minor units. Rounded at every step
  * (never accumulated as a float), so a category's line allocations can land
  * a cent or two off the category's own target — that remainder is real and
@@ -127,13 +147,58 @@ export function allocationEstimate(
  * ever written into `estimated` (spec 19 §2, §4).
  */
 export function effectiveEstimated(item: BudgetItemInput): number | null {
-  return item.estimated ?? allocationEstimate(item.allocatedAmount, item.gstTreatment ?? "inclusive");
+  return filled(item.estimated) ?? allocationEstimate(item.allocatedAmount, item.gstTreatment ?? "inclusive");
 }
 
 export function estimateSource(item: BudgetItemInput): EstimateSource {
-  if (item.estimated !== null && item.estimated !== undefined) return "entered";
+  if (filled(item.estimated) !== null) return "entered";
   if (item.allocatedAmount !== null && item.allocatedAmount !== undefined) return "allocation";
   return "none";
+}
+
+/**
+ * How much of a section's allocation its own lines have claimed between them
+ * (spec 20): the answer to "does 38 + 30 + 42 add to 100?" — it does not, it
+ * adds to 110, which is the whole reason this exists.
+ *
+ * Only lines carrying a percentage count toward the sum (spec 20 §11,
+ * decision 1). Lines without one are counted separately rather than blended
+ * in, so the headline percentage answers the percentage question and a
+ * section with un-percentaged lines can still say so.
+ *
+ * `allocatedAmount` sums each line's own rounded allocation rather than
+ * taking the summed percentage of the target, so it always equals what the
+ * rows themselves show — including their per-line rounding remainders.
+ */
+export function sectionAllocation(
+  lines: { allocationPct: number | null | undefined }[],
+  /** The category's own target in minor units, from `categoryTarget()`. Null when the wedding or the category has no percentage. */
+  categoryTargetAmount: number | null | undefined,
+): {
+  allocatedPct: number;
+  allocatedAmount: number | null;
+  /** 100 minus what's claimed: negative when the section is over-allocated. */
+  remainingPct: number;
+  remainingAmount: number | null;
+  withPct: number;
+  withoutPct: number;
+} {
+  const withPct = lines.filter((l) => l.allocationPct !== null && l.allocationPct !== undefined);
+  // Rounded to the cent-equivalent precision percentages are stored at
+  // (numeric(5,2)), so summing decimals can't drift into 109.99999999999999.
+  const allocatedPct = Math.round(withPct.reduce((sum, l) => sum + (l.allocationPct ?? 0), 0) * 100) / 100;
+  const target = categoryTargetAmount ?? null;
+  const allocatedAmount =
+    target === null ? null : withPct.reduce((sum, l) => sum + (itemAllocation(target, l.allocationPct) ?? 0), 0);
+
+  return {
+    allocatedPct,
+    allocatedAmount,
+    remainingPct: Math.round((100 - allocatedPct) * 100) / 100,
+    remainingAmount: target === null || allocatedAmount === null ? null : target - allocatedAmount,
+    withPct: withPct.length,
+    withoutPct: lines.length - withPct.length,
+  };
 }
 
 /**
@@ -186,7 +251,10 @@ export function computeCurrent(
   const amount = (() => {
     switch (item.quantityBasis) {
       case "flat":
-        return item.contracted ?? item.quoted ?? effectiveEstimated(item) ?? 0;
+        // Each rung is skipped when it is null OR zero (`filled`) — "the best
+        // number we currently have" means the best REAL number, so a 0 left
+        // in `contracted` can't mask a live quote beneath it.
+        return filled(item.contracted) ?? filled(item.quoted) ?? effectiveEstimated(item) ?? 0;
       case "per_adult":
         return Math.round((item.unitPrice ?? 0) * counts.adult);
       case "per_child":

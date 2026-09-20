@@ -112,19 +112,25 @@ export function BudgetHeader({
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Figure label="Budget" value={formatMoney(summary.total_budget)} />
+            {/* Spec 20 §6: worded to match the per-section line, so the
+                same idea reads the same way at both grains. */}
             <Figure
               label="Allocated"
               value={summary.total_allocated_pct !== null ? `${trimPct(summary.total_allocated_pct)}%` : "—"}
-              hint={summary.total_allocated_amount !== null ? formatMoney(summary.total_allocated_amount) : "no category has a % yet"}
+              hint={
+                summary.total_allocated_amount !== null
+                  ? `${formatMoney(summary.total_allocated_amount)} of the budget allocated`
+                  : "no category has a % yet"
+              }
             />
             <Figure
-              label="Unallocated"
-              value={summary.unallocated_amount !== null ? formatMoney(summary.unallocated_amount) : "—"}
+              label={summary.unallocated_amount !== null && summary.unallocated_amount < 0 ? "Over-allocated" : "Left to allocate"}
+              value={summary.unallocated_amount !== null ? formatMoney(Math.abs(summary.unallocated_amount)) : "—"}
               tone={summary.unallocated_amount !== null && summary.unallocated_amount < 0 ? "warn" : undefined}
               hint={
                 summary.unallocated_amount !== null && summary.unallocated_amount < 0
-                  ? "the percentages add up to more than 100%"
-                  : "still to give to a category"
+                  ? "the categories' percentages add up to more than 100%"
+                  : "not yet given to any category"
               }
             />
             <Figure

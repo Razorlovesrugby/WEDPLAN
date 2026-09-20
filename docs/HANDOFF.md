@@ -3,28 +3,62 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 24 — spec 20 written, answered and built same
-session: a **last name column and a real-name "Side" on the guest list.**
-Both `guests.last_name` and `guests.side` already existed (V1) — this was
-a UI-surfacing gap, not a schema one. `GuestsTable` splits its old "Name"
-column into "First name" (still the guest link) and an inline-editable
-"Last name"; a new "Side" badge column reuses spec 15's
-`collaborators.display_name` via a new `sideLabel()` helper
-(`src/lib/format.ts`) so it shows the couple's own names instead of
-"Partner A"/"Partner B" — `partner_a` is the owner collaborator,
-`partner_b` the other one, falling back to "Partner A"/"Partner B" until a
-name is set under Settings → Names. `guest-form.tsx`'s existing Side
-dropdown (the guest edit page) picked up the same labels. The `side`
-filter that already existed end-to-end in `GuestFilters`/`listGuests` but
-had no `FilterBar` control now has one. No migration. Two decisions the
-spec left open were answered the same session (both took the recommended
-option): `partner_a`/`partner_b` map to owner/non-owner collaborator role,
-not an independently assignable field; and Side is a label only — it does
-not change who receives reminder digests or RSVP notifications, which
-still go to both collaborators regardless of a guest's side. `npm test`
-(483, up from 478, +5 for `sideLabel`), `npm run typecheck` and
-`npm run build` all pass. Same live/browser caveat as every session since
-12 — see `docs/specs/20-guest-last-name-column-and-named-sides.md`.
+Last updated: session 25 — a real bug, found by the planner in the running
+app and fixed: **a zero in `estimated`/`quoted`/`contracted` was outranking
+every real figure beneath it.** A line quoted at $7,700 with a typed 0 in
+`contracted` reported a current figure of $0, and therefore "$4,900 under
+its allocation (100%)" on a line that was $2,800 OVER. Spec 6 §3's
+`coalesce(contracted, quoted, estimated)` counted 0 as a perfectly good
+number; the rest of the app already treated 0 as unset (the item editor
+renders a stored 0 as an empty field and saves it back as null), so the
+ladder was the one place disagreeing. `0021_budget_zero_is_not_a_figure.sql`
+is a `CREATE OR REPLACE` of `v_budget_items` adding `nullif(x, 0)` to the
+flat ladder and to `estimate_source` — no column changes, so
+`v_budget_category_totals` and `v_budget_summary` pick up the corrected
+figures without being rebuilt, and no table is written to. `filled()` in
+`src/lib/budget.ts` mirrors it; `optionalSnapshot()` in the actions stops a
+typed 0 being stored at all from now on; `BudgetItemRow` shows a stored 0 as
+"—". 487 tests (up from 481), 261 SQL assertions (up from 250), typecheck
+and build clean. See `docs/specs/19-budget-allocation-percentages.md` §14.
+
+**THE LIVE/BROWSER CAVEAT NO LONGER HOLDS.** Every session since 12 has said
+this app had never run against a real Supabase project or been opened in a
+browser. That changed this session: the planner is running `/budget` against
+real data and sent a screenshot of it. The migrations through `0020` are
+evidently applied. Two things follow — first, `0021` needs applying like any
+other migration; second, **this is now a live app with real data in it**, and
+"the checks pass" stops being a sufficient claim for anything user-facing.
+The bug above is exactly the kind automated checks could not have caught:
+every figure was computed correctly from the data it was given, and the data
+said something nobody meant.
+
+Note the branch topology: session 23's spec 19 work is on
+`claude/wedding-budget-percentages-o0v9kw`, and sessions 24-25 are on
+`claude/budget-section-allocation-remaining`, branched from it. Neither is
+merged. This fix is on the second branch, so it arrives only when both do.
+
+Previously: session 24 — spec 20 written, answered and built, on branch
+`claude/budget-section-allocation-remaining` (which sits on top of session
+23's still-unmerged spec 19 branch, not on `main`). **Two presentation
+fixes to `/budget`, no schema:** (1) every category now shows how much of
+its own allocation its lines have claimed — "110% of Drinks allocated ·
+$3,520 of $3,200 · $320 (10%) over-allocated", plus "n lines have no % set"
+— answering the planner's "does 38+30+42 add to 100?" without them adding
+it up by hand; and (2) spec 19's "Allocated" and "Estimated" figures are
+collapsed into one Estimate column, since on a line with nothing typed they
+printed the same number twice (and on a GST-exclusive line, the same number
+twice with a 15% gap that read as an error). The target survives as a
+secondary note (`allocated $320`) so the per-line variance still refers to
+something on screen. New `sectionAllocation` in `src/lib/budget.ts`;
+`npm test` 481 (up from 473); `npm run typecheck` and `npm run build`
+clean; `./scripts/verify-migrations.sh` re-run at 250 assertions, unchanged
+— **nothing in this session touched SQL.** See
+`docs/specs/20-budget-section-allocation-remaining.md` §12.
+
+**Worth knowing for whoever picks this up:** two feature branches are open
+and unmerged, and 20 depends on 19. Neither has been opened in a browser,
+and spec 20 is *entirely* presentation — it is the session whose work a
+browser pass would most easily invalidate.
 
 Previously: session 23 — spec 19 written, answered and built: **the
 budget now has a top-down half.** One overall budget on the wedding, a
@@ -130,6 +164,95 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 25: A zero is not a figure — the first bug reported from real use
+
+**What happened.** The planner sent a screenshot of `/budget` showing a line
+called Reception: allocated $4,900, estimated $7,700, quoted $7,700,
+contracted $0.00, current $0.00, and beneath it "$4,900.00 under its
+allocation (100%)". Their words: "THIS IS SAYING ITS UNDER ITS ALLOCATION.
+BUT ITS NOT, ITS OVER."
+
+**The tell** is that Contracted rendered as `$0.00` rather than `—`, so the
+column held a real 0 rather than a null — the planner had typed one. Spec 6
+§3's ladder, `coalesce(contracted, quoted, estimated)`, treats 0 as a
+perfectly good number, so the zero masked a live $7,700 quote.
+`computed_current` came out $0 and every figure derived from it inherited
+the error: the line's allocation variance, the category rollup above it
+("$0.00 of $7,000.00 · $7,000.00 under (100%)"), the wedding total, the
+per-head figures, `outstanding`.
+
+**The fix, and why it is not the fix that was asked for.** The planner
+prescribed a ladder for the comparison — "if current is filled in use that,
+if not contracted, if not quoted". That is exactly what `computed_current`
+already is; it just counted a zero as filled in. So the rule went one level
+deeper instead: every rung now skips a value that is null **or** zero, which
+corrects the Current column itself and therefore every total at once, rather
+than giving the allocation comparison a private ladder that would disagree
+with the Current figure printed beside it.
+
+**Files:** `0021_budget_zero_is_not_a_figure.sql` (CREATE OR REPLACE of
+`v_budget_items`, `nullif(x, 0)` in the flat ladder and `estimate_source`);
+`filled()` in `src/lib/budget.ts`, applied in `computeCurrent`,
+`effectiveEstimated`, `estimateSource`; `optionalSnapshot()` in
+`src/server/actions/budget.ts` (a typed 0 now saves as null, so the state
+stops being reachable — existing 0s stay and behave as unset);
+`BudgetItemRow` (a stored 0 reads "—", and the contracted-vs-quoted variance
+line no longer fires on one — it was claiming "Under quote by $7,700.00" for
+a line with no contract). `supabase/tests/03_budget.sql` gained a section 6
+that rebuilds the screenshot's exact line as a fixture.
+
+**The judgement call worth knowing about:** a line that genuinely costs
+nothing is now recorded by leaving the field empty, not by typing 0. The
+editor cannot distinguish "this vendor charges nothing" from "I haven't got
+a number yet" — it renders both as blank — and the cost of guessing the
+other way is a real quote silently reading as $0, which is the bug this
+fixes. If a comped line ever needs to be explicitly $0 rather than empty,
+that needs a deliberate mechanism, not a typed zero.
+
+## Session 24: Spec 20 — section allocation totals, and one estimate column instead of two
+
+**Two pieces of feedback on spec 19's screen, one round, one spec** (the
+repo has precedent for condensing rather than splitting — see specs 15-17).
+Both halves are presentation; neither touches the database.
+
+**Half one — "does 38+30+42 add to 100?"** Spec 19 answered "have I
+allocated all of it?" at the wedding level and nowhere else. Now every
+category carries a line above its rollup: the percentage its lines claim
+between them, that figure in money, and what is left to allocate — or, at
+110%, what it is over-allocated by, in the warning colour. Lines with no
+percentage are counted separately ("1 line has no % set — its estimate
+isn't counted above") rather than blended into the sum, so the headline
+answers the percentage question it was asked. The item editor gained a
+matching live clause: "takes Drinks to 110%", before saving rather than
+after.
+
+**Half two — one estimate column.** Spec 19's row printed Allocated and
+Estimated side by side; on a line with no typed estimate they were the same
+number twice, and on a GST-exclusive line the same number twice with a 15%
+gap that reads as a discrepancy rather than as the deliberate ÷1.15. The
+model was already right — `effective_estimated` *is* "typed if typed, else
+derived" — so the fix was display-only: drop the column, show
+`effective_estimated`, keep the "from allocation" marker, and when a line
+has both a typed estimate and an allocation keep the target as a secondary
+note (`allocated $320`, or `allocated $480 all-in` when exclusive) so the
+variance line beneath it still refers to a number on screen.
+
+**Deliberately no schema.** The four-columns-on-`v_budget_category_totals`
+alternative is written up in spec 20 §3 and was rejected for now (§11
+decision 3): `/budget` already holds every line with its `allocation_pct`,
+so a pure function can't disagree with the page's own numbers, and there is
+no second surface needing the figure. Revisit if a dashboard stat or an
+export ever wants it.
+
+**Files:** `src/lib/budget.ts` (+`sectionAllocation`) and its tests;
+`src/components/budget/category-header.tsx` (new
+`SectionAllocationSummary`), `budget-item-fields.tsx` (the live clause,
+`siblingAllocationPct`), `budget-item-row.tsx` (the column collapse),
+`add-budget-item-form.tsx`, `budget-header.tsx` (wording aligned with the
+per-section line); `src/app/(planner)/budget/page.tsx`. Spec 19's §6
+screens table gained a pointer recording that its "Allocated" figure is
+superseded.
 
 ## Session 23: Spec 19 — an overall budget, percentage allocations, and allocation-derived estimates
 

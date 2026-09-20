@@ -307,7 +307,7 @@ doesn't enforce (§2, §9 question 3).
 | --- | --- |
 | `/budget` | **A budget header block**, above the existing five summary figures: the overall budget (inline-editable, empty state "Set an overall budget to allocate by percentage"), total allocated as % and $, unallocated $, and current total vs. budget with its over/under. The existing Estimated/Quoted/Contracted/Paid/Outstanding row stays as-is beneath it. |
 | `/budget` | **Per category header** (`category-header.tsx`): a small `%` input beside the name, showing the target amount live as you type ("12% · $4,800"), then the rollup — current, variance in $ and %, and actual share — with a thin bar making over/under visible at a glance. A category with no percentage shows a muted "Set %" affordance and nothing else, so an un-allocated wedding's page looks like it does today. |
-| `/budget` | **Per line** (`budget-item-fields.tsx`, `budget-item-row.tsx`): an "Allocation %" field next to the estimate, with a live hint under it — "10% of Drinks ($3,200) = $320" — and, when the estimate field is empty, the estimate showing that derived figure greyed with an "from allocation" marker rather than blank. The row shows target vs. current and its variance the same way the category header does. When the category has no percentage or the wedding has no overall budget, the field is still editable but the hint reads "Set a % on Drinks to turn this into an amount" — allocations entered in any order eventually resolve. |
+| `/budget` | **Per line** (`budget-item-fields.tsx`, `budget-item-row.tsx`): an "Allocation %" field next to the estimate, with a live hint under it — "10% of Drinks ($3,200) = $320" — and, when the estimate field is empty, the estimate showing that derived figure greyed with an "from allocation" marker rather than blank. **Superseded in part by spec 20 §7:** the separate "Allocated" figure this row description adds was the same number printed twice on a line with nothing typed, and is now one Estimate column with the target as a secondary note. The row shows target vs. current and its variance the same way the category header does. When the category has no percentage or the wedding has no overall budget, the field is still editable but the hint reads "Set a % on Drinks to turn this into an amount" — allocations entered in any order eventually resolve. |
 | `/budget` | **"Suggest percentages"** (§8) in the header block, when at least one category has no allocation yet. |
 | `/` (dashboard) | The existing Budget tile gains one line: overall budget vs. current total, with the same over/under colouring the Outstanding figure already uses. No new query — it already reads `v_budget_summary`. |
 | `/guests/rank` | Unchanged. Its per-seat figure reads `computed_current` (spec 18 §6) and picks up allocation-derived estimates on flat lines for free. |
@@ -625,3 +625,68 @@ overall budget degrading every line to its pre-spec-19 behaviour), and
 **Not verified, same caveat as every session since 12:** none of this has
 run against a live Supabase project, and nothing has been opened in a
 browser. §11's browser pass is still outstanding in full.
+
+## 14. Correction (2026-09-20): a zero is not a figure
+
+**Reported from the running app**, with a screenshot — the first feedback on
+this feature from real data rather than from reading the spec:
+
+> Reception — Allocated $4,900.00 · Estimated $7,700.00 · Quoted $7,700.00 ·
+> Contracted $0.00 · Current $0.00 · "$4,900.00 under its allocation (100%)"
+>
+> "THIS IS SAYING ITS UNDER ITS ALLOCATION. BUT ITS NOT, ITS OVER."
+
+Correct, and the fault is in the ladder, not the allocation. `contracted`
+held a real **0** (a typed zero, not an empty field), and spec 6 §3's
+`coalesce(contracted, quoted, estimated)` treats 0 as a perfectly good
+number — so the zero masked a live $7,700 quote, `computed_current` came out
+$0, and every figure derived from it inherited the error: the line read
+"100% under its allocation", the category rollup read "$0.00 of $7,000.00 ·
+$7,000.00 under (100%)", and the wedding total was short by the same amount.
+
+**The rule, as the planner stated it:** use the most relevant field — current
+if it's filled in, else contracted, else quoted.
+
+**The fix is that rule applied one level deeper.** `computed_current` *is*
+already that ladder; it just counted a zero as filled in. Each rung now skips
+a value that is null **or** zero, so:
+
+- the Current column shows the quote, as it should have all along;
+- the allocation variance, the category rollup, the wedding total, the
+  per-head figures and `outstanding` all correct themselves at once, because
+  they all read `computed_current`;
+- and nothing needs a second, private ladder that could disagree with the
+  Current column printed beside it.
+
+This is also the reading the rest of the app already had: the item editor
+renders a stored 0 as an empty field (`initial?.contracted ? … : ""`), and
+saving that empty field writes null. The ladder was the one place
+disagreeing with everything around it.
+
+**Shipped as:**
+- `supabase/migrations/0021_budget_zero_is_not_a_figure.sql` — a
+  `CREATE OR REPLACE` of `v_budget_items` adding `nullif(x, 0)` to the flat
+  ladder and to `estimate_source`. No column changes, so
+  `v_budget_category_totals` and `v_budget_summary` pick the corrected
+  figures up without being rebuilt, and no table is written to.
+- `filled()` in `src/lib/budget.ts`, applied in `computeCurrent`,
+  `effectiveEstimated` and `estimateSource` — the pure mirror of the same
+  rule.
+- `optionalSnapshot()` in `src/server/actions/budget.ts`: a typed 0 now
+  saves as null for `estimated`/`quoted`/`contracted`, so the state stops
+  being reachable for new writes. Existing rows keep their 0 and simply
+  behave as unset.
+- `BudgetItemRow` renders a stored 0 as "—" rather than "$0.00", and its
+  contracted-vs-quoted variance line no longer fires on one (that line was
+  reporting "Under quote by $7,700.00" for a line with no contract).
+
+**A deliberately free line** is recorded by leaving the field empty, not by
+typing 0. "This vendor charges nothing" and "I haven't got a number yet"
+are not distinguishable in this editor, and the cost of guessing wrong the
+other way — a real quote silently reading as $0 — is what this correction
+exists to prevent.
+
+**Verification:** 6 new unit cases (487 total), 11 new SQL assertions (261
+total) including the screenshot's exact line rebuilt as a fixture, and its
+category rollup asserted as over rather than 100% under. `npm run
+typecheck` and `npm run build` clean.

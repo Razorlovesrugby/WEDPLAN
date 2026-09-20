@@ -8,7 +8,7 @@ import { PaymentList } from "./payment-list";
 import { BudgetLinksPopup } from "./budget-links-popup";
 import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields";
 import { formatMoney } from "@/lib/format";
-import { variance as computeVariance } from "@/lib/budget";
+import { variance as computeVariance, filled } from "@/lib/budget";
 import { trimPct } from "./budget-header";
 import type {
   BudgetItemView,
@@ -40,6 +40,7 @@ export function BudgetItemRow({
   item,
   categoryName,
   categoryAllocatedAmount,
+  siblingAllocationPct,
   events,
   components,
   payments,
@@ -56,6 +57,8 @@ export function BudgetItemRow({
   categoryName: string;
   /** The category's own target in minor units, or null when the wedding or the category has no percentage. */
   categoryAllocatedAmount: number | null;
+  /** What the rest of this section's lines claim between them (spec 20), for the editor's "takes Drinks to 110%" hint. */
+  siblingAllocationPct: number;
   events: EventRow[];
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
@@ -81,7 +84,11 @@ export function BudgetItemRow({
   const [pending, startTransition] = useTransition();
   const [prompt, setPrompt] = useState(false);
 
-  const variance = item.contracted !== null ? item.contracted - (item.quoted ?? item.contracted) : null;
+  // A zero in either column is not a figure (0021) — comparing against one
+  // produced "Under quote by $7,700.00" on a line that had no contract yet.
+  const contracted = filled(item.contracted);
+  const quoted = filled(item.quoted);
+  const variance = contracted !== null ? contracted - (quoted ?? contracted) : null;
   // Against the line's own allocation (spec 19) — a different question from
   // the contracted-vs-quoted variance above, so both can show at once.
   const allocationVariance = computeVariance(item.computed_current, item.allocated_amount);
@@ -140,21 +147,27 @@ export function BudgetItemRow({
         </div>
       </div>
 
-      <div className={`grid grid-cols-2 gap-x-4 gap-y-1 text-sm ${item.allocated_amount !== null ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
-        {item.allocated_amount !== null ? (
-          <Figure label="Allocated" value={formatMoney(item.allocated_amount)} />
-        ) : null}
-        {/* A derived estimate is shown greyed and marked: it's a number
-            nobody typed (spec 19 §4), and the row should never let that pass
-            for a real one. */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-5">
+        {/* Spec 20 §7: one Estimate figure, never an Allocated column beside
+            it — on a line with nothing typed the two were the same number
+            twice. What shows is `effective_estimated`: typed if typed, else
+            derived from the allocation and marked as such, so a figure
+            nobody entered never passes for a real one. When both exist, the
+            target stays as a note rather than a column (§11, question 5). */}
         <Figure
-          label="Estimated"
-          value={formatMoney(item.estimate_source === "allocation" ? item.effective_estimated : item.estimated)}
+          label="Estimate"
+          value={formatMoney(item.effective_estimated)}
           muted={item.estimate_source === "allocation"}
-          note={item.estimate_source === "allocation" ? "from allocation" : undefined}
+          note={
+            item.estimate_source === "allocation"
+              ? "from allocation"
+              : item.allocated_amount !== null
+                ? `allocated ${formatMoney(item.allocated_amount)}${item.gst_treatment === "exclusive" ? " all-in" : ""}`
+                : undefined
+          }
         />
-        <Figure label="Quoted" value={formatMoney(item.quoted)} />
-        <Figure label="Contracted" value={formatMoney(item.contracted)} />
+        <Figure label="Quoted" value={formatMoney(quoted)} />
+        <Figure label="Contracted" value={formatMoney(contracted)} />
         <Figure label="Current" value={formatMoney(item.computed_current)} strong />
         <Figure
           label="Outstanding"
@@ -195,6 +208,7 @@ export function BudgetItemRow({
             pending={pending}
             categoryName={categoryName}
             categoryAllocatedAmount={categoryAllocatedAmount}
+            siblingAllocationPct={siblingAllocationPct}
             onSubmit={onSave}
             onCancel={() => setEditing(false)}
           />

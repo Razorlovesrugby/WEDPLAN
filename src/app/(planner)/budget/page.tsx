@@ -17,6 +17,7 @@ import { AddBudgetItemForm } from "@/components/budget/add-budget-item-form";
 import { BudgetItemRow } from "@/components/budget/budget-item-row";
 import { PaymentCalendar } from "@/components/budget/payment-calendar";
 import { formatMoney, pluralise } from "@/lib/format";
+import { sectionAllocation } from "@/lib/budget";
 
 export const metadata = { title: "Budget" };
 
@@ -122,11 +123,19 @@ export default async function BudgetPage({
             const categoryItems = itemsByCategory.get(category.id) ?? [];
             const totals = totalsByCategory.get(category.id);
             const categoryAllocatedAmount = totals?.allocated_amount ?? null;
+            // Spec 20: the section's own percentage total, computed here
+            // once from rows this page already holds — no view column, no
+            // second query (spec 20 §3, §11 decision 3).
+            const section = sectionAllocation(
+              categoryItems.map((i) => ({ allocationPct: i.allocation_pct })),
+              categoryAllocatedAmount,
+            );
             return (
               <section key={category.id} className="card p-4">
                 <CategoryHeader
                   category={category}
                   totals={totals}
+                  lines={categoryItems}
                   hasTotalBudget={summary?.total_budget !== null && summary?.total_budget !== undefined}
                 />
                 {categoryItems.length === 0 ? (
@@ -139,6 +148,9 @@ export default async function BudgetPage({
                         item={item}
                         categoryName={category.name}
                         categoryAllocatedAmount={categoryAllocatedAmount}
+                        siblingAllocationPct={
+                          Math.round((section.allocatedPct - (item.allocation_pct ?? 0)) * 100) / 100
+                        }
                         events={events}
                         components={componentsByItem.get(item.id) ?? []}
                         payments={paymentsByItem.get(item.id) ?? []}
@@ -158,6 +170,7 @@ export default async function BudgetPage({
                     categoryId={category.id}
                     categoryName={category.name}
                     categoryAllocatedAmount={categoryAllocatedAmount}
+                    siblingAllocationPct={section.allocatedPct}
                     events={events}
                   />
                 </div>
