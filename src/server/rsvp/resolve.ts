@@ -49,8 +49,14 @@ export type ResolveFailure =
 
 export type ResolveResult = { ok: true; context: RsvpContext } | { ok: false } & ResolveFailure;
 
-/** Best-effort client address, hashed before it is ever stored. */
-async function clientIpHash(): Promise<string> {
+/**
+ * Best-effort client address, hashed before it is ever stored.
+ *
+ * Exported for `address.ts`, which resolves the other form of the same
+ * credential (spec 21) and must share one throttle rather than opening a
+ * second, unthrottled way in.
+ */
+export async function clientIpHash(): Promise<string> {
   const headerList = await headers();
   const forwarded = headerList.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() || headerList.get("x-real-ip") || "unknown";
@@ -62,7 +68,7 @@ async function clientIpHash(): Promise<string> {
  * 32-byte token is not going to be guessed. What it really buys is that a
  * script hammering the endpoint stops being free.
  */
-async function isThrottled(ipHash: string): Promise<boolean> {
+export async function isThrottled(ipHash: string): Promise<boolean> {
   const supabase = createAdminClient();
   const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
 
@@ -79,7 +85,7 @@ async function isThrottled(ipHash: string): Promise<boolean> {
   return (count ?? 0) >= MAX_FAILURES_PER_WINDOW;
 }
 
-async function recordAttempt(ipHash: string, succeeded: boolean): Promise<void> {
+export async function recordAttempt(ipHash: string, succeeded: boolean): Promise<void> {
   const supabase = createAdminClient();
   await supabase.from("rsvp_token_attempts").insert({ ip_hash: ipHash, succeeded });
 }

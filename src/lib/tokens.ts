@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { absoluteUrl, serverEnv } from "./env";
+import { householdPath, type HouseholdAddress } from "./site/household-slug";
 
 /**
  * Invitation tokens.
@@ -113,21 +114,23 @@ export function decryptToken(payload: string): string | null {
   }
 }
 
-/** The link a household actually follows. */
-export function invitationUrl(token: string): string {
-  return absoluteUrl(`/rsvp/${token}`);
-}
-
 /**
- * The stationery card for the same household (spec 14 §12.2).
+ * The link a household actually follows (spec 21 Q6).
  *
- * The same token, a different page: `/i` is the card you forward over
- * WhatsApp, `/rsvp` is the form. Sharing one token across both is what makes
- * "one link per household for the life of the wedding" true, so a QR code
- * printed on paper and a link pasted into a chat lead to the same place.
+ * This used to be `/rsvp/<token>`, with `/i/<token>` beside it for the card.
+ * Both still resolve — every invitation already sent points at one of them,
+ * and a printed QR code cannot be reissued — but they are permanent redirects
+ * now, and nothing should mint one. There is one link per household and this
+ * builds it.
+ *
+ * The token is still the credential the RSVP actions take; it is simply no
+ * longer what the guest sees. Note what that means for the two halves: the
+ * readable slug can be edited without breaking anything (the old address is
+ * aliased), while a change of `slug_suffix` is a change of credential and is
+ * exactly what `reissueInvitation` does.
  */
-export function invitationCardUrl(token: string): string {
-  return absoluteUrl(`/i/${token}`);
+export function householdSiteUrl(weddingSlug: string, address: HouseholdAddress): string {
+  return absoluteUrl(householdPath(weddingSlug, address));
 }
 
 // ---------------------------------------------------------------------------

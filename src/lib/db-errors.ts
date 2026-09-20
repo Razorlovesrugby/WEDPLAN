@@ -42,3 +42,16 @@ export function isSchemaMissing(error: DbErrorish): boolean {
   const message = error.message ?? "";
   return /schema cache/i.test(message) && /could not find/i.test(message);
 }
+
+/**
+ * True for a unique-constraint violation.
+ *
+ * PostgREST passes `23505` straight through, so unlike the schema codes above
+ * there is only one to match — the message fallback is for a driver that
+ * reports the constraint without the code.
+ */
+export function isUniqueViolation(error: DbErrorish): boolean {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  return /duplicate key value violates unique constraint/i.test(error.message ?? "");
+}

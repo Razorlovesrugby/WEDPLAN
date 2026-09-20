@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { GuestForm } from "@/components/guests/guest-form";
 import { HouseholdForm } from "@/components/guests/household-form";
 import { HouseholdPicker } from "@/components/guests/household-picker";
+import { HouseholdAddress } from "@/components/guests/household-address";
 import { AnswerList } from "@/components/questions/answer-list";
 import { getHousehold, listHouseholds } from "@/server/queries/guests";
 import { moveGuest, moveGuests } from "@/server/actions/guests";
@@ -51,6 +52,15 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
 
       <div className="grid gap-5 lg:grid-cols-[2fr,1fr]">
         <div className="space-y-5">
+          <HouseholdAddress
+            weddingSlug={wedding.slug}
+            householdId={household.id}
+            displayName={household.display_name}
+            slug={household.slug}
+            suffix={household.slug_suffix}
+            hasInvitation={invitation !== null}
+          />
+
           <HouseholdForm household={household} />
 
           <section>

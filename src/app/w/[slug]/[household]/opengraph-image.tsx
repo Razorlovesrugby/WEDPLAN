@@ -1,13 +1,14 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveCard } from "@/server/rsvp/card";
+import { resolveCardByAddress } from "@/server/rsvp/card";
 import { themeTokens } from "@/lib/theme/presets";
 import { monogramFromName } from "@/lib/site/names";
 import { formatDate } from "@/lib/format";
 
 /**
- * The preview image for the stationery card (spec 14 §12.2).
+ * The preview image for a household's page (spec 14 §12.2, moved here by
+ * spec 21 Q6).
  *
  * Without it a forwarded WhatsApp message is a bare URL, which reads as spam —
  * this is the difference between "someone sent me a link" and "I have been
@@ -37,8 +38,14 @@ async function loadFont(file: string): Promise<ArrayBuffer> {
   return Uint8Array.from(buffer).buffer;
 }
 
-export default async function OpengraphImage({ params }: { params: { token: string } }) {
-  const card = await resolveCard(params.token);
+export default async function OpengraphImage({
+  params,
+}: {
+  params: { slug: string; household: string };
+}) {
+  // A malformed address short-circuits inside the resolver before any
+  // database call, so the fallback below renders through the real pipeline.
+  const card = await resolveCardByAddress(params.slug, params.household);
 
   const [scriptFont, bodyFont] = await Promise.all([
     loadFont("PinyonScript.ttf"),

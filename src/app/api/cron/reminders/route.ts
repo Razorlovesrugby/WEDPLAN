@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { absoluteUrl, serverEnv } from "@/lib/env";
-import { decryptToken, invitationUrl } from "@/lib/tokens";
+import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { digestEmail, reminderEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
@@ -48,7 +48,7 @@ async function run(request: NextRequest) {
 
   const { data: weddings, error: weddingError } = await supabase
     .from("weddings")
-    .select("id, name, wedding_date, timezone, rsvp_lock_at, reminder_window_days");
+    .select("id, name, slug, wedding_date, timezone, rsvp_lock_at, reminder_window_days");
   if (weddingError) {
     return NextResponse.json({ error: weddingError.message }, { status: 500 });
   }
@@ -73,7 +73,7 @@ async function run(request: NextRequest) {
 
       const { data: household } = await supabase
         .from("households")
-        .select("id, display_name, reminders_muted")
+        .select("id, display_name, reminders_muted, slug, slug_suffix")
         .eq("wedding_id", wedding.id)
         .eq("id", row.household_id)
         .is("deleted_at", null)
@@ -130,7 +130,13 @@ async function run(request: NextRequest) {
       const message = reminderEmail({
         weddingName: wedding.name,
         householdName: household.display_name,
-        url: invitationUrl(token),
+        // Their own page, the same link every other sender uses (spec 21 Q6).
+        // The token above is still checked: a reminder pointing at a form that
+        // cannot take an answer is worse than no reminder.
+        url: householdSiteUrl(wedding.slug, {
+          slug: household.slug,
+          suffix: household.slug_suffix,
+        }),
         lockLabel: wedding.rsvp_lock_at
           ? formatDate(wedding.rsvp_lock_at, wedding.timezone)
           : null,
