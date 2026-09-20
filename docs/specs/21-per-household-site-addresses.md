@@ -1,13 +1,69 @@
 # Spec 21 — A page of their own: per-household addresses on the wedding site
 
-**Status: proposed. Nothing is built, schema included.** This spec revisits a
-decision spec 14 already made (Q1: the opaque household token), so §6's open
-questions are not detail — question 1 decides whether this feature is a URL
-change or a credential change, and everything else follows from it.
+**Status: proposed, fully answered (2026-09-20 — see the next section).
+Nothing is built, schema included.** All eight questions in §9 are settled and
+§§4–8 are rewritten around the answers. This spec revisits a decision spec 14
+already made (Q1: the opaque household token) and the answer to question 1
+keeps that decision's substance — the credential stays unguessable — while
+changing what it looks like.
 
 **Depends on:** spec 14, built (`weddings.slug`, `/w/[slug]`, the Script theme
 and renderer, `/i/[token]`, `/rsvp/[token]`, the `/site` editor) and V1's
 guest list (`households`, `invitations`, `invitation_events`, `rsvps`).
+
+---
+
+## Answered — 2026-09-20
+
+All eight, in one round. The sections below are rewritten to match; this is
+the record of what was decided and what each answer costs.
+
+**Q1 — option A, the readable name plus a short random suffix**, with one
+correction: **the slug is the household's own name and nothing appended.**
+`/w/ray-and-olivia/okonkwo-4f7ak`, not `…/the-okonkwo-family-4f7ak`. The
+credential model is therefore unchanged from spec 14 in substance — the
+address is still unguessable — and everything in §3's list (guest names,
+dietary notes, RSVPs answered on someone's behalf, coach seats, uploads)
+stays as protected as it is today. What changes is that the link now says
+whose it is. **Q2 does not arise**: it was conditional on option B.
+
+**Q3 — per-event notes**, not one block in the Site tab. Each event carries
+its own guest-facing note and a household's page stitches together the ones
+they are actually invited to, so a ceremony-only household reads about the
+ceremony and nothing else. This is the more expensive answer — it is a column
+on `events` and a field on the events editor rather than one block — and it is
+the one that makes the page genuinely *theirs* rather than the same timetable
+on everyone's page. See §5.4.
+
+**Q4 — retired slugs keep working.** An alias table and 301s. The link is in
+people's chat histories from months back, and an edit that silently breaks it
+would make the "live, editable URL" the whole feature is named after into a
+thing nobody dares touch.
+
+**Q5 — keep `/w`.** Unchanged from the recommendation; §4 has the reasoning.
+
+**Q6 — `/i/[token]` and `/rsvp/[token]` redirect to the new address.** One
+link per household, full stop. Every invitation already sent keeps working,
+and there is no decision to make about which URL to send. §8 carries the one
+build detail this creates: the Open Graph image currently lives under `/i` and
+has to move with the card, or every forwarded link previews as nothing.
+
+**Q7 — strip the filler.** A leading "The" and a trailing
+"family"/"household"/"whānau" come off before slugifying, so the real guest
+list reads `okonkwo`, `nakamuras`, `priya-dev-raman`, `grandma-reid`,
+`old-rugby-lot`. Not derived from surnames (Q7's third option): it would have
+to guess at "Old rugby lot" and at households with three surnames in them.
+
+**Q8 — automatic for every household, editable per household.** There is no
+"create their page" button and no household without an address; the trigger
+derives one on insert the way `0015` already does for weddings. The household
+screen shows it, and lets the planner edit, copy and preview it. This is a
+change from how the planner first described it (a button on the guest page)
+and was chosen deliberately: "a household with no page" is a state every
+screen, sender and export would otherwise have to handle.
+
+**Net effect:** nothing here waits on anything outside. The build order in §8
+is unblocked end to end, and the schema is one migration.
 
 ---
 
@@ -65,7 +121,12 @@ tick the events.
 
 ## 3. The fork: a pretty URL is a change of credential
 
-This is the decision. Everything else in this spec is mechanical.
+**Decided: option A** (Q1). The rest of this section is kept as the record of
+what was weighed — in particular §3's list of what sits behind the URL, which
+is the reason the suffix exists and should be read before anyone proposes
+dropping it later.
+
+This was the decision. Everything else in this spec is mechanical.
 
 `/rsvp/hT8_2fQ…` is unguessable. `/w/ray-and-olivia/the-smith-family` is
 guessable by anyone who knows the couple — and a wedding site is *published to
@@ -91,15 +152,15 @@ migration.
 
 Three honest options.
 
-### Option A — pretty prefix, short secret suffix *(recommended)*
+### Option A — pretty prefix, short secret suffix ***(chosen)***
 
-`/w/ray-and-olivia/the-smith-family-4f7a`
+`/w/ray-and-olivia/okonkwo-4f7ak`
 
 The household's name is in the URL, so it reads as theirs and the planner can
-tell at a glance which link is which. The four-or-five character suffix is
-random (Crockford base32, no vowels, so no accidental words and no
-`0`/`O` confusion), scoped per wedding, and restores the property that you
-cannot get to a page by guessing a surname.
+tell at a glance which link is which. The five-character suffix is random
+(Crockford base32, which already excludes `I`, `L`, `O` and `U`, so no
+`0`/`O` confusion and far fewer accidental words), scoped per wedding, and
+restores the property that you cannot get to a page by guessing a surname.
 
 - Pros: reads like the planner asked; no gate, no cookie, no form; one link
   per household is still true; the throttle already built on
@@ -109,7 +170,7 @@ cannot get to a page by guessing a surname.
 - Entropy: 5 chars ≈ 33 million per wedding name, against a rate-limited
   lookup. Against a guest list of 80 this is not close.
 
-### Option B — pretty URL, no secret, accept the exposure
+### Option B — pretty URL, no secret, accept the exposure *(not chosen)*
 
 `/w/ray-and-olivia/the-smith-family`
 
@@ -125,7 +186,7 @@ cannot get to a page by guessing a surname.
   seats, uploads — stay behind the token link that page links out to. That is
   half the feature, but it is the half with no downside.
 
-### Option C — pretty URL plus a lightweight challenge
+### Option C — pretty URL plus a lightweight challenge *(not chosen)*
 
 `/w/ray-and-olivia/the-smith-family`, and the first visit asks for something
 the household knows — a surname, a postcode, or a four-digit PIN printed on
@@ -138,20 +199,17 @@ the invitation — then sets a signed cookie for the rest of the season.
   PIN is another thing to print and another thing to lose. Roughly a day of
   work plus a support burden on the couple.
 
-**Recommendation: A.** It gives the planner the readable, per-household,
-editable address they asked for, keeps the existing security model intact
-(same hash-at-rest, same throttle, same one-link-per-household), and needs no
-new concept on the guest's side. B is defensible for a small local wedding if
-the planner would rather have the cleaner URL and accept the exposure **with
-the write surface narrowed as described** — but that is their call to make
-explicitly, not one to infer.
+**Chosen: A.** It gives the planner the readable, per-household, editable
+address they asked for, keeps the existing security model intact (same
+throttle, same one-link-per-household, same rule that nothing downstream takes
+a household id from the client), and needs no new concept on the guest's side.
 
 ## 4. The address, in detail
 
-Assuming A or B, the shape is:
+The shape is:
 
 ```
-/w/<wedding-slug>/<household-slug>[-<suffix>]
+/w/<wedding-slug>/<household-slug>-<suffix>
 ```
 
 `/w` stays. Dropping it — `/ray-and-olivia/…` — means every top-level path
@@ -160,39 +218,60 @@ becomes a potential wedding slug and every planner route (`/site`, `/guests`,
 precisely because getting that list wrong is invisible until it is a
 vulnerability. Not worth it for two characters. (Question 5.)
 
-**Generation.** From `households.display_name`, through the `slugify()` that
-`0015` already added — "The Smith Family" → `the-smith-family`, "Nana & Pop" →
-`nana-pop`. Rules:
+**Generation (Q7, Q8).** Automatic for every household, on insert, from
+`households.display_name` through the `slugify()` that `0015` already added,
+with the filler stripped first. Against the real guest list:
 
-- Unique per wedding, not globally: two weddings can both have a
-  `the-smith-family`. The unique index is on `(wedding_id, slug)`.
-- Collisions inside one wedding (two Smith households) resolve the way
-  `0015`'s trigger already resolves wedding slugs: `-2`, `-3`, in creation
-  order, so the first one keeps the bare name.
+| `display_name` | slug |
+| --- | --- |
+| The Okonkwo family | `okonkwo-4f7ak` |
+| The Nakamuras | `nakamuras-9k2pm` |
+| Priya & Dev Raman | `priya-dev-raman-7t3mq` |
+| Grandma Reid | `grandma-reid-2xq8h` |
+| Old rugby lot | `old-rugby-lot-6bn4z` |
+
+Rules:
+
+- **Strip before slugifying:** a leading `the`, and a trailing `family`,
+  `household` or `whānau`/`whanau`. If stripping leaves nothing — a household
+  literally named "The Family" — keep the full name instead of producing an
+  empty slug.
+- **The suffix carries uniqueness, so the name part does not have to.** Two
+  Smith households are `smith-4f7ak` and `smith-9k2pm`, and `0015`'s `-2`,
+  `-3` dance is not needed here. The unique index is on
+  `(wedding_id, slug, slug_suffix)`, partial on `deleted_at is null` — matching
+  `households_rank_key`, so an uncut-then-recut household does not permanently
+  burn its name. In the unreachable event the suffix itself collides, the
+  trigger redraws.
 - Same shape check as the wedding slug: `^[a-z0-9]+(-[a-z0-9]+)*$`, 2–64
   characters, enforced in the database rather than only in the form.
 - A display name that slugifies to nothing (all emoji, a script `translate()`
-  does not cover) falls back to `household-<first 8 of id>`, as `0015` does.
+  does not cover) falls back to `household`, which the suffix still makes
+  unique — `household-3jd7k`.
 - Reserved words rejected at the second segment: `rsvp`, `i`, `api`,
   `opengraph-image`, and anything else that might later be a sibling route.
+  Cheap insurance, since the suffix means a reserved word can only arrive by
+  hand-editing.
 
-**Editing.** Editable on the household, live, as asked. Two consequences to
-decide (question 4):
+**Editing (Q4).** Live, on the household screen.
 
-- **Renaming breaks the old link**, and the old link is in someone's WhatsApp
-  from three months ago. The cheap fix is an alias table — every slug a
-  household has ever had, the current one flagged — and a 301 from any retired
-  slug. That is one small table and it is the difference between "editable" and
-  "editable once nobody has the link yet".
-- **Renaming the household renames the slug?** No — derive on create, then
-  leave it alone. A household renamed from "The Smiths" to "Bob and Jane
-  Smith" should not silently invalidate their invitation. Offer the new
-  derivation as a suggestion in the editor instead.
+- **The suffix is minted once and never changes.** Editing changes only the
+  readable part, so "fix a typo in their name" cannot quietly mint a new
+  credential and orphan the one that is already in the post.
+- **Retired slugs keep working.** Every address a household has ever had goes
+  into `household_slug_aliases` on edit, and any retired slug 301s to the
+  current one. Without this, "editable" is only true before anyone has the
+  link, which is the opposite of what was asked for.
+- **Renaming the household does not rename the slug.** Derive on insert, then
+  leave it alone — a household renamed from "The Smiths" to "Bob and Jane
+  Smith" should not silently change its address. The editor offers the new
+  derivation as a suggestion, and taking it is one click and one alias.
 
-**Soft deletes.** A cut household keeps its row (`deleted_at`), so its slug
-keeps squatting. The unique index should be partial —
-`where deleted_at is null` — matching `households_rank_key`, so an
-uncut-then-recut household does not permanently burn the name.
+**Soft deletes.** A cut household keeps its row (`deleted_at`) and therefore
+its slug, and the resolver must treat a cut household as not found — the whole
+point of the platform's soft-delete rule is that the guest stays
+reconstructable, not that their page stays up. Their alias rows stay too, so
+uncutting them restores the address rather than minting a new one.
 
 ## 5. What the page actually shows
 
@@ -213,12 +292,22 @@ as:
    the schedule section already renders. A household ticked for the ceremony
    only sees one; a household ticked for everything sees the weekend.
 4. **The on-the-day run-down** — the planner's "if they're ticked to both".
-   This is the one genuinely new piece of content. It is *not* the planner's
-   `/run-sheet` (that carries vendor calls, supplier contacts and internal
-   timings). It is a guest-facing timeline: the public events they are invited
-   to with their start times, the walking distance between them, and the
-   couple's own notes. Question 3 asks how it is authored — a new
-   `site_content` block that every invited household sees, or per-event notes.
+   This is the one genuinely new piece of content, and **Q3 put it on the
+   events themselves**: each event gets a guest-facing note, and a household's
+   page stitches together the notes for the events they are invited to, in
+   `starts_at` order. A ceremony-only household reads the ceremony's note and
+   never learns there was a note about Sunday breakfast.
+
+   It is emphatically *not* the planner's `/run-sheet`, which carries vendor
+   calls, supplier phone numbers and internal timings. Different audience,
+   different table, no shared rows — worth stating because "run sheet" is the
+   obvious thing to reuse and reusing it would publish a florist's mobile
+   number.
+
+   The note is authored in the existing events editor, one field per event,
+   next to the venue and dress code it will be rendered beside. An event with
+   no note simply contributes its time, name and venue, which is what every
+   event does today.
 5. **RSVP**, per guest, per invited event, plus the custom questions — the
    existing `RsvpForm`, unchanged.
 6. **The rest of the shared site** — travel, stays, coach booking, FAQ,
@@ -227,19 +316,21 @@ as:
 The public `/w/<slug>` page stays exactly as it is: the version a guest sees
 when they arrive without a personal link, with "find my invitation" on it.
 
-**One consequence worth stating:** if this page becomes the wedding website
-for a guest, then `/i/[token]`, `/rsvp/[token]` and this new page are three
-addresses for overlapping content. The tidy end state is that the personal
-address *is* the card and the RSVP, `/i` and `/rsvp` become redirects to it,
-and there is one link per household, full stop. That is the recommendation,
-but it retires two shipped surfaces and belongs in the decision (question 6).
+**One consequence, now decided (Q6):** this page becomes the card *and* the
+RSVP, and `/i/[token]` and `/rsvp/[token]` 301 to it. One link per household,
+full stop — nothing to choose between when sending, and every invitation
+already in the world keeps landing in the right place. Two shipped surfaces
+are retired rather than deleted; see §8 for the piece of `/i` that has to move
+rather than redirect.
 
 ## 6. Where it is managed
 
-- **Household page (`/households/[id]`)** — the planner's "create custom
-  slug". Their events (already there, read-only today — this spec makes the
-  tick live where it is), their address, an edit field, copy button, WhatsApp
-  copy-out, and "preview as this household". This is the screen the planner
+- **Household page (`/households/[id]`)** — where the planner asked for
+  "create custom slug", except that Q8 removed the creating: the address
+  already exists by the time the screen loads. So it shows the address, an
+  edit field, a copy button, the WhatsApp copy-out, "preview as this
+  household", and their invited events (already there, read-only today — this
+  spec makes the tick live where it is). This is the screen the planner
   described and the one that currently shows none of it.
 - **Invitations (`/invitations`)** — the bulk view. The address column
   replaces or accompanies the revealed token link; the senders keep working
@@ -248,27 +339,45 @@ but it retires two shipped surfaces and belongs in the decision (question 6).
   is edited. It gains one thing: a per-household **preview** picker, which
   spec 14's build notes already list as a known gap ("No preview-as-guest").
 
-## 7. Schema sketch — not to be built yet
+## 7. Schema — one migration, not to be built yet
 
 Small, and additive. Recorded so the size of the change is visible, not
 because it is authorized.
 
 ```sql
 -- 00NN_household_slugs.sql
-alter table public.households add column slug text;          -- backfilled via slugify(display_name)
--- + shape check, + unique index on (wedding_id, slug) where deleted_at is null
--- + BEFORE INSERT trigger deriving and de-duplicating, mirroring 0015's
+alter table public.households add column slug text;         -- household_slugify(display_name)
+alter table public.households add column slug_suffix text;  -- 5 chars, crockford base32
+-- + shape checks on both
+-- + unique index on (wedding_id, slug, slug_suffix) where deleted_at is null
+-- + BEFORE INSERT trigger deriving both, mirroring 0015's
+-- + backfill for every existing household
 
--- Option A only: the unguessable part
-alter table public.households add column slug_suffix text;   -- 5 chars, crockford base32
-
--- Only if question 4 says old links must survive a rename
+-- Q4: a rename must not break the link already in someone's chat history
 create table public.household_slug_aliases (
-  wedding_id uuid not null, household_id uuid not null,
-  slug text not null, retired_at timestamptz not null default now(),
-  primary key (wedding_id, slug)
+  wedding_id   uuid not null,
+  household_id uuid not null,
+  slug         text not null,
+  slug_suffix  text not null,
+  retired_at   timestamptz not null default now(),
+  primary key (wedding_id, slug, slug_suffix),
+  foreign key (household_id, wedding_id)
+    references public.households (id, wedding_id) on delete cascade
 );
+
+-- Q3: the guest-facing note, per event
+alter table public.events add column guest_note text;
 ```
+
+`household_slugify()` is `slugify()` (already in `0015`) with the filler strip
+in front of it, as its own function so the trigger and the backfill share one
+definition of the rule.
+
+RLS on `household_slug_aliases` like every other table, keyed to `wedding_id`,
+tested with a second account. `events.guest_note` needs no policy change —
+`events` already has one — but it does change what the public read path is
+allowed to select, which is the sort of thing `supabase/tests/` exists to
+pin down.
 
 Plus `wedding_id` on every table and RLS on each, per the platform rules —
 `household_slug_aliases` included, even as a leaf table.
@@ -280,49 +389,55 @@ client.
 
 ## 8. Build order, if it is authorized
 
-0. Migration: `households.slug` (+ suffix and/or aliases per the answers).
-1. `resolveHousehold(weddingSlug, householdSlug)` in `src/server/rsvp/`,
-   mirroring `resolveCard()` — the throttle, the neutral not-found message,
-   the same one-household scoping rule.
-2. The route `/w/[slug]/[household]`, rendering §5's page in the site theme,
-   reusing `RsvpForm`, `Schedule`, `CoachBooking`, `GuestUploader` as they
-   stand.
-3. The household screen: address, edit, copy, preview (§6).
-4. The on-the-day block (§5.4) — authoring in `/site`, rendering here.
-5. `/i` and `/rsvp` redirects, if question 6 says so; senders and the print
-   sheet switched to the new URL; alias 301s.
+0. **Migration** (§7): both columns, the shape checks, the partial unique
+   index, `household_slugify()`, the insert trigger, the backfill, the alias
+   table with its RLS, and `events.guest_note`. SQL tests alongside, the way
+   `06_wedding_slug.sql` tests `0015`.
+1. **`resolveHousehold(weddingSlug, householdSlug)`** in `src/server/rsvp/`,
+   mirroring `resolveCard()` — the throttle, the neutral not-found message
+   (the same one whether the slug is malformed, unknown, or belongs to a cut
+   household), and the rule that the pair resolves to exactly one household
+   and one wedding with nothing downstream taking an id from the client.
+   Alias lookup lives here too, returning "redirect to this address" rather
+   than a context.
+2. **The route `/w/[slug]/[household]`**, rendering §5 in the site theme and
+   reusing `RsvpForm`, `Schedule`, `CoachBooking` and `GuestUploader` as they
+   stand. `noindex` stays on, as on both pages it replaces.
+3. **The household screen** (§6): address, edit, copy, WhatsApp, preview.
+4. **The per-event note** (§5.4): the field in the events editor, the
+   rendering on the personal page, and the public read path allowed to select
+   it.
+5. **The retirement** (Q6): `/i/[token]` and `/rsvp/[token]` 301 to the
+   household's address; `invitationUrl()` and `invitationCardUrl()` return the
+   new URL, which is what silently updates the senders, the QR route and the
+   print sheet; alias 301s live.
 
-Steps 1–3 are the feature. 4 and 5 are the tail.
+   **The one thing that cannot just redirect:** `/i/[token]/opengraph-image`.
+   It is the only part of spec 14 that has ever been seen working, and a
+   redirect is not a preview — a forwarded WhatsApp link would render blank.
+   The image has to move to the new route and be checked, not assumed.
 
-## 9. Open questions
+Steps 0–3 are the feature. 4 and 5 are the tail, and 5 is the one with a
+blast radius: it changes what every already-sent invitation resolves to.
 
-**None of these are rhetorical, and 1 blocks the rest.**
+## 9. Open questions — all answered, 2026-09-20
 
-1. **Option A, B or C in §3?** Readable-with-a-suffix (recommended),
-   readable-and-open (with writes narrowed), or readable-plus-a-challenge.
-   This decides whether the change is a route or a security model.
-2. **If B: does the RSVP form live on the guessable page, or behind a link?**
-   §3's narrowed variant is the only version of B this spec would recommend
-   building.
-3. **The on-the-day run-down (§5.4) — who writes it?** A single block in the
-   Site tab that every invited household sees (cheapest, recommended), or per
-   event, or derived automatically from the events' own start times with no
-   authoring at all.
-4. **Do retired slugs keep working?** An alias table and 301s (recommended:
-   the link is already in people's chat histories), or a rename simply breaks
-   the old address.
-5. **`/w/ray-and-olivia/the-smiths`, or `/ray-and-olivia/the-smiths`?**
-   Recommended: keep `/w` — see §4.
-6. **Do `/i/[token]` and `/rsvp/[token]` retire?** Recommended: they redirect
-   to the new address, so there is one link per household. The alternative is
-   three live surfaces and a decision every time about which one to send.
-7. **What is the household slug derived from?** `display_name` as it stands
-   ("The Smith Family" → `the-smith-family`), or the guests' actual surnames,
-   which would read better for households named "Mum and Dad" or "Work
-   friends 2".
-8. **Does the planner ever type one by hand at scale?** If yes, the household
-   page needs a bulk "generate for everyone" on `/invitations` as well as the
-   per-household button; if no, the per-household control is enough.
+Kept as asked, with what came back. The reasoning behind each answer is in
+the "Answered" section at the top.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Option A, B or C in §3 — is this a route change or a security model change? | **A**, with the slug being the household's own name and nothing appended |
+| 2 | If B: does the RSVP form live on the guessable page or behind a link? | **Does not arise** — conditional on B |
+| 3 | The on-the-day run-down (§5.4) — who writes it? | **Per-event notes**, stitched per household |
+| 4 | Do retired slugs keep working? | **Yes** — alias table and 301s |
+| 5 | Keep `/w`, or drop it? | **Keep `/w`** |
+| 6 | Do `/i/[token]` and `/rsvp/[token]` retire? | **Yes** — both 301 to the household's address |
+| 7 | What is the slug derived from? | **`display_name`, filler stripped** — not surnames |
+| 8 | Minted in bulk or per household? | **Automatic for every household**, editable per household |
+
+**Nothing here is built.** The answers settle the design; the build starts
+when the planner says so, in words that mean it.
 
 ---
 
