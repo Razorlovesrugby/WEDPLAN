@@ -3,7 +3,30 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 23 — spec 19 written, answered and built: **the
+Last updated: session 24 — spec 20 written, answered and built same
+session: a **last name column and a real-name "Side" on the guest list.**
+Both `guests.last_name` and `guests.side` already existed (V1) — this was
+a UI-surfacing gap, not a schema one. `GuestsTable` splits its old "Name"
+column into "First name" (still the guest link) and an inline-editable
+"Last name"; a new "Side" badge column reuses spec 15's
+`collaborators.display_name` via a new `sideLabel()` helper
+(`src/lib/format.ts`) so it shows the couple's own names instead of
+"Partner A"/"Partner B" — `partner_a` is the owner collaborator,
+`partner_b` the other one, falling back to "Partner A"/"Partner B" until a
+name is set under Settings → Names. `guest-form.tsx`'s existing Side
+dropdown (the guest edit page) picked up the same labels. The `side`
+filter that already existed end-to-end in `GuestFilters`/`listGuests` but
+had no `FilterBar` control now has one. No migration. Two decisions the
+spec left open were answered the same session (both took the recommended
+option): `partner_a`/`partner_b` map to owner/non-owner collaborator role,
+not an independently assignable field; and Side is a label only — it does
+not change who receives reminder digests or RSVP notifications, which
+still go to both collaborators regardless of a guest's side. `npm test`
+(483, up from 478, +5 for `sideLabel`), `npm run typecheck` and
+`npm run build` all pass. Same live/browser caveat as every session since
+12 — see `docs/specs/20-guest-last-name-column-and-named-sides.md`.
+
+Previously: session 23 — spec 19 written, answered and built: **the
 budget now has a top-down half.** One overall budget on the wedding, a
 percentage per category, a percentage per line of its own category's
 target, and the rule the planner actually asked for — "an allocation field

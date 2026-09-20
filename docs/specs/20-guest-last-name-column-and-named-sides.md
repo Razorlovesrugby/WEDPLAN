@@ -1,12 +1,29 @@
 # Feature spec: A last name column and real-name "Side" on the guest list
 
-**Status: proposed, not built — no migration, no code.** This is a spec
-only, per `docs/specs/README.md` — nothing here is built until the Open
-Questions in §5 are answered.
+**Status: built end to end, same session.** Both open questions below
+were answered and the build authorized the same session. No migration —
+`guests.last_name` and `guests.side` already existed. `npm run typecheck`,
+`npm test` (483 tests, +5 for `sideLabel`), and `npm run build` all pass.
+Same live/browser caveat as every session before it — never opened
+against a live Supabase project or a real browser.
 
 **Depends on:** V1 (`guests.last_name`, `guests.side` already exist) and
 spec 15 (`collaborators.display_name`, already built). No new tables or
-columns are needed for the core of this feature — see §3.
+columns needed — see §3.
+
+## Answered (same session)
+
+1. **`partner_a`/`partner_b` map to owner/non-owner collaborator role** —
+   the recommended option in §5 Q1. No independent assignment mechanism;
+   if this turns out to not track "whose side is whose" for this couple,
+   that's a follow-up.
+2. **Side is a label only, not notification routing** — the recommended
+   option in §5 Q2. Reminder digests and RSVP-received emails are
+   unchanged; they still go to both collaborators regardless of a guest's
+   side. Routing by side, if wanted later, is its own spec.
+3. Q3 (CSV export columns) wasn't asked separately — decided along the
+   way as out of scope for this pass. `/api/export/guests` and
+   `/api/export/catering` are unchanged.
 
 ## 0. What was actually asked
 

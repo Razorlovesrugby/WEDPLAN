@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createGuest, removeGuest, updateGuest } from "@/server/actions/guests";
-import type { GuestRow } from "@/lib/types/database";
+import { sideLabel } from "@/lib/format";
+import type { CollaboratorRow, GuestRow } from "@/lib/types/database";
 
 type Fields = Record<string, string>;
 
@@ -13,20 +14,16 @@ const AGE_BANDS = [
   { value: "infant", label: "Infant — no seat, may need a high chair" },
 ] as const;
 
-const SIDES = [
-  { value: "", label: "Not set" },
-  { value: "partner_a", label: "Partner A" },
-  { value: "partner_b", label: "Partner B" },
-  { value: "both", label: "Both" },
-  { value: "other", label: "Other" },
-] as const;
+const SIDE_VALUES = ["partner_a", "partner_b", "both", "other"] as const;
 
 export function GuestForm({
   guest,
   householdId,
+  collaborators,
 }: {
   guest?: GuestRow;
   householdId: string;
+  collaborators: CollaboratorRow[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -111,9 +108,10 @@ export function GuestForm({
         <label>
           <span className="mb-1 block text-sm font-medium">Side</span>
           <select name="side" defaultValue={guest?.side ?? ""} className="field">
-            {SIDES.map((side) => (
-              <option key={side.value} value={side.value}>
-                {side.label}
+            <option value="">Not set</option>
+            {SIDE_VALUES.map((value) => (
+              <option key={value} value={value}>
+                {sideLabel(value, collaborators)}
               </option>
             ))}
           </select>
