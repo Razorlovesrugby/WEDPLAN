@@ -1,9 +1,9 @@
 # Spec 22 — Inviting per event, answering, and knowing they looked
 
-**Status: proposed, the shape decided (2026-09-20 — see "Decided" below).
-Nothing is built, schema included.** Six open questions remain in §10; none of
-them blocks the build order, but three of them change what a screen says to
-the planner, so they want answering before step 3.
+**Status: proposed, fully answered (2026-09-20 — see "Decided" and
+"Answered" below). Nothing is built, schema included.** All six questions in
+§10 are settled and the sections around them are rewritten to match. The
+build order is unblocked end to end.
 
 **Depends on:** V1's guest list (`guests`, `households`, `invitations`,
 `invitation_events`, `rsvps`), spec 14 (the site and the senders) and spec 21
@@ -84,6 +84,52 @@ household's page with the answer applied, ready to adjust.
 **Opens are logged individually** — first, last and how many — because the
 difference between "never looked" and "looked five times and still has not
 replied" is the difference between two entirely different chasing decisions.
+
+## 3a. Answered — 2026-09-20, round two
+
+The six questions from §10, with what each one costs.
+
+**Q1 — "Maybe" stays.** A guest who genuinely does not know yet will
+otherwise simply not reply, and "no reply" is indistinguishable from being
+ignored, having lost the link, or never having received it. Maybe is at least
+a signal that they read it. The caterer's number comes from Yes, as it always
+did.
+
+**Q2 — the page names only who an event is for.** "For Chidi and Ada", never
+"(Zara isn't invited to this one)". The household page is as likely to be
+scrolled by the child as by the parent, and a page that lists a named child's
+exclusion in writing is a thing the couple cannot take back. The RSVP form
+underneath offers only the invited, so the fact is still unambiguous where it
+has to be.
+
+**Q3 — chasing stays at household level**, now reading the per-event rule: a
+household is outstanding while any invited person has any unanswered event.
+One email covers all of it. Per-event chasing was declined — it needs
+per-event reminder tracking to avoid chasing twice for the same thing, and it
+turns one nudge into several.
+
+**Q4 — a decline offers an optional message.** After the No is saved, the page
+asks "Anything you'd like to say?" and takes no for an answer.
+
+> **Where that message is stored, decided while specifying:** not a new
+> column. `rsvp_answers` already stores free text per household with a
+> `question_scope` of `household`, and `/questions` and the household screen
+> already render those answers. So the decline note is a built-in
+> household-scope question, seeded per wedding, hidden from the normal
+> question list. It arrives where the planner already looks instead of in a
+> field only one screen knows about.
+
+**Q5 — no section analytics.** `site_visits` stays the empty table spec 14
+left. "Did they open it" answers the chasing question that was actually
+asked; counting which sections named guests read is a different kind of data
+to be holding about people who cannot opt out of being on a guest list.
+
+**Q6 — the grid stays a flat list of people.** One row per guest, as today.
+Household-level ticking happens on the household screen and through the
+column-header bulk action (§5); a grouped, expandable grid would be a second
+navigation model on a screen whose filters and selection bar already work.
+
+---
 
 ## 4. The model: one effective answer to "is this person invited?"
 
@@ -179,9 +225,10 @@ For Chidi and Ada
   Ada Okonkwo     [ Yes ] [ No ]
 ```
 
-Whether the page says anything at all about the people *not* invited to that
-event is §10 question 2 — there is a real argument each way, and it is the
-planner's call about their own guests rather than a technical one.
+**The page never names who is *not* invited** (Q2). "For Chidi and Ada" is
+the whole statement. The form below offers only those two, so nobody can
+mistake who may answer, and no child reads their own name next to a party
+they are not at.
 
 **The on-the-day notes (spec 21 §5.4) follow the same rule**, per person: a
 note attached to an event is only ever read by somebody invited to it.
@@ -224,8 +271,12 @@ Three rules, each preventing a specific way this goes wrong:
    applied to a page the reader already had the address for; it grants
    nothing, and re-tapping changes nothing.
 
-A "No" tap does the same in reverse and — question 4 — may or may not offer a
-message box on the way through.
+A "No" tap does the same in reverse, and then offers an optional message
+(Q4): "That's a shame — we've marked you as unable to come. Anything you'd
+like to say?" with an empty box and no requirement to fill it. The note is
+stored as a household-scope `rsvp_answers` row against a built-in question, so
+it shows up on the household screen and in `/questions` beside every other
+answer rather than somewhere only this feature knows about.
 
 ## 9. Knowing they looked
 
@@ -263,33 +314,22 @@ dashboard's existing invitation tiles gain a "sent, opened, never replied"
 segment, which is the list worth chasing and is currently impossible to
 produce.
 
-Per-section analytics (`site_visits`) stay unbuilt — question 5.
+Per-section analytics (`site_visits`) stay unbuilt, deliberately (Q5). The
+table remains as spec 14 left it: present, empty, and not read.
 
-## 10. Open questions
+## 10. Open questions — all answered, 2026-09-20
 
-1. **Does "Maybe" survive?** The enum has it and the grid shows it. It is
-   useful to a guest and useless to a caterer, and "maybe" answers tend to
-   never resolve. Keep it, or reduce the ladder to Yes / No and let the
-   uncertain stay unanswered?
-2. **Does a shared page mention who is *not* invited to an event?** "For Chidi
-   and Ada" is factual. Adding "(Zara isn't invited to this one)" is clearer
-   for the parent reading it and blunter for the child. Recommended: name only
-   who it is for, and say nothing about who it is not.
-3. **Do reminders become per event?** Today chasing is per household and stops
-   when everything is answered. With per-event invites, "answered the ceremony
-   but not the evening do" is a state worth chasing specifically — or worth
-   leaving alone until the whole household is complete, as now.
-4. **Does a one-tap "No" ask why, or offer a message?** A message box catches
-   "we'd love to but we're away" and gives the couple something kind to read.
-   It also asks somebody who just declined to write something.
-5. **Per-section analytics at all?** `site_visits` exists. "Did anybody read
-   the FAQ" is genuinely useful when deciding whether to send an update;
-   counting which sections named households read is a different kind of data
-   from "did they open it".
-6. **Does the grid group by household?** The `/guests` grid is a flat list of
-   people. With household-level invites doing most of the work, a collapsed
-   household row with its members under it may be the better shape — or it may
-   be a second navigation model on a screen that already works.
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Does "Maybe" survive? | **Yes** — kept, on the grid and for guests |
+| 2 | Does the page say who is *not* invited? | **No** — it names only who it is for |
+| 3 | Do reminders become per event? | **No** — chase the household until everything is answered |
+| 4 | Does a decline ask why? | **An optional message**, stored as a household-scope answer |
+| 5 | Per-section analytics? | **No** — `site_visits` stays empty |
+| 6 | Does the grid group by household? | **No** — it stays a flat list of people |
+
+**Nothing here is built.** The answers settle the design; the build starts
+when the planner says so, in words that mean it.
 
 ## 11. Schema sketch — not to be built yet
 
@@ -331,7 +371,9 @@ included.
 3. The page: per-person lines under each event, the RSVP form narrowed to the
    invited, the on-the-day notes narrowed the same way.
 4. One-tap replies: `?reply=` on the household address, the banner, the fill
-   rules, and the buttons in the invitation email.
+   rules, the buttons in the invitation email, and the optional decline note
+   (which needs the built-in household-scope question seeded per wedding, and
+   a backfill for weddings that already exist).
 5. Open logging: the write, the 30-minute collapse, the preview exclusion, and
    the three places it shows.
 
