@@ -7,11 +7,17 @@ export const metadata: Metadata = {
   // The planner is private and the public site is thin and unfinished until
   // V2. Nothing here should be indexed until someone decides otherwise.
   robots: { index: false, follow: false },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    title: "Wedding",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#600e17",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
