@@ -3,7 +3,30 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 23 — spec 19 written, answered and built: **the
+Last updated: session 24 — spec 20 written, answered and built, on branch
+`claude/budget-section-allocation-remaining` (which sits on top of session
+23's still-unmerged spec 19 branch, not on `main`). **Two presentation
+fixes to `/budget`, no schema:** (1) every category now shows how much of
+its own allocation its lines have claimed — "110% of Drinks allocated ·
+$3,520 of $3,200 · $320 (10%) over-allocated", plus "n lines have no % set"
+— answering the planner's "does 38+30+42 add to 100?" without them adding
+it up by hand; and (2) spec 19's "Allocated" and "Estimated" figures are
+collapsed into one Estimate column, since on a line with nothing typed they
+printed the same number twice (and on a GST-exclusive line, the same number
+twice with a 15% gap that read as an error). The target survives as a
+secondary note (`allocated $320`) so the per-line variance still refers to
+something on screen. New `sectionAllocation` in `src/lib/budget.ts`;
+`npm test` 481 (up from 473); `npm run typecheck` and `npm run build`
+clean; `./scripts/verify-migrations.sh` re-run at 250 assertions, unchanged
+— **nothing in this session touched SQL.** See
+`docs/specs/20-budget-section-allocation-remaining.md` §12.
+
+**Worth knowing for whoever picks this up:** two feature branches are open
+and unmerged, and 20 depends on 19. Neither has been opened in a browser,
+and spec 20 is *entirely* presentation — it is the session whose work a
+browser pass would most easily invalidate.
+
+Previously: session 23 — spec 19 written, answered and built: **the
 budget now has a top-down half.** One overall budget on the wedding, a
 percentage per category, a percentage per line of its own category's
 target, and the rule the planner actually asked for — "an allocation field
@@ -107,6 +130,50 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 24: Spec 20 — section allocation totals, and one estimate column instead of two
+
+**Two pieces of feedback on spec 19's screen, one round, one spec** (the
+repo has precedent for condensing rather than splitting — see specs 15-17).
+Both halves are presentation; neither touches the database.
+
+**Half one — "does 38+30+42 add to 100?"** Spec 19 answered "have I
+allocated all of it?" at the wedding level and nowhere else. Now every
+category carries a line above its rollup: the percentage its lines claim
+between them, that figure in money, and what is left to allocate — or, at
+110%, what it is over-allocated by, in the warning colour. Lines with no
+percentage are counted separately ("1 line has no % set — its estimate
+isn't counted above") rather than blended into the sum, so the headline
+answers the percentage question it was asked. The item editor gained a
+matching live clause: "takes Drinks to 110%", before saving rather than
+after.
+
+**Half two — one estimate column.** Spec 19's row printed Allocated and
+Estimated side by side; on a line with no typed estimate they were the same
+number twice, and on a GST-exclusive line the same number twice with a 15%
+gap that reads as a discrepancy rather than as the deliberate ÷1.15. The
+model was already right — `effective_estimated` *is* "typed if typed, else
+derived" — so the fix was display-only: drop the column, show
+`effective_estimated`, keep the "from allocation" marker, and when a line
+has both a typed estimate and an allocation keep the target as a secondary
+note (`allocated $320`, or `allocated $480 all-in` when exclusive) so the
+variance line beneath it still refers to a number on screen.
+
+**Deliberately no schema.** The four-columns-on-`v_budget_category_totals`
+alternative is written up in spec 20 §3 and was rejected for now (§11
+decision 3): `/budget` already holds every line with its `allocation_pct`,
+so a pure function can't disagree with the page's own numbers, and there is
+no second surface needing the figure. Revisit if a dashboard stat or an
+export ever wants it.
+
+**Files:** `src/lib/budget.ts` (+`sectionAllocation`) and its tests;
+`src/components/budget/category-header.tsx` (new
+`SectionAllocationSummary`), `budget-item-fields.tsx` (the live clause,
+`siblingAllocationPct`), `budget-item-row.tsx` (the column collapse),
+`add-budget-item-form.tsx`, `budget-header.tsx` (wording aligned with the
+per-section line); `src/app/(planner)/budget/page.tsx`. Spec 19's §6
+screens table gained a pointer recording that its "Allocated" figure is
+superseded.
 
 ## Session 23: Spec 19 — an overall budget, percentage allocations, and allocation-derived estimates
 

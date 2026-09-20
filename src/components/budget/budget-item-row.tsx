@@ -40,6 +40,7 @@ export function BudgetItemRow({
   item,
   categoryName,
   categoryAllocatedAmount,
+  siblingAllocationPct,
   events,
   components,
   payments,
@@ -56,6 +57,8 @@ export function BudgetItemRow({
   categoryName: string;
   /** The category's own target in minor units, or null when the wedding or the category has no percentage. */
   categoryAllocatedAmount: number | null;
+  /** What the rest of this section's lines claim between them (spec 20), for the editor's "takes Drinks to 110%" hint. */
+  siblingAllocationPct: number;
   events: EventRow[];
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
@@ -140,18 +143,24 @@ export function BudgetItemRow({
         </div>
       </div>
 
-      <div className={`grid grid-cols-2 gap-x-4 gap-y-1 text-sm ${item.allocated_amount !== null ? "sm:grid-cols-6" : "sm:grid-cols-5"}`}>
-        {item.allocated_amount !== null ? (
-          <Figure label="Allocated" value={formatMoney(item.allocated_amount)} />
-        ) : null}
-        {/* A derived estimate is shown greyed and marked: it's a number
-            nobody typed (spec 19 §4), and the row should never let that pass
-            for a real one. */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-5">
+        {/* Spec 20 §7: one Estimate figure, never an Allocated column beside
+            it — on a line with nothing typed the two were the same number
+            twice. What shows is `effective_estimated`: typed if typed, else
+            derived from the allocation and marked as such, so a figure
+            nobody entered never passes for a real one. When both exist, the
+            target stays as a note rather than a column (§11, question 5). */}
         <Figure
-          label="Estimated"
-          value={formatMoney(item.estimate_source === "allocation" ? item.effective_estimated : item.estimated)}
+          label="Estimate"
+          value={formatMoney(item.effective_estimated)}
           muted={item.estimate_source === "allocation"}
-          note={item.estimate_source === "allocation" ? "from allocation" : undefined}
+          note={
+            item.estimate_source === "allocation"
+              ? "from allocation"
+              : item.allocated_amount !== null
+                ? `allocated ${formatMoney(item.allocated_amount)}${item.gst_treatment === "exclusive" ? " all-in" : ""}`
+                : undefined
+          }
         />
         <Figure label="Quoted" value={formatMoney(item.quoted)} />
         <Figure label="Contracted" value={formatMoney(item.contracted)} />
@@ -195,6 +204,7 @@ export function BudgetItemRow({
             pending={pending}
             categoryName={categoryName}
             categoryAllocatedAmount={categoryAllocatedAmount}
+            siblingAllocationPct={siblingAllocationPct}
             onSubmit={onSave}
             onCancel={() => setEditing(false)}
           />

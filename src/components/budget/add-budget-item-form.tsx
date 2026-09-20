@@ -10,12 +10,15 @@ export function AddBudgetItemForm({
   categoryId,
   categoryName,
   categoryAllocatedAmount,
+  siblingAllocationPct,
   events,
 }: {
   categoryId: string;
   categoryName: string;
   /** The category's target in minor units (spec 19), for the allocation field's live hint. Null when unallocated. */
   categoryAllocatedAmount: number | null;
+  /** What this section's existing lines already claim (spec 20) — a new line adds to all of them. */
+  siblingAllocationPct: number;
   events: EventRow[];
 }) {
   const router = useRouter();
@@ -52,6 +55,7 @@ export function AddBudgetItemForm({
         pending={pending}
         categoryName={categoryName}
         categoryAllocatedAmount={categoryAllocatedAmount}
+        siblingAllocationPct={siblingAllocationPct}
         onSubmit={onSubmit}
         onCancel={() => setOpen(false)}
       />

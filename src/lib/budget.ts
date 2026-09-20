@@ -137,6 +137,51 @@ export function estimateSource(item: BudgetItemInput): EstimateSource {
 }
 
 /**
+ * How much of a section's allocation its own lines have claimed between them
+ * (spec 20): the answer to "does 38 + 30 + 42 add to 100?" — it does not, it
+ * adds to 110, which is the whole reason this exists.
+ *
+ * Only lines carrying a percentage count toward the sum (spec 20 §11,
+ * decision 1). Lines without one are counted separately rather than blended
+ * in, so the headline percentage answers the percentage question and a
+ * section with un-percentaged lines can still say so.
+ *
+ * `allocatedAmount` sums each line's own rounded allocation rather than
+ * taking the summed percentage of the target, so it always equals what the
+ * rows themselves show — including their per-line rounding remainders.
+ */
+export function sectionAllocation(
+  lines: { allocationPct: number | null | undefined }[],
+  /** The category's own target in minor units, from `categoryTarget()`. Null when the wedding or the category has no percentage. */
+  categoryTargetAmount: number | null | undefined,
+): {
+  allocatedPct: number;
+  allocatedAmount: number | null;
+  /** 100 minus what's claimed: negative when the section is over-allocated. */
+  remainingPct: number;
+  remainingAmount: number | null;
+  withPct: number;
+  withoutPct: number;
+} {
+  const withPct = lines.filter((l) => l.allocationPct !== null && l.allocationPct !== undefined);
+  // Rounded to the cent-equivalent precision percentages are stored at
+  // (numeric(5,2)), so summing decimals can't drift into 109.99999999999999.
+  const allocatedPct = Math.round(withPct.reduce((sum, l) => sum + (l.allocationPct ?? 0), 0) * 100) / 100;
+  const target = categoryTargetAmount ?? null;
+  const allocatedAmount =
+    target === null ? null : withPct.reduce((sum, l) => sum + (itemAllocation(target, l.allocationPct) ?? 0), 0);
+
+  return {
+    allocatedPct,
+    allocatedAmount,
+    remainingPct: Math.round((100 - allocatedPct) * 100) / 100,
+    remainingAmount: target === null || allocatedAmount === null ? null : target - allocatedAmount,
+    withPct: withPct.length,
+    withoutPct: lines.length - withPct.length,
+  };
+}
+
+/**
  * Current against target. `pct` is the over/under against the target itself
  * ("6.25% over its allocation"), null when there's no target to be over —
  * the other reading of "over or under as a %", share of the whole budget,

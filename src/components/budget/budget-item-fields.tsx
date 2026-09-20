@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { allocationEstimate, itemAllocation } from "@/lib/budget";
+import { trimPct } from "./budget-header";
 import { formatMoney } from "@/lib/format";
 import type { BudgetItemView, BudgetQuantityBasis, EventRow } from "@/lib/types/database";
 
@@ -41,6 +42,7 @@ export function BudgetItemFields({
   pending,
   categoryName,
   categoryAllocatedAmount,
+  siblingAllocationPct,
   onSubmit,
   onCancel,
 }: {
@@ -51,6 +53,8 @@ export function BudgetItemFields({
   categoryName: string;
   /** The category's own target in minor units, or null when the wedding or the category has no percentage yet. */
   categoryAllocatedAmount: number | null;
+  /** What the section's OTHER lines already claim, so the hint can say where this one takes it (spec 20 §6). */
+  siblingAllocationPct: number;
   onSubmit: (value: BudgetItemFormValue) => void;
   onCancel: () => void;
 }) {
@@ -75,6 +79,12 @@ export function BudgetItemFields({
   const allocated =
     pctNumber !== null && Number.isFinite(pctNumber) ? itemAllocation(categoryAllocatedAmount, pctNumber) : null;
   const derivedEstimate = allocationEstimate(allocated, gstTreatment);
+  // Where this line's percentage takes the whole section (spec 20) — shown
+  // while typing, so an over-allocation is visible before saving.
+  const sectionPct =
+    pctNumber !== null && Number.isFinite(pctNumber)
+      ? Math.round((siblingAllocationPct + pctNumber) * 100) / 100
+      : null;
 
   function submit() {
     const value: BudgetItemFormValue = {
@@ -192,10 +202,21 @@ export function BudgetItemFields({
             {estimated.trim() === ""
               ? " · used as this line's estimate until you type one"
               : " · your typed estimate wins; clear it to fall back to this"}
+            {sectionPct !== null ? (
+              <>
+                {" · takes "}
+                {categoryName} to{" "}
+                <span className={sectionPct > 100 ? "text-tierB" : ""}>{trimPct(sectionPct)}%</span>
+              </>
+            ) : null}
           </p>
         ) : pctNumber !== null ? (
           <p className="text-xs text-muted">
-            Set an overall budget and a % on {categoryName} to turn this into an amount.
+            Takes {categoryName} to{" "}
+            <span className={sectionPct !== null && sectionPct > 100 ? "text-tierB" : ""}>
+              {sectionPct !== null ? `${trimPct(sectionPct)}%` : "—"}
+            </span>
+            . Set an overall budget and a % on {categoryName} to turn it into an amount.
           </p>
         ) : null}
       </div>

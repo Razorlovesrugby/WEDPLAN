@@ -1,11 +1,11 @@
 # Feature spec: Budget — how much of a section's allocation is spoken for, and one estimate column instead of two
 
-**Status: proposed, not built. One of five questions answered.** Question 5
-was answered on 2026-09-20 (§11); questions 1-4 are still open. Per
-`docs/specs/README.md`, nothing beyond schema is built until §8's Open
-Questions are answered — and this spec's recommendation is that there is no
-schema to build at all (§3), so the questions gate the whole thing. Answers
-are content for this spec, not authorization to build it (`CLAUDE.md`).
+**Status: built end to end, session 24 (2026-09-20).** All five questions
+answered the same day (§11) — question 5 on the planner's agreement with
+the recommendation, questions 1-4 when they answered "Build please" to the
+offer of taking §8's recommendations on the rest. §12 has the build notes.
+No migration: §11 decision 3 kept this a pure function over rows `/budget`
+already loads, so no SQL changed at all.
 
 **Two halves, from one round of feedback on the same screen**, shippable
 independently: §1-§6 add a per-section allocation total ("does 38+30+42 add
@@ -344,7 +344,53 @@ planner agreed with the recommendation as §7 and §8 state it:
 Nothing else in the spec changes: §7's column collapse is otherwise as
 written, and no figure's computation moves.
 
-**Still open: questions 1, 2, 3 and 4** — what counts toward a section's
-allocated percentage, where the summary line sits, pure function versus
-four view columns, and how loud an over-allocated section should be. Each
-carries a recommendation in §8. The build waits on them.
+**Questions 1-4 — the recommendation on each, same day.** Asked whether to
+take §8's recommendations on the remaining four, the planner answered
+"Build please", which settles them as recommended and authorizes the build:
+
+1. **The section percentage counts only lines that carry a percentage**, with
+   the "n lines have no % set" note as the safety valve. The headline answers
+   the question actually asked ("does 38+30+42 add to 100?"), and a line with
+   no percentage is reported separately rather than blended into that sum.
+2. **The summary is its own line, directly above the existing rollup bar** —
+   §4's two "remaining"s are different questions and one line saying both
+   would be the confusing version.
+3. **A pure function, no migration and no view change.** Nothing outside
+   `/budget` needs the figure today; the four-column
+   `v_budget_category_totals` alternative stays written up in §3 for
+   whenever something does.
+4. **An over-allocated section is a coloured line and nothing louder** — no
+   banner, no blocked save, matching spec 19 §12 decision 3.
+
+## 12. Build status (2026-09-20)
+
+Built in §9's order, immediately after §11's answers.
+
+**Pure logic** — `sectionAllocation(lines, categoryTargetAmount)` in
+`src/lib/budget.ts`: the percentage its lines claim, that figure in money
+(summed from each line's own rounded allocation, so it always equals what
+the rows print), what's left of 100%, and the counts of lines with and
+without a percentage. 8 new unit tests, including the planner's own
+38/30/42.
+
+**Screens** — a new `SectionAllocationSummary` inside `CategoryHeader`,
+rendered above the existing rollup bar and only once at least one line in
+the section carries a percentage; the "takes Drinks to 110%" clause in
+`BudgetItemFields`, fed by a `siblingAllocationPct` prop computed once per
+category in `/budget`'s page; `BudgetItemRow`'s six figures collapsed back
+to five per §7; and the wedding-level header reworded to match ("$32,000 of
+the budget allocated", "Left to allocate" / "Over-allocated").
+
+**No SQL, no query, no action changed.** The whole feature reads
+`allocation_pct` and `allocated_amount`, which spec 19's `v_budget_items`
+already returns to a page that already loads every line.
+
+**Verification actually run this session:** `npm run typecheck` (clean),
+`npm test` (481 tests, up from 473), `npm run build` (clean, 30 routes),
+and `./scripts/verify-migrations.sh` (250 assertions, unchanged — run to
+confirm nothing regressed, not because anything here touches SQL).
+
+**Not verified, same caveat as every session since 12:** nothing has run
+against a live Supabase project, and nothing has been opened in a browser.
+§10's browser passes are outstanding in full — which matters more than
+usual here, because both halves of this spec are *only* presentation.

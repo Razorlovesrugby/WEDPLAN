@@ -11,6 +11,7 @@ import {
   estimateSource,
   itemAllocation,
   pctOf,
+  sectionAllocation,
   variance,
 } from "./budget";
 
@@ -397,5 +398,81 @@ describe("variance", () => {
 
   it("is null with no allocation at all", () => {
     expect(variance(1000, null)).toBeNull();
+  });
+});
+
+describe("sectionAllocation", () => {
+  const target = 320_000; // Drinks: 8% of a $40,000 budget
+
+  it("answers the planner's own question — 38 + 30 + 42 does not add to 100", () => {
+    const result = sectionAllocation(
+      [{ allocationPct: 38 }, { allocationPct: 30 }, { allocationPct: 42 }],
+      target,
+    );
+    expect(result.allocatedPct).toBe(110);
+    expect(result.allocatedAmount).toBe(352_000); // 121600 + 96000 + 134400
+    expect(result.remainingPct).toBe(-10);
+    expect(result.remainingAmount).toBe(-32_000); // $320 over-allocated
+  });
+
+  it("reports what's left when the section is under-allocated", () => {
+    const result = sectionAllocation(
+      [{ allocationPct: 38 }, { allocationPct: 30 }, { allocationPct: 22 }],
+      target,
+    );
+    expect(result.allocatedPct).toBe(90);
+    expect(result.remainingPct).toBe(10);
+    expect(result.remainingAmount).toBe(32_000);
+  });
+
+  it("reports exactly 100% as nothing remaining, not as over", () => {
+    const result = sectionAllocation([{ allocationPct: 60 }, { allocationPct: 40 }], target);
+    expect(result.allocatedPct).toBe(100);
+    expect(result.remainingPct).toBe(0);
+    expect(result.remainingAmount).toBe(0);
+  });
+
+  it("counts lines with no percentage separately rather than blending them in", () => {
+    const result = sectionAllocation(
+      [{ allocationPct: 38 }, { allocationPct: null }, { allocationPct: undefined }],
+      target,
+    );
+    expect(result.allocatedPct).toBe(38);
+    expect(result.withPct).toBe(1);
+    expect(result.withoutPct).toBe(2);
+  });
+
+  it("distinguishes a section of un-percentaged lines from an empty one", () => {
+    const none = sectionAllocation([{ allocationPct: null }, { allocationPct: null }], target);
+    expect(none).toMatchObject({ allocatedPct: 0, withPct: 0, withoutPct: 2 });
+    const empty = sectionAllocation([], target);
+    expect(empty).toMatchObject({ allocatedPct: 0, withPct: 0, withoutPct: 0 });
+  });
+
+  it("still sums percentages with no category target, leaving every amount null", () => {
+    const result = sectionAllocation([{ allocationPct: 38 }, { allocationPct: 30 }], null);
+    expect(result.allocatedPct).toBe(68);
+    expect(result.remainingPct).toBe(32);
+    expect(result.allocatedAmount).toBeNull();
+    expect(result.remainingAmount).toBeNull();
+  });
+
+  it("sums fractional percentages without float drift", () => {
+    expect(sectionAllocation([{ allocationPct: 12.5 }, { allocationPct: 12.5 }], target).allocatedPct).toBe(25);
+    expect(
+      sectionAllocation([{ allocationPct: 0.1 }, { allocationPct: 0.2 }], target).allocatedPct,
+    ).toBe(0.3);
+  });
+
+  it("sums each line's own rounded allocation, matching what the rows show", () => {
+    // 33.33% of 3333c rounds to 1111 per line; three of them is 3333, not
+    // round(3333 * 99.99%) = 3333 — they agree here, and the point is that
+    // the figure is built from the same per-line numbers the rows print.
+    const result = sectionAllocation(
+      [{ allocationPct: 33.33 }, { allocationPct: 33.33 }, { allocationPct: 33.33 }],
+      3333,
+    );
+    expect(result.allocatedAmount).toBe(1111 * 3);
+    expect(result.allocatedPct).toBe(99.99);
   });
 });
