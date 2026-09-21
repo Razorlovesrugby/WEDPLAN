@@ -59,6 +59,25 @@
   .skeleton {
     @apply animate-pulse rounded bg-line/60;
   }
+
+  /* -------------------------------------------------------------------------
+     The public site's three type roles (spec 25 §14)
+     -------------------------------------------------------------------------
+     Script had two faces and no place to put a metadata label. Editorial needs
+     three: a display serif for headings, a serif for body, and a letterspaced
+     label for `04 · ATTIRE`, `5.00PM`, `CASUAL SUMMER`.
+
+     Both classes resolve through Tailwind's `display`/`label` families, which
+     read --font-display and --font-label. A theme that sets neither falls back
+     to the two faces it already had, so the Script preset renders exactly as
+     it did before these classes existed.
+  ------------------------------------------------------------------------- */
+  .site-heading {
+    @apply font-display;
+  }
+  .site-label {
+    @apply font-label text-[0.7rem] font-medium uppercase tracking-[0.14em];
+  }
 }
 
 /* ---------------------------------------------------------------------------

@@ -13,20 +13,36 @@ export function SiteSection({
   id,
   heading,
   intro,
+  eyebrow,
   rule = true,
   children,
 }: {
   id: string;
   heading: string;
   intro?: string | null;
+  /**
+   * `04 · ATTIRE` (spec 25 §8) — the block's number and its job, above the
+   * heading. The number is computed from position, so a page always reads 01
+   * to N with no gaps.
+   */
+  eyebrow?: string;
   rule?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section id={id} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
       <div className="mx-auto max-w-2xl">
-        {rule ? <FloralRule className="mb-8" /> : null}
-        <h2 className="text-center font-script text-4xl leading-tight text-ink sm:text-5xl">
+        {/* The rule is the Script theme's ornament. A numbered eyebrow does the
+            same job — it says a new section has started — so drawing both is
+            saying it twice. */}
+        {rule && !eyebrow ? <FloralRule className="mb-8" /> : null}
+        {eyebrow ? (
+          <p className="mb-4 flex items-center gap-2 text-muted">
+            <span aria-hidden="true" className="inline-block h-1.5 w-1.5 bg-accent" />
+            <Label>{eyebrow}</Label>
+          </p>
+        ) : null}
+        <h2 className="site-heading text-center text-4xl leading-tight text-ink sm:text-5xl">
           {heading}
         </h2>
         {intro ? (
@@ -52,7 +68,7 @@ export function SiteSection({
 export function Label({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <span
-      className={`text-[0.7rem] font-medium uppercase tracking-[0.14em] text-muted ${className ?? ""}`}
+      className={`site-label text-muted ${className ?? ""}`}
     >
       {children}
     </span>

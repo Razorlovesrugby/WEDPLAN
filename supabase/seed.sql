@@ -220,6 +220,100 @@ select
 from public.weddings w
 where w.id = '11111111-1111-4111-8111-111111111111';
 
+
+-- ---------------------------------------------------------------------------
+-- Spec 25 — the things blocks now read
+-- ---------------------------------------------------------------------------
+-- Seeded DIRECTLY rather than left to 0026's backfill, for the reason spec 23
+-- learned the hard way (its correction 3): a fresh database applies every
+-- migration BEFORE the seed, so the backfill has already run and seen nothing
+-- by the time these blocks exist. A local reset would otherwise produce a
+-- schedule with dress-code strings in its payload and no dress_codes rows —
+-- the feature looking broken on the one database anybody develops against.
+
+insert into public.dress_codes (id, wedding_id, name, sort_order) values
+  ('dc000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Lounge suits, summer dresses', 10),
+  ('dc000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Whatever you danced in', 20)
+on conflict (id) do nothing;
+
+-- Two labelled notes, which is what the app pre-fills a new code with. The
+-- labels are content, not schema — rename them, delete one, add a third.
+insert into public.dress_code_notes (id, wedding_id, dress_code_id, label, body, sort_order) values
+  ('dd000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'dc000000-0000-4000-8000-000000000001',
+   'For her', 'Summer dresses, and something warmer for the lawn once the sun goes. The ground by the barn is uneven, so a block heel will serve you better than a stiletto.', 10),
+  ('dd000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'dc000000-0000-4000-8000-000000000001',
+   'For him', 'A lounge suit, no tie needed. It is June in a field — linen over wool if you have it.', 20),
+  ('dd000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'dc000000-0000-4000-8000-000000000002',
+   'Everyone', 'The evening is in the barn and nobody is checking. Bring the shoes you can actually dance in.', 10)
+on conflict (id) do nothing;
+
+update public.events set dress_code_id = 'dc000000-0000-4000-8000-000000000001'
+ where wedding_id = '11111111-1111-4111-8111-111111111111'
+   and id in ('e1111111-1111-4111-8111-111111111111', 'e2222222-2222-4222-8222-222222222222');
+update public.events set dress_code_id = 'dc000000-0000-4000-8000-000000000002'
+ where wedding_id = '11111111-1111-4111-8111-111111111111' and id = 'e3333333-3333-4333-8333-333333333333';
+
+-- Arrival points and typed legs. Nullable everywhere: the second option below
+-- deliberately carries no cost and no duration, so the renderer is exercised
+-- against a half-filled row rather than only a complete one.
+insert into public.arrival_points (id, wedding_id, code, name, region, minutes_to_venue, sort_order) values
+  ('ab000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'BRS', 'Bristol Airport', 'England', 55, 10),
+  ('ab000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'LHR', 'London Heathrow', 'England', 150, 20)
+on conflict (id) do nothing;
+
+-- Cost is integer minor units, NZD (spec 18). 4500 is $45.00.
+insert into public.transport_options
+  (id, wedding_id, arrival_point_id, kind, name, detail, duration_minutes, cost_low, cost_high, sort_order) values
+  ('ac000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'ab000000-0000-4000-8000-000000000001',
+   'taxi', 'Taxi from Bristol Airport', 'Straight to Bath. Book ahead on a Saturday or you will wait.', 55, 6500, 8500, 10),
+  ('ac000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'ab000000-0000-4000-8000-000000000002',
+   'train', 'Train to Bath Spa', 'Paddington to Bath Spa, then a ten minute taxi. Change at Reading on some services.', 150, 4500, 12000, 20),
+  ('ac000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', null,
+   'parking', 'Parking at the venue', 'There is room for about thirty cars, and you are very welcome to leave one overnight.', null, null, null, 30)
+on conflict (id) do nothing;
+
+-- A coach run that serves a specific event, so the schedule has something to
+-- render underneath the evening party. A run with no event still renders in
+-- the coach block, which is how every run behaved before 0026.
+insert into public.coach_runs (id, wedding_id, event_id, direction, label, departs_at, capacity, sort_order) values
+  ('ae000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'e3333333-3333-4333-8333-333333333333',
+   'to_venue', 'Coach to the barn', '2027-06-12 19:15:00+01', 48, 10),
+  ('ae000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', null,
+   'from_venue', 'Last coach into town', '2027-06-13 00:30:00+01', 48, 20)
+on conflict (id) do nothing;
+
+insert into public.coach_stops (id, wedding_id, coach_run_id, name, pickup_at, sort_order) values
+  ('af000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'ae000000-0000-4000-8000-000000000001',
+   'The Crown, Bath', '2027-06-12 19:15:00+01', 10),
+  ('af000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'ae000000-0000-4000-8000-000000000001',
+   'Bath Spa station', '2027-06-12 19:30:00+01', 20)
+on conflict (id) do nothing;
+
+-- Guest participation (Part B). One note published from a household link, one
+-- from the shared page still waiting — which is the whole moderation rule,
+-- visible in the seed rather than only in a test.
+insert into public.guest_notes (id, wedding_id, household_id, author_name, body, status) values
+  ('bd000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'd0000000-0000-4000-8000-000000000001',
+   'Ada Okonkwo', 'From the first dinner you two cooked for us, we knew. Cannot wait to watch you do this.', 'approved'),
+  ('bd000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', null,
+   'Someone from the internet', 'Congratulations! Great website.', 'new')
+on conflict (id) do nothing;
+
+-- Songs: one approved (so the public list has something), one still waiting.
+-- The approved one came from a household link, which under spec 25's rule is
+-- why it is approved at all.
+insert into public.song_requests (id, wedding_id, household_id, asked_by, title, artist, status) values
+  ('ba000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'd0000000-0000-4000-8000-000000000001',
+   'Marit', 'This Must Be the Place', 'Talking Heads', 'approved'),
+  ('ba000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', null,
+   'Jeff', 'September', 'Earth, Wind & Fire', 'new')
+on conflict (id) do nothing;
+
+insert into public.song_votes (wedding_id, song_request_id, household_id) values
+  ('11111111-1111-4111-8111-111111111111', 'ba000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002'),
+  ('11111111-1111-4111-8111-111111111111', 'ba000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000003')
+on conflict do nothing;
+
 -- ---------------------------------------------------------------------------
 -- Wedding 2 — the one nobody in wedding 1 may ever see
 -- ---------------------------------------------------------------------------

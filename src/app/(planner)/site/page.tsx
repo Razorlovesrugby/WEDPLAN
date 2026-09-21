@@ -50,8 +50,14 @@ export default async function SitePage() {
           <Link href="/site/theme" className="btn">
             Theme
           </Link>
+          <Link href="/site/attire" className="btn">
+            What to wear
+          </Link>
           <Link href="/site/songs" className="btn">
             Song requests
+          </Link>
+          <Link href="/site/guestbook" className="btn">
+            Guestbook
           </Link>
           <Link href={`/w/${wedding.slug}`} target="_blank" className="btn">
             See it live

@@ -112,6 +112,16 @@ type SongRequestRelationships = [
   >,
 ];
 
+type GuestNoteRelationships = [
+  Rel<
+    "guest_notes_household_id_wedding_id_fkey",
+    ["household_id", "wedding_id"],
+    "households",
+    ["id", "wedding_id"],
+    true
+  >,
+];
+
 type RsvpAnswerRelationships = [
   Rel<
     "rsvp_answers_question_id_wedding_id_fkey",
@@ -349,6 +359,61 @@ export type TransportOptionRow = {
   name: string;
   detail: string | null;
   url: string | null;
+  /**
+   * Spec 25 §5. All four nullable, and that is the promise: 0017 refused these
+   * columns because a wedding people drive to would show empty ones. The
+   * renderer draws only what is filled.
+   */
+  arrival_point_id: string | null;
+  duration_minutes: number | null;
+  /** Integer minor units, NZD (spec 18). Never a float. */
+  cost_low: number | null;
+  cost_high: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Where guests fly or sail into, and how far it is (spec 25 §5). */
+export type ArrivalPointRow = {
+  id: string;
+  wedding_id: string;
+  /** The big display token — MXP. Null when it is not an airport. */
+  code: string | null;
+  name: string;
+  region: string | null;
+  minutes_to_venue: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A named dress code an event points at (spec 25 §4). */
+export type DressCodeRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  board_id: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * One labelled block of guidance under a code.
+ *
+ * `label` is free text on purpose. Two columns called for_her and for_him
+ * would hardcode a gender binary into the schema of a product whose guest list
+ * does not have one; the app pre-fills those two words and the couple may
+ * write anything (spec 25 Answered, question 1).
+ */
+export type DressCodeNoteRow = {
+  id: string;
+  wedding_id: string;
+  dress_code_id: string;
+  label: string;
+  body: string | null;
+  board_id: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -359,6 +424,12 @@ export type CoachRunRow = {
   wedding_id: string;
   direction: CoachDirection;
   label: string;
+  /**
+   * The event this run serves, so the schedule can render it under that event
+   * (spec 25 §6). Null means the whole weekend, which is how every run behaved
+   * before 0026 and how they keep behaving.
+   */
+  event_id: string | null;
   departs_at: string | null;
   /** Null means "not counted yet", which is not the same as zero. */
   capacity: number | null;
@@ -465,6 +536,8 @@ export type EventRow = {
    * carries supplier phone numbers.
    */
   guest_note: string | null;
+  /** The dress code this event wears (spec 25 §4). */
+  dress_code_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -701,6 +774,40 @@ export type RsvpTokenAttemptRow = {
   ip_hash: string;
   succeeded: boolean;
   attempted_at: string;
+};
+
+/**
+ * One household's vote for one song (spec 25 §11).
+ *
+ * `household_id` is NOT NULL here and in the database, and that is the design
+ * rather than an oversight: without identity, "one vote each" is a cookie, and
+ * a cookie is a suggestion (spec 25 Answered, question 4).
+ */
+export type SongVoteRow = {
+  id: string;
+  wedding_id: string;
+  song_request_id: string;
+  household_id: string;
+  created_at: string;
+};
+
+/**
+ * A line in the guestbook (spec 25 §12).
+ *
+ * Born `approved` when it came from a household's own link and `new` when it
+ * came from the shared address — the one rule that made reopening spec 23's
+ * cut affordable. No `played`; that rung belongs to a song.
+ */
+export type GuestNoteRow = {
+  id: string;
+  wedding_id: string;
+  household_id: string | null;
+  guest_id: string | null;
+  author_name: string | null;
+  body: string;
+  status: "new" | "approved" | "ignored";
+  created_at: string;
+  updated_at: string;
 };
 
 export type SavedViewRow = {
@@ -1252,7 +1359,10 @@ export type Database = {
         "id" | Timestamps | "timezone" | "reminder_window_days" | "slug"
       >;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
-      events: Table<EventRow, "id" | Timestamps | "is_public" | "sort_order" | "guest_note">;
+      events: Table<
+        EventRow,
+        "id" | Timestamps | "is_public" | "sort_order" | "guest_note" | "dress_code_id"
+      >;
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted" | "slug" | "slug_suffix">;
       household_slug_aliases: Table<HouseholdSlugAliasRow, "retired_at">;
       guest_event_overrides: Table<GuestEventOverrideRow, Timestamps>;
@@ -1292,8 +1402,33 @@ export type Database = {
       >;
       rsvp_answers: Table<RsvpAnswerRow, "id" | "answered_at" | "value", RsvpAnswerRelationships>;
       message_log: Table<MessageLogRow, "id" | "created_at" | "channel" | "status">;
-      transport_options: Table<TransportOptionRow, "id" | Timestamps | "kind" | "sort_order">;
-      coach_runs: Table<CoachRunRow, "id" | Timestamps | "sort_order">;
+      transport_options: Table<
+        TransportOptionRow,
+        | "id"
+        | Timestamps
+        | "kind"
+        | "sort_order"
+        | "arrival_point_id"
+        | "duration_minutes"
+        | "cost_low"
+        | "cost_high"
+      >;
+      arrival_points: Table<
+        ArrivalPointRow,
+        "id" | Timestamps | "sort_order" | "code" | "region" | "minutes_to_venue"
+      >;
+      dress_codes: Table<DressCodeRow, "id" | Timestamps | "sort_order" | "board_id">;
+      dress_code_notes: Table<
+        DressCodeNoteRow,
+        "id" | Timestamps | "sort_order" | "body" | "board_id"
+      >;
+      song_votes: Table<SongVoteRow, "id" | "created_at">;
+      guest_notes: Table<
+        GuestNoteRow,
+        "id" | Timestamps | "status" | "household_id" | "guest_id" | "author_name",
+        GuestNoteRelationships
+      >;
+      coach_runs: Table<CoachRunRow, "id" | Timestamps | "sort_order" | "event_id">;
       coach_stops: Table<CoachStopRow, "id" | Timestamps | "sort_order", CoachStopRelationships>;
       coach_seats: Table<CoachSeatRow, "id" | Timestamps, CoachSeatRelationships>;
       accommodations: Table<AccommodationRow, "id" | Timestamps | "sort_order", AccommodationRelationships>;

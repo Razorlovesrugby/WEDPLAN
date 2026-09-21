@@ -39,6 +39,16 @@ export default {
         // the fallback stack anywhere else — the planner app never loads them.
         script: ["var(--font-script)", "Snell Roundhand", "Apple Chancery", "cursive"],
         body: ["var(--font-body)", "Georgia", "Cambria", "serif"],
+        // Spec 25 Part C. A theme sets --font-display and --font-label to the
+        // faces it wants; Script points both back at its own two, so nothing
+        // changes for a wedding that keeps it.
+        // The fallback goes INSIDE var(), not as the next entry in the list:
+        // an undefined custom property makes the whole font-family declaration
+        // invalid at computed-value time, so `var(--font-display), var(--font-script)`
+        // would render a Script-theme heading in the browser default rather
+        // than in Pinyon.
+        display: ["var(--font-display, var(--font-script))", "Georgia", "Cambria", "serif"],
+        label: ["var(--font-label, var(--font-body))", "Georgia", "Cambria", "serif"],
       },
     },
   },

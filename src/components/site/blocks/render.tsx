@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BLOCKS, type BlockStyle, type SiteBlock } from "@/lib/site/blocks";
+import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlock } from "@/lib/site/blocks";
 import { text } from "@/lib/site/sections";
 import { formatDate, daysUntil } from "@/lib/format";
 import { SiteHero } from "../hero";
@@ -17,6 +17,12 @@ import { GuestUploader } from "../guest-uploader";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
 import { SongRequestForm } from "../song-requests";
+import { SongList } from "../song-list";
+import { Guestbook } from "../guestbook";
+import { Attire } from "../attire";
+import { Arrivals } from "../arrivals";
+import { runsByEvent } from "../event-inline";
+import { visibleDressCodes } from "@/lib/site/dress-codes";
 import { DressCode, MapBlock, PhotoBand, PhotoText, Playlist } from "./media";
 import type { RenderContext } from "@/server/queries/site-render";
 
@@ -50,11 +56,14 @@ function Shell({
   block,
   heading,
   intro,
+  mark,
   children,
 }: {
   block: SiteBlock;
   heading?: string | null;
   intro?: string | null;
+  /** `04 · ATTIRE` (spec 25 §8). Absent on a block that is not a destination. */
+  mark?: SectionMark;
   children: React.ReactNode;
 }) {
   const style = block.style ?? {};
@@ -80,17 +89,35 @@ function Shell({
 
   return (
     <div className={background}>
-      <SiteSection id={block.type} heading={label} intro={intro ?? undefined}>
+      <SiteSection
+        id={block.type}
+        heading={label}
+        intro={intro ?? undefined}
+        eyebrow={mark ? `${mark.number} · ${mark.label}` : undefined}
+      >
         <div className={`mx-auto ${WIDTH_CLASS[style.width ?? "contained"]}`}>{children}</div>
       </SiteSection>
     </div>
   );
 }
 
-export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderContext }) {
+export function SiteBlockView({
+  block,
+  ctx,
+  mark,
+}: {
+  block: SiteBlock;
+  ctx: RenderContext;
+  mark?: SectionMark;
+}) {
   const { payload } = block;
   const personal = ctx.personal;
   const intro = text(payload, "intro");
+
+  // Spec 25 §6: which shuttle serves which event, and which code each event
+  // wears. Computed once per block rather than per event row.
+  const coachByEvent = runsByEvent(ctx.travel.runs);
+  const dressCodes = ctx.extras.dressCodes;
 
   switch (block.type) {
     // -- essentials ---------------------------------------------------------
@@ -112,6 +139,26 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
             imageAlt={text(payload, "image_alt")}
             monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
           />
+          {/* A line about why, under the date — "to celebrate those closest to
+              us". Short, and the only sentence in the hero. */}
+          {intro ? (
+            <p className="px-5 pt-6 text-center text-[1.0625rem] italic text-muted">{intro}</p>
+          ) : null}
+          {/* The countdown lives here now (spec 25 §7) rather than being a
+              separate block that could end up three sections from the date it
+              counts to. The standalone `countdown` block still renders for any
+              page that already has one. */}
+          {payload && (payload as Record<string, unknown>)["show_countdown"] === true &&
+          ctx.wedding.wedding_date &&
+          daysUntil(ctx.wedding.wedding_date) !== null ? (
+            <div className="pt-8">
+              <Countdown
+                weddingDate={ctx.wedding.wedding_date}
+                initialDays={daysUntil(ctx.wedding.wedding_date)!}
+                label={text(payload, "countdown_label")}
+              />
+            </div>
+          ) : null}
           {/* Whose page this is. One line, and the only thing on the shared
               site that is missing from it. */}
           {personal ? (
@@ -138,7 +185,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
 
     case "story":
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <Story payload={payload} />
         </Shell>
       );
@@ -201,22 +248,26 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
       // public, for a reader we do not know.
       return personal ? (
         personal.events.length === 0 ? null : (
-          <Shell block={block} heading="You're invited to" intro={intro}>
+          <Shell block={block} heading="You're invited to" intro={intro} mark={mark}>
             <InvitedEvents
               events={personal.events}
               members={personal.members}
               invitedByEvent={personal.invitedByEvent}
               timeZone={ctx.wedding.timezone}
+              dressCodes={dressCodes}
+              coachByEvent={coachByEvent}
             />
           </Shell>
         )
       ) : (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <Schedule
             events={ctx.events}
             payload={payload}
             timeZone={ctx.wedding.timezone}
             invitedEventIds={null}
+            dressCodes={dressCodes}
+            coachByEvent={coachByEvent}
           />
         </Shell>
       );
@@ -226,7 +277,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
       const hasNotes = personal.events.some((event) => event.guest_note?.trim());
       if (!hasNotes) return null;
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <OnTheDay events={personal.events} timeZone={ctx.wedding.timezone} />
         </Shell>
       );
@@ -235,7 +286,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
     case "rsvp":
       if (!personal) {
         return (
-          <Shell block={block} heading="RSVP">
+          <Shell block={block} heading="RSVP" mark={mark}>
             <RsvpPointer payload={payload} />
           </Shell>
         );
@@ -271,7 +322,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
 
     case "faq":
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <Faq payload={payload} />
         </Shell>
       );
@@ -279,9 +330,19 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
     case "dress_code": {
       const boardId = text(payload, "board_id");
       const board = boardId ? ctx.boards.find((entry) => entry.board.id === boardId) : null;
+
+      // Narrowed to the codes covering events this reader can see: on a
+      // household's page, a code whose only event is the brunch they were not
+      // invited to would name a party nobody told them about (spec 25 §4).
+      const codes = visibleDressCodes(
+        dressCodes,
+        personal ? new Set(personal.events.map((event) => event.id)) : null,
+      );
+
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <DressCode payload={payload}>
+            {codes.length > 0 ? <Attire codes={codes} boards={ctx.boards} /> : null}
             {board ? <PublicBoardView board={board} /> : null}
           </DressCode>
         </Shell>
@@ -290,14 +351,14 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
 
     case "party":
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <Party payload={payload} />
         </Shell>
       );
 
     case "things_to_do":
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <ThingsToDo payload={payload} />
         </Shell>
       );
@@ -307,7 +368,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
       const images = ctx.gallery;
       if (images.length === 0 && !personal) return null;
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <div className="space-y-10">
             <GalleryGrid images={images} />
             {/* Uploading is a thing only a household can do — the open
@@ -365,12 +426,19 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
 
     case "travel": {
       const prose = text(payload, "intro") ?? text(payload, "body");
+      // A wedding that has set up arrival points gets the grouped rendering;
+      // one that has not gets exactly the list it had before (spec 25 §5).
+      const hasArrivals = ctx.extras.arrivals.length > 0;
       return (
-        <Shell block={block}>
+        <Shell block={block} mark={mark}>
           <div className="space-y-10">
             {prose ? <Prose body={prose} /> : null}
             <CoachSection runs={ctx.travel.runs} timeZone={ctx.wedding.timezone} bookable={false} />
-            <TransportList options={ctx.travel.transport} />
+            {hasArrivals ? (
+              <Arrivals points={ctx.extras.arrivals} legs={ctx.travel.transport} />
+            ) : (
+              <TransportList options={ctx.travel.transport} />
+            )}
           </div>
         </Shell>
       );
@@ -378,7 +446,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
 
     case "stays":
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           <div className="space-y-10">
             <StaysList stays={ctx.travel.stays} />
           </div>
@@ -388,7 +456,7 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
     case "coach": {
       if (ctx.travel.runs.length === 0) return null;
       return (
-        <Shell block={block} intro={intro}>
+        <Shell block={block} intro={intro} mark={mark}>
           {personal && personal.token ? (
             <CoachBooking
               token={personal.token}
@@ -406,18 +474,37 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
     // -- music --------------------------------------------------------------
     case "song_requests":
       return (
-        <Shell block={block} intro={null}>
+        <Shell block={block} intro={null} mark={mark}>
           <SongRequestForm
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             intro={intro ?? "Tell us what will get you dancing."}
+          />
+          {/* Spec 25 §11 — approved requests, rendered back, because a form
+              nobody sees the result of is a suggestion box. */}
+          <SongList
+            weddingSlug={ctx.wedding.slug}
+            token={personal?.token ?? null}
+            songs={ctx.extras.songs}
+          />
+        </Shell>
+      );
+
+    case "guestbook":
+      return (
+        <Shell block={block} intro={intro} mark={mark}>
+          <Guestbook
+            weddingSlug={ctx.wedding.slug}
+            token={personal?.token ?? null}
+            prompt={text(payload, "prompt")}
+            notes={ctx.extras.notes}
           />
         </Shell>
       );
 
     case "playlist":
       return (
-        <Shell block={block} heading={text(payload, "heading") ?? "The playlist"}>
+        <Shell block={block} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
           <Playlist
             payload={payload}
             embed={block.style?.embed === true}
@@ -430,10 +517,15 @@ export function SiteBlockView({ block, ctx }: { block: SiteBlock; ctx: RenderCon
 
 /** The whole page. */
 export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderContext }) {
+  // Numbered here, over the blocks this reader actually gets: the caller has
+  // already dropped hidden blocks and ones for another audience, so a guest
+  // never sees 01, 02, 04 and wonders what they missed (spec 25 §8).
+  const marks = sectionNumbers(blocks);
+
   return (
     <>
       {blocks.map((block) => (
-        <SiteBlockView key={block.id} block={block} ctx={ctx} />
+        <SiteBlockView key={block.id} block={block} ctx={ctx} mark={marks.get(block.id)} />
       ))}
     </>
   );

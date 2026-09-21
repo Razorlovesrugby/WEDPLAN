@@ -1,7 +1,10 @@
 # Spec 25 — Blocks that know things
 
-**Status: proposed, not built.** Seven open questions (§19); nothing beyond
-this document exists. Two migrations are sketched and neither is written.
+**Status: built, 2026-09-21.** All seven questions answered and the build
+authorized the same day. See "Build status" below for what exists, the six
+things the build corrected or discovered, and what was left. §19 keeps the
+questions as they were asked; "Answered" is the authoritative record of what
+they were answered with.
 
 **Depends on:** spec 23 (the block catalogue, `site_blocks`, `site_revisions`,
 the shared renderer), spec 22 (`v_guest_event_invites`, which decides whose
@@ -29,6 +32,118 @@ never been opened in a browser. Every comparison below is between aisle's
 rendered pages and our source. The gaps are structural — they are about what
 data a block can reach, not about how it looks — so they survive that caveat
 better than spec 24's do. But nobody has seen ours.
+
+---
+
+## Answered — 2026-09-21
+
+All seven, four of them put to the planner directly and four answered as
+recommended. The build was authorized in the same message.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Dress-code guidance shape | **Labelled notes, defaulting to "For her" / "For him".** A new code is pre-filled with those two, so the common case matches the reference exactly; the labels are content, and a couple can rename them, delete one, or add "For the wedding party". The schema carries no gender binary |
+| 2 | Typefaces for Editorial | **Fraunces for display, Inter for labels, EB Garamond stays as body.** Both new faces are SIL Open Font License and subset cleanly. Fraunces is variable with optical sizing, which is what gets genuine display contrast at headline sizes without falling apart small. Keeping EB Garamond halves the new font payload and matches the reference, whose body is a serif |
+| 3 | Moderation | **A household link publishes; the shared page queues.** §10's model as written. Spec 21 minted `slug_suffix` as a credential, so a reader holding one is an invited guest and not a stranger |
+| 4 | Song voting from the shared page | **Add yes, vote no.** Anyone with the site address can suggest a song and see the list; voting needs a household link, because without identity "one vote each" is a cookie and a cookie is a suggestion. The same rule governs the one-song limit |
+| 5 | Existing weddings and Editorial | **Default for new weddings only.** Script stays available and nothing already chosen changes. Answered in the round that scoped this spec |
+| 6 | Does hiding a block renumber the rest | **Yes, computed.** The page always reads 01 to N with no gaps. Numbers are positional, never stored |
+| 7 | "On the day" once the schedule carries the note | **Stays on by default.** The event gets the note as well, not instead; a planner who wants those notes collected in one place keeps that, and anyone who does not can hide one block |
+
+Questions 5 to 7 were taken as settled rather than asked again: 5 was answered
+when the spec's scope was chosen, and 6 and 7 had a clear proposal in §8 and §6
+with no cost to being wrong — both are one-line changes if the planner disagrees
+once they can see it.
+
+---
+
+## Build status — 2026-09-21
+
+`npm run typecheck`, `npm test` (582, up from 541), `./scripts/verify-migrations.sh`
+(388 assertions, up from 356), `./scripts/verify-migrations-single-tx.sh` and
+`npm run build` all pass.
+
+### Done
+
+| Part | What exists | Where |
+| --- | --- | --- |
+| A | `dress_codes`, `dress_code_notes`, `events.dress_code_id`, `coach_runs.event_id`, `arrival_points`, four nullable columns on `transport_options`, and the backfill out of `site_blocks` payloads | `supabase/migrations/0026_dress_codes_and_travel.sql` |
+| A | The record logic, all pure and unit-tested — `resolveDressCodes`, `eventDressCode`, `coverageLabel`, `visibleDressCodes`; `formatDuration`, `formatCostRange`, `groupByArrival` | `src/lib/site/dress-codes.ts`, `travel.ts` (+ tests) |
+| A | The tag and the shuttle INSIDE the event, drawn by one component both schedule renderers call | `src/components/site/event-inline.tsx` |
+| A | The attire section — each code, the events it covers, its labelled notes, its boards | `src/components/site/attire.tsx` |
+| A | Arrival points with typed legs, falling back to the old flat list when a wedding has none | `src/components/site/arrivals.tsx` |
+| A | The hero absorbs the countdown and gains "a line about why"; `countdown` deprecated but still renders | `blocks.ts`, `render.tsx` |
+| A | `sectionNumbers()` and the `NN · LABEL` eyebrow, computed from position | `blocks.ts`, `section.tsx` |
+| A | `/site/attire` — codes, notes, and coverage as tickboxes over events | `src/app/(planner)/site/attire/`, `attire-editor.tsx` |
+| A | Arrival points, leg duration/cost, and the coach-run event picker on `/travel` | `travel-editor.tsx`, `src/server/actions/travel.ts` |
+| B | `song_votes` (household NOT NULL), `guest_notes`, and `song_requests`'s composite unique | `supabase/migrations/0027_guest_participation.sql` |
+| B | The rule, as one function both write paths call | `src/lib/site/participation.ts` (+ tests) |
+| B | The public song list with votes, and the guestbook | `song-list.tsx`, `guestbook.tsx`, `src/server/actions/songs.ts`, `guestbook.ts` |
+| B | `/site/guestbook` — the queue, defaulting to what is actually waiting | `src/app/(planner)/site/guestbook/`, `guest-note-list.tsx` |
+| C | Fraunces and Inter, self-hosted, latin + latin-ext; `siteFontClasses()` loads them only for Editorial | `src/lib/fonts/` |
+| C | Three type roles — `.site-heading`, `.site-label`, and the `display`/`label` Tailwind families | `globals.css`, `tailwind.config.ts` |
+| C | Editorial available and the default for new weddings, with existing ones pinned to Script first | `presets.ts`, `supabase/migrations/0028_editorial_default.sql` |
+
+### Six things the build corrected or discovered
+
+1. **`v_coach_runs` would not have seen the new column.** The view lists its
+   columns explicitly (0017's own note, taking 0014's lesson about `r.*`
+   expanding at definition time), so `coach_runs.event_id` was invisible to
+   every reader. `0026` recreates it with `event_id` **appended**, because
+   `create or replace view` may only add columns at the end.
+
+2. **An undefined CSS custom property invalidates the whole declaration.**
+   `font-family: var(--font-display), var(--font-script)` does NOT fall back to
+   the second entry when the first is undefined — the property is thrown away
+   at computed-value time and the heading renders in the browser default. The
+   fallback had to go *inside* the `var()`. Getting this wrong would have
+   silently unstyled every Script-theme heading.
+
+3. **The theme default could not simply be flipped.** `resolveTheme(null)`
+   returns `DEFAULT_THEME`, so every wedding that had never opened the theme
+   editor was rendering Script *by fallback*, not by choice. Changing the
+   constant would have restyled all of them overnight — the opposite of
+   "nothing existing changes". `0028` pins them explicitly first; the constant
+   moved only after that.
+
+4. **An existing test counted the whole fixture.** `10_site_blocks.sql` §8
+   asserted "2 song requests in this wedding" — true only while the seed had
+   none. Spec 25's seed adds two, so those three assertions are now scoped to
+   the rows that test inserts, which is what they always meant.
+
+5. **The migrations README had gone stale at `0019`** while the directory held
+   files through `0025` — precisely the failure its own warning describes.
+   Brought up to date through `0028`, with a note saying it went stale so
+   anybody who applied by hand between sessions 23 and 29 knows to check.
+
+6. **A dress code covering only events a household cannot see is a
+   disclosure.** Not in the spec, found while wiring the renderer: printing
+   "For Farewell Brunch" on the page of a household not invited to the brunch
+   names a party nobody told them about. `visibleDressCodes()` drops those and
+   narrows the coverage line; a code covering nothing at all is kept, because
+   that is general guidance rather than a leak.
+
+### Not done, and worth knowing
+
+- **Nothing has been opened in a browser**, and Part C is typography. A
+  passing build says nothing whatsoever about whether Fraunces at 96px sits
+  well over Inter at 0.7rem, or whether the numbered eyebrow reads as
+  structure or as clutter. This is the part most likely to want an hour and a
+  screen.
+- **`0026`, `0027` and `0028` are not applied to the live project** — nor are
+  `0022` through `0025` from the three sessions before. They apply in order.
+- **No catalogue search for songs** (§11). Plain title and artist fields; a
+  music API is a third party and spec 23 Q1's rule governs it.
+- **The backfill only sees draft blocks.** A wedding whose schedule block was
+  created after `0026` ran keeps its per-event dress-code string, and
+  `DressCodeTag` falls back to rendering it — so nothing is lost, but those
+  strings are not records and do not appear in the attire section.
+- **`accommodations` gained nothing.** No price, no room balance: payments are
+  out (§16) and that has not quietly changed.
+- **No Editorial-specific hero.** `defaultHero: "full"` is declared and the
+  hero component honours the three existing styles, but nothing was built to
+  make a full-bleed Editorial hero look different from a full-bleed Script one
+  beyond the faces.
 
 ## 2. The diagnosis: four rules aisle follows and we do not
 

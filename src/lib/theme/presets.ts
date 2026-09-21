@@ -1,13 +1,16 @@
 import { toRgbChannels, type PaletteTokens } from "./contrast";
 
 /**
- * The theme system for the public site (spec 14 §5).
+ * The theme system for the public site (spec 14 §5, extended by spec 25 Part C).
  *
- * Four presets are described; **only `script` is built**, because that is what
- * the planner chose and a preset nobody has picked is a file that rots. The
- * other three are declared here with their type stacks so adding one later is
- * a stylesheet rather than a refactor of every component — the section
- * renderer reads tokens, never a preset name.
+ * Two presets are built now: `script`, the traditional stationery register,
+ * and `editorial`. The remaining two are still declarations — adding one is a
+ * stylesheet rather than a refactor, because the renderer reads tokens and
+ * never a preset name.
+ *
+ * **Editorial is the default for a NEW wedding** (spec 25 Answered, question
+ * 5); nothing already chosen changes, because the theme lives in a
+ * `site_content` row that only `/site/theme` writes.
  *
  * Palettes are five tokens, deliberately the same five the planner app already
  * uses (`ink`, `paper`, `muted`, `line`, `accent`), so every existing
@@ -41,8 +44,13 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   editorial: {
     id: "editorial",
     label: "Editorial",
-    description: "Magazine. High-contrast serif display, grotesque body, wide margins, hairline rules.",
-    available: false,
+    // The original declaration said "grotesque body". The reference this was
+    // built against sets its body in a serif and uses the grotesque only for
+    // metadata — a grotesque body reads noticeably colder, so the description
+    // is corrected here rather than the build quietly diverging from it.
+    description:
+      "Magazine. High-contrast serif display, serif body, letterspaced labels, numbered sections.",
+    available: true,
     defaultHero: "full",
   },
   deckle: {
@@ -116,7 +124,27 @@ export type SiteTheme = {
   monogram: boolean;
 };
 
+/**
+ * What a wedding with no saved theme gets.
+ *
+ * Editorial since spec 25 Part C. **This is only safe because `0028` wrote an
+ * explicit `script` row for every wedding that existed when it ran** — without
+ * that, moving this line would have restyled every site that had never opened
+ * the theme editor. A future change to this default owes the same courtesy.
+ *
+ * `monogram` is false and `heroStyle` is `full`: the monogram is a Script
+ * ornament, and Editorial's hero is a full-bleed photograph.
+ */
 export const DEFAULT_THEME: SiteTheme = {
+  preset: "editorial",
+  palette: "ivory",
+  customTokens: null,
+  heroStyle: "full",
+  monogram: false,
+};
+
+/** What Script looked like when it was the default — used by its own tests. */
+export const SCRIPT_THEME: SiteTheme = {
   preset: "script",
   palette: "ivory",
   customTokens: null,

@@ -6,6 +6,8 @@ import {
   STARTER_LAYOUTS,
   isBlockType,
   pageNotes,
+  palletableBlocks,
+  sectionNumbers,
   typesAtLimit,
   visibleBlocks,
   type SiteBlock,
@@ -197,5 +199,65 @@ describe("blockNavItems", () => {
   it("lists a repeated type once — that is where the anchor lands", () => {
     const blocks = [block({ type: "gallery" }), block({ type: "gallery" })];
     expect(blockNavItems(blocks)).toHaveLength(1);
+  });
+});
+
+describe("sectionNumbers — the eyebrow above each section", () => {
+  it("numbers the destinations and skips the punctuation", () => {
+    const marks = sectionNumbers([
+      block({ id: "a", type: "hero" }),
+      block({ id: "b", type: "schedule" }),
+      block({ id: "c", type: "photo_band" }),
+      block({ id: "d", type: "rsvp" }),
+    ]);
+    // A hero is not somewhere you arrive, and a photo band is rhythm.
+    expect([...marks.keys()]).toEqual(["b", "d"]);
+    expect(marks.get("b")).toEqual({ number: "01", label: "The weekend" });
+    expect(marks.get("d")).toEqual({ number: "02", label: "Your reply" });
+  });
+
+  it("closes the gap when a block is removed from the list", () => {
+    // Numbers are computed, never stored (spec 25 Answered, question 6): a
+    // guest counting 01, 02, 04 wonders what they missed.
+    const marks = sectionNumbers([
+      block({ id: "b", type: "schedule" }),
+      block({ id: "d", type: "rsvp" }),
+      block({ id: "e", type: "faq" }),
+    ]);
+    expect(marks.get("e")?.number).toBe("03");
+
+    const fewer = sectionNumbers([block({ id: "b", type: "schedule" }), block({ id: "e", type: "faq" })]);
+    expect(fewer.get("e")?.number).toBe("02");
+  });
+
+  it("pads to two digits", () => {
+    expect(sectionNumbers([block({ id: "b", type: "schedule" })]).get("b")?.number).toBe("01");
+  });
+
+  it("numbers two blocks of the same type separately", () => {
+    const marks = sectionNumbers([
+      block({ id: "a", type: "prose" }),
+      block({ id: "b", type: "schedule" }),
+    ]);
+    // prose has no eyebrow — the planner writes its own heading.
+    expect([...marks.keys()]).toEqual(["b"]);
+  });
+
+  it("is empty for a page of nothing but photographs", () => {
+    expect(sectionNumbers([block({ type: "photo_band" }), block({ type: "photo_text" })]).size).toBe(0);
+  });
+});
+
+describe("palletableBlocks", () => {
+  it("hides the deprecated countdown but keeps it in the catalogue", () => {
+    // Removing the type would blank the countdown on every revision already
+    // published — toBlock() drops what it does not recognise.
+    expect(palletableBlocks().some((def) => def.type === "countdown")).toBe(false);
+    expect(BLOCKS.countdown).toBeDefined();
+    expect(BLOCK_TYPES).toContain("countdown");
+  });
+
+  it("offers the guestbook", () => {
+    expect(palletableBlocks().some((def) => def.type === "guestbook")).toBe(true);
   });
 });

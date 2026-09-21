@@ -1,13 +1,25 @@
 import Link from "next/link";
 import { TravelEditor } from "@/components/travel/travel-editor";
 import { getTravel } from "@/server/queries/travel";
+import { getArrivalPoints } from "@/server/queries/site-extras";
 import { requireWedding } from "@/server/queries/wedding";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Getting there" };
 
 export default async function TravelPage() {
   const wedding = await requireWedding();
-  const data = await getTravel(wedding.id);
+  const supabase = await createClient();
+  const [data, arrivals, { data: events }] = await Promise.all([
+    getTravel(wedding.id),
+    getArrivalPoints(wedding.id),
+    supabase
+      .from("events")
+      .select("id, name")
+      .eq("wedding_id", wedding.id)
+      .order("sort_order")
+      .order("starts_at"),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -22,7 +34,12 @@ export default async function TravelPage() {
         </p>
       </div>
 
-      <TravelEditor data={data} timeZone={wedding.timezone} />
+      <TravelEditor
+        data={data}
+        arrivals={arrivals}
+        events={events ?? []}
+        timeZone={wedding.timezone}
+      />
     </div>
   );
 }

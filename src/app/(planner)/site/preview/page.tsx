@@ -1,4 +1,4 @@
-import { body, script } from "@/lib/fonts";
+import { siteFontClasses } from "@/lib/fonts";
 import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
 import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-render";
@@ -67,7 +67,7 @@ export default async function SitePreviewPage({
   return (
     <div
       style={themeCssVars(ctx.theme)}
-      className={`${script.variable} ${body.variable} -m-4 min-h-screen bg-paper font-body text-ink antialiased sm:-m-6`}
+      className={`${siteFontClasses(ctx.theme.preset)} -m-4 min-h-screen bg-paper font-body text-ink antialiased sm:-m-6`}
     >
       {shown.length === 0 ? (
         <p className="p-10 text-center text-sm text-muted">
