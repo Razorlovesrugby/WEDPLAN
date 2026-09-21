@@ -243,3 +243,58 @@ function revalidateGallery() {
   revalidatePath("/w");
   revalidatePath("/w/[slug]", "page");
 }
+
+/**
+ * Whether guests may add photos, and whether their photos wait for approval
+ * (spec 14 §9, moved here by spec 23).
+ *
+ * These two settings used to be fields on the site's Photos *section*, edited
+ * in the old section editor. The builder replaced that editor, and a page
+ * block is the wrong home for them anyway: uploads have to be gated whether
+ * or not the couple has put a gallery block on the page, so this is
+ * configuration — like the theme — rather than content.
+ *
+ * It keeps its `site_content` row, which is what `galleryPolicy()` and the
+ * public read path already look at.
+ */
+export async function setGallerySettings(fields: {
+  uploads_open: boolean;
+  moderation: "review" | "auto";
+}): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      uploads_open: z.coerce.boolean(),
+      moderation: z.enum(["review", "auto"]),
+    })
+    .safeParse(fields);
+  if (!parsed.success) return fail("That setting didn't look right");
+
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("site_content")
+    .select("payload")
+    .eq("wedding_id", wedding.id)
+    .eq("block_key", "gallery")
+    .maybeSingle();
+
+  const payload = {
+    ...((existing?.payload ?? {}) as Record<string, unknown>),
+    uploads_open: parsed.data.uploads_open,
+    moderation: parsed.data.moderation,
+  };
+
+  const { error } = await supabase
+    .from("site_content")
+    .upsert(
+      { wedding_id: wedding.id, block_key: "gallery", payload: payload as never },
+      { onConflict: "wedding_id,block_key", ignoreDuplicates: false },
+    );
+
+  if (error) return fail(error.message);
+
+  revalidatePath("/gallery");
+  revalidatePath("/w", "layout");
+  return ok(undefined);
+}

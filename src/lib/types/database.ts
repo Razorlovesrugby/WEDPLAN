@@ -102,6 +102,16 @@ type InvitationRelationships = [
   >,
 ];
 
+type SongRequestRelationships = [
+  Rel<
+    "song_requests_household_id_wedding_id_fkey",
+    ["household_id", "wedding_id"],
+    "households",
+    ["id", "wedding_id"],
+    true
+  >,
+];
+
 type RsvpAnswerRelationships = [
   Rel<
     "rsvp_answers_question_id_wedding_id_fkey",
@@ -474,6 +484,46 @@ export type HouseholdRow = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+/** One block of the site the planner is editing (spec 23 §4). */
+export type SiteBlockRow = {
+  id: string;
+  wedding_id: string;
+  type: string;
+  payload: Json;
+  style: Json;
+  sort_order: number;
+  visible: boolean;
+  audience: "everyone" | "invited" | "public_only";
+  created_at: string;
+  updated_at: string;
+}
+
+/** A published snapshot of the whole page. What guests actually see. */
+export type SiteRevisionRow = {
+  id: string;
+  wedding_id: string;
+  published_at: string;
+  published_by: string | null;
+  blocks: Json;
+  note: string | null;
+}
+
+/** A song a guest asked for (spec 23 §8). */
+export type SongRequestRow = {
+  id: string;
+  wedding_id: string;
+  household_id: string | null;
+  guest_id: string | null;
+  /** The optional "your name" field — a name, never an identity. */
+  asked_by: string | null;
+  title: string;
+  artist: string | null;
+  note: string | null;
+  status: "new" | "approved" | "played" | "ignored";
+  created_at: string;
+  updated_at: string;
 }
 
 /** A per-guest exception to their household's invitation (spec 22 §4). */
@@ -1206,6 +1256,16 @@ export type Database = {
       households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted" | "slug" | "slug_suffix">;
       household_slug_aliases: Table<HouseholdSlugAliasRow, "retired_at">;
       guest_event_overrides: Table<GuestEventOverrideRow, Timestamps>;
+      site_blocks: Table<
+        SiteBlockRow,
+        "id" | Timestamps | "payload" | "style" | "sort_order" | "visible" | "audience"
+      >;
+      site_revisions: Table<SiteRevisionRow, "id" | "published_at" | "published_by" | "note">;
+      song_requests: Table<
+        SongRequestRow,
+        "id" | Timestamps | "status" | "household_id" | "guest_id" | "asked_by" | "artist" | "note",
+        SongRequestRelationships
+      >;
       invitation_views: Table<InvitationViewRow, "id" | "viewed_at" | "source">;
       cut_lines: Table<CutLineRow, "id" | Timestamps>;
       guests: Table<

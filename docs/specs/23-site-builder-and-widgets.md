@@ -1,16 +1,91 @@
 # Spec 23 — The site builder: blocks, widgets, photos and a live preview
 
-**Status: proposed, fully answered (2026-09-20 — see "Decided" and
-"Answered" below). Nothing is built, schema included.** This is the larger
-half of one request — [spec 22](22-per-event-invite-status-and-tracking.md) is
-the other — and it is a design project as much as a build. All eight questions
-in §11 are settled, including the two structural ones, so the build order is
-unblocked end to end.
+**Status: built, 2026-09-21.** All eight questions answered, the build
+authorized, and steps 1–5 of §10 are done with most of step 6. See "Build
+status" below for what exists, the four things the build corrected, and what
+was deliberately left. This is the larger half of one request —
+[spec 22](22-per-event-invite-status-and-tracking.md) is the other.
 
 **Depends on:** spec 14 (the theme system, the renderer, `site_content`, the
 twelve sections, `site_assets`, the storage bucket) and spec 21 (the household
 address and the personalised page), both built. Spec 22 supplies the rule for
 which events a given reader may see; this spec renders it.
+
+
+---
+
+## Build status — 2026-09-21
+
+**Steps 1 to 5 are built, and most of 6.** `npm run typecheck`, `npm test`
+(541), `./scripts/verify-migrations.sh` (356 assertions, up from 333),
+`./scripts/verify-migrations-single-tx.sh` and `npm run build` all pass.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 1 | `block_audience` enum, on its own (the 55P04 rule) | `supabase/migrations/0024_block_audience.sql` |
+| 1 | `site_blocks`, `site_revisions` with its pruning trigger, `song_requests`, the backfill from `site_content`, and a first revision per wedding so no live site goes blank | `supabase/migrations/0025_site_blocks.sql`, `supabase/tests/10_site_blocks.sql` (23 assertions) |
+| 1 | The catalogue: twenty-one block types, their families, limits, style controls, audiences; `visibleBlocks`, `typesAtLimit`, `pageNotes`, `blockNavItems`, the three starter layouts | `src/lib/site/blocks.ts`, `.test.ts` (22 tests) |
+| 1 | The read split — draft for the editor, newest revision for guests, and the unpublished-changes count | `src/server/queries/site-blocks.ts` |
+| 1 | One renderer for three callers, with personalisation in place | `src/components/site/blocks/render.tsx`, `src/server/queries/site-render.ts` |
+| 2 | The builder: block list, drag to reorder, add/duplicate/hide/delete, the palette grouped by family, the inspector, the live preview iframe with a phone/desktop toggle, the publish bar | `src/components/site/editor/builder.tsx`, `block-inspector.tsx`, `/site` |
+| 2 | `/site/preview` — the draft, rendered by the same components a guest gets | `src/app/(planner)/site/preview/page.tsx` |
+| 2 | Publish, restore, and the last-twenty history screen | `src/server/actions/site-blocks.ts`, `/site/history` |
+| 3 | Photo upload straight to storage, the picker (upload or reuse), and the four photo blocks | `src/server/actions/site-photos.ts`, `photo-picker.tsx`, `blocks/media.tsx` |
+| 4 | Every old section as a block, plus `map`, `photo_text`, `prose`, `dress_code`, `playlist` | `blocks.ts`, `block-fields.ts`, `render.tsx` |
+| 5 | Song requests: the public form, the rate-limited write, the planner's list with approve/played/ignore | `song-requests.tsx`, `src/server/actions/songs.ts`, `/site/songs` |
+| 6 | Starter layouts, the thin/bloated page notes, per-block style controls, mobile content editing | `blocks.ts`, `builder.tsx` |
+
+### Four corrections the build made
+
+1. **`old` is a reserved word inside a trigger.** The pruning function aliased
+   `site_revisions` as `old`, which is a trigger's own record variable — every
+   reference became ambiguous, and it only failed when the trigger actually
+   fired (during the seed, not during the migration). Aliased `stale` now.
+2. **Deleting the old editor orphaned two settings.** "Let guests add photos"
+   and the moderation choice were fields on the old Photos *section*, edited
+   in the editor this spec replaced. They are configuration rather than page
+   content — uploads must be gated whether or not a gallery block is on the
+   page — so they moved to `/gallery`, keeping their `site_content` row, which
+   is where `galleryPolicy()` already looks.
+3. **The seed had to move with the schema.** The migration backfills
+   `site_content` into blocks, but a *fresh* database applies migrations before
+   the seed, so a local reset would have produced a site with no blocks and no
+   revision — a blank page and an empty builder. `supabase/seed.sql` now seeds
+   blocks and a published revision directly.
+4. **An empty heading is not a heading.** A prose block with no title rendered
+   `<h2></h2>`, which drew the rule and the vertical space of a heading with
+   nothing in it. The shell now recognises an explicitly empty heading and
+   renders the section without one.
+
+### Not done, and worth knowing
+
+- **Nothing here has been opened in a browser.** Everything above is
+  "typechecks, tested, builds" — and this is the feature where that gap is
+  widest, because it is the one whose whole point is how it looks. The preview
+  pane, the drag-to-reorder, the photo picker and every block's rendering are
+  all unseen.
+- **`0024` and `0025` are not applied to the live project** — nor are `0022`
+  and `0023` from the two sessions before. They apply in order.
+- **No crop UI.** `shape` crops with CSS (`object-cover`) at four aspects,
+  which is enough to stop a gallery looking homemade, but nobody can choose
+  *which* part of a photograph survives the crop. That is the one piece of
+  step 3 the spec describes and this build does not have.
+- **No block thumbnails in the palette** (§5). Each entry is a label and a
+  line of description; the spec asked for a picture of what the block looks
+  like in the current theme.
+- **Drag-to-reorder is desktop only**, as Q7 decided — but on a phone there is
+  currently *no* way to reorder at all, not even Move up/down buttons.
+- **`site_content` still exists**, with the theme in it and the old section
+  rows left where they were. Deliberate (a rollback must not be a data loss),
+  and worth a cleanup migration once this has run for a while.
+- **The preview does not preview a household.** `/site/preview?as=<id>` is
+  built and works, but nothing in the builder links to it — the "preview as a
+  household" picker in §5 is not wired up.
+- **Embeds are untested against the real thing.** The Spotify and Google
+  iframes have never been loaded; only the URL-shaping logic around them is
+  covered.
 
 ---
 

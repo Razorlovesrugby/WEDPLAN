@@ -3,7 +3,54 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 27 — **spec 22 written, answered and built: inviting is
+Last updated: session 28 — **spec 23 built: `/site` is a block builder with a
+live preview, and the public site is a published snapshot rather than whatever
+the planner last typed.**
+
+The page was twelve fixed sections in `site_content`, one row each, unique per
+wedding — the content model said "a wedding has at most one Story" and a
+builder says "a page is a list of whatever you like, in whatever order, as
+many times as you like". So: `site_blocks` is the draft, `site_revisions` is
+what guests see, and publishing is a snapshot rather than a flag flip. That
+split is the spine of the feature — **a half-finished edit cannot reach the
+internet by construction rather than by anybody remembering to check a flag**
+— and `supabase/tests/10_site_blocks.sql` §2 and §3 are the assertions that
+say so.
+
+**One renderer, three callers.** `src/components/site/blocks/render.tsx` draws
+the shared site, a household's personalised page and the editor's preview. A
+preview with its own renderer starts lying the moment somebody changes the
+real one, which is why the preview pane is an iframe of `/site/preview` and
+not a mock-up.
+
+Twenty-one block types live in one catalogue (`src/lib/site/blocks.ts`) with
+their families, limits, style controls and audiences; adding a widget is a row
+there plus a case in the renderer. Photos upload straight from the browser to
+storage (the bytes never pass through a server action) and blocks store an
+**asset id**, not a URL — the bucket is private, so URLs are signed at render
+time and a stored one would work for an hour and then quietly stop.
+
+**Two things were deleted on purpose:** the old section editor, and the
+section writers behind it. Leaving them would have left a second write path
+into a table nothing renders, which is how somebody edits for an hour and
+cannot work out why the site never changed. `site_content` itself stays, with
+the theme in it — configuration rather than content — and the old rows are
+left where they are, because a rollback must not be a data loss.
+
+`0024` (the enum, alone, per the 55P04 rule) and `0025` are **not applied to
+the live project**, and neither are `0022` and `0023` from the two sessions
+before. They apply in order. 541 tests, 356 SQL assertions, typecheck,
+single-transaction check and build all clean.
+
+**The caveat that matters more here than anywhere else: nothing has been
+opened in a browser.** This is the feature whose whole point is how it looks,
+and the preview pane, the drag-to-reorder, the photo picker and every block's
+rendering are all unseen. The spec's "Not done" list has the rest, of which
+the two worth knowing first are **no crop UI** (aspect is applied with
+`object-cover`, so nobody chooses which part of a photograph survives) and
+**no way to reorder blocks on a phone**.
+
+Previously: session 27 — **spec 22 written, answered and built: inviting is
 now per person per event, and every open of an invitation is logged.**
 
 `/guests` was already a grid of guests by events with a read-only RSVP status
@@ -246,6 +293,54 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 28: Spec 23 — the site becomes a builder
+
+**What was asked:** a preview, and something that works like a website
+builder — add elements, photos, widgets — as beautiful as it can be made.
+
+**The decision that shaped the build**, taken in the spec and worth
+re-reading before anybody revisits it: a **block builder, not a free canvas**.
+Absolute positioning needs a hand-built layout per breakpoint or it collapses
+on a phone, which is where guests open this, and it is several times the work
+for a worse result on the device that matters.
+
+**The schema.** `site_blocks` (draft) + `site_revisions` (published snapshots,
+last twenty, pruned by a trigger) + `song_requests`. `type` is text rather
+than an enum on purpose — the set of block types is a fact about the
+application, and an enum would mean a migration before anybody could try a new
+widget. The backfill turns each `site_content` section into a block, and each
+wedding gets a first revision built from it: **without that, every live site
+would have gone blank the moment the renderer started reading revisions.**
+
+**The shape of the code.** One catalogue (`blocks.ts`) describing every type;
+one renderer (`blocks/render.tsx`) used by all three surfaces; one context
+builder (`site-render.ts`) gathering what blocks draw from. Personalisation is
+a branch inside the renderer rather than a second layout, which is what makes
+"the site and the invite are the same thing" true in the code.
+
+**Files.** `0024_block_audience.sql`, `0025_site_blocks.sql`,
+`supabase/tests/10_site_blocks.sql`; `src/lib/site/blocks.ts` + tests,
+`block-fields.ts`, `encode-image.ts` (the EXIF-stripping encoder, lifted out
+of the guest uploader so both uploads share it); `src/server/queries/
+site-blocks.ts` and `site-render.ts`; `src/server/actions/site-blocks.ts`,
+`site-photos.ts`, `songs.ts`; `src/components/site/blocks/` and
+`editor/{builder,block-inspector,photo-picker,revision-list,song-list}.tsx`;
+`/site`, `/site/preview`, `/site/history`, `/site/songs`; both public pages
+rewritten onto the renderer.
+
+**Four corrections the build made**, all in the spec's build status: `old` is
+a reserved word inside a trigger and the prune function aliased a table with
+it; deleting the old editor orphaned the gallery's upload settings, which
+moved to `/gallery` where they belong; the seed had to be rewritten to produce
+blocks and a revision, because a fresh database applies migrations before the
+seed and would otherwise reset to a blank page; and an empty heading drew a
+heading's rule and spacing with nothing in it.
+
+**Where to pick this up:** open it. Apply `0022`–`0025` in order, then look at
+`/site` on a laptop and at `/w/<slug>` on a phone. The most likely places for
+something to be wrong are the ones nobody has seen: the preview iframe's
+sizing, the drag handles, and how the photo blocks crop at each aspect.
 
 ## Session 27: Spec 22 — inviting per event, per person, and knowing they looked
 

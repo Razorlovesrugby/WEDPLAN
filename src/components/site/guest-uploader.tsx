@@ -8,41 +8,15 @@ import {
   requestGuestUpload,
 } from "@/server/actions/gallery";
 import { MAX_UPLOAD_BYTES } from "@/lib/site/assets";
+import { toWebp } from "@/lib/site/encode-image";
 import type { GalleryImage } from "@/server/queries/gallery";
 
 /**
  * Guests adding photos, from their own RSVP link (spec 14 §9).
  *
- * The browser re-encodes to WebP before uploading, which does three jobs at
- * once: it strips EXIF — including the GPS coordinates a phone writes into
- * every photo, which is somebody's home address — it turns a 6MB HEIC into a
- * few hundred KB, and it means the stored extension is a fact rather than a
- * guess about what arrived.
+ * The browser re-encodes to WebP before uploading — see
+ * `src/lib/site/encode-image.ts` for why that matters, EXIF above all.
  */
-
-const MAX_EDGE = 2000;
-
-async function toWebp(file: File): Promise<{ blob: Blob; width: number; height: number } | null> {
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) return null;
-
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/webp", 0.85),
-  );
-  return blob ? { blob, width, height } : null;
-}
 
 export function GuestUploader({
   token,
