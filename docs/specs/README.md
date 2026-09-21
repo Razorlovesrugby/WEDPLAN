@@ -56,6 +56,7 @@ renumbered to spec 2, is unchanged in substance.
 | 22 | [Inviting per event, answering, and knowing they looked](22-per-event-invite-status-and-tracking.md) | **Built end to end, session 27 (2026-09-20)** — all six questions answered and the build authorized the same day. `0023_per_event_invites.sql`: `guest_event_overrides` + `v_guest_event_invites` (household default, per-guest exceptions, one `coalesce` in one place), `invitation_views`, the built-in decline-note question, and both summary views recounted onto the invites view. Clickable per-event cells with a menu on `/guests`, the "everyone here" tick per event on the household screen, per-person lines under each event on the guest page, one-tap Yes/No in the invitation email, and every open logged with a 30-minute collapse and the planner's preview excluded. **Two corrections to earlier specs:** spec 6's `budget_guest_population` was computing invited-ness itself and now reads the view; spec 14 §6's list-and-mark rendering is replaced — an event nobody in the household is invited to is not shown. 540 tests, 333 SQL assertions, clean build. **Never opened in a browser; `0022` and `0023` both still need applying.** See the spec's "Build status". | V1's guest list, spec 14, spec 21, all built |
 | 23 | [The site builder: blocks, widgets, photos and a live preview](23-site-builder-and-widgets.md) | **Built, session 28 (2026-09-21)** — steps 1–5 of §10 and most of 6. `0024_block_audience.sql` (enum only, per the 55P04 rule) and `0025_site_blocks.sql`: `site_blocks` as the draft, `site_revisions` as what guests see (pruned to the last twenty by a trigger), `song_requests`, the backfill from `site_content` and a first revision per wedding so no live site goes blank. Twenty-one block types in one catalogue; one renderer shared by the shared site, a household's page and the editor's preview; `/site` rebuilt as a builder with drag-to-reorder, a palette, per-block style and audience, a live preview iframe and a publish bar; photo upload and the four photo blocks; `/site/history` restore; `/site/songs`. **`site_content` keeps only the theme**, and the old section editor is deleted rather than left as a second write path. 541 tests, 356 SQL assertions, clean build. **Never opened in a browser — and this is the feature where that gap matters most.** Known gaps: no crop UI, no palette thumbnails, no mobile reordering. See the spec's "Build status". | Spec 14, spec 21, spec 22, all built |
 | 24 | [The builder, as a tool you can work in](24-builder-editing-feel.md) | **Proposed, not built — five open questions.** No migration and no SQL at all: presentation and interaction over spec 23's model. The preview keeping its scroll position (its React `key` is a hash of every payload, so every save remounts the frame), a new block arriving with starter content instead of `{}`, autosave replacing the Save button spec 23 §5 asked for and the build never got to, style controls and the repeat-group heading in English rather than enum values and payload keys, a block list with a snippet and a thumbnail, and the phone getting the preview toggle Q7 asked for. Click-the-preview-to-edit, a publish diff and draft undo are named and deliberately left out (§8). | Spec 23, built |
+| 25 | [Blocks that know things](25-blocks-that-know-things.md) | **Proposed, not built — seven open questions.** Written from fifteen screenshots of a competitor's live site. Part A: dress codes become records bound to events (the per-event string already exists, stranded in the schedule block's payload) and render twice — a tag inside the event, a full entry in the attire section; `coach_runs` gains `event_id` so a shuttle renders under the event it serves; `transport_options` gains nullable duration and NZD cost, reopening `0017`'s "no cost and no duration columns" on its own destination-wedding terms; the hero absorbs the countdown; sections get a computed number and a job-label. Part B reopens spec 23's guestbook and planner-only song list, on one rule — a household link publishes, the shared page queues — reusing `site_assets.approved_at`'s existing gate. Part C builds the already-declared `editorial` preset as the default for new weddings, adding the third type role (letterspaced labels) that Part A's eyebrow needs. `0026` + `0027`, no new enum. **Payments and the registry are explicitly out (§16).** | Specs 14, 21, 22, 23, all built |
 
 ## Recommended build order
 
@@ -142,6 +143,24 @@ in spec 23 has ever been opened in a browser, and its §2 says so rather than
 pretending otherwise. Three larger wants from the same round — clicking the
 preview to edit a block, seeing a diff before publishing, and undo on the draft
 — are named in its §8 and deliberately left for their own spec.
+
+**Spec 25 is the first spec in this project written from a competitor's live
+site.** Fifteen screenshots of `aisle.wedding` were read against our source,
+and the gap they show is not styling: their blocks compose the wedding's own
+data where a guest is asking about it, and ours are topic-siloed content slots
+beside a database that already holds most of the answer. The clearest case is
+the per-event dress code, which **we already collect** — as a free string
+inside the schedule block's payload, disconnected from the `dress_code` block
+that renders unrelated prose on the same subject. It sits beside spec 24
+rather than on top of it: 24 makes the builder pleasant, 25 makes it worth
+using, and either can be built first. Two of its three parts reopen written
+decisions — `0017`'s deliberate omission of travel cost and duration (reopened
+on its own terms, since that reasoning was scoped to non-destination weddings)
+and spec 23's cut of the guestbook and public song list (reopened on one rule:
+a household's private link publishes, the shared page queues for review).
+**Payments and the registry were put to the planner and deliberately left
+out**, and §16 says so, because a contribution goal with a progress bar is a
+registry with a softer name and spec 14 Q6 cut that twice.
 
 ## What's shared across both
 
