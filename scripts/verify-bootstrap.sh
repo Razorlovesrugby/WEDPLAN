@@ -57,7 +57,11 @@ expect() {
 expect "one wedding"            "select count(*) from public.weddings"       1
 expect "both collaborators"     "select count(*) from public.collaborators"  2
 expect "ceremony and reception" "select count(*) from public.events"         2
-expect "standard questions"     "select count(*) from public.rsvp_questions" 4
+# Five since 0023, not four: spec 22 added the built-in decline-note question
+# (`ensure_builtin_questions`, fired by a trigger on weddings). This check was
+# left at 4 in session 27 and has been failing ever since — found in session 29
+# while running the full pass for spec 8.
+expect "standard questions"     "select count(*) from public.rsvp_questions" 5
 expect "site content blocks"    "select count(*) from public.site_content"   4
 
 echo "==> the owner can see their own wedding through RLS"

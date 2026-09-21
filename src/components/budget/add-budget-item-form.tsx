@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createBudgetItem } from "@/server/actions/budget";
 import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields";
+import type { VendorLike } from "@/lib/vendors";
 import type { EventRow } from "@/lib/types/database";
 
 export function AddBudgetItemForm({
@@ -12,6 +13,7 @@ export function AddBudgetItemForm({
   categoryAllocatedAmount,
   siblingAllocationPct,
   events,
+  vendors,
 }: {
   categoryId: string;
   categoryName: string;
@@ -20,6 +22,7 @@ export function AddBudgetItemForm({
   /** What this section's existing lines already claim (spec 20) — a new line adds to all of them. */
   siblingAllocationPct: number;
   events: EventRow[];
+  vendors: VendorLike[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -52,6 +55,7 @@ export function AddBudgetItemForm({
       {error ? <p className="mb-2 text-sm text-red-700">{error}</p> : null}
       <BudgetItemFields
         events={events}
+        vendors={vendors}
         pending={pending}
         categoryName={categoryName}
         categoryAllocatedAmount={categoryAllocatedAmount}

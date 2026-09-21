@@ -3,52 +3,136 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 28 — **spec 23 built: `/site` is a block builder with a
+Last updated: session 29 — **specs 24 and 25 written, 25 and 8 built, and four
+stale status documents corrected. Vendors exist.**
+
+**Spec 8 is built** — the last substantial unbuilt feature. `0029_vendors.sql`
+adds `vendors`, `vendor_categories`, `vendor_contacts`, `vendor_notes`,
+`budget_items.vendor_id` and `run_sheet_items.vendor_id`, with `/vendors`,
+`/vendors/[id]`, `/vendors/contact-sheet` and a `VendorPicker` on `/budget`.
+
+**The one thing to understand before touching it:** `budget_items.vendor_name`
+is NOT dropped, and `v_budget_items` now returns `coalesce(vendor.name,
+bi.vendor_name)` under that same column name. That one line is why a rename on
+`/vendors` reaches `/budget`, the payment calendar and the weekly digest with
+no sync step and no trigger — and why the stored text can stay as the snapshot
+that keeps a line reading "The Old Barn" after its vendor is hard-deleted.
+`v_reminders_due` needed the same treatment separately, because its payment
+branch reads `budget_items` directly and bypasses the view entirely.
+
+**Deleting a vendor must never delete money.** Contacts and notes cascade;
+budget lines null their `vendor_id` and keep their name, numbers and payment
+schedule. `supabase/tests/12_vendors.sql` §3 is the assertion that says so,
+and it is the one to keep working.
+
+**Question 1 was answered against the recommendation.** Vendor categories are
+their own taxonomy rather than a reuse of `budget_categories` — the planner
+chose that after the "two lists drift" argument was put to them. `0029` seeds
+`vendor_categories` from the budget's category names so the two start aligned;
+**nothing syncs them afterwards and nothing should**, because a sync is the
+single taxonomy by the back door with a worse failure mode.
+
+**Four status documents were stale, and are now corrected.** This is a pattern
+worth naming rather than four separate bugs:
+
+- `supabase/migrations/README.md` stopped at `0019` while the directory held
+  files through `0025` — exactly the failure its own warning describes. Now
+  current through `0029`, and it says that it went stale.
+- `docs/specs/README.md` said spec 4 was "open and unmerged, do not merge or
+  extend"; PR #16 merged on 2026-09-15.
+- The same table said spec 16 was "Proposed, not built". It has been built
+  since session 17 — `0017_budget_section_links.sql` and seven source files.
+  A table claiming a shipped feature is unbuilt is how it gets built twice.
+- `20-guest-last-name-column-and-named-sides.md` had no row at all; it shares
+  the number 20 with the budget spec and was overwritten rather than added.
+  Listed as `20b`.
+- And `./scripts/verify-bootstrap.sh` had been **failing since session 27**:
+  `0023` added a fifth built-in question and the check still expected four.
+
+**What is actually left:** spec 24 (the builder's editing feel — written, five
+open questions, unbuilt) and spec 9.1's Pinterest half, which needs a developer
+app at an access tier nobody here controls. Everything else in `docs/specs/` is
+built.
+
+608 tests, 424 SQL assertions, typecheck, both migration checks, bootstrap and
+build all clean. **Nothing has been opened in a browser**, and `0022` through
+`0029` are none of them applied to the live project.
+
+Previously in session 29 — **spec 25: the site's blocks now read the wedding
+instead of being a second place to type it.**
+
+The session began as a brainstorm and the planner supplied fifteen screenshots
+of a competitor's live wedding site. The gap they showed was structural, not
+stylistic: **their blocks compose the wedding's own data where a guest is
+asking about it, and ours were topic silos beside a database that already held
+most of the answer.** The shuttle time and the dress code sit *inside* the
+Welcome Dinner entry there; ours were three separate blocks in three separate
+places on the page.
+
+**The sharpest case, and the one to understand first:** per-event dress code
+already existed. It was a free string inside the schedule block's own payload
+(`payload -> 'events' -> n ->> 'dress_code'`), with no relationship to the
+`dress_code` block rendering unrelated prose on the same subject. `0026` lifts
+those strings into `dress_codes` rows, and one record now renders twice — a tag
+on the event, and a full entry in the attire section whose "For Welcome Dinner,
+Farewell Brunch" line is **a reverse lookup, never a typed list**. A typed list
+is a second copy of the truth and the second copy is the one that goes stale.
+
+**Two decisions were deliberately reopened, and both say so in writing.**
+`0017` refused cost and duration on `transport_options` because "a wedding down
+the road would show five empty columns" — that reasoning was scoped to a
+wedding people drive to, so `0026` adds them all nullable and the renderer
+draws only what is filled. And spec 23 cut the guestbook and kept the song list
+planner-facing, both for the same reason: moderation. `0027` reopens both on
+one rule.
+
+**That rule is the thing most likely to be broken by accident.** Spec 21 minted
+`households.slug_suffix` as a credential, so a reader on
+`/w/ray-and-olivia/okonkwo-4f7ak` holds an invitation and a reader on
+`/w/ray-and-olivia` is the internet. So: **a contribution carrying a household
+publishes immediately; one from the shared page queues.** It lives in exactly
+one function — `canPublishImmediately()` in `src/lib/site/participation.ts` —
+which both write paths call, because two copies is how one of them quietly
+stops gating and nothing appears to break. If that rule is ever weakened, both
+features should go back out with it. `song_votes.household_id` is NOT NULL for
+the same reason: without identity "one vote each" is a cookie, and a cookie is
+a suggestion.
+
+**Part C: Editorial is now the default theme for new weddings**, Script stays,
+and nothing already chosen changes. Two traps were found doing it. First, an
+undefined CSS custom property does not fall through to the next entry in a
+`font-family` list — it invalidates the whole declaration, so the fallback had
+to go *inside* the `var()` or every Script heading would have silently
+rendered in the browser default. Second, the default could not just be flipped:
+`resolveTheme(null)` meant every wedding that had never opened the theme editor
+was rendering Script by *fallback*, and changing the constant would have
+restyled all of them. `0028` pins them explicitly first.
+
+**`0026`, `0027` and `0028` are not applied to the live project** — nor are
+`0022` through `0025` from the three sessions before. They apply in order. The
+migrations README had also gone stale at `0019` while the directory held files
+through `0025`, which is exactly the failure its own warning describes; it is
+current through `0028` now and says that it went stale, so anybody who applied
+by hand between sessions 23 and 29 knows to check what they actually have.
+
+582 tests (up from 541), 388 SQL assertions (up from 356), typecheck,
+single-transaction check and build all clean. **Nothing has been opened in a
+browser, and Part C is typography** — a passing build says nothing about
+whether Fraunces at 96px sits well over Inter at 0.7rem. See
+`docs/specs/25-blocks-that-know-things.md` "Build status" for the six things
+the build corrected and the eight things it left.
+
+**Spec 24 is written and NOT built.** It is the other half of the same request:
+the builder's own editing feel — the preview keeps its scroll position (its
+React `key` is a hash of every payload, so every save remounts the iframe), new
+blocks arrive with starter content instead of `{}`, autosave replaces the Save
+button, style controls stop offering a choice between `paper`, `tinted` and
+`ink`. Five open questions, none answered. It sits beside spec 25 rather than
+on top of it, and its §7 "English pass" is an afternoon.
+
+Previously: session 28 — **spec 23 built: `/site` is a block builder with a
 live preview, and the public site is a published snapshot rather than whatever
-the planner last typed.**
-
-The page was twelve fixed sections in `site_content`, one row each, unique per
-wedding — the content model said "a wedding has at most one Story" and a
-builder says "a page is a list of whatever you like, in whatever order, as
-many times as you like". So: `site_blocks` is the draft, `site_revisions` is
-what guests see, and publishing is a snapshot rather than a flag flip. That
-split is the spine of the feature — **a half-finished edit cannot reach the
-internet by construction rather than by anybody remembering to check a flag**
-— and `supabase/tests/10_site_blocks.sql` §2 and §3 are the assertions that
-say so.
-
-**One renderer, three callers.** `src/components/site/blocks/render.tsx` draws
-the shared site, a household's personalised page and the editor's preview. A
-preview with its own renderer starts lying the moment somebody changes the
-real one, which is why the preview pane is an iframe of `/site/preview` and
-not a mock-up.
-
-Twenty-one block types live in one catalogue (`src/lib/site/blocks.ts`) with
-their families, limits, style controls and audiences; adding a widget is a row
-there plus a case in the renderer. Photos upload straight from the browser to
-storage (the bytes never pass through a server action) and blocks store an
-**asset id**, not a URL — the bucket is private, so URLs are signed at render
-time and a stored one would work for an hour and then quietly stop.
-
-**Two things were deleted on purpose:** the old section editor, and the
-section writers behind it. Leaving them would have left a second write path
-into a table nothing renders, which is how somebody edits for an hour and
-cannot work out why the site never changed. `site_content` itself stays, with
-the theme in it — configuration rather than content — and the old rows are
-left where they are, because a rollback must not be a data loss.
-
-`0024` (the enum, alone, per the 55P04 rule) and `0025` are **not applied to
-the live project**, and neither are `0022` and `0023` from the two sessions
-before. They apply in order. 541 tests, 356 SQL assertions, typecheck,
-single-transaction check and build all clean.
-
-**The caveat that matters more here than anywhere else: nothing has been
-opened in a browser.** This is the feature whose whole point is how it looks,
-and the preview pane, the drag-to-reorder, the photo picker and every block's
-rendering are all unseen. The spec's "Not done" list has the rest, of which
-the two worth knowing first are **no crop UI** (aspect is applied with
-`object-cover`, so nobody chooses which part of a photograph survives) and
-**no way to reorder blocks on a phone**.
+the planner last typed.** See `docs/specs/23-site-builder-and-widgets.md`.
 
 Previously: session 27 — **spec 22 written, answered and built: inviting is
 now per person per event, and every open of an invitation is logged.**

@@ -26,13 +26,38 @@ const optionalText = z.string().trim().max(2000).optional().transform((v) => (v 
 // Transport options, and places to stay
 // ---------------------------------------------------------------------------
 
-const transportSchema = z.object({
-  id: z.string().uuid().optional(),
-  kind: z.enum(["parking", "taxi", "train", "walk", "other"]),
-  name: z.string().trim().min(1, "Give it a name").max(200),
-  detail: optionalText,
-  url: optionalText,
-});
+/**
+ * An optional whole number from a form.
+ *
+ * An empty field is null, never 0. Spec 19 learned this the expensive way in
+ * the budget: a stored 0 that means "unset" outranks every real figure beneath
+ * it. Here a 0 has to keep meaning zero — a free shuttle is a real price — so
+ * the emptiness is resolved at the boundary rather than in the renderer.
+ */
+const optionalWholeNumber = z
+  .union([z.coerce.number().int().min(0).max(100_000_000), z.literal("")])
+  .optional()
+  .transform((v) => (v === "" || v === undefined ? null : v));
+
+const transportSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    kind: z.enum(["parking", "taxi", "train", "walk", "other"]),
+    name: z.string().trim().min(1, "Give it a name").max(200),
+    detail: optionalText,
+    url: optionalText,
+    // Spec 25 §5. All optional: 0017 refused these columns because a wedding
+    // people drive to would show empty ones, and that stays true.
+    arrival_point_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    duration_minutes: optionalWholeNumber,
+    /** Integer minor units, NZD (spec 18). The form collects dollars. */
+    cost_low: optionalWholeNumber,
+    cost_high: optionalWholeNumber,
+  })
+  .refine(
+    (v) => v.cost_low === null || v.cost_high === null || v.cost_high >= v.cost_low,
+    { message: "The top of the range is below the bottom", path: ["cost_high"] },
+  );
 
 export async function saveTransportOption(fields: Record<string, unknown>): Promise<ActionResult> {
   const wedding = await requireWedding();
@@ -116,6 +141,12 @@ const runSchema = z.object({
     .optional()
     .transform((v) => (v === "" || v === undefined ? null : v)),
   notes: optionalText,
+  /**
+   * The event this run serves (spec 25 §6). Null means the whole weekend,
+   * which is what every run meant before this column existed — so a run left
+   * unset keeps rendering in the coach block and nowhere else.
+   */
+  event_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
 });
 
 export async function saveCoachRun(fields: Record<string, unknown>): Promise<ActionResult> {
@@ -311,4 +342,57 @@ function revalidateTravel() {
   revalidatePath("/travel");
   revalidatePath("/w");
   revalidatePath("/w/[slug]", "page");
+}
+
+// ---------------------------------------------------------------------------
+// Arrival points (spec 25 §5)
+// ---------------------------------------------------------------------------
+
+const arrivalSchema = z.object({
+  id: z.string().uuid().optional(),
+  code: z.string().trim().max(8).optional().transform((v) => (v ? v.toUpperCase() : null)),
+  name: z.string().trim().min(1, "Give it a name").max(200),
+  region: optionalText,
+  minutes_to_venue: z
+    .union([z.coerce.number().int().min(0).max(10_000), z.literal("")])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : v)),
+});
+
+export async function saveArrivalPoint(fields: Record<string, unknown>): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = arrivalSchema.safeParse(fields);
+  if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
+  const { id, ...values } = parsed.data;
+
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from("arrival_points").update(values).eq("id", id).eq("wedding_id", wedding.id)
+    : await supabase.from("arrival_points").insert({ ...values, wedding_id: wedding.id });
+
+  if (error) return fail(error.message);
+  revalidateTravel();
+  return ok(undefined);
+}
+
+/**
+ * Deleting an arrival point does not delete the legs under it.
+ *
+ * `on delete set null (arrival_point_id)` leaves them loose, and the renderer
+ * draws loose legs as a plain list — the same list every wedding had before
+ * arrival points existed. Somebody tidying up their airports should not lose
+ * three taxi numbers.
+ */
+export async function deleteArrivalPoint(id: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("arrival_points")
+    .delete()
+    .eq("id", id)
+    .eq("wedding_id", wedding.id);
+
+  if (error) return fail(error.message);
+  revalidateTravel();
+  return ok(undefined);
 }

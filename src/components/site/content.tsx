@@ -1,5 +1,8 @@
 import { Label } from "./section";
+import { DressCodeTag, ShuttleLines } from "./event-inline";
 import { FindInvitation } from "./find-invitation";
+import type { DressCode } from "@/lib/site/dress-codes";
+import type { CoachRun } from "@/server/queries/travel";
 import { faqItems, groupByTag, rows, splitFaq, text } from "@/lib/site/sections";
 import { formatDate, formatTime } from "@/lib/format";
 
@@ -24,6 +27,8 @@ export type PublicEvent = {
   ends_at: string | null;
   venue: string | null;
   address: string | null;
+  /** The dress code this event wears (spec 25 §4), rendered as a tag on it. */
+  dress_code_id?: string | null;
 };
 
 /** Per-event extras live in the schedule payload keyed by event id (spec §6). */
@@ -48,12 +53,17 @@ export function Schedule({
   payload,
   timeZone,
   invitedEventIds,
+  dressCodes = [],
+  coachByEvent,
 }: {
   events: PublicEvent[];
   payload: unknown;
   timeZone: string;
   /** Null when we do not know who is reading — then nothing is marked. */
   invitedEventIds: Set<string> | null;
+  /** Spec 25 §6 — the tag goes on the event, not in a section of its own. */
+  dressCodes?: DressCode[];
+  coachByEvent?: Map<string, CoachRun[]>;
 }) {
   const days = new Map<string, PublicEvent[]>();
   for (const event of events) {
@@ -88,12 +98,11 @@ export function Schedule({
                   </div>
                   {event.venue ? <p className="mt-1 text-[1.0625rem] text-ink">{event.venue}</p> : null}
                   {event.address ? <p className="text-[0.95rem] text-muted">{event.address}</p> : null}
-                  {extras.dressCode ? (
-                    <p className="mt-2">
-                      <Label>Dress</Label>{" "}
-                      <span className="text-[0.95rem] text-muted">{extras.dressCode}</span>
-                    </p>
-                  ) : null}
+                  {/* The shuttle that gets them here, then what to wear when
+                      they arrive — both answered where the question is asked
+                      rather than two sections away (spec 25 §6). */}
+                  <ShuttleLines runs={coachByEvent?.get(event.id) ?? []} timeZone={timeZone} />
+                  <DressCodeTag event={event} codes={dressCodes} fallback={extras.dressCode} />
                   {extras.detail ? (
                     <p className="mt-2 whitespace-pre-line text-[0.95rem] text-muted">{extras.detail}</p>
                   ) : null}

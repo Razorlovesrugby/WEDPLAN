@@ -9,6 +9,7 @@ import {
   type GalleryImage,
 } from "@/server/queries/gallery";
 import { getHouseholdSeats, getPublicTravel } from "@/server/queries/travel";
+import { getPublicSiteExtras, type SiteExtras } from "@/server/queries/site-extras";
 import { flag, text } from "@/lib/site/sections";
 import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
 import type { RsvpContext } from "@/server/rsvp/resolve";
@@ -36,6 +37,11 @@ export type PersonalContext = {
   rsvp: RsvpContext | null;
   seats: Record<string, Pick<CoachSeatRow, "coach_stop_id" | "seats">>;
   uploads: GalleryImage[];
+  /**
+   * Who is reading, for the things only a known guest may do (spec 25 §10):
+   * publish a guestbook note without review, and vote for a song.
+   */
+  householdId: string;
 };
 
 export type RenderContext = {
@@ -61,6 +67,13 @@ export type RenderContext = {
    * only this map turns one into something the browser can fetch.
    */
   imageUrls: Map<string, string>;
+  /**
+   * Dress codes, arrival points, the public song list and the guestbook
+   * (spec 25). Every list here is already filtered to what this reader may
+   * see — approved rows only, and codes narrowed to their own events — so a
+   * component cannot widen it by forgetting a filter.
+   */
+  extras: SiteExtras;
   /** Null when a stranger is reading; the household when we know who it is. */
   personal: PersonalContext | null;
 };
@@ -111,6 +124,28 @@ export async function buildRenderContext(
     loadImageUrls(wedding.id),
   ]);
 
+  // The events this reader may see, which is what the dress codes are resolved
+  // against: on a household's page that is their own weekend (spec 22), and a
+  // code covering only the brunch they were not invited to would otherwise
+  // name an event nobody told them about.
+  const visibleEvents = personal
+    ? personal.events.map((event) => ({
+        id: event.id,
+        name: event.name,
+        dress_code_id: event.dress_code_id,
+      }))
+    : events.map((event) => ({
+        id: event.id,
+        name: event.name,
+        dress_code_id: event.dress_code_id ?? null,
+      }));
+
+  const extras = await getPublicSiteExtras(
+    wedding.id,
+    visibleEvents,
+    personal?.householdId ?? null,
+  );
+
   return {
     wedding,
     theme,
@@ -121,6 +156,7 @@ export async function buildRenderContext(
     uploadsOpen: flag(galleryBlock, "uploads_open"),
     uploadsModerated: text(galleryBlock, "moderation") !== "auto",
     imageUrls,
+    extras,
     personal,
   };
 }
@@ -129,7 +165,7 @@ async function publicEvents(weddingId: string): Promise<PublicEvent[]> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("events")
-    .select("id, name, starts_at, ends_at, venue, address")
+    .select("id, name, starts_at, ends_at, venue, address, dress_code_id")
     .eq("wedding_id", weddingId)
     .eq("is_public", true)
     .order("sort_order")
@@ -167,6 +203,7 @@ export async function buildPersonalContext(
 
   return {
     householdName: household.display_name,
+    householdId: household.id,
     token,
     members,
     events: rsvp?.events ?? [],

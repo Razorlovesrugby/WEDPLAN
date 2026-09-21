@@ -1,18 +1,133 @@
 # Feature spec: Vendor management — contacts, notes, and the budget link
 
-**Status: proposed, not built. Nothing here exists yet — no migration, no
-screen, no action.** Per `docs/specs/README.md`, this is a proposal plus a
-list of decisions only the planner can make; §11 is that list. Unlike spec 6,
-whose schema was reviewed as pure infrastructure ahead of its answers,
-**nothing in this spec should be built — schema included — until §11 has
-answers**, because question 1 (where a vendor's category comes from) changes
-the shape of the `vendors` table itself.
+**Status: answered and built, 2026-09-21 (session 29).** All ten questions
+answered and the build authorized in the same message. See "Answered" below —
+which is the authoritative record, and where question 1 went the other way
+from the recommendation — and "Build status" for what exists and what the
+build had to change because this spec predates four later ones.
 
 **Depends on:** V1 (`weddings`, `events`) plus spec 6 / 6.1 (budget), already
 built — this spec's whole point is the link to `budget_items`, and §5 reads
 spec 6 §7's `v_budget_item_tasks` for the read-only task list on a vendor.
 Depends on specs 1 and 2 only transitively, through that. Does not depend on
 spec 5, and does not touch `guests`, `households`, `invitations`, or `rsvp_*`.
+
+---
+
+## Answered — 2026-09-21
+
+Four questions were put to the planner; the other six had recommendations with
+no cost to being wrong and were taken as written, which is recorded here rather
+than left implicit.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Where does a vendor's category come from? | **Its own `vendor_categories` table** — a separate taxonomy, not `budget_categories`. This is the option §3 and §11.1 argued against, chosen deliberately after that argument was put. See the note below |
+| 2 | Eight stage values, no kanban this pass? | **Yes to both**, as recommended. A select and a filter; a board if the list ever gets long enough to want one |
+| 3 | Notes as a dated log, or one free-text field? | **Both** — `vendor_notes` as the dated, pinnable log, plus `vendors.notes` for the throwaway one-liner that does not deserve an entry |
+| 4 | Can one budget line have more than one vendor? | **No.** One nullable FK; a line split between two suppliers is two lines |
+| 5 | A printable day-of contact sheet? | **Yes** — `/vendors/contact-sheet`, reusing the print CSS `/invitations/print` already has |
+| 6 | Keep `source`, `recommended_by`, `gut_score`? | **Keep all three, drop `price_band`**, as recommended. Real numbers live on budget lines |
+| 7 | Are vendor tasks via budget lines enough? | **Yes, and read-only**, as recommended. A join, not a new concept |
+| 8 | Confirming no automatic name matching | **Confirmed.** Exact-string grouping, the planner presses the button, the trigram matcher stays unused |
+| 9 | Confirming documents/quotes/contracts are out | **Confirmed.** They need a storage bucket and a retention story; that is its own spec |
+| 10 | Does `run_sheet_items.owner` stay free text? | **No — it gains a vendor link**, changed from the recommendation. `0009`'s own comment anticipated this, and the planner asked for it now rather than as a follow-up |
+
+### On question 1, written down so it is a choice and not a surprise
+
+§3 and §11.1 both argued for `budget_categories`: "Flowers" is one concept, and
+two independent lists start identical and drift within a month — the budget
+says Flowers, the vendor page says Florist, and nothing reconciles them. That
+argument was put in the question itself and the separate table was chosen
+anyway, which is the planner's call to make.
+
+**What it buys:** a vendor can be categorised before any budget line exists,
+which is the common case while you are still researching, and vendor
+categories can be shaped for vendors ("Photography", "Hair and makeup")
+rather than for money.
+
+**What it costs, and what the build does about it:** two lists that can
+disagree. The build does one thing to soften that and no more — `0029`
+**seeds `vendor_categories` from each wedding's existing budget category
+names**, so the two lists start aligned rather than starting empty and being
+invented separately. They are free to diverge from that point, which is what
+was asked for. Nothing syncs them afterwards, and nothing should: a sync would
+be the single taxonomy by the back door, with a worse failure mode.
+
+---
+
+## Build status — 2026-09-21 (session 29)
+
+`npm run typecheck`, `npm test` (608, up from 582), `./scripts/verify-migrations.sh`
+(424 assertions, up from 388), `./scripts/verify-migrations-single-tx.sh`,
+`./scripts/verify-bootstrap.sh` and `npm run build` all pass.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 1 | `vendor_stage`, `vendor_categories`, `vendors`, `vendor_contacts`, `vendor_notes`, the one-primary partial unique index, `budget_items.vendor_id`, `run_sheet_items.vendor_id`, `v_vendors`, and the two view redefinitions | `supabase/migrations/0029_vendors.sql` |
+| 2 | `VENDOR_STAGES`, `stageIsCommitted`, `sortVendors`, the URL filter, `committedWithoutBudget`; `searchVendors`, `findExactVendor` | `src/lib/vendors.ts`, `vendor-search.ts` (+ 41 tests) |
+| 3 | Four row types, `VendorView`, the stage union, `vendor_id` on two rows, and the three `Relationships` entries §7 warned about | `src/lib/types/database.ts` |
+| 4 | Queries and actions — vendor/contact/note CRUD, archive/restore/delete, the budget link, the backfill, the run-sheet link | `src/server/queries/vendors.ts`, `src/server/actions/vendors.ts` |
+| 5 | `/vendors` — grouped list, URL filters, archived mode, inline add, the backfill panel, the committed-without-budget warning | `vendor-list.tsx` |
+| 6 | `/vendors/[id]` — header, contacts, notes, money, read-only tasks | `vendor-detail.tsx` |
+| 7 | `VendorPicker` on `/budget`, `vendor_id` through the action, the vendor name as a conditional link | `vendor-picker.tsx`, `budget-item-fields.tsx`, `budget-item-row.tsx` |
+| — | `/vendors/contact-sheet` (Answered Q5), and `Nav` | `contact-sheet/page.tsx`, `nav.tsx` |
+| 10 | Seed vendors on both weddings, `supabase/tests/12_vendors.sql` (36 assertions) | `supabase/seed.sql`, `tests/12_vendors.sql` |
+
+### Six things the build changed, because this spec predates four later ones
+
+1. **`0013_vendors.sql` is `0029_vendors.sql`.** Moodboards took `0013` in
+   session 17. Likewise `supabase/tests/05_vendors.sql` is `12_vendors.sql`.
+
+2. **There is no `base_currency` any more.** Spec 18 removed multi-currency in
+   `0019`, so `committed_base`/`paid_base`/`outstanding_base` are `committed`,
+   `paid` and `outstanding`, in NZD minor units. The §8 test about "two lines
+   in two currencies" is not a test that can exist now.
+
+3. **The enum is NOT in its own file.** §9 step 1 implies the `0024` split, but
+   that rule is about `alter type ... add value`, not `create type` — `0017`
+   creates three enums and uses them in the same script. The single-transaction
+   check confirms it.
+
+4. **`v_budget_items` had to be redefined before `v_vendors`**, not after as
+   §3's ordering suggests: `v_vendors` reads `v_budget_items.vendor_id`, so
+   creating it first fails with "column bi.vendor_id does not exist".
+
+5. **`v_coach_runs`-style column discipline applies to `v_budget_items` too.**
+   It was reproduced verbatim from `0021` with exactly two lines changed
+   (`vendor_name` becoming a `coalesce`, and `vendor_id` appended last), rather
+   than re-derived — re-deriving it would risk silently changing the money.
+
+6. **Notes cannot embed their author.** §7 assumed an embed; `vendor_notes.author_id`
+   references `auth.users` and `collaborators` is a separate table keyed by
+   `user_id`, so there is no relationship to embed through. The name is looked
+   up in a second query and joined in TypeScript.
+
+### Also found while running the full pass
+
+`./scripts/verify-bootstrap.sh` had been **failing since session 27** —
+`0023` added a fifth built-in question (the decline note) and the check still
+expected four. Nothing to do with vendors; fixed here because this is the
+first spec since then whose test plan runs it.
+
+### Not done, and worth knowing
+
+- **Nothing has been opened in a browser.** The `VendorPicker` combobox, the
+  backfill panel and the contact sheet's print layout are all unseen.
+- **`0029` is not applied to the live project** — nor is anything from `0022`
+  onwards. They apply in order.
+- **No vendor category editor UI.** Categories are seeded from the budget's
+  names by `0029` and can be created by `createVendorCategory`, but no screen
+  calls it yet — the detail page's category select offers what exists. A
+  planner wanting "Hair and makeup" has no button for it.
+- **The run-sheet vendor link has no UI either.** `run_sheet_items.vendor_id`
+  and `setRunSheetItemVendor` exist and are tested; `/run-sheet` does not show
+  or set them yet.
+- **`/budget?item=<id>` click-through is assumed, not verified.** Spec 6 §7
+  says that opens the line's popup on load; that was not re-checked here.
+- **No dashboard tile**, per §5. Deliberate.
 
 ## 1. What this is, and what it deliberately isn't
 

@@ -75,6 +75,11 @@ const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
     headline: optionalText,
     date_label: optionalText,
     location: optionalText,
+    // The countdown lives here now (spec 25 §7) rather than being a separate
+    // block the planner stacks underneath and hopes sits well.
+    show_countdown: z.coerce.boolean().optional(),
+    countdown_label: optionalText,
+    intro: optionalText,
     image_id: uuid.optional(),
     image_alt: optionalText,
   }),
@@ -135,6 +140,7 @@ const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   stays: z.object({ intro: optionalText }),
   coach: z.object({ intro: optionalText }),
   song_requests: z.object({ intro: optionalText }),
+  guestbook: z.object({ intro: optionalText, prompt: optionalText }),
   playlist: z.object({
     heading: optionalText,
     label: optionalText,

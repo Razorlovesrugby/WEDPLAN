@@ -220,13 +220,18 @@ values (:w1, 'Dancing Queen', 'ABBA', 'Someone at the shared site');
 insert into public.song_requests (wedding_id, household_id, title)
 values (:w1, 'd0000000-0000-4000-8000-000000000001', 'Mr. Brightside');
 
+-- Scoped to the two rows inserted just above rather than to the wedding:
+-- spec 25's seed adds song requests of its own, and a test that counts every
+-- row in the fixture breaks every time the fixture grows.
 select pg_temp.expect(
-  (select count(*)::int from public.song_requests where wedding_id = :w1),
+  (select count(*)::int from public.song_requests
+    where wedding_id = :w1 and title in ('Dancing Queen', 'Mr. Brightside')),
   2,
   'a request can come with a household or with neither');
 
 select pg_temp.expect_true(
-  (select bool_and(status = 'new') from public.song_requests where wedding_id = :w1),
+  (select bool_and(status = 'new') from public.song_requests
+    where wedding_id = :w1 and title in ('Dancing Queen', 'Mr. Brightside')),
   'and arrives as new, for the planner to approve');
 
 do $$
@@ -254,7 +259,8 @@ $$;
 -- list would lose the DJ a track.
 delete from public.households where id = 'd0000000-0000-4000-8000-000000000001';
 select pg_temp.expect(
-  (select count(*)::int from public.song_requests where wedding_id = :w1),
+  (select count(*)::int from public.song_requests
+    where wedding_id = :w1 and title in ('Dancing Queen', 'Mr. Brightside')),
   2,
   'deleting a household keeps its song request, without the name');
 rollback;

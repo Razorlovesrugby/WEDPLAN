@@ -269,6 +269,17 @@ const budgetItemFields = z.object({
   event_id: optionalUuid(),
   label: z.string().trim().min(1, "Give the line a name").max(200),
   vendor_name: optionalText(200),
+  /**
+   * Set when the name came from picking a vendor record (spec 8 §4).
+   * An empty string means "plain text" — the planner typed a name that
+   * belongs to no vendor, which stays a legitimate thing to do.
+   */
+  vendor_id: z
+    .string()
+    .uuid()
+    .or(z.literal(""))
+    .optional()
+    .transform((v) => (v ? v : null)),
   quantity_basis: z.enum(["flat", "per_adult", "per_child", "per_seat", "consumption", "manual"]),
   unit_price: optionalMinorUnits(),
   estimated: optionalSnapshot(),

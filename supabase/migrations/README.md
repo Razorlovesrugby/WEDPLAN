@@ -24,6 +24,16 @@ script that can be pasted straight into the Supabase SQL editor.
 | 17 | `0017_budget_section_links.sql` | `budget_item_sections`, `v_budget_item_tasks.link_source`, `v_timeline_items.list_icon` | 4, 5, 10, 16 |
 | 18 | `0018_section_notes.sql` | `list_sections.notes` (free text per section); drops `list_sections.kind` and `list_section_kind` from 16 — see that file's own comment | 16 |
 | 19 | `0019_budget_nzd_and_gst.sql` | Drops `fx_rates`, every `currency`/`fx_rate` column, and `weddings.base_currency` — budget is NZD only; adds `budget_items.gst_treatment` (a hardcoded 15% uplift when exclusive) | 10, 11, 17 |
+| 20 | `0020_budget_allocations.sql` | `weddings.total_budget`, `allocation_pct` on categories and items, `v_budget_category_totals` | 10, 19 |
+| 21 | `0021_budget_zero_is_not_a_figure.sql` | `create or replace` of `v_budget_items` — a typed 0 no longer outranks a real figure | 20 |
+| 22 | `0022_household_slugs.sql` | `households.slug`/`slug_suffix`, their derivation and trigger, `household_slug_aliases`, `events.guest_note` | 1, 15 |
+| 23 | `0023_per_event_invites.sql` | `guest_event_overrides`, `v_guest_event_invites`, `invitation_views`, recounted summary views | 1, 22 |
+| 24 | `0024_block_audience.sql` | The `block_audience` enum, **alone** (the 55P04 rule) | 1 |
+| 25 | `0025_site_blocks.sql` | `site_blocks`, `site_revisions` + pruning trigger, `song_requests`, the backfill from `site_content` | 24, and 17's `site_content` |
+| 26 | `0026_dress_codes_and_travel.sql` | `dress_codes`, `dress_code_notes`, `events.dress_code_id`, `coach_runs.event_id` (and `v_coach_runs` recreated to carry it), `arrival_points`, four nullable columns on `transport_options`, and the dress-code backfill out of `site_blocks` payloads | 17, 25 |
+| 27 | `0027_guest_participation.sql` | `song_votes` (household NOT NULL — a vote needs identity), `guest_notes`, and the composite unique `song_requests` needed to become a parent | 25 |
+| 28 | `0028_editorial_default.sql` | Pins every existing wedding to the Script theme it was already rendering, so the code-level default could move to Editorial without restyling anybody | 1 |
+| 29 | `0029_vendors.sql` | `vendor_stage`, `vendor_categories`, `vendors`, `vendor_contacts`, `vendor_notes`, the one-primary partial unique index, `budget_items.vendor_id`, `run_sheet_items.vendor_id`, `v_vendors`, and `v_budget_items` + `v_reminders_due` redefined to prefer the linked vendor's live name | 9, 10, 17, 20, 21 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
@@ -34,6 +44,14 @@ table that stops short of the newest migration is exactly how a column like
 `list_sections.kind` (added in `0016`) ends up missing from a real project —
 whoever applied migrations by hand followed this list and stopped where it
 stopped. Add a row here in the same commit that adds a migration file.
+
+*It went stale anyway.* It stopped at `0019` while the directory held files
+through `0025`, and was brought back into line when `0026`–`0028` landed — so
+anybody who applied migrations by hand from this list between sessions 23 and
+29 is missing six of them, `0020` onwards. Check what a project actually has
+before assuming: `select count(*) from information_schema.columns where
+table_name = 'events' and column_name = 'dress_code_id'` answers it for the
+newest, and the "What success looks like" queries below answer the rest.
 
 ---
 

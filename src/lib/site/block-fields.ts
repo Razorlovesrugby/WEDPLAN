@@ -44,12 +44,31 @@ const ALT: Field = {
 
 export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   hero: {
-    blurb: "The top of the page: your names, the date, and a photograph behind them.",
+    blurb:
+      "The top of the page: your names, the date, a line about why, and the countdown if you want it.",
     image: "hero",
     fields: [
       { name: "headline", label: "Headline", kind: "text", help: "Defaults to the wedding's name." },
       { name: "date_label", label: "Date", kind: "text", placeholder: "Saturday 12 June 2027" },
       { name: "location", label: "Place", kind: "text", placeholder: "The Swan, Wells" },
+      {
+        name: "intro",
+        label: "A line about why",
+        kind: "text",
+        placeholder: "to celebrate those closest to us",
+      },
+      {
+        name: "show_countdown",
+        label: "Show the countdown here",
+        kind: "checkbox",
+        help: "Days and hours, under the date. It used to be a block of its own; keeping it in the hero is what stops it drifting away from the date it counts to.",
+      },
+      {
+        name: "countdown_label",
+        label: "After the number",
+        kind: "text",
+        placeholder: "until we say I do",
+      },
       ALT,
     ],
   },
@@ -111,6 +130,7 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     },
   },
   dress_code: {
+    managedElsewhere: "/site/attire",
     blurb: "A sentence about what to wear, and a moodboard if you have published one.",
     fields: [
       INTRO,
@@ -206,6 +226,21 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     blurb: "Guests suggest songs; you get a list to hand the DJ.",
     managedElsewhere: "/site/songs",
     fields: [INTRO],
+  },
+  guestbook: {
+    blurb:
+      "A line from everyone. A note left from a guest's own link appears straight away; one from the shared address waits for you.",
+    managedElsewhere: "/site/guestbook",
+    fields: [
+      INTRO,
+      {
+        name: "prompt",
+        label: "The prompt",
+        kind: "text",
+        placeholder: "Write something we will read on a slow afternoon in twenty years…",
+        help: "Shown inside the empty box. A good prompt is most of what makes people write the good version.",
+      },
+    ],
   },
   playlist: {
     blurb: "A link to your playlist — or the player itself, if you switch the embed on.",

@@ -22,6 +22,7 @@ import {
   BLOCKS,
   BLOCK_FAMILIES,
   STARTER_LAYOUTS,
+  palletableBlocks,
   pageNotes,
   typesAtLimit,
   type BlockType,
@@ -233,7 +234,9 @@ export function SiteBuilder({
           {showPalette ? (
             <div className="card space-y-4 p-3">
               {BLOCK_FAMILIES.map((family) => {
-                const inFamily = Object.values(BLOCKS).filter((def) => def.family === family);
+                // palletableBlocks() rather than BLOCKS: a deprecated type still
+                // renders on pages that have one, but is not offered again.
+                const inFamily = palletableBlocks().filter((def) => def.family === family);
                 if (inFamily.length === 0) return null;
                 return (
                   <div key={family}>

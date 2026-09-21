@@ -15,6 +15,7 @@ import { CategoryHeader } from "@/components/budget/category-header";
 import { NewCategoryForm } from "@/components/budget/new-category-form";
 import { AddBudgetItemForm } from "@/components/budget/add-budget-item-form";
 import { BudgetItemRow } from "@/components/budget/budget-item-row";
+import { listVendors } from "@/server/queries/vendors";
 import { PaymentCalendar } from "@/components/budget/payment-calendar";
 import { formatMoney, pluralise } from "@/lib/format";
 import { sectionAllocation } from "@/lib/budget";
@@ -28,7 +29,7 @@ export default async function BudgetPage({
 }) {
   const { item: openItemId } = await searchParams;
   const wedding = await requireWedding();
-  const [categories, categoryTotals, items, components, payments, summary, events, lists, sections, allTasks] = await Promise.all([
+  const [categories, categoryTotals, items, components, payments, summary, events, lists, sections, allTasks, vendors] = await Promise.all([
     listBudgetCategories(wedding.id),
     listBudgetCategoryTotals(wedding.id),
     listBudgetItems(wedding.id),
@@ -39,6 +40,7 @@ export default async function BudgetPage({
     getLists(wedding.id),
     getAllSections(wedding.id),
     getAllItems(wedding.id),
+    listVendors(wedding.id),
   ]);
 
   // Guest counts, one lookup per distinct event scope actually used by an
@@ -144,6 +146,7 @@ export default async function BudgetPage({
                   <div>
                     {categoryItems.map((item) => (
                       <BudgetItemRow
+                        vendors={vendors}
                         key={item.id}
                         item={item}
                         categoryName={category.name}
@@ -167,6 +170,7 @@ export default async function BudgetPage({
                 )}
                 <div className="mt-3">
                   <AddBudgetItemForm
+                    vendors={vendors}
                     categoryId={category.id}
                     categoryName={category.name}
                     categoryAllocatedAmount={categoryAllocatedAmount}

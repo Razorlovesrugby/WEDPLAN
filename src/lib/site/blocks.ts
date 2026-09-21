@@ -64,6 +64,24 @@ export type BlockDef = {
   defaultAudience?: BlockAudience;
   /** Heading shown above the block, when the renderer draws one. */
   heading?: string;
+  /**
+   * The short category label above the heading — `04 · ATTIRE` (spec 25 §8).
+   *
+   * It names the block's JOB, where `heading` is whatever the couple wanted to
+   * call it. A block with none is not a destination: a hero has no eyebrow
+   * because nobody arrives at it, and a photo band has none because it is
+   * punctuation rather than a section.
+   */
+  eyebrow?: string;
+  /**
+   * Kept renderable, hidden from the palette.
+   *
+   * `countdown` moved into the hero, and REMOVING the type would be a
+   * data-loss bug rather than a cleanup: `toBlock()` drops any entry whose
+   * type it does not know, so a revision published last month would silently
+   * lose its countdown the next time somebody opened it.
+   */
+  deprecated?: boolean;
 };
 
 export const BLOCK_TYPES = [
@@ -87,6 +105,7 @@ export const BLOCK_TYPES = [
   "coach",
   "song_requests",
   "playlist",
+  "guestbook",
   "footer",
 ] as const;
 
@@ -105,15 +124,17 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "countdown",
     label: "Countdown",
     family: "essentials",
-    blurb: "How long until the day.",
+    blurb: "How long until the day. Now part of the hero — this block still renders.",
     max: 1,
     styles: ["background"],
+    deprecated: true,
   },
   story: {
     type: "story",
     label: "Our story",
     family: "essentials",
     blurb: "How you met, in a paragraph or as a list of moments.",
+    eyebrow: "Our story",
     styles: ["width", "background", "align"],
     heading: "Our story",
   },
@@ -129,6 +150,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "The weekend",
     family: "the day",
     blurb: "Your events, grouped by day. On a guest's own page, only theirs.",
+    eyebrow: "The weekend",
     max: 1,
     styles: ["width", "background"],
     personal: true,
@@ -139,6 +161,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "On the day",
     family: "the day",
     blurb: "Your notes for each event — parking, timings, what happens when.",
+    eyebrow: "On the day",
     max: 1,
     styles: ["width", "background"],
     personal: true,
@@ -150,6 +173,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "RSVP",
     family: "the day",
     blurb: "The form on a guest's own page; 'find my invitation' on the shared one.",
+    eyebrow: "Your reply",
     max: 1,
     styles: ["background"],
     personal: true,
@@ -160,6 +184,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Questions",
     family: "the day",
     blurb: "The things everybody asks, a few open and the rest collapsed.",
+    eyebrow: "Questions",
     max: 1,
     styles: ["width", "background"],
     heading: "Questions",
@@ -169,6 +194,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "What to wear",
     family: "the day",
     blurb: "A sentence, and a moodboard if you have published one.",
+    eyebrow: "Attire",
     styles: ["width", "background", "align"],
     heading: "What to wear",
   },
@@ -177,6 +203,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Who's who",
     family: "the day",
     blurb: "The people standing up with you.",
+    eyebrow: "Who's who",
     max: 1,
     styles: ["width", "background"],
     heading: "Who's who",
@@ -186,6 +213,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "While you're here",
     family: "travel",
     blurb: "What to do with the rest of the weekend.",
+    eyebrow: "While you're here",
     max: 1,
     styles: ["width", "background"],
     heading: "While you're here",
@@ -195,6 +223,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Photo gallery",
     family: "photos",
     blurb: "A grid of photographs.",
+    eyebrow: "Photographs",
     styles: ["width", "shape"],
     heading: "Photos",
   },
@@ -217,6 +246,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Map",
     family: "travel",
     blurb: "One venue, how to get there, and a link that opens Maps.",
+    eyebrow: "The venue",
     styles: ["width", "background", "embed"],
   },
   travel: {
@@ -224,6 +254,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Getting there",
     family: "travel",
     blurb: "Parking, taxis, the train — and the coach, if you have one.",
+    eyebrow: "Arrival",
     max: 1,
     styles: ["width", "background"],
     heading: "Getting there",
@@ -233,6 +264,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Where to stay",
     family: "travel",
     blurb: "Somewhere to sleep, as links.",
+    eyebrow: "Where to stay",
     max: 1,
     styles: ["width", "background"],
     heading: "Where to stay",
@@ -242,6 +274,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "The coach",
     family: "travel",
     blurb: "Times and stops. On a guest's own page, they can reserve seats.",
+    eyebrow: "The coach",
     max: 1,
     styles: ["width", "background"],
     personal: true,
@@ -252,6 +285,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Song requests",
     family: "music",
     blurb: "Guests suggest songs; you get a list to hand the DJ.",
+    eyebrow: "The playlist",
     max: 1,
     styles: ["width", "background"],
     heading: "Songs",
@@ -263,11 +297,23 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     blurb: "A link to your playlist, or the player itself.",
     styles: ["width", "background", "embed"],
   },
+  guestbook: {
+    type: "guestbook",
+    label: "Guestbook",
+    family: "the day",
+    blurb: "A line from everyone. Notes from a guest's own link appear at once; the rest wait for you.",
+    max: 1,
+    styles: ["width", "background"],
+    personal: true,
+    heading: "Leave a note",
+    eyebrow: "Leave a note",
+  },
   footer: {
     type: "footer",
     label: "Footer",
     family: "essentials",
     blurb: "The bottom of the page — a note, an email address, a hashtag.",
+    eyebrow: "With love",
     max: 1,
     styles: ["background"],
   },
@@ -388,7 +434,10 @@ export const STARTER_LAYOUTS: StarterLayout[] = [
     id: "classic",
     label: "Classic",
     blurb: "The usual order, and the one nobody has to think about.",
-    types: ["hero", "countdown", "story", "schedule", "on_the_day", "travel", "faq", "rsvp", "footer"],
+    // No `countdown` block: it is a switch on the hero now (spec 25 §7), and
+    // a starter layout that added the deprecated one would be teaching the
+    // shape we just moved away from.
+    types: ["hero", "story", "schedule", "on_the_day", "travel", "dress_code", "faq", "rsvp", "footer"],
   },
   {
     id: "photo_led",
@@ -414,6 +463,48 @@ export const STARTER_LAYOUTS: StarterLayout[] = [
     types: ["hero", "schedule", "on_the_day", "rsvp", "footer"],
   },
 ];
+
+/**
+ * The number and label above each section — `04 · ATTIRE` (spec 25 §8).
+ *
+ * **Numbers are computed, never stored** (Answered question 6). Hiding a block
+ * renumbers everything after it, so the page always reads 01 to N with no gaps
+ * — a guest counting "01, 02, 04" wonders what they missed, and the answer
+ * "nothing, the couple hid a block" is not one the page can give them.
+ *
+ * Only blocks with an eyebrow are numbered, which is the same judgement
+ * `blockNavItems` makes about what is a destination: a photo band is
+ * punctuation, and numbering it would make the page look longer than it reads.
+ * Hidden blocks are expected to be filtered out by `visibleBlocks` before this
+ * is called — it numbers what it is given.
+ */
+export type SectionMark = { number: string; label: string };
+
+export function sectionNumbers(blocks: SiteBlock[]): Map<string, SectionMark> {
+  const marks = new Map<string, SectionMark>();
+  let n = 0;
+
+  for (const block of blocks) {
+    const eyebrow = BLOCKS[block.type]?.eyebrow;
+    if (!eyebrow) continue;
+    n += 1;
+    // Two digits up to 99, which is well past the point pageNotes starts
+    // telling the planner the page is too long.
+    marks.set(block.id, { number: String(n).padStart(2, "0"), label: eyebrow });
+  }
+  return marks;
+}
+
+/**
+ * What the palette offers.
+ *
+ * Deprecated types are excluded — `countdown` lives in the hero now — but they
+ * stay in `BLOCKS` and stay renderable, because a published revision may hold
+ * one and dropping the type would blank it silently.
+ */
+export function palletableBlocks(): BlockDef[] {
+  return Object.values(BLOCKS).filter((def) => !def.deprecated);
+}
 
 /**
  * The jump nav.

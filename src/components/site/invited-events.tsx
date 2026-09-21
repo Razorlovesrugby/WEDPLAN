@@ -1,6 +1,9 @@
 import { formatDate, formatTime } from "@/lib/format";
 import { invitedForLine, listNames } from "@/lib/invites";
 import { Label } from "./section";
+import { DressCodeTag, ShuttleLines } from "./event-inline";
+import type { DressCode } from "@/lib/site/dress-codes";
+import type { CoachRun } from "@/server/queries/travel";
 
 /**
  * The events this household is invited to, with who each one is for
@@ -21,12 +24,28 @@ export function InvitedEvents({
   members,
   invitedByEvent,
   timeZone,
+  dressCodes = [],
+  coachByEvent,
 }: {
-  events: { id: string; name: string; starts_at: string | null; venue: string | null; address: string | null }[];
+  events: {
+    id: string;
+    name: string;
+    starts_at: string | null;
+    venue: string | null;
+    address: string | null;
+    dress_code_id?: string | null;
+  }[];
   members: { id: string; name: string }[];
   /** Guest ids invited to each event id. */
   invitedByEvent: Map<string, Set<string>>;
   timeZone: string;
+  /**
+   * Spec 25 §6, on the personalised page too. The shared site and a
+   * household's own page must agree about an event — the same component draws
+   * both, so the shuttle cannot quietly stop appearing on one of them.
+   */
+  dressCodes?: DressCode[];
+  coachByEvent?: Map<string, CoachRun[]>;
 }) {
   const byDay = new Map<string, typeof events>();
   for (const event of events) {
@@ -60,6 +79,8 @@ export function InvitedEvents({
                     <p className="text-[0.95rem] text-muted">{event.address}</p>
                   ) : null}
                   {forLine ? <p className="mt-2 text-[0.95rem] text-muted">{forLine}</p> : null}
+                  <ShuttleLines runs={coachByEvent?.get(event.id) ?? []} timeZone={timeZone} />
+                  <DressCodeTag event={event} codes={dressCodes} />
                 </li>
               );
             })}

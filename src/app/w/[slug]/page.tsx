@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { body, script } from "@/lib/fonts";
+import { siteFontClasses } from "@/lib/fonts";
 import { findWeddingBySlug } from "@/server/queries/site";
 import { loadPublishedBlocks } from "@/server/queries/site-blocks";
 import { buildRenderContext } from "@/server/queries/site-render";
@@ -58,7 +58,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
     // palette rather than the planner's.
     <div
       style={themeCssVars(ctx.theme)}
-      className={`site-print ${script.variable} ${body.variable} min-h-screen bg-paper font-body text-ink antialiased`}
+      className={`site-print ${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       {nav.length > 0 ? (
         <SiteNav

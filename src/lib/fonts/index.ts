@@ -48,3 +48,58 @@ export const body = localFont({
   display: "swap",
   fallback: ["Georgia", "Cambria", "Times New Roman", "serif"],
 });
+
+/**
+ * Editorial's display face (spec 25 Part C).
+ *
+ * Fraunces is variable on two axes — weight and OPTICAL SIZE — which is the
+ * reason it is here rather than one of the obvious alternatives. Optical
+ * sizing is what lets one file be genuinely high-contrast at a 96px headline
+ * and still readable at 24px; a single-master didone has to choose, and
+ * whichever it chooses is wrong at the other end. `font-optical-sizing: auto`
+ * (the browser default) drives it, so nothing has to be set per element.
+ *
+ * SIL Open Font License, self-hosted for the same reasons as the two above.
+ */
+export const display = localFont({
+  src: [
+    { path: "./Fraunces-latin.woff2", weight: "400 700", style: "normal" },
+    { path: "./Fraunces-latin-ext.woff2", weight: "400 700", style: "normal" },
+  ],
+  variable: "--font-display",
+  display: "swap",
+  fallback: ["Georgia", "Cambria", "Times New Roman", "serif"],
+});
+
+/**
+ * Editorial's label face — `04 · ATTIRE`, `5.00PM`, `CASUAL SUMMER`.
+ *
+ * A grotesque rather than a third serif, on purpose: the whole effect of this
+ * theme is the contrast between a high-contrast display serif and small
+ * letterspaced metadata, and metadata set in a serif reads as more body text.
+ *
+ * SIL Open Font License.
+ */
+export const label = localFont({
+  src: [
+    { path: "./Inter-latin.woff2", weight: "400 700", style: "normal" },
+    { path: "./Inter-latin-ext.woff2", weight: "400 700", style: "normal" },
+  ],
+  variable: "--font-label",
+  display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
+});
+
+/**
+ * The font variable classes a given theme needs on the site's root element.
+ *
+ * Only Editorial loads Fraunces and Inter. That is not a size optimisation —
+ * it is what keeps the Script theme looking like itself: `.site-heading`
+ * resolves `var(--font-display, var(--font-script))`, so a page that never
+ * defines `--font-display` falls back to Pinyon exactly as it did before
+ * spec 25 existed.
+ */
+export function siteFontClasses(preset: string): string {
+  const base = `${script.variable} ${body.variable}`;
+  return preset === "editorial" ? `${base} ${display.variable} ${label.variable}` : base;
+}
