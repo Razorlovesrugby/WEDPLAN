@@ -12,8 +12,7 @@ import {
   THEME_PRESET_IDS,
   type ThemePresetId,
 } from "@/lib/theme/presets";
-import { FAQ_LIBRARY } from "@/lib/site/faq-library";
-import { SECTION_KEYS, THEME_BLOCK_KEY, isSectionKey, SECTIONS } from "@/lib/site/sections";
+import { THEME_BLOCK_KEY } from "@/lib/site/sections";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -147,121 +146,18 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * The sort_order a write should carry.
+ * NOTE, spec 23: the section writers that used to live here are gone.
  *
- * Reads the row's current value rather than assuming the designed default,
- * because an upsert names every column it sets — so writing the default here
- * would silently undo a planner's reordering the next time they edited a
- * section's text. Only a row that does not exist yet gets the default.
- */
-async function currentSortOrder(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  weddingId: string,
-  blockKey: string,
-  fallback: number,
-): Promise<number> {
-  const { data } = await supabase
-    .from("site_content")
-    .select("sort_order")
-    .eq("wedding_id", weddingId)
-    .eq("block_key", blockKey)
-    .maybeSingle();
-  return data?.sort_order ?? fallback;
-}
-
-export async function saveSiteBlock(
-  blockKey: string,
-  fields: Record<string, unknown>,
-): Promise<ActionResult> {
-  const wedding = await requireWedding();
-
-  if (!isSectionKey(blockKey) || !(blockKey in sectionSchemas)) {
-    return fail("That isn't a section of the site");
-  }
-  const schema = sectionSchemas[blockKey as SectionSchemaKey];
-  const parsed = schema.safeParse(fields);
-  if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
-
-  const supabase = await createClient();
-  const sortOrder = await currentSortOrder(
-    supabase,
-    wedding.id,
-    blockKey,
-    SECTIONS[blockKey].defaultOrder,
-  );
-  const { error } = await supabase.from("site_content").upsert(
-    {
-      wedding_id: wedding.id,
-      block_key: blockKey,
-      payload: compact(parsed.data as Record<string, unknown>) as never,
-      sort_order: sortOrder,
-    },
-    // The unique key is (wedding_id, block_key); without naming it, an upsert
-    // collides on the primary key instead and inserts a duplicate row.
-    { onConflict: "wedding_id,block_key", ignoreDuplicates: false },
-  );
-  if (error) return fail(`Could not save that section: ${error.message}`);
-
-  revalidateSite();
-  return ok(undefined);
-}
-
-export async function setSectionVisible(blockKey: string, visible: boolean): Promise<ActionResult> {
-  const wedding = await requireWedding();
-  if (!isSectionKey(blockKey)) return fail("That isn't a section of the site");
-
-  const supabase = await createClient();
-  const sortOrder = await currentSortOrder(
-    supabase,
-    wedding.id,
-    blockKey,
-    SECTIONS[blockKey].defaultOrder,
-  );
-  const { error } = await supabase.from("site_content").upsert(
-    { wedding_id: wedding.id, block_key: blockKey, visible, sort_order: sortOrder },
-    { onConflict: "wedding_id,block_key", ignoreDuplicates: false },
-  );
-  if (error) return fail(`Could not change that: ${error.message}`);
-
-  revalidateSite();
-  return ok(undefined);
-}
-
-/**
- * Renumber the sections.
+ * `saveSiteBlock`, `setSectionVisible`, `reorderSections` and `addStarterFaq`
+ * wrote `site_content` rows, which nothing renders any more — the site is
+ * `site_blocks` plus a published revision now (see
+ * `src/server/actions/site-blocks.ts`). Leaving them would have left a second
+ * write path into a table the app does not read, which is how somebody edits
+ * for an hour and cannot work out why the site never changes.
  *
- * Takes the whole order rather than a from/to pair, for the same reason
- * `reorderLists` (spec 12) does: the client already knows the order it wants,
- * and computing it from a move server-side means reconstructing state the
- * client has and the server does not.
+ * The theme stays here, and stays in `site_content`: it is configuration
+ * rather than content, and `/site/theme` is still its screen.
  */
-export async function reorderSections(orderedKeys: string[]): Promise<ActionResult> {
-  const wedding = await requireWedding();
-
-  const keys = orderedKeys.filter(isSectionKey);
-  if (keys.length !== orderedKeys.length) return fail("That isn't a section of the site");
-  if (new Set(keys).size !== keys.length) return fail("A section was listed twice");
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("site_content").upsert(
-    keys.map((key, index) => ({
-      wedding_id: wedding.id,
-      block_key: key,
-      // Gaps of 10 so a later single insert has somewhere to land without
-      // renumbering everything again.
-      sort_order: index * 10,
-    })),
-    { onConflict: "wedding_id,block_key", ignoreDuplicates: false },
-  );
-  if (error) return fail(`Could not reorder the sections: ${error.message}`);
-
-  revalidateSite();
-  return ok(undefined);
-}
-
-// ---------------------------------------------------------------------------
-// Theme
-// ---------------------------------------------------------------------------
 
 const themeSchema = z.object({
   preset: z.enum(THEME_PRESET_IDS),
@@ -343,58 +239,10 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
   return ok(undefined);
 }
 
-// ---------------------------------------------------------------------------
-// The FAQ starter library
-// ---------------------------------------------------------------------------
-
-/**
- * Add the starter questions to whatever is already there.
- *
- * Appends rather than replaces, and skips any question already present, so
- * pressing it twice is safe and it can never eat an answer somebody wrote.
- */
-export async function addStarterFaq(): Promise<ActionResult<{ added: number }>> {
-  const wedding = await requireWedding();
-  const supabase = await createClient();
-
-  const { data: existing, error: readError } = await supabase
-    .from("site_content")
-    .select("payload, sort_order")
-    .eq("wedding_id", wedding.id)
-    .eq("block_key", "faq")
-    .maybeSingle();
-  if (readError) return fail(`Could not read the current questions: ${readError.message}`);
-
-  const payload = (existing?.payload ?? {}) as Record<string, unknown>;
-  const current = Array.isArray(payload["items"]) ? (payload["items"] as Record<string, unknown>[]) : [];
-  const have = new Set(
-    current.map((item) => String(item["q"] ?? "").trim().toLowerCase()).filter(Boolean),
-  );
-
-  const additions = FAQ_LIBRARY.filter((item) => !have.has(item.q.toLowerCase()));
-  if (additions.length === 0) return ok({ added: 0 });
-
-  const { error } = await supabase.from("site_content").upsert(
-    {
-      wedding_id: wedding.id,
-      block_key: "faq",
-      payload: { ...payload, items: [...current, ...additions] } as never,
-      sort_order: existing?.sort_order ?? SECTIONS.faq.defaultOrder,
-    },
-    { onConflict: "wedding_id,block_key", ignoreDuplicates: false },
-  );
-  if (error) return fail(`Could not add the questions: ${error.message}`);
-
-  revalidateSite();
-  return ok({ added: additions.length });
-}
-
-// ---------------------------------------------------------------------------
-
 function revalidateSite() {
   revalidatePath("/site");
   revalidatePath("/site/theme");
-  // Both the redirect and the real address: a planner who saves a section and
+  // Both the redirect and the real address: a planner who saves the theme and
   // then opens the site should see the change, not a cached page.
   revalidatePath("/w");
   revalidatePath("/w/[slug]", "page");

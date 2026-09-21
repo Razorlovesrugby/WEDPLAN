@@ -70,7 +70,13 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
 
   const weddingId = context.wedding.id;
   const ownGuestIds = new Set(context.guests.map((guest) => guest.id));
-  const invitedEventIds = new Set(context.events.map((event) => event.id));
+  // Per guest, per event (spec 22 §6): a household where the kids are not at
+  // the evening do must not be able to answer for them, whatever the form
+  // posts. The context is re-resolved above, so this set comes from the
+  // database on every submission rather than from anything the client sent.
+  const invitedPairs = new Set(
+    context.invites.map((invite) => `${invite.guest_id}:${invite.event_id}`),
+  );
   const questionById = new Map(context.questions.map((question) => [question.id, question]));
 
   // Anything not belonging to this household is dropped silently rather than
@@ -111,7 +117,11 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
     }
 
     for (const response of guest.responses) {
-      if (!invitedEventIds.has(response.eventId)) continue;
+      // Silently dropped rather than rejected, like every other id that does
+      // not belong to this household: an answer for an event this person is
+      // not invited to is either a stale form or an attempt, and neither
+      // deserves a message confirming which events exist.
+      if (!invitedPairs.has(`${guest.guestId}:${response.eventId}`)) continue;
 
       const { error } = await supabase.from("rsvps").upsert(
         {

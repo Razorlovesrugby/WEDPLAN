@@ -161,9 +161,20 @@ on conflict (id) do nothing;
 -- look at without hand-writing JSON, and makes a working renderer look broken.
 --
 -- Written in first person plural (Q11), like the real defaults.
+-- The theme is configuration rather than content, so it stays in
+-- site_content and /site/theme keeps writing it (spec 23 §4).
 insert into public.site_content (wedding_id, block_key, payload, sort_order) values
   ('11111111-1111-4111-8111-111111111111', 'theme',
-   '{"preset":"script","palette":"ivory","hero_style":"framed","monogram":true}', -1),
+   '{"preset":"script","palette":"ivory","hero_style":"framed","monogram":true}', -1)
+on conflict (wedding_id, block_key) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- The site itself, as blocks (spec 23)
+-- ---------------------------------------------------------------------------
+-- A page is a list of blocks now. This seeds a full example — every block type
+-- the renderer knows how to draw — so a local reset shows a real site rather
+-- than an empty builder, and so `/site`'s preview has something in it.
+insert into public.site_blocks (wedding_id, type, payload, sort_order) values
   ('11111111-1111-4111-8111-111111111111', 'hero',
    '{"headline":"Alex & Sam","date_label":"Saturday 12 June 2027","location":"Bath, England"}', 0),
   ('11111111-1111-4111-8111-111111111111', 'countdown',
@@ -186,7 +197,28 @@ insert into public.site_content (wedding_id, block_key, payload, sort_order) val
    '{"intro":"Your invitation has a link that is personal to your household — it is how we know who is replying.","closes_label":"Please reply by 30 April 2027"}', 100),
   ('11111111-1111-4111-8111-111111111111', 'footer',
    '{"note":"We cannot wait to see you","contact_email":"alexandsam@example.com","hashtag":"#alexandsam2027"}', 110)
-on conflict (wedding_id, block_key) do nothing;
+on conflict do nothing;
+
+-- What guests actually see: the published snapshot. Without one the public
+-- page is blank, because it reads revisions and never the draft.
+insert into public.site_revisions (wedding_id, blocks, note)
+select
+  w.id,
+  coalesce(
+    (
+      select jsonb_agg(
+               jsonb_build_object(
+                 'id', b.id, 'type', b.type, 'payload', b.payload,
+                 'style', b.style, 'visible', b.visible, 'audience', b.audience
+               ) order by b.sort_order
+             )
+      from public.site_blocks b where b.wedding_id = w.id
+    ),
+    '[]'::jsonb
+  ),
+  'Seeded'
+from public.weddings w
+where w.id = '11111111-1111-4111-8111-111111111111';
 
 -- ---------------------------------------------------------------------------
 -- Wedding 2 — the one nobody in wedding 1 may ever see

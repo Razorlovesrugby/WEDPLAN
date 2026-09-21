@@ -1,0 +1,22 @@
+-- ===========================================================================
+-- 0024: the block_audience enum (spec 23 §6)
+-- ===========================================================================
+-- Enum-only, and its own file, because of the trap `0011` taught this repo:
+-- adding an enum value and using it in the same script throws 55P04 ("unsafe
+-- use of new value") when the whole script runs as one transaction, which is
+-- exactly what the Supabase SQL editor does with a pasted file. This one must
+-- be run, and committed, before 0025.
+--
+-- Three audiences and no more (Q5). Targeting a block at a cut line or at
+-- "people invited to the brunch" was declined: it is where a content model
+-- turns into a rules engine, and its failure mode is a guest who cannot see
+-- something with nobody able to say why.
+--
+--   everyone      the shared site and every household's own page
+--   invited       only a household's own page — details for people actually
+--                 coming, not for anyone who finds the public URL
+--   public_only   only the shared site — "find my invitation" is noise to
+--                 somebody already holding their link
+-- ===========================================================================
+
+create type public.block_audience as enum ('everyone', 'invited', 'public_only');

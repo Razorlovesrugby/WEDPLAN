@@ -3,7 +3,101 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 26 — **spec 21 written, answered and built: every
+Last updated: session 28 — **spec 23 built: `/site` is a block builder with a
+live preview, and the public site is a published snapshot rather than whatever
+the planner last typed.**
+
+The page was twelve fixed sections in `site_content`, one row each, unique per
+wedding — the content model said "a wedding has at most one Story" and a
+builder says "a page is a list of whatever you like, in whatever order, as
+many times as you like". So: `site_blocks` is the draft, `site_revisions` is
+what guests see, and publishing is a snapshot rather than a flag flip. That
+split is the spine of the feature — **a half-finished edit cannot reach the
+internet by construction rather than by anybody remembering to check a flag**
+— and `supabase/tests/10_site_blocks.sql` §2 and §3 are the assertions that
+say so.
+
+**One renderer, three callers.** `src/components/site/blocks/render.tsx` draws
+the shared site, a household's personalised page and the editor's preview. A
+preview with its own renderer starts lying the moment somebody changes the
+real one, which is why the preview pane is an iframe of `/site/preview` and
+not a mock-up.
+
+Twenty-one block types live in one catalogue (`src/lib/site/blocks.ts`) with
+their families, limits, style controls and audiences; adding a widget is a row
+there plus a case in the renderer. Photos upload straight from the browser to
+storage (the bytes never pass through a server action) and blocks store an
+**asset id**, not a URL — the bucket is private, so URLs are signed at render
+time and a stored one would work for an hour and then quietly stop.
+
+**Two things were deleted on purpose:** the old section editor, and the
+section writers behind it. Leaving them would have left a second write path
+into a table nothing renders, which is how somebody edits for an hour and
+cannot work out why the site never changed. `site_content` itself stays, with
+the theme in it — configuration rather than content — and the old rows are
+left where they are, because a rollback must not be a data loss.
+
+`0024` (the enum, alone, per the 55P04 rule) and `0025` are **not applied to
+the live project**, and neither are `0022` and `0023` from the two sessions
+before. They apply in order. 541 tests, 356 SQL assertions, typecheck,
+single-transaction check and build all clean.
+
+**The caveat that matters more here than anywhere else: nothing has been
+opened in a browser.** This is the feature whose whole point is how it looks,
+and the preview pane, the drag-to-reorder, the photo picker and every block's
+rendering are all unseen. The spec's "Not done" list has the rest, of which
+the two worth knowing first are **no crop UI** (aspect is applied with
+`object-cover`, so nobody chooses which part of a photograph survives) and
+**no way to reorder blocks on a phone**.
+
+Previously: session 27 — **spec 22 written, answered and built: inviting is
+now per person per event, and every open of an invitation is logged.**
+
+`/guests` was already a grid of guests by events with a read-only RSVP status
+in each cell. Those cells are now clickable: invite, remove, mark the
+invitation as sent, or record an answer somebody gave by text message. Who is
+invited is a household fact with per-guest exceptions — `invitation_events`
+still says what the household is invited to, `guest_event_overrides` records
+the deliberate departures, and `v_guest_event_invites` computes
+`coalesce(override, household)` in **one place, which is the rule the whole
+feature turns on**. A bulk household change therefore cannot silently
+re-invite the child somebody removed last week.
+
+**Two earlier decisions were corrected while building, both worth knowing.**
+Spec 6's `budget_guest_population` was computing invited-ness itself by
+joining `invitation_events` — correct when that was a household fact, and
+wrong the moment a child is taken off the evening do, because the caterer's
+number then disagrees with the guest list screen. It reads the view now, and
+the catering CSV had the same flaw in TypeScript. And spec 14 §6's "list every
+event and mark the ones you are not invited to" is replaced: with per-person
+invites that rendering prints a named child beside the party they are not at,
+so an event nobody in the household is invited to is simply not shown.
+
+**The thing most likely to be undone by accident:** one-tap replies and open
+logging both apply from the browser, on mount, never during the server render.
+Corporate mail scanners and link previewers fetch every URL in a message; a
+write on GET would record answers nobody gave and opens nobody made. Scanners
+do not run JavaScript, so that client component is the entire defence. Anybody
+"simplifying" it into the page body breaks the numbers silently.
+
+`0023_per_event_invites.sql` also adds `invitation_views` (no IP, no user
+agent), the built-in decline-note question — stored as a household-scope
+`rsvp_answers` row so it lands where the planner already looks — and recounts
+`v_household_rsvp` and `v_wedding_stats` onto the invites view so an answer
+kept from before an un-invite stops inflating every total. **Neither `0022`
+nor `0023` has been applied to the live project; they apply in order.** 540
+tests (up from 513), 333 SQL assertions (up from 304), typecheck, single-
+transaction check and build all clean. See
+`docs/specs/22-per-event-invite-status-and-tracking.md`.
+
+**Spec 23, the site builder, is written and fully answered but NOT built.**
+It is the other half of the same request and is a design project: a block
+model replacing the twelve fixed sections, draft-then-publish, photo uploads,
+and four widget families. One of its answers reopens spec 14 §11's
+third-party ban (embeds, per block, opt-in) — read §3a there before touching
+it.
+
+Previously: session 26 — **spec 21 written, answered and built: every
 household now has its own readable address on the wedding site.**
 `/w/ray-and-olivia/okonkwo-4f7ak` is the household's own page — the couple's
 hero, only the events that household is invited to, the per-event "on the day"
@@ -199,6 +293,110 @@ answered (see session 11's note below, and §6's "Writing a spec is not
 permission to build it"). 9.1 additionally needs a Pinterest developer app
 that only the planner can register. Session 15's work — spec 7, built end to
 end — is unchanged and is described below these entries.
+
+## Session 28: Spec 23 — the site becomes a builder
+
+**What was asked:** a preview, and something that works like a website
+builder — add elements, photos, widgets — as beautiful as it can be made.
+
+**The decision that shaped the build**, taken in the spec and worth
+re-reading before anybody revisits it: a **block builder, not a free canvas**.
+Absolute positioning needs a hand-built layout per breakpoint or it collapses
+on a phone, which is where guests open this, and it is several times the work
+for a worse result on the device that matters.
+
+**The schema.** `site_blocks` (draft) + `site_revisions` (published snapshots,
+last twenty, pruned by a trigger) + `song_requests`. `type` is text rather
+than an enum on purpose — the set of block types is a fact about the
+application, and an enum would mean a migration before anybody could try a new
+widget. The backfill turns each `site_content` section into a block, and each
+wedding gets a first revision built from it: **without that, every live site
+would have gone blank the moment the renderer started reading revisions.**
+
+**The shape of the code.** One catalogue (`blocks.ts`) describing every type;
+one renderer (`blocks/render.tsx`) used by all three surfaces; one context
+builder (`site-render.ts`) gathering what blocks draw from. Personalisation is
+a branch inside the renderer rather than a second layout, which is what makes
+"the site and the invite are the same thing" true in the code.
+
+**Files.** `0024_block_audience.sql`, `0025_site_blocks.sql`,
+`supabase/tests/10_site_blocks.sql`; `src/lib/site/blocks.ts` + tests,
+`block-fields.ts`, `encode-image.ts` (the EXIF-stripping encoder, lifted out
+of the guest uploader so both uploads share it); `src/server/queries/
+site-blocks.ts` and `site-render.ts`; `src/server/actions/site-blocks.ts`,
+`site-photos.ts`, `songs.ts`; `src/components/site/blocks/` and
+`editor/{builder,block-inspector,photo-picker,revision-list,song-list}.tsx`;
+`/site`, `/site/preview`, `/site/history`, `/site/songs`; both public pages
+rewritten onto the renderer.
+
+**Four corrections the build made**, all in the spec's build status: `old` is
+a reserved word inside a trigger and the prune function aliased a table with
+it; deleting the old editor orphaned the gallery's upload settings, which
+moved to `/gallery` where they belong; the seed had to be rewritten to produce
+blocks and a revision, because a fresh database applies migrations before the
+seed and would otherwise reset to a blank page; and an empty heading drew a
+heading's rule and spacing with nothing in it.
+
+**Where to pick this up:** open it. Apply `0022`–`0025` in order, then look at
+`/site` on a laptop and at `/w/<slug>` on a phone. The most likely places for
+something to be wrong are the ones nobody has seen: the preview iframe's
+sizing, the drag handles, and how the photo blocks crop at each aspect.
+
+## Session 27: Spec 22 — inviting per event, per person, and knowing they looked
+
+**What was asked:** tick, in Guests, whether a person is included in a
+particular event, with more states than yes/no — "invite sent" among them;
+show the event's details only to people in one of those states; RSVP buttons
+that feed back; and see when they open the link.
+
+**What the discovery pass found:** the grid already had a column per event per
+guest, showing RSVP status and doing nothing when clicked. Invited-ness was a
+household fact set once, at invitation-creation time, with no screen anywhere
+to change it afterwards. "Invite sent" lived in a different table from Yes/No.
+Opens were a single first-open timestamp. So the shape of the work was: make
+the implied model real, and make the cells do what they look like they do.
+
+**The design decision, and why it is not the obvious one.** The planner chose
+household-default-with-per-guest-overrides over a pure per-guest model. The
+naive implementation of that is a materialised row per guest per event — and
+it is wrong, because "add the Okonkwos to the brunch" then becomes a fan-out
+write that silently re-invites the child somebody deliberately removed last
+week. An exceptions table plus one view means the deliberate act survives the
+bulk one. `supabase/tests/09_per_event_invites.sql` §4 is that assertion, and
+it is the test to keep if all the others go.
+
+**Files.** `0023_per_event_invites.sql` (+ 29 SQL assertions);
+`src/lib/invites.ts` + tests (the ladder, the menu's actions, what needs
+confirming, "For Chidi and Ada"); `src/server/queries/invites.ts`;
+`src/server/actions/invites.ts` (six actions and the pending-row reconciler);
+`src/server/actions/reply.ts` and `views.ts`;
+`src/components/guests/invite-cell.tsx` and `household-events.tsx`;
+`src/components/site/invited-events.tsx`, `reply-banner.tsx`,
+`view-logger.tsx`; the resolver, the RSVP form and `submitRsvp` narrowed per
+guest; the invitation email's Yes/No pair; `/invitations` gaining a `silent`
+filter and the dashboard a "Read, no reply" tile.
+
+**Three judgement calls:** a menu rather than a cycling click (six states
+behind one click is a guessing game, and two transitions should never happen
+by accident); an un-invite keeps the answer and stops counting, with a confirm
+naming what they said; and marking as sent from a per-event cell says out loud
+that it covers the whole invitation, because a control that quietly writes a
+household fact erodes trust in the screen.
+
+**A bug caught by its own test, worth repeating.** The first version of
+`v_guest_event_invites` joined the household's invitation *through*
+`invitation_events`, so `invitation_id` was null exactly when the household
+was not invited to that event — the grid then said "no invitation yet" and
+refused to invite them, on precisely the cell the planner had clicked. Two
+laterals now: the invitation, and whether it covers this event. Test 12 pins
+it.
+
+**Loose ends, in the order they would bite:** `0022` and `0023` are not
+applied to the live project; nothing here has been opened in a browser; the
+seed carries no invitations, so a local reset shows an empty grid and the SQL
+tests build their own fixture; the reminder cron corrected itself through the
+recounted view but has never run against real data; and a bulk column action
+has no undo.
 
 ## Session 26: Spec 21 — a page of their own, written, answered and built
 

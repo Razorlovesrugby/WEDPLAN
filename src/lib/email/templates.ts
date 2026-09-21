@@ -29,6 +29,33 @@ function layout(bodyHtml: string): string {
     <div style="max-width:34rem;margin:0 auto">${bodyHtml}</div></body></html>`;
 }
 
+/**
+ * The one-tap Yes / No pair (spec 22 §8).
+ *
+ * Two links to the household's own page carrying `?reply=`. The page applies
+ * it from the browser rather than on the GET, so a mail scanner following
+ * these links sees a page and records nothing — see
+ * `src/server/actions/reply.ts`.
+ *
+ * Table-based, because a flex row is not a thing Outlook agrees to render.
+ */
+function replyButtons(url: string): string {
+  const yes = `${escapeHtml(url)}?reply=yes`;
+  const no = `${escapeHtml(url)}?reply=no`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0">
+    <tr>
+      <td style="padding-right:10px">
+        <a href="${yes}" style="display:inline-block;padding:12px 20px;background:#1a1a1a;
+          color:#ffffff;text-decoration:none;border-radius:4px">Yes, we&rsquo;ll be there</a>
+      </td>
+      <td>
+        <a href="${no}" style="display:inline-block;padding:12px 20px;border:1px solid #1a1a1a;
+          color:#1a1a1a;text-decoration:none;border-radius:4px">Sorry, can&rsquo;t</a>
+      </td>
+    </tr>
+  </table>`;
+}
+
 function button(href: string, label: string): string {
   return `<p style="margin:24px 0"><a href="${escapeHtml(href)}"
     style="display:inline-block;padding:12px 20px;background:#1a1a1a;color:#ffffff;
@@ -52,7 +79,10 @@ export function invitationEmail(options: {
     "",
     `${weddingName} — ${dateLabel}`,
     "",
-    `Everything you need, and the RSVP, is here:`,
+    `Reply yes:  ${url}?reply=yes`,
+    `Reply no:   ${url}?reply=no`,
+    "",
+    `Everything you need — the details, the schedule and the RSVP — is here:`,
     url,
     "",
     `There's no account to create — the link is yours. You can change your answer any time`,
@@ -64,9 +94,11 @@ export function invitationEmail(options: {
     <p>We&rsquo;re getting married, and we would love you to be there.</p>
     <p style="font-size:20px;margin:24px 0 4px">${escapeHtml(weddingName)}</p>
     <p style="color:#6b6560;margin:0">${escapeHtml(dateLabel)}</p>
-    ${button(url, "Everything you need, and the RSVP")}
-    <p style="font-size:13px;color:#6b6560">There&rsquo;s no account to create — the link is
-    yours. You can change your answer any time before RSVPs close.</p>`);
+    ${replyButtons(url)}
+    <p style="margin:0"><a href="${escapeHtml(url)}" style="color:#1a1a1a">Or see all the
+    details first</a></p>
+    <p style="font-size:13px;color:#6b6560;margin-top:24px">There&rsquo;s no account to create —
+    the link is yours. You can change your answer any time before RSVPs close.</p>`);
 
   return { subject: `${weddingName} — you're invited`, text, html };
 }

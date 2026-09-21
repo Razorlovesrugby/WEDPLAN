@@ -1,17 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   FAQ_FEATURED_LIMIT,
-  NO_COUNTS,
   faqItems,
   flag,
   groupByTag,
-  hasContent,
-  navItems,
-  resolveSections,
   rows,
   splitFaq,
   text,
-  type SiteContentRow,
 } from "./sections";
 
 describe("text", () => {
@@ -138,110 +133,5 @@ describe("groupByTag", () => {
   });
 });
 
-describe("hasContent", () => {
-  it("always renders the hero and the RSVP pointer", () => {
-    // The hero carries the names; the RSVP pointer is why most guests opened
-    // the site. Neither should need filling in first.
-    expect(hasContent("hero", null)).toBe(true);
-    expect(hasContent("rsvp", null)).toBe(true);
-  });
 
-  it("hides a schedule with an intro but no events", () => {
-    // The case this whole function exists for: a heading over nothing.
-    expect(hasContent("schedule", { intro: "Here's the weekend" }, NO_COUNTS)).toBe(false);
-    expect(hasContent("schedule", null, { ...NO_COUNTS, events: 1 })).toBe(true);
-  });
 
-  it("shows the gallery for either images or a published board", () => {
-    expect(hasContent("gallery", null, NO_COUNTS)).toBe(false);
-    expect(hasContent("gallery", null, { ...NO_COUNTS, boards: 1 })).toBe(true);
-    expect(hasContent("gallery", null, { ...NO_COUNTS, galleryImages: 3 })).toBe(true);
-  });
-
-  it("hides an empty FAQ and shows one with a question", () => {
-    expect(hasContent("faq", { items: [] })).toBe(false);
-    expect(hasContent("faq", { items: [{ a: "no question" }] })).toBe(false);
-    expect(hasContent("faq", { items: [{ q: "Parking?" }] })).toBe(true);
-  });
-
-  it("only shows the countdown when it is switched on", () => {
-    expect(hasContent("countdown", null)).toBe(false);
-    expect(hasContent("countdown", { enabled: true })).toBe(true);
-  });
-
-  it("accepts the legacy travel payload", () => {
-    // /w shipped with travel.body before this spec; a site already carrying
-    // one must not lose its section on upgrade.
-    expect(hasContent("travel", { body: "Take the M5." })).toBe(true);
-  });
-
-  it("shows travel and stays on their rows alone", () => {
-    // After 0017 the content lives in its own tables, so a coach run with no
-    // intro written is still a travel section worth rendering.
-    expect(hasContent("travel", null, { ...NO_COUNTS, travelOptions: 1 })).toBe(true);
-    expect(hasContent("stays", null, { ...NO_COUNTS, stays: 2 })).toBe(true);
-    expect(hasContent("travel", null, NO_COUNTS)).toBe(false);
-    expect(hasContent("stays", null, NO_COUNTS)).toBe(false);
-  });
-});
-
-describe("resolveSections", () => {
-  const row = (key: string, payload: unknown, sort = 0, visible = true): SiteContentRow => ({
-    block_key: key,
-    payload,
-    sort_order: sort,
-    visible,
-  });
-
-  it("drops sections with nothing in them", () => {
-    const sections = resolveSections([row("story", { body: "   " }), row("faq", { items: [] })]);
-    expect(sections.map((s) => s.key)).toEqual(["hero", "rsvp"]);
-  });
-
-  it("honours visible = false", () => {
-    const sections = resolveSections([row("story", { body: "We met in 2019." }, 0, false)]);
-    expect(sections.map((s) => s.key)).not.toContain("story");
-  });
-
-  it("ignores a block_key that is not a section", () => {
-    // `theme` is configuration, and an unknown key is from a newer editor.
-    const sections = resolveSections([row("theme", { preset: "script" }), row("nonsense", { a: 1 })]);
-    expect(sections.map((s) => s.key)).toEqual(["hero", "rsvp"]);
-  });
-
-  it("orders by the row's sort_order", () => {
-    const sections = resolveSections([
-      row("faq", { items: [{ q: "Parking?" }] }, 1),
-      row("story", { body: "We met in 2019." }, 2),
-    ]);
-    expect(sections.map((s) => s.key)).toEqual(["hero", "faq", "story", "rsvp"]);
-  });
-
-  it("falls back to the designed order for rows nobody has saved", () => {
-    // A half-configured site still reads top to bottom.
-    const sections = resolveSections([row("story", { body: "x" }, 20)], { ...NO_COUNTS, events: 2 });
-    expect(sections.map((s) => s.key)).toEqual(["hero", "story", "schedule", "rsvp"]);
-  });
-});
-
-describe("navItems", () => {
-  it("lists only what rendered, and only what is a destination", () => {
-    const sections = resolveSections(
-      [
-        { block_key: "story", payload: { body: "We met in 2019." }, sort_order: 20 },
-        { block_key: "footer", payload: { note: "See you there" }, sort_order: 110 },
-      ],
-      { ...NO_COUNTS, events: 1 },
-    );
-    expect(navItems(sections)).toEqual([
-      { href: "#story", label: "Our story" },
-      { href: "#schedule", label: "The weekend" },
-      { href: "#rsvp", label: "RSVP" },
-    ]);
-  });
-
-  it("is empty of a section that was dropped for being empty", () => {
-    const sections = resolveSections([{ block_key: "faq", payload: { items: [] }, sort_order: 90 }]);
-    expect(navItems(sections).map((n) => n.label)).not.toContain("Questions");
-  });
-});

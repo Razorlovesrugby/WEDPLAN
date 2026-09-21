@@ -15,13 +15,17 @@ export const metadata = { title: "Invitations" };
  * is what makes the spec's rule true — every number on the home screen clicks
  * through to the list behind it.
  */
-const STATUSES = ["sent", "unsent", "opened"] as const;
+const STATUSES = ["sent", "unsent", "opened", "silent"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_LABEL: Record<Status, string> = {
   sent: "Invitations already sent",
   unsent: "Households with nothing sent yet",
   opened: "Households who have opened the link",
+  // The list actually worth chasing (spec 22 §9): they have it, they have
+  // read it, and they still have not answered. "Never opened" and "opened
+  // five times and said nothing" need different messages.
+  silent: "Opened, but nothing back yet",
 };
 
 export default async function InvitationsPage({
@@ -45,8 +49,12 @@ export default async function InvitationsPage({
         active === "sent"
           ? row.summary?.sent_at != null
           : active === "opened"
-            ? row.summary?.opened_at != null
-            : row.summary?.sent_at == null,
+            ? row.summary?.opened_at != null || (row.summary?.view_count ?? 0) > 0
+            : active === "silent"
+              ? row.summary?.sent_at != null &&
+                (row.summary.opened_at != null || (row.summary.view_count ?? 0) > 0) &&
+                row.summary.response_state === "none"
+              : row.summary?.sent_at == null,
       )
     : allRows;
 

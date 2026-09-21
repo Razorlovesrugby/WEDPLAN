@@ -1,61 +1,72 @@
 import Link from "next/link";
-import { SiteEditor, type EditorBlock, type EditorEvent } from "@/components/site/editor/site-editor";
+import { SiteBuilder } from "@/components/site/editor/builder";
 import { createClient } from "@/lib/supabase/server";
+import { signPaths } from "@/lib/supabase/storage";
 import { requireWedding } from "@/server/queries/wedding";
+import { getPublishState, listDraftBlocks } from "@/server/queries/site-blocks";
+import type { PhotoOption } from "@/components/site/editor/photo-picker";
+import type { SiteAssetRow } from "@/lib/types/database";
 
 export const metadata = { title: "The site" };
 
 /**
- * `/site` — the editor for the public wedding site (spec 14 §13).
+ * `/site` — the builder (spec 23).
  *
- * Every section is listed, including ones with nothing in them, because this
- * is the screen for filling them in. The site itself drops empty sections; the
- * editor must not, or a blank section becomes unreachable.
+ * This screen was twelve fixed forms writing twelve fixed rows. It is now a
+ * page made of blocks: add, reorder, style, hide, and publish when it is
+ * ready. What guests see is the last published revision, which is why the
+ * publish bar is the first thing on the screen rather than a button at the
+ * bottom.
  */
 export default async function SitePage() {
   const wedding = await requireWedding();
   const supabase = await createClient();
 
-  const [{ data: blocks, error }, { data: events }] = await Promise.all([
+  const [blocks, publishState, { data: assets }] = await Promise.all([
+    listDraftBlocks(wedding.id),
+    getPublishState(wedding.id),
     supabase
-      .from("site_content")
-      .select("block_key, payload, sort_order, visible")
+      .from("site_assets")
+      .select("id, storage_path, alt, kind, created_at")
       .eq("wedding_id", wedding.id)
-      .order("sort_order"),
-    supabase
-      .from("events")
-      .select("id, name")
-      .eq("wedding_id", wedding.id)
-      .eq("is_public", true)
-      .order("sort_order")
-      .order("starts_at"),
+      .in("kind", ["hero", "gallery", "story", "party", "stay"])
+      .order("created_at", { ascending: false }),
   ]);
 
-  if (error) throw new Error(`Could not load the site: ${error.message}`);
-
-  const siteHref = `/w/${wedding.slug}`;
+  const rows = (assets ?? []) as Pick<SiteAssetRow, "id" | "storage_path" | "alt">[];
+  const signed = await signPaths(rows.map((row) => row.storage_path));
+  const photos: PhotoOption[] = rows.flatMap((row) => {
+    const url = signed.get(row.storage_path);
+    // A row whose object has gone missing is dropped rather than rendered as
+    // a broken tile — one bad asset must not take the picker down.
+    return url ? [{ id: row.id, url, alt: row.alt }] : [];
+  });
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-serif text-2xl">The site</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted">
-          What guests see at{" "}
-          <Link href={siteHref} className="underline" target="_blank" rel="noreferrer">
-            {siteHref}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="font-serif text-2xl">Your site</h1>
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link href="/site/theme" className="btn">
+            Theme
           </Link>
-          . Sections with nothing in them don&rsquo;t appear on the site at all — an empty heading
-          is worse than no section. It&rsquo;s not listed in search engines.{" "}
-          <Link href="/site/theme" className="underline">
-            Change how it looks →
+          <Link href="/site/songs" className="btn">
+            Song requests
           </Link>
-        </p>
+          <Link href={`/w/${wedding.slug}`} target="_blank" className="btn">
+            See it live
+          </Link>
+        </div>
       </div>
 
-      <SiteEditor
-        blocks={(blocks ?? []) as EditorBlock[]}
-        events={(events ?? []) as EditorEvent[]}
-        siteHref={siteHref}
+      <SiteBuilder
+        blocks={blocks}
+        photos={photos}
+        publishedAt={publishState.publishedAt}
+        unpublished={publishState.unpublished}
+        // Any change to the draft changes this, which remounts the preview
+        // frame — that is what makes an edit appear without a manual refresh.
+        previewKey={JSON.stringify(blocks.map((block) => [block.id, block.payload, block.style, block.visible]))}
       />
     </div>
   );

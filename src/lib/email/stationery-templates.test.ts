@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { broadcastEmail, saveTheDateEmail } from "./templates";
+import { broadcastEmail, invitationEmail, saveTheDateEmail } from "./templates";
 
 describe("saveTheDateEmail", () => {
   const base = {
@@ -97,5 +97,38 @@ describe("broadcastEmail", () => {
   it("turns a single newline into a line break inside a paragraph", () => {
     const { html } = broadcastEmail({ ...base, body: "Line one\nLine two" });
     expect(html).toContain("Line one<br>Line two");
+  });
+});
+
+describe("invitationEmail — one-tap replies (spec 22 §8)", () => {
+  const base = {
+    weddingName: "Alex & Sam",
+    householdName: "The Okonkwos",
+    dateLabel: "Saturday 12 June 2027",
+    url: "https://example.test/w/alex-sam/okonkwo-4f7ak",
+  };
+
+  it("carries a Yes and a No that land on the household's own page", () => {
+    const { html } = invitationEmail(base);
+    expect(html).toContain("https://example.test/w/alex-sam/okonkwo-4f7ak?reply=yes");
+    expect(html).toContain("https://example.test/w/alex-sam/okonkwo-4f7ak?reply=no");
+  });
+
+  it("offers both in the plain-text part too", () => {
+    // A mail client that refuses HTML still has to be able to reply.
+    const { text } = invitationEmail(base);
+    expect(text).toContain("?reply=yes");
+    expect(text).toContain("?reply=no");
+  });
+
+  it("still links the page itself, for somebody who wants to look first", () => {
+    const { html } = invitationEmail(base);
+    expect(html).toContain('href="https://example.test/w/alex-sam/okonkwo-4f7ak"');
+  });
+
+  it("never sends a token link — the address is the only link now (spec 21 Q6)", () => {
+    const { html, text } = invitationEmail(base);
+    expect(html).not.toContain("/rsvp/");
+    expect(text).not.toContain("/rsvp/");
   });
 });

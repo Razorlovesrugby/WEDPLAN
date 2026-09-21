@@ -89,7 +89,9 @@ export function HouseholdAddress({
         <button type="button" className="btn" onClick={copy}>
           Copy link
         </button>
-        <Link href={path} target="_blank" className="btn">
+        {/* ?preview=1 keeps the planner's own look at the page out of the
+            open count (spec 22 §9). */}
+        <Link href={`${path}?preview=1`} target="_blank" className="btn">
           Preview as them
         </Link>
         <button type="button" className="btn" onClick={() => setEditing((open) => !open)}>

@@ -23,6 +23,7 @@ export default async function DashboardPage() {
   }
 
   const notYetInvited = stats.household_count - stats.invited_households;
+  const silentHouseholds = stats.silent_households;
   const overCapacity =
     wedding.capacity !== null && stats.above_cut_seats > wedding.capacity
       ? stats.above_cut_seats - wedding.capacity
@@ -203,6 +204,15 @@ export default async function DashboardPage() {
             value={stats.opened_households}
             href="/invitations?status=opened"
             hint="link followed at least once"
+          />
+          {/* Sent, read, and still silent — the list worth chasing, rather
+              than the two it used to be conflated with (spec 22 §9). */}
+          <Stat
+            label="Read, no reply"
+            value={silentHouseholds}
+            href="/invitations?status=silent"
+            hint="opened it and said nothing"
+            tone={silentHouseholds > 0 ? "warn" : "neutral"}
           />
           <Stat
             label="RSVP closes"

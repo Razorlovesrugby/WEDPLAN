@@ -1,12 +1,12 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listPublishedBoards } from "@/server/moodboards/resolve";
-import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
-import { THEME_BLOCK_KEY, type SiteContentRow } from "@/lib/site/sections";
-import type { PublicEvent } from "@/components/site/content";
 
 /**
- * Reads for the public site (spec 14 §3).
+ * Finding the wedding a public URL points at (spec 14 §3).
+ *
+ * Everything else the public page needs now comes from
+ * `site-blocks.ts` (the published revision) and `site-render.ts` (the data
+ * the blocks draw). This file is the door: slug in, wedding out.
  *
  * The service role reads here because there is no session: a guest opening
  * `/w/<slug>` is not signed in and never will be. That is one of the allowed
@@ -21,14 +21,6 @@ export type SiteWedding = {
   slug: string;
   wedding_date: string | null;
   timezone: string;
-};
-
-export type SiteData = {
-  wedding: SiteWedding;
-  theme: SiteTheme;
-  blocks: SiteContentRow[];
-  events: PublicEvent[];
-  boards: Awaited<ReturnType<typeof listPublishedBoards>>;
 };
 
 /** The wedding a public URL points at, or null. Never throws on a bad slug. */
@@ -58,37 +50,4 @@ export async function firstWeddingSlug(): Promise<string | null> {
     .limit(1)
     .maybeSingle();
   return data?.slug ?? null;
-}
-
-export async function loadSite(slug: string): Promise<SiteData | null> {
-  const wedding = await findWeddingBySlug(slug);
-  if (!wedding) return null;
-
-  const supabase = createAdminClient();
-  const [{ data: blocks }, { data: events }] = await Promise.all([
-    supabase
-      .from("site_content")
-      .select("block_key, payload, sort_order, visible")
-      .eq("wedding_id", wedding.id)
-      .eq("visible", true)
-      .order("sort_order"),
-    supabase
-      .from("events")
-      .select("id, name, starts_at, ends_at, venue, address")
-      .eq("wedding_id", wedding.id)
-      .eq("is_public", true)
-      .order("sort_order")
-      .order("starts_at"),
-  ]);
-
-  const rows = (blocks ?? []) as SiteContentRow[];
-  const themeRow = rows.find((row) => row.block_key === THEME_BLOCK_KEY);
-
-  return {
-    wedding,
-    theme: resolveTheme(themeRow?.payload ?? null),
-    blocks: rows,
-    events: (events ?? []) as PublicEvent[],
-    boards: await listPublishedBoards(wedding.id, "public_site"),
-  };
 }
