@@ -443,3 +443,73 @@ insert into public.moodboard_items
    '22222222-2222-4222-8222-222222222222/c1000000-0000-4000-8000-0000000000ff/c2000000-0000-4000-8000-0000000000ff_thumb.webp',
    'image/webp', 100000, now())
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Spec 8 — vendors, on BOTH weddings
+-- ---------------------------------------------------------------------------
+-- Both, deliberately: a tenancy test with one tenant proves nothing, and
+-- 12_vendors.sql asserts that wedding 2's collaborator cannot see any of
+-- wedding 1's vendors. `vendor_categories` already has rows for both from
+-- 0029's backfill off budget_categories, so these pick one up by name.
+
+-- 0029 backfills vendor_categories from budget_categories, but a FRESH
+-- database applies every migration BEFORE the seed — so at backfill time
+-- there were no budget categories to copy. Same lesson spec 23's correction 3
+-- and spec 25's seed both learned. Seeded explicitly here, mirroring what the
+-- backfill would have produced on a project that already had a budget.
+insert into public.vendor_categories (wedding_id, name, sort_order)
+select bc.wedding_id, bc.name, bc.sort_order
+from public.budget_categories bc
+on conflict (wedding_id, name) do nothing;
+
+-- A vendor category with no budget category behind it, so the two lists are
+-- visibly allowed to diverge — which is the whole point of question 1's
+-- answer.
+insert into public.vendor_categories (wedding_id, name, sort_order) values
+  ('11111111-1111-4111-8111-111111111111', 'Hair and makeup', 500)
+on conflict (wedding_id, name) do nothing;
+
+insert into public.vendors
+  (id, wedding_id, name, category_id, stage, website, email, phone, notes, source, recommended_by, gut_score) values
+  ('e0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'The Old Barn',
+   (select id from public.vendor_categories where wedding_id = '11111111-1111-4111-8111-111111111111' order by sort_order limit 1),
+   'booked', 'https://example.com/barn', 'events@example.com', '01225 000000',
+   'Holds 90 seated. They do the tables but not the linen.', 'Saw it on a walk', 'Nobody', 5),
+  ('e0000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Bloom & Co', null,
+   'quote_received', null, 'hello@example.com', '07700 900000',
+   'Quoted over the phone, nothing in writing yet.', 'Instagram', 'Priya', 4),
+  ('e0000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'Cheap Cars Ltd', null,
+   'declined', null, null, null, 'Quoted double everyone else. Kept so we do not ring them again.',
+   null, null, 1)
+on conflict (id) do nothing;
+
+insert into public.vendors (id, wedding_id, name, stage) values
+  ('e0000000-0000-4000-8000-0000000000ff', '22222222-2222-4222-8222-222222222222', 'Someone else''s florist', 'booked')
+on conflict (id) do nothing;
+
+-- Two contacts on the venue, because the person you book and the person who
+-- answers on the day are different people. Exactly one is primary — the
+-- partial unique index refuses a second.
+insert into public.vendor_contacts
+  (id, wedding_id, vendor_id, name, role, email, phone, is_primary, sort_order) values
+  ('ea000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'e0000000-0000-4000-8000-000000000001',
+   'Marcus Bell', 'Owner', 'marcus@example.com', '01225 000001', false, 10),
+  ('ea000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'e0000000-0000-4000-8000-000000000001',
+   'Ciara Byrne', 'Day-of coordinator', 'ciara@example.com', '07700 900001', true, 20)
+on conflict (id) do nothing;
+
+insert into public.vendor_notes (id, wedding_id, vendor_id, body, pinned) values
+  ('eb000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'e0000000-0000-4000-8000-000000000001',
+   'Confirmed the barn is ours from noon. Chairs included, linen is not.', true),
+  ('eb000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'e0000000-0000-4000-8000-000000000001',
+   'Asked about a late licence — they will come back to us.', false),
+  ('eb000000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'e0000000-0000-4000-8000-000000000002',
+   'Quoted $3,200 over the phone, valid 30 days.', false)
+on conflict (id) do nothing;
+
+-- No budget rows are seeded. 03_budget.sql counts categories globally
+-- ("alex sees 1 budget category") and builds its own fixtures inside a
+-- transaction; seeding a category here broke it. 12_vendors.sql does the
+-- same — it creates the budget line it needs and rolls it back — so the two
+-- suites stay independent of each other's fixtures.
+

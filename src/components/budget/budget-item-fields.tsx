@@ -4,11 +4,15 @@ import { useState } from "react";
 import { allocationEstimate, itemAllocation } from "@/lib/budget";
 import { trimPct } from "./budget-header";
 import { formatMoney } from "@/lib/format";
+import { VendorPicker } from "@/components/vendors/vendor-picker";
+import type { VendorLike } from "@/lib/vendors";
 import type { BudgetItemView, BudgetQuantityBasis, EventRow } from "@/lib/types/database";
 
 export type BudgetItemFormValue = {
   label: string;
   vendor_name: string;
+  /** Set when the name came from picking a vendor record (spec 8 §4). */
+  vendor_id: string;
   event_id: string;
   quantity_basis: BudgetQuantityBasis;
   unit_price: string;
@@ -39,6 +43,7 @@ const BASIS_OPTIONS: { value: BudgetQuantityBasis; label: string }[] = [
 export function BudgetItemFields({
   initial,
   events,
+  vendors,
   pending,
   categoryName,
   categoryAllocatedAmount,
@@ -48,6 +53,8 @@ export function BudgetItemFields({
 }: {
   initial?: BudgetItemView;
   events: EventRow[];
+  /** The wedding's vendors, for the picker. Filtered in memory — a wedding has tens. */
+  vendors: VendorLike[];
   pending: boolean;
   /** This line's category, named in the allocation hint ("10% of Drinks"). */
   categoryName: string;
@@ -60,6 +67,7 @@ export function BudgetItemFields({
 }) {
   const [label, setLabel] = useState(initial?.label ?? "");
   const [vendorName, setVendorName] = useState(initial?.vendor_name ?? "");
+  const [vendorId, setVendorId] = useState<string | null>(initial?.vendor_id ?? null);
   const [eventId, setEventId] = useState(initial?.event_id ?? "");
   const [basis, setBasis] = useState<BudgetQuantityBasis>(initial?.quantity_basis ?? "flat");
   const [unitPrice, setUnitPrice] = useState(initial?.unit_price ? String(initial.unit_price / 100) : "");
@@ -90,6 +98,7 @@ export function BudgetItemFields({
     const value: BudgetItemFormValue = {
       label,
       vendor_name: vendorName,
+      vendor_id: vendorId ?? "",
       event_id: eventId,
       quantity_basis: basis,
       unit_price: basis === "flat" || basis === "consumption" ? "" : String(Math.round(Number(unitPrice || "0") * 100)),
@@ -111,14 +120,28 @@ export function BudgetItemFields({
           Label
           <input value={label} onChange={(e) => setLabel(e.target.value)} className="field mt-0.5 block w-full text-sm" />
         </label>
-        <label className="text-xs text-muted">
+        <div className="text-xs text-muted">
           Vendor (optional)
-          <input
-            value={vendorName}
-            onChange={(e) => setVendorName(e.target.value)}
-            className="field mt-0.5 block w-full text-sm"
-          />
-        </label>
+          <div className="mt-0.5">
+            {/* Still a text field you can type a bare name into — a line like
+                "cake stand hire from the village hall's cupboard" does not
+                deserve a vendor record, and making one mandatory would turn a
+                field people already use into a form that nags (spec 8 §4). */}
+            <VendorPicker
+              vendors={vendors}
+              valueId={vendorId}
+              valueName={vendorName}
+              onPick={(vendor) => {
+                setVendorId(vendor.id);
+                setVendorName(vendor.name);
+              }}
+              onPlainText={(name) => {
+                setVendorId(null);
+                setVendorName(name);
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-3">

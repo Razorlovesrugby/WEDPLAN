@@ -122,6 +122,39 @@ type GuestNoteRelationships = [
   >,
 ];
 
+/**
+ * Spec 8 §7's named trap: an embed whose relationship is missing from these
+ * arrays resolves to `never`, which compiles fine and silently loses all type
+ * safety. Every embed the vendor screens use has its entry here.
+ */
+type VendorRelationships = [
+  Rel<
+    "vendors_category_id_wedding_id_fkey",
+    ["category_id", "wedding_id"],
+    "vendor_categories",
+    ["id", "wedding_id"],
+    true
+  >,
+];
+
+type VendorContactRelationships = [
+  Rel<
+    "vendor_contacts_vendor_id_wedding_id_fkey",
+    ["vendor_id", "wedding_id"],
+    "vendors",
+    ["id", "wedding_id"]
+  >,
+];
+
+type VendorNoteRelationships = [
+  Rel<
+    "vendor_notes_vendor_id_wedding_id_fkey",
+    ["vendor_id", "wedding_id"],
+    "vendors",
+    ["id", "wedding_id"]
+  >,
+];
+
 type RsvpAnswerRelationships = [
   Rel<
     "rsvp_answers_question_id_wedding_id_fkey",
@@ -323,6 +356,16 @@ export type BudgetQuantityBasis = "flat" | "per_adult" | "per_child" | "per_seat
 export type BudgetGuestBasis = "per_adult" | "per_seat";
 /** spec 18 — a per-line GST toggle; "exclusive" adds a hardcoded 15% to everything that sums the line. */
 export type BudgetGstTreatment = "inclusive" | "exclusive";
+
+export type VendorStage =
+  | "researching"
+  | "enquiry_sent"
+  | "quote_received"
+  | "shortlisted"
+  | "booked"
+  | "deposit_paid"
+  | "complete"
+  | "declined";
 /** spec 19 — where a line's working estimate came from: typed, derived from its allocation, or nowhere yet. */
 export type EstimateSource = "entered" | "allocation" | "none";
 export type ReminderDueSource = "list_item" | "payment";
@@ -901,6 +944,66 @@ export type ListItemRow = {
 // ---------------------------------------------------------------------------
 // Budget (spec 6)
 // ---------------------------------------------------------------------------
+/** A vendor taxonomy of its own, not `budget_categories` (spec 8 Answered, Q1). */
+export type VendorCategoryRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VendorRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  category_id: string | null;
+  stage: VendorStage;
+  website: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  /** The throwaway one-liner. The dated log is `vendor_notes` (spec 8 Q3: both). */
+  notes: string | null;
+  source: string | null;
+  recommended_by: string | null;
+  /** 1–5, checked in the database. Free text would be unsortable. */
+  gut_score: number | null;
+  /** The soft delete, matching `lists.archived_at`. Archive is reversible; delete is not. */
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VendorContactRow = {
+  id: string;
+  wedding_id: string;
+  vendor_id: string;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  /** At most one per vendor, enforced by a partial unique index. */
+  is_primary: boolean;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VendorNoteRow = {
+  id: string;
+  wedding_id: string;
+  vendor_id: string;
+  body: string;
+  pinned: boolean;
+  /** Nulls when a collaborator is deleted — the record of what was said stays. */
+  author_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BudgetCategoryRow = {
   id: string;
   wedding_id: string;
@@ -935,6 +1038,13 @@ export type BudgetItemRow = {
   quantity: number | null;
   /** This line's target share of its CATEGORY's target amount, as a percentage (spec 19) — 80% of Drinks, not 80% of the wedding. */
   allocation_pct: number | null;
+  /**
+   * The vendor this line is with (spec 8). Nullable, and `vendor_name` stays
+   * beside it: a line can legitimately have no vendor record, and when a
+   * vendor is deleted this column nulls while the name snapshot remains, so
+   * the line reads "The Old Barn" rather than going blank.
+   */
+  vendor_id: string | null;
 }
 
 export type ConsumptionComponentRow = {
@@ -1001,8 +1111,10 @@ export type RunSheetItemRow = {
   title: string;
   notes: string | null;
   location: string | null;
-  /** Free text — no vendor FK exists yet. */
+  /** Free text, for the "Dad" and "the best man" who will never be vendor records. */
   owner: string | null;
+  /** The vendor responsible, when there is one (spec 8 Answered, Q10). */
+  vendor_id: string | null;
   track: RunSheetTrack;
   pinned: boolean;
   /** Set iff pinned. */
@@ -1228,6 +1340,31 @@ export type TimelineItemView = {
 }
 
 /** `v_budget_items` — every budget_items row plus computed/derived money columns. See spec 6, section 3; spec 18 for the GST uplift. */
+/**
+ * `v_vendors` — one row per vendor for `/vendors` (spec 8 §3).
+ *
+ * Every money figure is summed from `v_budget_items`. This view does no
+ * arithmetic of its own, because a vendor with a price in two places is a
+ * vendor with two prices that disagree.
+ */
+export type VendorView = VendorRow & {
+  category_name: string | null;
+  primary_contact_name: string | null;
+  primary_contact_email: string | null;
+  primary_contact_phone: string | null;
+  contact_count: number;
+  note_count: number;
+  last_note_at: string | null;
+  budget_line_count: number;
+  /** Minor units, NZD. Summed from v_budget_items.computed_current. */
+  committed: number;
+  paid: number;
+  outstanding: number;
+  /** The earliest unpaid payment across this vendor's lines. */
+  next_payment_due: string | null;
+  open_task_count: number;
+};
+
 export type BudgetItemView = BudgetItemRow & {
   /** "The best number we currently have" — never one of estimated/quoted/contracted stored as truth. Grossed up by 15% when gst_treatment is "exclusive" (spec 18). */
   computed_current: number;
@@ -1423,6 +1560,34 @@ export type Database = {
         "id" | Timestamps | "sort_order" | "body" | "board_id"
       >;
       song_votes: Table<SongVoteRow, "id" | "created_at">;
+      vendor_categories: Table<VendorCategoryRow, "id" | Timestamps | "sort_order">;
+      vendors: Table<
+        VendorRow,
+        | "id"
+        | Timestamps
+        | "stage"
+        | "category_id"
+        | "website"
+        | "email"
+        | "phone"
+        | "address"
+        | "notes"
+        | "source"
+        | "recommended_by"
+        | "gut_score"
+        | "archived_at",
+        VendorRelationships
+      >;
+      vendor_contacts: Table<
+        VendorContactRow,
+        "id" | Timestamps | "is_primary" | "sort_order" | "role" | "email" | "phone" | "notes",
+        VendorContactRelationships
+      >;
+      vendor_notes: Table<
+        VendorNoteRow,
+        "id" | Timestamps | "pinned" | "author_id",
+        VendorNoteRelationships
+      >;
       guest_notes: Table<
         GuestNoteRow,
         "id" | Timestamps | "status" | "household_id" | "guest_id" | "author_name",
@@ -1507,6 +1672,7 @@ export type Database = {
       v_wedding_stats: View<WeddingStatsView>;
       v_timeline_items: View<TimelineItemView>;
       v_budget_items: View<BudgetItemView>;
+      v_vendors: View<VendorView>;
       v_budget_summary: View<BudgetSummaryView>;
       v_budget_category_totals: View<BudgetCategoryTotalsView>;
       v_reminders_due: View<ReminderDueView>;

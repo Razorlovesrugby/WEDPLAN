@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { confirmBudgetFollowUp, deleteBudgetItem, dismissBudgetFollowUp, updateBudgetItem } from "@/server/actions/budget";
 import { ConsumptionEditor } from "./consumption-editor";
@@ -10,6 +11,7 @@ import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields
 import { formatMoney } from "@/lib/format";
 import { variance as computeVariance, filled } from "@/lib/budget";
 import { trimPct } from "./budget-header";
+import type { VendorLike } from "@/lib/vendors";
 import type {
   BudgetItemView,
   ConsumptionComponentRow,
@@ -42,6 +44,7 @@ export function BudgetItemRow({
   categoryAllocatedAmount,
   siblingAllocationPct,
   events,
+  vendors,
   components,
   payments,
   lists,
@@ -60,6 +63,7 @@ export function BudgetItemRow({
   /** What the rest of this section's lines claim between them (spec 20), for the editor's "takes Drinks to 110%" hint. */
   siblingAllocationPct: number;
   events: EventRow[];
+  vendors: VendorLike[];
   components: ConsumptionComponentRow[];
   payments: PaymentRow[];
   lists: ListRow[];
@@ -128,7 +132,21 @@ export function BudgetItemRow({
           >
             {item.label}
           </button>
-          {item.vendor_name ? <span className="ml-2 text-sm text-muted">{item.vendor_name}</span> : null}
+          {item.vendor_name ? (
+            // A linked line's name is a link; a plain-text one stays text.
+            // The name itself comes from v_budget_items, which prefers the
+            // vendor's live name, so a rename shows up here with no sync step.
+            item.vendor_id ? (
+              <Link
+                href={`/vendors/${item.vendor_id}`}
+                className="ml-2 text-sm text-muted underline hover:text-ink"
+              >
+                {item.vendor_name}
+              </Link>
+            ) : (
+              <span className="ml-2 text-sm text-muted">{item.vendor_name}</span>
+            )
+          ) : null}
           <div className="mt-0.5 text-xs text-muted">
             {BASIS_LABEL[item.quantity_basis]}
             {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price)}` : ""}
@@ -205,6 +223,7 @@ export function BudgetItemRow({
           <BudgetItemFields
             initial={item}
             events={events}
+            vendors={vendors}
             pending={pending}
             categoryName={categoryName}
             categoryAllocatedAmount={categoryAllocatedAmount}

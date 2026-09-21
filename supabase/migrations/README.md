@@ -33,6 +33,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 26 | `0026_dress_codes_and_travel.sql` | `dress_codes`, `dress_code_notes`, `events.dress_code_id`, `coach_runs.event_id` (and `v_coach_runs` recreated to carry it), `arrival_points`, four nullable columns on `transport_options`, and the dress-code backfill out of `site_blocks` payloads | 17, 25 |
 | 27 | `0027_guest_participation.sql` | `song_votes` (household NOT NULL — a vote needs identity), `guest_notes`, and the composite unique `song_requests` needed to become a parent | 25 |
 | 28 | `0028_editorial_default.sql` | Pins every existing wedding to the Script theme it was already rendering, so the code-level default could move to Editorial without restyling anybody | 1 |
+| 29 | `0029_vendors.sql` | `vendor_stage`, `vendor_categories`, `vendors`, `vendor_contacts`, `vendor_notes`, the one-primary partial unique index, `budget_items.vendor_id`, `run_sheet_items.vendor_id`, `v_vendors`, and `v_budget_items` + `v_reminders_due` redefined to prefer the linked vendor's live name | 9, 10, 17, 20, 21 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

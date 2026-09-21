@@ -3,8 +3,63 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 29 — **specs 24 and 25 written; spec 25 built. The site's
-blocks now read the wedding instead of being a second place to type it.**
+Last updated: session 29 — **specs 24 and 25 written, 25 and 8 built, and four
+stale status documents corrected. Vendors exist.**
+
+**Spec 8 is built** — the last substantial unbuilt feature. `0029_vendors.sql`
+adds `vendors`, `vendor_categories`, `vendor_contacts`, `vendor_notes`,
+`budget_items.vendor_id` and `run_sheet_items.vendor_id`, with `/vendors`,
+`/vendors/[id]`, `/vendors/contact-sheet` and a `VendorPicker` on `/budget`.
+
+**The one thing to understand before touching it:** `budget_items.vendor_name`
+is NOT dropped, and `v_budget_items` now returns `coalesce(vendor.name,
+bi.vendor_name)` under that same column name. That one line is why a rename on
+`/vendors` reaches `/budget`, the payment calendar and the weekly digest with
+no sync step and no trigger — and why the stored text can stay as the snapshot
+that keeps a line reading "The Old Barn" after its vendor is hard-deleted.
+`v_reminders_due` needed the same treatment separately, because its payment
+branch reads `budget_items` directly and bypasses the view entirely.
+
+**Deleting a vendor must never delete money.** Contacts and notes cascade;
+budget lines null their `vendor_id` and keep their name, numbers and payment
+schedule. `supabase/tests/12_vendors.sql` §3 is the assertion that says so,
+and it is the one to keep working.
+
+**Question 1 was answered against the recommendation.** Vendor categories are
+their own taxonomy rather than a reuse of `budget_categories` — the planner
+chose that after the "two lists drift" argument was put to them. `0029` seeds
+`vendor_categories` from the budget's category names so the two start aligned;
+**nothing syncs them afterwards and nothing should**, because a sync is the
+single taxonomy by the back door with a worse failure mode.
+
+**Four status documents were stale, and are now corrected.** This is a pattern
+worth naming rather than four separate bugs:
+
+- `supabase/migrations/README.md` stopped at `0019` while the directory held
+  files through `0025` — exactly the failure its own warning describes. Now
+  current through `0029`, and it says that it went stale.
+- `docs/specs/README.md` said spec 4 was "open and unmerged, do not merge or
+  extend"; PR #16 merged on 2026-09-15.
+- The same table said spec 16 was "Proposed, not built". It has been built
+  since session 17 — `0017_budget_section_links.sql` and seven source files.
+  A table claiming a shipped feature is unbuilt is how it gets built twice.
+- `20-guest-last-name-column-and-named-sides.md` had no row at all; it shares
+  the number 20 with the budget spec and was overwritten rather than added.
+  Listed as `20b`.
+- And `./scripts/verify-bootstrap.sh` had been **failing since session 27**:
+  `0023` added a fifth built-in question and the check still expected four.
+
+**What is actually left:** spec 24 (the builder's editing feel — written, five
+open questions, unbuilt) and spec 9.1's Pinterest half, which needs a developer
+app at an access tier nobody here controls. Everything else in `docs/specs/` is
+built.
+
+608 tests, 424 SQL assertions, typecheck, both migration checks, bootstrap and
+build all clean. **Nothing has been opened in a browser**, and `0022` through
+`0029` are none of them applied to the live project.
+
+Previously in session 29 — **spec 25: the site's blocks now read the wedding
+instead of being a second place to type it.**
 
 The session began as a brainstorm and the planner supplied fifteen screenshots
 of a competitor's live wedding site. The gap they showed was structural, not
