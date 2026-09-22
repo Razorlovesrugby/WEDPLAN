@@ -5,12 +5,14 @@ import { useMemo, useState, useTransition } from "react";
 import { InlineText } from "./inline-text";
 import { HouseholdPicker } from "./household-picker";
 import { InviteCell } from "./invite-cell";
+import { SaveTheDateCell } from "./save-the-date-cell";
 import { moveGuests, setGuestTags, updateGuest } from "@/server/actions/guests";
 import { setEventInviteForHouseholds } from "@/server/actions/invites";
 import { inviteState } from "@/lib/invites";
 import { guestName, sideLabel } from "@/lib/format";
 import { tierBadgeClass } from "@/lib/tier-colors";
 import type { GuestListItem } from "@/server/queries/guests";
+import type { SaveTheDateOpens } from "@/server/queries/save-the-date";
 import type {
   CollaboratorRow,
   EventRow,
@@ -26,6 +28,8 @@ export function GuestsTable({
   households,
   collaborators,
   invites,
+  weddingSlug,
+  saveTheDateOpens,
 }: {
   guests: GuestListItem[];
   tags: TagRow[];
@@ -34,6 +38,9 @@ export function GuestsTable({
   collaborators: CollaboratorRow[];
   /** `v_guest_event_invites` for this wedding — who is invited to what. */
   invites: GuestEventInviteView[];
+  weddingSlug: string;
+  /** Save-the-date opens by household id (0031). */
+  saveTheDateOpens: Record<string, SaveTheDateOpens>;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTag, setBulkTag] = useState("");
@@ -41,6 +48,10 @@ export function GuestsTable({
   const [pending, startTransition] = useTransition();
 
   const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+  const householdById = useMemo(
+    () => new Map(households.map((household) => [household.id, household])),
+    [households],
+  );
 
   // Keyed lookup rather than a filter per cell: a hundred guests by five
   // events is five hundred cells, and each one asks this question once.
@@ -176,6 +187,7 @@ export function GuestsTable({
               <th scope="col" className="px-3 py-2">Email</th>
               <th scope="col" className="px-3 py-2">Dietary</th>
               <th scope="col" className="px-3 py-2">Tags</th>
+              <th scope="col" className="px-3 py-2">Save the date</th>
               {events.map((event) => (
                 <th key={event.id} scope="col" className="px-3 py-2" title={event.name}>
                   <span className="block">{event.name}</span>
@@ -205,6 +217,8 @@ export function GuestsTable({
           <tbody>
             {guests.map((guest) => {
               const rsvpByEvent = new Map(guest.rsvps.map((r) => [r.event_id, r.status]));
+              const household = householdById.get(guest.household_id);
+              const opens = saveTheDateOpens[guest.household_id];
               return (
                 <tr key={guest.id} className="border-b border-line/60 last:border-0 hover:bg-paper">
                   <td className="px-3 py-1.5">
@@ -285,6 +299,14 @@ export function GuestsTable({
                       })}
                     </span>
                   </td>
+                  <SaveTheDateCell
+                    weddingSlug={weddingSlug}
+                    address={
+                      household ? { slug: household.slug, suffix: household.slug_suffix } : null
+                    }
+                    lastViewedAt={opens?.lastViewedAt ?? null}
+                    viewCount={opens?.viewCount ?? 0}
+                  />
                   {events.map((event) => {
                     const invite = inviteByPair.get(`${guest.id}:${event.id}`);
                     return (

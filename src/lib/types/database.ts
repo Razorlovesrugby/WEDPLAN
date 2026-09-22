@@ -658,7 +658,8 @@ export type InvitationViewRow = {
   wedding_id: string;
   household_id: string;
   viewed_at: string;
-  source: "address" | "token" | "email";
+  /** `save_the_date` added by 0031 — counted apart from invitation opens. */
+  source: "address" | "token" | "email" | "save_the_date";
 }
 
 /** A household address that has been replaced, kept so old links still land (spec 21 §4). */
@@ -1315,6 +1316,9 @@ export type HouseholdRsvpView = {
   last_viewed_at: string | null;
   /** How many opens in total. Zero, never null. */
   view_count: number;
+  /** Most recent open of the save-the-date page (0031). Never an invitation open. */
+  std_last_viewed_at: string | null;
+  std_view_count: number;
 }
 
 export type WeddingStatsView = {

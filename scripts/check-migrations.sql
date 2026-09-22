@@ -23,7 +23,7 @@
 -- This list had gone stale at 0015 while the directory held files through
 -- 0029 -- the exact failure its own instruction above describes, and the
 -- fourth status document in this repo to do it (see docs/HANDOFF.md, session
--- 29). Current through 0030. If you are reading this and the directory holds
+-- 29). Current through 0031. If you are reading this and the directory holds
 -- a higher number, it has gone stale again.
 --
 -- Also note 0011 is split across two files that share the same numeric
@@ -66,7 +66,8 @@ with expected(version, files) as (
     ('0027', 'guest_participation.sql'),
     ('0028', 'editorial_default.sql'),
     ('0029', 'vendors.sql'),
-    ('0030', 'gift_funds.sql')
+    ('0030', 'gift_funds.sql'),
+    ('0031', 'save_the_date_views.sql')
 ),
 applied as (
   select version from supabase_migrations.schema_migrations
@@ -91,7 +92,8 @@ with expected(version) as (
     ('0011'), ('0012'), ('0013'), ('0014'), ('0015'),
     ('0016'), ('0017'), ('0018'), ('0019'), ('0020'),
     ('0021'), ('0022'), ('0023'), ('0024'), ('0025'),
-    ('0026'), ('0027'), ('0028'), ('0029'), ('0030')
+    ('0026'), ('0027'), ('0028'), ('0029'), ('0030'),
+    ('0031')
 )
 select version as unexpected_applied_version
 from supabase_migrations.schema_migrations
