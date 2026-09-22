@@ -1,0 +1,256 @@
+{
+ "note": "Vigilance check catalogue. Every check is deterministic: it is a query, not an inference. The model renders `facts` into a sentence and never decides that there is a finding. Where a check depends on a table that does not exist yet, `requires` names it.",
+ "severities": ["info", "warn", "critical"],
+ "cadences": ["on_write", "hourly", "daily", "weekly"],
+ "checks": [
+  {
+   "key": "capacity.above_cut_exceeds_contracted",
+   "title": "Ranked list above the cut exceeds contracted venue capacity",
+   "severity": "critical",
+   "cadence": "on_write",
+   "subject_type": "wedding",
+   "facts": ["above_cut_seats", "contracted_capacity", "venue_name", "contract_id"],
+   "condition": "v_wedding_stats.above_cut_seats > contracts.key_dates->>'capacity'",
+   "requires": ["contracts"],
+   "why": "The flagship check. The contract, the ranked list, the caterer quote and the drink plan routinely disagree and nothing else surfaces it."
+  },
+  {
+   "key": "capacity.confirmed_exceeds_capacity",
+   "title": "Confirmed attending exceeds capacity",
+   "severity": "critical",
+   "cadence": "on_write",
+   "subject_type": "wedding",
+   "facts": ["attending_guests", "capacity"],
+   "condition": "v_wedding_stats.attending_guests > weddings.capacity"
+  },
+  {
+   "key": "capacity.caterer_headcount_stale",
+   "title": "Caterer quote assumes a headcount that no longer matches",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "vendor",
+   "facts": ["quote_headcount", "attending_guests", "variance_pct", "quote_id"],
+   "condition": "abs(quotes.headcount_assumption - attending_guests) / attending_guests > 0.10",
+   "requires": ["quotes"]
+  },
+  {
+   "key": "capacity.drink_plan_stale",
+   "title": "Drink plan headcount is stale against confirmed attending",
+   "severity": "info",
+   "cadence": "daily",
+   "subject_type": "event",
+   "facts": ["plan_headcount", "attending_guests", "variance_pct"],
+   "condition": "drink_plans.headcount_source = 'manual' and abs(manual_headcount - attending_guests) / attending_guests > 0.10",
+   "requires": ["drink_plans"]
+  },
+
+  {
+   "key": "dates.final_numbers_before_rsvp_lock",
+   "title": "Derived final-numbers date falls before the RSVP lock date",
+   "severity": "critical",
+   "cadence": "daily",
+   "subject_type": "wedding",
+   "facts": ["earliest_final_numbers_date", "rsvp_lock_at", "driving_vendor", "days_short"],
+   "condition": "min(contracts.key_dates->>'final_numbers') < weddings.rsvp_lock_at",
+   "requires": ["contracts"],
+   "why": "Venue wants numbers 21 days out, caterer wants 28. The real lock date is 35 days out and the one typed into setup is wrong. Nobody notices until the week it matters."
+  },
+  {
+   "key": "dates.contract_key_date_without_task",
+   "title": "A contract key date has no task against it",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "vendor",
+   "facts": ["contract_id", "key_date_label", "key_date", "vendor_name"],
+   "condition": "contracts.key_dates has an entry with no matching tasks row",
+   "requires": ["contracts", "tasks"]
+  },
+  {
+   "key": "dates.hold_expires_before_signing",
+   "title": "A vendor hold expires before the contract is due to be signed",
+   "severity": "critical",
+   "cadence": "daily",
+   "subject_type": "vendor",
+   "facts": ["vendor_name", "hold_expires_at", "signing_task_due", "days_gap"],
+   "requires": ["vendors", "tasks"]
+  },
+  {
+   "key": "dates.overdue_with_dependents",
+   "title": "An overdue task is blocking others",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "task",
+   "facts": ["task_title", "due_date", "days_overdue", "dependent_count"],
+   "requires": ["tasks", "task_dependencies"]
+  },
+  {
+   "key": "dates.task_due_in_the_past_on_import",
+   "title": "Generated tasks landed in the past",
+   "severity": "info",
+   "cadence": "on_write",
+   "subject_type": "wedding",
+   "facts": ["count", "earliest_offset_days"],
+   "condition": "generation produced tasks with a computed due date before today",
+   "requires": ["tasks", "task_templates"],
+   "why": "A shorter engagement than the template assumes. Surface it as a bucket, never as silent failure."
+  },
+
+  {
+   "key": "money.category_over_allocation",
+   "title": "A category is contracted over its allocation",
+   "severity": "warn",
+   "cadence": "on_write",
+   "subject_type": "budget_category",
+   "facts": ["category", "allocated_minor", "contracted_minor", "variance_pct", "currency"],
+   "condition": "contracted > allocated * 1.05",
+   "requires": ["budget_items", "budget_allocations"]
+  },
+  {
+   "key": "money.payments_due_soon",
+   "title": "Payments falling due in the next 30 days",
+   "severity": "info",
+   "cadence": "weekly",
+   "subject_type": "wedding",
+   "facts": ["total_minor", "currency", "payment_count", "earliest_due"],
+   "requires": ["payments"]
+  },
+  {
+   "key": "money.budget_line_on_superseded_quote",
+   "title": "A budget line still carries a superseded quote figure",
+   "severity": "warn",
+   "cadence": "on_write",
+   "subject_type": "vendor",
+   "facts": ["vendor_name", "budget_quoted_minor", "latest_quote_minor", "quote_version"],
+   "requires": ["quotes", "budget_items"]
+  },
+  {
+   "key": "money.per_head_cost_moved",
+   "title": "Per-head marginal cost has moved materially",
+   "severity": "info",
+   "cadence": "weekly",
+   "subject_type": "wedding",
+   "facts": ["current_per_head_minor", "previous_per_head_minor", "variance_pct", "currency"],
+   "condition": "abs(delta) / previous > 0.10",
+   "why": "Shown on the ranking screen so the cost of dragging a household above the cut is visible at the moment of dragging."
+  },
+  {
+   "key": "money.deposit_paid_no_schedule",
+   "title": "Deposit paid with no balance schedule",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "vendor",
+   "facts": ["vendor_name", "deposit_minor", "currency"],
+   "requires": ["payments", "contracts"]
+  },
+
+  {
+   "key": "vendor.thread_silent",
+   "title": "No reply on an open vendor thread",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "vendor",
+   "facts": ["vendor_name", "days_silent", "last_outbound_at", "thread_id"],
+   "condition": "email_threads.status = 'waiting_on_them' and last inbound older than N days",
+   "requires": ["email_threads"],
+   "default_params": {"days": 10},
+   "why": "Wedding planning fails in the gaps between emails, not inside them."
+  },
+  {
+   "key": "vendor.booked_without_contract",
+   "title": "A vendor is marked booked with no signed contract",
+   "severity": "critical",
+   "cadence": "daily",
+   "subject_type": "vendor",
+   "facts": ["vendor_name", "stage", "booked_at"],
+   "requires": ["vendors", "contracts"]
+  },
+
+  {
+   "key": "rsvp.unresponded_near_lock",
+   "title": "Households still unresponded with the lock date approaching",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "wedding",
+   "facts": ["household_count", "guest_count", "rsvp_lock_at", "days_remaining"],
+   "default_params": {"days": 14}
+  },
+  {
+   "key": "rsvp.dietary_without_menu_choice",
+   "title": "A dietary requirement with no menu choice",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "guest",
+   "facts": ["guest_name", "dietary", "event_name"],
+   "requires": ["rsvp_answers"]
+  },
+  {
+   "key": "rsvp.no_contact_above_cut",
+   "title": "A household above the cut has no way to be reached",
+   "severity": "critical",
+   "cadence": "on_write",
+   "subject_type": "household",
+   "facts": ["household_name", "tier", "seat_count"],
+   "condition": "tier = 'A' and no guest with an email and household.address is null"
+  },
+  {
+   "key": "rsvp.invitation_unopened",
+   "title": "An invitation was sent a while ago and never opened",
+   "severity": "info",
+   "cadence": "weekly",
+   "subject_type": "household",
+   "facts": ["household_name", "sent_at", "days_since", "channel"],
+   "default_params": {"days": 14},
+   "why": "Usually a bad address or a spam folder, not a slow guest. Worth catching early given the sending domain is on the critical path."
+  },
+  {
+   "key": "rsvp.save_the_date_without_invitation",
+   "title": "Save the date sent, invitation not sent",
+   "severity": "info",
+   "cadence": "weekly",
+   "subject_type": "wedding",
+   "facts": ["household_count", "invite_send_on"],
+   "requires": ["message_log with save_the_date kind"]
+  },
+
+  {
+   "key": "seating.attendee_unseated",
+   "title": "A confirmed attendee has no seat",
+   "severity": "warn",
+   "cadence": "daily",
+   "subject_type": "guest",
+   "facts": ["guest_count", "days_to_wedding"],
+   "default_params": {"days": 14},
+   "requires": ["seat_assignments"]
+  },
+  {
+   "key": "seating.constraint_violated",
+   "title": "A seating constraint is being violated",
+   "severity": "info",
+   "cadence": "on_write",
+   "subject_type": "floor_plan",
+   "facts": ["constraint_kind", "guest_a", "guest_b", "table_label"],
+   "requires": ["seating_constraints", "seat_assignments"],
+   "why": "Non-blocking by design. Some violations are deliberate."
+  },
+
+  {
+   "key": "data.extraction_accept_rate_dropped",
+   "title": "Extraction accept rate has dropped for a field",
+   "severity": "info",
+   "cadence": "weekly",
+   "subject_type": "wedding",
+   "facts": ["field", "accept_rate", "previous_rate", "prompt_version", "sample_size"],
+   "requires": ["candidates", "extractions"],
+   "why": "The only eval signal that arrives for free. A drop means a prompt regression or a new document class."
+  },
+  {
+   "key": "data.review_queue_backlog",
+   "title": "Candidates waiting in the review queue",
+   "severity": "info",
+   "cadence": "daily",
+   "subject_type": "wedding",
+   "facts": ["pending_count", "oldest_received_at"],
+   "requires": ["candidates"]
+  }
+ ]
+}

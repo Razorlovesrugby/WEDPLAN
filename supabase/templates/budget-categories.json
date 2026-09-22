@@ -1,0 +1,118 @@
+{
+ "source": "The Knot 2025 Real Weddings Study, US figures",
+ "warning": "Shares are US-derived. Validate against UK figures before using as defaults.",
+ "total_share": 1.0,
+ "categories": [
+  {
+   "group": "Venues & rentals",
+   "category": "Venues",
+   "share": 0.243
+  },
+  {
+   "group": "Venues & rentals",
+   "category": "Event Rentals",
+   "share": 0.047
+  },
+  {
+   "group": "Venues & rentals",
+   "category": "Planner/ Coordinator",
+   "share": 0.04
+  },
+  {
+   "group": "Food and drink",
+   "category": "Catering",
+   "share": 0.178
+  },
+  {
+   "group": "Food and drink",
+   "category": "Cake or dessert",
+   "share": 0.01
+  },
+  {
+   "group": "Food and drink",
+   "category": "Alcohol/liquor",
+   "share": 0.052
+  },
+  {
+   "group": "Photography and videography",
+   "category": "Photographer",
+   "share": 0.056
+  },
+  {
+   "group": "Photography and videography",
+   "category": "Videographer",
+   "share": 0.044
+  },
+  {
+   "group": "Entertainment",
+   "category": "Music",
+   "share": 0.075
+  },
+  {
+   "group": "Entertainment",
+   "category": "Guest entertainment",
+   "share": 0.03
+  },
+  {
+   "group": "Flowers and decorations",
+   "category": "Flowers",
+   "share": 0.052
+  },
+  {
+   "group": "Flowers and decorations",
+   "category": "Decor and lighting",
+   "share": 0.037
+  },
+  {
+   "group": "Invitations and paper",
+   "category": "Invitations & Paper",
+   "share": 0.01
+  },
+  {
+   "group": "Ceremony",
+   "category": "Officiant",
+   "share": 0.01
+  },
+  {
+   "group": "Dress and attire",
+   "category": "Wedding dress",
+   "share": 0.03
+  },
+  {
+   "group": "Dress and attire",
+   "category": "Tux or suit",
+   "share": 0.005
+  },
+  {
+   "group": "Dress and attire",
+   "category": "Jewelry (not including wedding rings)",
+   "share": 0.005
+  },
+  {
+   "group": "Dress and attire",
+   "category": "Wedding Rings",
+   "share": 0.05
+  },
+  {
+   "group": "Hair and makeup",
+   "category": "Hair Stylist",
+   "share": 0.003
+  },
+  {
+   "group": "Hair and makeup",
+   "category": "Makeup Artist",
+   "share": 0.003
+  },
+  {
+   "group": "Transport",
+   "category": "Transportation",
+   "share": 0.02
+  },
+  {
+   "group": "Other",
+   "category": "Contingency",
+   "share": 0.0,
+   "note": "The source sheet allocates 100% with no contingency. Hold 5-10% back."
+  }
+ ]
+}
