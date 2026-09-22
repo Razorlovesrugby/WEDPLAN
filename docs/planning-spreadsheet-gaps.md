@@ -29,7 +29,7 @@ status documents. What each section actually stands at:
 | 3 | Four seed templates | **Partly built.** `supabase/templates/checklists.json` is in the repo and is the file this section describes. It is not yet loaded into `list_templates`, so the Decor, Invitation suite, Shot list and Registry lists are seed data on disk that no screen offers. |
 | 4 | Pattern B, tasks generated from the wedding date | **Built.** Also spec 1 / `0004`. There is no `task_templates` table: a dated template is a `list_templates` row whose items carry `offset_days`, generated into real `list_items`. `supabase/templates/task-timeline.json` on main is this file's 175 tasks **reshaped into that payload**; the bundle's flat `tasks` array is the older shape and must not overwrite it. |
 | 5 | Pattern D, top-down budget allocation | **Built**, and further than proposed. Spec 19 / `0020_budget_allocations.sql` gives `weddings.total_budget` and `allocation_pct` on categories and items; spec 20 adds per-section allocation. `budget_allocations` as a table was not needed. `budget_benchmarks` is **not** built. |
-| 5 | Pattern C, the drink calculator | **Not built.** Nothing in `src/` or `supabase/` references it. This is the one substantial unbuilt proposal in the document. |
+| 5 | Pattern C, the drink calculator | **Built, session 30** — `0030_drink_plans.sql`, `src/lib/drinks.ts`, `/budget/drinks`. See "Build status" below for the two places the build departed from this section. |
 | 5 | The gift calculator | **Not built**, and has nowhere to live until the registry template is loaded. |
 | 6 | Save the date as a distinct send | **Built**, `0016_save_the_date.sql`. |
 | 6 | Seed the menu-choice question | **Superseded.** Spec 14 shipped a full question builder with `single_select` and guest scope, so this is a starter-library entry, not schema. |
@@ -45,10 +45,59 @@ status documents. What each section actually stands at:
 - §4's claim that the wedding date blocks nothing is correct and is now
   demonstrated rather than argued: generation against a null date has shipped.
 
-**What is genuinely left here:** the drink calculator (§5), the gift
-calculator riding on it (§5), loading the four checklist templates into
-`list_templates` (§3), `budget_benchmarks` (§5), and per-vendor PDF export of
-the shot list (§3, open question 3).
+**What is genuinely left here:** the gift calculator (§5), the two unloaded
+checklist templates (§3, and see below), `budget_benchmarks` (§5), and
+per-vendor PDF export of the shot list (§3, open question 3).
+
+### Build status: the drink calculator, session 30
+
+Built end to end and authorised directly — `0030_drink_plans.sql`
+(`drink_headcount_source`, `drink_plans`, `v_drink_plans`), `src/lib/drinks.ts`
+with 17 unit tests, `src/server/queries/drinks.ts`,
+`src/server/actions/drinks.ts`, `/budget/drinks` and its two components, and
+`supabase/tests/13_drink_plans.sql` with 18 assertions. 625 tests, 442 SQL
+assertions, both migration checks, bootstrap and build all clean.
+**Never opened in a browser and never run against the live project** — the same
+caveat every session since 12 carries, and `0022`–`0030` are all unapplied.
+
+**Two departures from §5 as written, both deliberate:**
+
+1. **`drink_plans` stores no `hours`-times-headcount result, and no cost.**
+   §5 proposed a table that recomputes servings independently of
+   `consumption_components`, which already does that arithmetic against a live
+   guest basis and prices it. Two tables multiplying the same three numbers is
+   a second copy of the truth. The table holds only the inputs a human
+   chooses; the headcount is resolved on read by `v_drink_plans` and the
+   container maths by `src/lib/drinks.ts`. `budget_item_id` links the two for
+   navigation and neither side writes to the other. The migration header
+   carries the full argument.
+2. **Three headcount sources, not four.** §5 lists
+   `confirmed | invited | above_cut | manual`. In this schema
+   `budget_guest_population` is already restricted to tier A, and tier A is
+   what "above the cut" means — so `above_cut` would be a synonym for
+   `invited` dressed as a choice. `13_drink_plans.sql` asserts the distinction
+   that does exist: one RSVP moves a `confirmed` plan and leaves an `invited`
+   one alone.
+
+The §5 constraint that mattered most is enforced where it belongs: the three
+alcohol shares and the three wine shares each sum to 1 as a database CHECK on
+exact `numeric`, with the same rule mirrored in the action so the planner sees
+"has to add up to 100%" rather than a constraint violation.
+
+### Not built, and why: the two unloaded checklist templates (§3)
+
+§3 asks for four seed templates and the repo loads two. `scripts/seed-templates.mjs`
+already loads decor, stationery and the timeline; the photography shot list and
+the registry/gift list sit in `checklists.json` deliberately unloaded, because
+**spec 1's open question 1 was answered by the planner** to drop the registry as
+US-shaped and ship those three only.
+
+This document argues the other way — the registry as a gift list with URLs, the
+shot list as a photographer's brief. That is a reasonable case, and it is a
+reversal of an answered spec question, so it needs the planner rather than a
+build. It is two lines in `TO_LOAD` once decided. The gift calculator (§5) is
+blocked behind the same decision: it was specified as a header on the registry
+checklist, and there is no registry checklist until this is settled.
 
 ---
 

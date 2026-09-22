@@ -357,6 +357,9 @@ export type BudgetGuestBasis = "per_adult" | "per_seat";
 /** spec 18 — a per-line GST toggle; "exclusive" adds a hardcoded 15% to everything that sums the line. */
 export type BudgetGstTreatment = "inclusive" | "exclusive";
 
+/** 0030. Three values, not the gaps document's four: `above_cut` is not distinct from `invited` in this schema. */
+export type DrinkHeadcountSource = "confirmed" | "invited" | "manual";
+
 export type VendorStage =
   | "researching"
   | "enquiry_sent"
@@ -1482,6 +1485,46 @@ export type MoodboardView = MoodboardRow & {
   last_viewed_at: string | null;
 }
 
+/**
+ * A drink plan's inputs (0030). Deliberately carries no serving count, no
+ * bottle count and no cost — those are derived by `src/lib/drinks.ts` and by
+ * the view below, never stored. See the migration's header for why.
+ */
+export type DrinkPlanRow = {
+  id: string;
+  wedding_id: string;
+  /** Null means the whole wedding; set scopes both the plan and its headcount to one event. */
+  event_id: string | null;
+  label: string;
+  /** Postgres `numeric` arrives as a number through PostgREST. */
+  hours: number;
+  /** 0.85 light through 1.30 extra heavy — a number, not an enum, so an unusual room can be recorded honestly. */
+  intensity: number;
+  champagne_toast: boolean;
+  beer_share: number;
+  wine_share: number;
+  spirit_share: number;
+  red_share: number;
+  white_share: number;
+  rose_share: number;
+  headcount_source: DrinkHeadcountSource;
+  /** Set when and only when `headcount_source` is "manual", enforced in the database. */
+  manual_headcount: number | null;
+  /** Navigation only — the plan never writes to the budget. */
+  budget_item_id: string | null;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DrinkPlanView = DrinkPlanRow & {
+  event_name: string | null;
+  budget_item_label: string | null;
+  /** Resolved live from RSVPs (or typed, when the source is manual) — the whole point of the feature. */
+  headcount: number | null;
+};
+
 type Timestamps = "created_at" | "updated_at";
 
 export type Database = {
@@ -1560,6 +1603,21 @@ export type Database = {
         "id" | Timestamps | "sort_order" | "body" | "board_id"
       >;
       song_votes: Table<SongVoteRow, "id" | "created_at">;
+      drink_plans: Table<
+        DrinkPlanRow,
+        | "id"
+        | Timestamps
+        | "intensity"
+        | "champagne_toast"
+        | "beer_share"
+        | "wine_share"
+        | "spirit_share"
+        | "red_share"
+        | "white_share"
+        | "rose_share"
+        | "headcount_source"
+        | "sort_order"
+      >;
       vendor_categories: Table<VendorCategoryRow, "id" | Timestamps | "sort_order">;
       vendors: Table<
         VendorRow,
@@ -1680,6 +1738,7 @@ export type Database = {
       v_run_sheet_items: View<RunSheetItemView>;
       v_moodboards: View<MoodboardView>;
       v_coach_runs: View<CoachRunView>;
+      v_drink_plans: View<DrinkPlanView>;
     };
     Functions: {
       budget_guest_counts: {
@@ -1705,6 +1764,7 @@ export type Database = {
       moodboard_share_channel: MoodboardShareChannel;
       moodboard_item_origin: MoodboardItemOrigin;
       moodboard_layout: MoodboardLayout;
+      drink_headcount_source: DrinkHeadcountSource;
     };
     CompositeTypes: Record<string, never>;
   };

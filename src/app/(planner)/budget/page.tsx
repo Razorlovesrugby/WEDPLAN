@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   getBudgetSummary,
   getUpcomingPayments,
@@ -84,7 +85,14 @@ export default async function BudgetPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-serif text-2xl">Budget</h1>
-        <NewCategoryForm />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* The other half of a drinks line: /budget says what it costs,
+              /budget/drinks says what to buy. */}
+          <Link href="/budget/drinks" className="btn">
+            Drinks
+          </Link>
+          <NewCategoryForm />
+        </div>
       </div>
 
       {summary ? (

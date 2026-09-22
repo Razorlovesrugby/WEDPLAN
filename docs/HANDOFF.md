@@ -3,7 +3,64 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 29 — **specs 24 and 25 written, 25 and 8 built, and four
+Last updated: session 30 — **two supplied specs landed and reconciled against
+what main has since shipped, and the drink calculator built.**
+
+The session started from a git bundle carrying two documents —
+`docs/ai-native-spec.md` and `docs/planning-spreadsheet-gaps.md` — written
+against migration `0003`. Main is at `0030`. **Taken verbatim they describe
+shipped features as unbuilt**, which is the same stale-status failure session
+29 spent its last hours correcting in four other documents, so neither was
+committed as-is: each carries a dated "Status against main" section, and the
+original argument is left intact underneath it.
+
+**The reconciliation is the more useful half of this session.** What the gaps
+document proposes is mostly already here under other names: its checklist
+primitive and its date-generated task list are both spec 1 / `0004_lists.sql`;
+its top-down budget allocation is specs 19 and 20; its save-the-date is `0016`.
+Its `task_templates` table does not exist and should not — a dated template is
+a `list_templates` row whose items carry `offset_days`. Of the AI document's
+six-phase build order, phases 1, 4 and 5 are substantially done and were done
+out of order, so what actually remains is the grid and xlsx import, the ingest
+loop, and the vigilance engine.
+
+**The sharpest finding, and the one that shaped the build:**
+`consumption_components` (`0010_budget.sql`) already computes
+`headcount x hours x servings-per-guest-per-hour` against a live guest basis,
+and costs it. The gaps document's drink calculator proposed a table that does
+that multiplication again. So `0030_drink_plans.sql` stores **inputs only** —
+no serving count, no bottle count, no cost. The headcount is resolved on read
+by `v_drink_plans` (through `budget_head_count`, so one RSVP moves the shopping
+list), and the container maths lives in `src/lib/drinks.ts` alone, because
+nothing in the database needs a bottle count. `drink_plans.budget_item_id`
+links the two for navigation and **neither side writes to the other**: the
+budget says what drinks cost, the plan says what to buy, and there is no sync
+step because there is nothing to keep in sync.
+
+`supabase/tests/13_drink_plans.sql` §2 is the assertion that says the feature
+works: with no RSVPs both sources read 10, and the moment one guest replies a
+`confirmed` plan drops to 1 while an `invited` plan does not move. If that ever
+stops holding, the feature has no reason to exist.
+
+**Three headcount sources, not the document's four.** `above_cut` was dropped:
+`budget_guest_population` is already restricted to tier A, and tier A is what
+"above the cut" means, so it would have been a synonym that reads like a
+choice.
+
+625 tests (17 new), 442 SQL assertions (18 new), typecheck, both migration
+checks, bootstrap and build all clean. **Nothing has been opened in a browser**,
+and `0022` through `0030` are none of them applied to the live project.
+
+**Left deliberately undone, needing the planner rather than a build:** the gaps
+document's §3 asks for four checklist seed templates and
+`scripts/seed-templates.mjs` loads two. The photography shot list and the
+registry/gift list are unloaded because **spec 1's open question 1 was answered
+to drop them**. This document argues the other way and may well be right, but
+reversing an answered spec question is not a coding decision. It is two lines
+in `TO_LOAD` once settled, and the §5 gift calculator is blocked behind the
+same call, since it was specified as a header on the registry checklist.
+
+Previously in session 29 — **specs 24 and 25 written, 25 and 8 built, and four
 stale status documents corrected. Vendors exist.**
 
 **Spec 8 is built** — the last substantial unbuilt feature. `0029_vendors.sql`
@@ -55,7 +112,8 @@ app at an access tier nobody here controls. Everything else in `docs/specs/` is
 built.
 
 608 tests, 424 SQL assertions, typecheck, both migration checks, bootstrap and
-build all clean. **Nothing has been opened in a browser**, and `0022` through
+build all clean (session 30's numbers are 625 and 442 — see the top of this
+file). **Nothing has been opened in a browser**, and `0022` through
 `0029` are none of them applied to the live project.
 
 Previously in session 29 — **spec 25: the site's blocks now read the wedding
