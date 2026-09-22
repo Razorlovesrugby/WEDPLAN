@@ -114,6 +114,44 @@ export const PALETTES: Record<PaletteId, Palette> = {
   },
 };
 
+/**
+ * The type pairings a planner can choose (spec 25 Part C, extended).
+ *
+ * A pairing names the display and body faces; the label face stays Inter in
+ * both, because letterspaced metadata set in a serif reads as more body text
+ * and that is the one thing this theme cannot afford.
+ *
+ * **Only faces already self-hosted in `src/lib/fonts` appear here.** The
+ * reference design offers a third pairing, Newsreader · Manrope; shipping it
+ * would mean either two more woff2 subsets in the repo or a runtime Google
+ * fetch, and the second is refused outright — a third-party font request from
+ * a guest site leaks every visitor's IP and costs a render-blocking round
+ * trip. It is left out rather than shipped broken; adding it later is two
+ * files in `src/lib/fonts` and a row in this table.
+ */
+export const TYPOGRAPHY_IDS = ["fraunces_garamond", "garamond_inter"] as const;
+export type TypographyId = (typeof TYPOGRAPHY_IDS)[number];
+
+export type TypographyPairing = {
+  id: TypographyId;
+  /** Set in the body face in the picker, so the choice previews itself. */
+  label: string;
+  description: string;
+};
+
+export const TYPOGRAPHY: Record<TypographyId, TypographyPairing> = {
+  fraunces_garamond: {
+    id: "fraunces_garamond",
+    label: "Fraunces · EB Garamond",
+    description: "High-contrast display serif over an old-style body. The default.",
+  },
+  garamond_inter: {
+    id: "garamond_inter",
+    label: "EB Garamond · Inter",
+    description: "Quieter. A serif for the headings, a grotesque for the running text.",
+  },
+};
+
 export type SiteTheme = {
   preset: ThemePresetId;
   palette: PaletteId | "custom";
@@ -122,6 +160,8 @@ export type SiteTheme = {
   heroStyle: HeroStyle;
   /** The SVG monogram in the header and footer. Script only. */
   monogram: boolean;
+  /** Editorial only — Script's two faces are the theme. */
+  typography: TypographyId;
 };
 
 /**
@@ -141,6 +181,7 @@ export const DEFAULT_THEME: SiteTheme = {
   customTokens: null,
   heroStyle: "full",
   monogram: false,
+  typography: "fraunces_garamond",
 };
 
 /** What Script looked like when it was the default — used by its own tests. */
@@ -150,6 +191,7 @@ export const SCRIPT_THEME: SiteTheme = {
   customTokens: null,
   heroStyle: "framed",
   monogram: true,
+  typography: "fraunces_garamond",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -200,6 +242,7 @@ export function resolveTheme(payload: unknown): SiteTheme {
     customTokens,
     heroStyle: pick(payload["hero_style"], HERO_STYLES, THEME_PRESETS[preset].defaultHero),
     monogram: typeof payload["monogram"] === "boolean" ? payload["monogram"] : DEFAULT_THEME.monogram,
+    typography: pick(payload["typography"], TYPOGRAPHY_IDS, DEFAULT_THEME.typography),
   };
 }
 

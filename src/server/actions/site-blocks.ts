@@ -47,6 +47,9 @@ const styleSchema = z
     background: z.enum(BLOCK_BACKGROUNDS).optional(),
     align: z.enum(BLOCK_ALIGNS).optional(),
     shape: z.enum(IMAGE_SHAPES).optional(),
+    // A site_assets id, not a URL: the renderer signs it, so a block can
+    // never carry a path into a bucket or a third party's image.
+    bgImage: uuid.optional(),
     embed: z.coerce.boolean().optional(),
   })
   .strict();
@@ -122,6 +125,9 @@ const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   things_to_do: z.object({ intro: optionalText, items: z.array(listItemSchema).max(30).optional() }),
   gallery: z.object({ intro: optionalText }),
   photo_band: z.object({ image_id: uuid.optional(), image_alt: optionalText, caption: optionalText }),
+  // An asset and its alt text, and nothing else. A band that could carry a
+  // caption would be a photo_band with extra steps.
+  page_break: z.object({ image_id: uuid.optional(), image_alt: optionalText }),
   photo_text: z.object({
     heading: optionalText,
     body: optionalText,
@@ -139,6 +145,8 @@ const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   travel: z.object({ intro: optionalText, body: optionalText }),
   stays: z.object({ intro: optionalText }),
   coach: z.object({ intro: optionalText }),
+  // The funds live in `gift_funds`; the block holds only the line above them.
+  gift_funds: z.object({ intro: optionalText }),
   song_requests: z.object({ intro: optionalText }),
   guestbook: z.object({ intro: optionalText, prompt: optionalText }),
   playlist: z.object({

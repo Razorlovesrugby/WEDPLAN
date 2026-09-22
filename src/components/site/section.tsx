@@ -39,14 +39,18 @@ export function SiteSection({
         {eyebrow ? (
           <p className="mb-4 flex items-center gap-2 text-muted">
             <span aria-hidden="true" className="inline-block h-1.5 w-1.5 bg-accent" />
-            <Label>{eyebrow}</Label>
+            <Label className="site-eyebrow">{eyebrow}</Label>
           </p>
         ) : null}
-        <h2 className="site-heading text-center text-4xl leading-tight text-ink sm:text-5xl">
+        {/* The `site-h2` / `site-intro` hooks carry no rules under Script —
+            the Tailwind utilities beside them are what render. Editorial
+            overrides them from globals.css, which is what keeps "a third
+            preset is a stylesheet" true. */}
+        <h2 className="site-h2 site-heading text-center text-4xl leading-tight text-ink sm:text-5xl">
           {heading}
         </h2>
         {intro ? (
-          <p className="mx-auto mt-4 max-w-prose text-center text-[1.0625rem] leading-relaxed text-muted">
+          <p className="site-intro mx-auto mt-4 max-w-prose text-center text-[1.0625rem] leading-relaxed text-muted">
             {intro}
           </p>
         ) : null}

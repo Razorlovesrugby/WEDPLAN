@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
+import { householdReply, replyToAll } from "@/lib/rsvp-household";
 import { QuestionField, type AnswerValue } from "./question-field";
 import type {
   EventRow,
@@ -147,9 +148,74 @@ export function RsvpForm({
     );
   }
 
+  /**
+   * The form offers each person exactly the events they are invited to — and
+   * a person invited to nothing does not appear at all (spec 22 §6, rule 3).
+   *
+   * Without this they rendered as a name with no questions under it and a
+   * dietary box, which reads as "we forgot to invite you to anything" on a
+   * page the whole household scrolls together. `resolve.ts` deliberately
+   * returns every guest in the household, because the card and the greeting
+   * need them; narrowing is this form's job.
+   */
+  const answering = state.filter((guest) => Object.keys(guest.responses).length > 0);
+
+  if (answering.length === 0) {
+    return (
+      <p className="text-center text-[1.0625rem] text-muted">
+        There&rsquo;s nothing to reply to yet — your invitation doesn&rsquo;t cover any events so
+        far. Do get in touch with the couple if that looks wrong.
+      </p>
+    );
+  }
+
+  const collective = householdReply(answering.map((guest) => guest.responses));
+
+  /**
+   * One card click answers for everybody.
+   *
+   * It writes straight into the per-person rows rather than into a flag of
+   * its own, so what the couple receives is the same shape whichever way the
+   * guest answered, and a household that then changes one row is simply a
+   * household whose cards are no longer lit.
+   */
+  function replyForEveryone(status: RsvpStatus) {
+    setState((prev) => prev.map((guest) => ({ ...guest, responses: replyToAll(guest.responses, status) })));
+    setStatus("idle");
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      {state.map((guestState) => {
+      {/* Most replies are "all of us" one way or the other. Asking for that
+          one event at a time, per person, is twelve taps for one fact. */}
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+        {(
+          [
+            { value: "yes", title: "Yes, we'll be there", note: "We'll save you a seat" },
+            { value: "no", title: "Not able to", note: "We'll miss you" },
+          ] as const
+        ).map((card) => {
+          const active = collective === card.value;
+          return (
+            <button
+              key={card.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => replyForEveryone(card.value)}
+              className={`rounded border p-[26px_28px] text-left transition-colors ${
+                active
+                  ? "border-ink bg-ink text-paper"
+                  : "border-line bg-white hover:border-ink"
+              }`}
+            >
+              <span className="site-heading block text-2xl">{card.title}</span>
+              <span className="site-label mt-2 block opacity-70">{card.note}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {answering.map((guestState) => {
         const guest = guests.find((g) => g.id === guestState.guestId)!;
         return (
           <fieldset key={guest.id} className="card p-5">
@@ -258,11 +324,11 @@ export function RsvpForm({
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" className="btn-primary" disabled={pending}>
-          {pending ? "Saving…" : "Send our answers"}
+          {pending ? "Saving…" : "Confirm our RSVP"}
         </button>
         {status === "saved" ? (
           <span className="text-sm text-tierA">
-            Saved, thank you. You can come back and change this any time.
+            Saved, thank you. Come back and change it whenever.
           </span>
         ) : null}
         {status === "error" && error ? <span className="text-sm text-red-700">{error}</span> : null}

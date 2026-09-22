@@ -59,10 +59,70 @@ export function daysUntil(value: string | null | undefined): number | null {
   return Math.ceil((target.getTime() - Date.now()) / 86_400_000);
 }
 
+/**
+ * How long until a moment, as the biggest unit that still says something
+ * useful (spec 25 §7, extended for Editorial's hero counter).
+ *
+ * `daysUntil` counts whole days and nothing else, which is right for a
+ * section in the middle of a page and wrong for the corner of a hero on the
+ * morning of the wedding — "0 days to go" is the one day it most needs to be
+ * more specific. Inside the last day this drops to hours, and inside the last
+ * hour it says the day has arrived.
+ *
+ * Null once the moment has passed: the hero renders nothing rather than a
+ * negative count.
+ *
+ * `now` is injectable so this is testable without freezing the clock.
+ */
+export type TimeLeft = { value: number; unit: "days" | "hours" | "now" };
+
+export function timeLeft(
+  value: string | null | undefined,
+  now: number = Date.now(),
+): TimeLeft | null {
+  if (!value) return null;
+  const target = new Date(value).getTime();
+  if (Number.isNaN(target)) return null;
+
+  const ms = target - now;
+  if (ms < 0) return null;
+
+  if (ms >= 86_400_000) return { value: Math.ceil(ms / 86_400_000), unit: "days" };
+  const hours = Math.floor(ms / 3_600_000);
+  return hours === 0 ? { value: 0, unit: "now" } : { value: hours, unit: "hours" };
+}
+
+/** `timeLeft` as the words the hero prints. */
+export function timeLeftLabel(left: TimeLeft | null): string | null {
+  if (!left) return null;
+  if (left.unit === "now") return "Today";
+  const noun = left.unit === "days" ? "day" : "hour";
+  return `${left.value} ${left.value === 1 ? noun : `${noun}s`} to go`;
+}
+
 /** Minor units (cents) to an NZD string — every wedding is NZD only (spec 18), e.g. formatMoney(460000) -> "$4,600.00". */
 export function formatMoney(minorUnits: number | null | undefined): string {
   if (minorUnits === null || minorUnits === undefined) return "—";
   return new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(minorUnits / 100);
+}
+
+/**
+ * Money for the guest site, where cents are noise.
+ *
+ * `formatMoney` is the planner's formatter and keeps its cents, because a
+ * budget that rounds is a budget that stops reconciling. A gift fund reading
+ * "$1,200" rather than "$1,200.00" is the same number with less to read, and
+ * a fund that genuinely sits at $1,200.50 still says so.
+ */
+export function formatMoneyShort(minorUnits: number | null | undefined): string {
+  if (minorUnits === null || minorUnits === undefined) return "—";
+  const whole = minorUnits % 100 === 0;
+  return new Intl.NumberFormat("en-NZ", {
+    style: "currency",
+    currency: "NZD",
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  }).format(minorUnits / 100);
 }
 
 export function pluralise(count: number, singular: string, plural = `${singular}s`): string {

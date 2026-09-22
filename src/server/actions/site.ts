@@ -10,6 +10,7 @@ import {
   PALETTE_IDS,
   THEME_PRESETS,
   THEME_PRESET_IDS,
+  TYPOGRAPHY_IDS,
   type ThemePresetId,
 } from "@/lib/theme/presets";
 import { THEME_BLOCK_KEY } from "@/lib/site/sections";
@@ -164,6 +165,10 @@ const themeSchema = z.object({
   palette: z.enum([...PALETTE_IDS, "custom"] as [string, ...string[]]),
   hero_style: z.enum(HERO_STYLES),
   monogram: z.coerce.boolean().default(true),
+  // Editorial only. Defaulted rather than required so a caller that predates
+  // the pairing picker — an old form post, a test — still saves a valid theme
+  // instead of failing validation on a field it has never heard of.
+  typography: z.enum(TYPOGRAPHY_IDS).default("fraunces_garamond"),
   custom_ink: z.string().trim().optional(),
   custom_paper: z.string().trim().optional(),
   custom_muted: z.string().trim().optional(),
@@ -227,6 +232,7 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
         palette: data.palette,
         hero_style: data.hero_style,
         monogram: data.monogram,
+        typography: data.typography,
         custom_tokens: customTokens,
       }) as never,
       sort_order: -1, // Config, not a section. Never rendered in the list.

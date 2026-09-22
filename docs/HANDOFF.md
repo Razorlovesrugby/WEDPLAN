@@ -3,7 +3,112 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 29 — **specs 24 and 25 written, 25 and 8 built, and four
+Last updated: session 30 — **the Editorial theme is built out, `/site` is a
+rail beside a live preview, and there is a gift list.**
+
+Built from a design handoff the planner brought in (four HTML prototypes plus
+a README and an integration map, produced elsewhere and treated as a visual
+spec, not as code to copy). **The planner asked for it to be implemented, in
+those words.** Two scope calls were put to them before anything was written
+and both are recorded here because they shaped what got built.
+
+**The bundle was written against an older view of `main`, and roughly a third
+of it was already done.** Worth knowing before reading its README as a task
+list: it says "only Script was ever built", but session 29's Part C had
+already made Editorial the default theme (`0028`), self-hosted Fraunces and
+Inter, and added the three type roles. Chapter numbering from position was
+already `sectionNumbers()`. Song votes already existed end to end — `0027`'s
+`song_votes`, `voteForSong`, and the `☆ 14` button with its ordering. What was
+genuinely missing was Editorial's *layout*, and that is most of what this
+session is.
+
+**How a theme differs from another theme now lives in `globals.css`**, scoped
+to `[data-site-theme="<preset>"]` on the site root, not in a
+`preset === "editorial"` branch in a dozen render functions. The hook classes
+(`site-h1`, `site-h2`, `site-eyebrow`, `site-event`, …) carry no rules of
+their own, so under Script the Tailwind utilities beside them win exactly as
+before and nothing about that theme moved. `[data-site-theme] .hook` is two
+selectors to a utility's one, which is what makes the override work without
+`!important`. **Adding a fourth preset stays a stylesheet.**
+
+Three places genuinely needed a React branch instead, and each is commented as
+such: the hero (Editorial's is a different composition — names left at up to
+150px, the ampersand on its own line, a counter in the corner), the itinerary
+row (three columns where Script stacks), and nothing else.
+
+**The two scope calls.**
+
+*Typography ships two pairings, not three.* The design offers Fraunces · EB
+Garamond, Newsreader · Manrope, and EB Garamond · Inter. The first and third
+draw entirely on faces already self-hosted here; the second needs two new
+woff2 families, and `src/lib/fonts/index.ts` refuses a runtime Google fetch
+outright — a third-party font request from a guest site leaks every visitor's
+IP. It is left out of the picker rather than shipped broken, and
+`TYPOGRAPHY` in `presets.ts` says so. Adding it later is two files in
+`src/lib/fonts` and a row in that table.
+
+*Gift funds were built, including the schema.* `INTEGRATION.md` §2.6 offered
+"ship the site without it"; the planner chose to include it. **What it is not
+is a payment integration**, and `0030_gift_funds.sql`'s header is the place
+that argument is made: `contribute_url` is a link out to whatever actually
+takes the money, and `raised_minor` is a figure the couple types. The
+alternative shape — a `gift_contributions` table nothing writes to, with
+`raised` summed from it — would read as a working payment path to the next
+person and would be an empty ledger with a progress bar on top. When a
+provider is chosen, the contributions table lands then. `/site/gifts` says
+this to the planner in as many words, because a progress bar implies a system
+behind it.
+
+**Two behaviour fixes fell out of the bundle's own rules.** The RSVP form
+rendered every guest in the household, so somebody invited to nothing appeared
+as a name with a dietary box and no questions — which reads as "we forgot to
+invite you to anything" on a page the whole household scrolls together. Spec
+22 §6 rule 3 always said they should not appear; `resolve.ts` correctly returns
+every guest (the card and the greeting need them) and the narrowing is now the
+form's job. And `ThemeEditor` had to start carrying `typography` through,
+because `saveTheme` writes the whole theme in one go and an omitted field
+would have silently reset somebody's pairing every time they visited
+`/site/theme` to change the hero style.
+
+**`/site/theme` still exists and `/site` no longer links to it.** It is the
+only place `heroStyle`, the monogram and an existing custom palette can be
+edited — the rail deliberately offers curated swatches only, because
+`validatePalette` is the thing standing between a planner and a page a guest
+cannot read in a car park. `resolveTheme` and `validatePalette` are untouched,
+so a wedding that already saved a custom palette keeps rendering it.
+
+**Two things in the design were deliberately not adopted**, and both are
+judgement calls a later session may reverse:
+
+- The design opens the first two FAQ entries. `splitFaq` opens six, with a
+  written argument for that number (Aisle's rule, and "collapsing three
+  questions is pure friction"). A documented product decision was not
+  overturned to match a prototype that had four questions in it.
+- `--line` and `--muted` are still explicit per palette rather than derived
+  with `color-mix`. `INTEGRATION.md` offered either; every palette in
+  `presets.ts` states both and `theme.test.ts` asserts their contrast, so
+  deriving them would move five checked values to a formula and quietly drop
+  the gate.
+
+`0030` adds `gift_funds` — RLS, `anon` revoked, money as integer minor units,
+and a `contribute_url` check constraint that refuses anything but http(s),
+because that column ends up in an `href` in front of every guest.
+`supabase/tests/13_gift_funds.sql` asserts that constraint from the database
+side rather than trusting the action.
+
+`scripts/check-migrations.sql` had gone stale at `0015` while the directory
+held files through `0029` — the same failure its own instruction describes,
+and the fifth status document in this repo to do it. It is current through
+`0030` and says so.
+
+633 tests (up from 608), 437 SQL assertions (up from 424), typecheck, both
+migration checks, bootstrap and build all clean. **Nothing has been opened in
+a browser** — and that gap is larger this session than most, because almost
+everything here is type, colour and layout. A passing build says the page
+compiles, not that it looks right. `0022` through `0030` are none of them
+applied to the live project.
+
+Previously in session 29 — **specs 24 and 25 written, 25 and 8 built, and four
 stale status documents corrected. Vendors exist.**
 
 **Spec 8 is built** — the last substantial unbuilt feature. `0029_vendors.sql`

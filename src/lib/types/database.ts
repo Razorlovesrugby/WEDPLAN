@@ -853,6 +853,31 @@ export type GuestNoteRow = {
   updated_at: string;
 };
 
+/**
+ * One thing the couple would like help with — the honeymoon, a new kitchen,
+ * a donation (0030).
+ *
+ * `raised_minor` is a figure the couple types, not a sum of contributions:
+ * there is no payment integration and `contribute_url` links out to whatever
+ * actually takes the money. `0030`'s header says why that is the schema
+ * rather than an empty ledger with a progress bar on it.
+ *
+ * Minor units, NZD, like every other money column here (spec 18).
+ */
+export type GiftFundRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  blurb: string | null;
+  /** Null when the fund has no target — the renderer then draws no progress rule. */
+  target_minor: number | null;
+  raised_minor: number;
+  contribute_url: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SavedViewRow = {
   id: string;
   wedding_id: string;
@@ -1592,6 +1617,10 @@ export type Database = {
         GuestNoteRow,
         "id" | Timestamps | "status" | "household_id" | "guest_id" | "author_name",
         GuestNoteRelationships
+      >;
+      gift_funds: Table<
+        GiftFundRow,
+        "id" | Timestamps | "sort_order" | "raised_minor" | "blurb" | "target_minor" | "contribute_url"
       >;
       coach_runs: Table<CoachRunRow, "id" | Timestamps | "sort_order" | "event_id">;
       coach_stops: Table<CoachStopRow, "id" | Timestamps | "sort_order", CoachStopRelationships>;

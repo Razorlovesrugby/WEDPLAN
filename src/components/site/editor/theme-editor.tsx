@@ -60,6 +60,11 @@ export function ThemeEditor({ theme, siteHref }: { theme: SiteTheme; siteHref: s
         palette,
         hero_style: heroStyle,
         monogram,
+        // Carried through untouched. The pairing is chosen in the builder's
+        // rail, and this screen saves the whole theme in one write — omitting
+        // it would silently reset somebody's typography every time they came
+        // here to change the hero style.
+        typography: theme.typography,
         custom_ink: custom.ink,
         custom_paper: custom.paper,
         custom_muted: custom.muted,

@@ -1,9 +1,10 @@
 import { formatDate, formatTime } from "@/lib/format";
 import { invitedForLine, listNames } from "@/lib/invites";
 import { Label } from "./section";
-import { DressCodeTag, ShuttleLines } from "./event-inline";
+import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
+import type { ThemePresetId } from "@/lib/theme/presets";
 
 /**
  * The events this household is invited to, with who each one is for
@@ -26,6 +27,7 @@ export function InvitedEvents({
   timeZone,
   dressCodes = [],
   coachByEvent,
+  preset = "script",
 }: {
   events: {
     id: string;
@@ -46,7 +48,15 @@ export function InvitedEvents({
    */
   dressCodes?: DressCode[];
   coachByEvent?: Map<string, CoachRun[]>;
+  /**
+   * Editorial lays a row out as three columns — time, event, dress code —
+   * where Script stacks them. That is a different markup tree rather than a
+   * restyled one, so it is a branch here and not a rule in `globals.css`.
+   */
+  preset?: ThemePresetId;
 }) {
+  const editorial = preset === "editorial";
+
   const byDay = new Map<string, typeof events>();
   for (const event of events) {
     const day = event.starts_at ? formatDate(event.starts_at, timeZone) : "To be confirmed";
@@ -59,27 +69,55 @@ export function InvitedEvents({
     <div className="space-y-10">
       {[...byDay.entries()].map(([day, dayEvents]) => (
         <div key={day}>
-          <h3 className="text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
+          <h3 className="site-h3 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
             {day}
           </h3>
-          <ul className="mt-5 space-y-6">
+          <ul className={editorial ? "mt-5" : "mt-5 space-y-6"}>
             {dayEvents.map((event) => {
               const invited = invitedByEvent.get(event.id) ?? new Set<string>();
               const forLine = invitedForLine(members, invited);
+              const time = event.starts_at ? <Label>{formatTime(event.starts_at, timeZone)}</Label> : null;
+              const where = (
+                <>
+                  {event.venue ? (
+                    <p className="site-event-detail mt-1 text-[1.0625rem] text-ink">{event.venue}</p>
+                  ) : null}
+                  {event.address ? (
+                    <p className="site-event-detail text-[0.95rem] text-muted">{event.address}</p>
+                  ) : null}
+                </>
+              );
+              const shuttle = (
+                <ShuttleLines runs={coachByEvent?.get(event.id) ?? []} timeZone={timeZone} />
+              );
+              const who = forLine ? (
+                <p className="mt-2 text-[0.95rem] text-muted">{forLine}</p>
+              ) : null;
+
+              if (editorial) {
+                return (
+                  <EditorialEventRow
+                    key={event.id}
+                    time={time}
+                    name={event.name}
+                    aside={<DressCodeTag event={event} codes={dressCodes} />}
+                  >
+                    {where}
+                    {shuttle}
+                    {who}
+                  </EditorialEventRow>
+                );
+              }
+
               return (
                 <li key={event.id} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-xl text-ink">{event.name}</p>
-                    {event.starts_at ? <Label>{formatTime(event.starts_at, timeZone)}</Label> : null}
+                    {time}
                   </div>
-                  {event.venue ? (
-                    <p className="mt-1 text-[1.0625rem] text-ink">{event.venue}</p>
-                  ) : null}
-                  {event.address ? (
-                    <p className="text-[0.95rem] text-muted">{event.address}</p>
-                  ) : null}
-                  {forLine ? <p className="mt-2 text-[0.95rem] text-muted">{forLine}</p> : null}
-                  <ShuttleLines runs={coachByEvent?.get(event.id) ?? []} timeZone={timeZone} />
+                  {where}
+                  {who}
+                  {shuttle}
                   <DressCodeTag event={event} codes={dressCodes} />
                 </li>
               );

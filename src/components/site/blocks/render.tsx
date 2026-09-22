@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlock } from "@/lib/site/blocks";
 import { text } from "@/lib/site/sections";
-import { formatDate, daysUntil } from "@/lib/format";
+import { formatDate, daysUntil, timeLeft } from "@/lib/format";
 import { SiteHero } from "../hero";
 import { SiteSection } from "../section";
 import { Countdown } from "../countdown";
@@ -16,6 +16,7 @@ import { CoachBooking } from "../coach-booking";
 import { GuestUploader } from "../guest-uploader";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
+import { GiftFunds } from "../gift-funds";
 import { SongRequestForm } from "../song-requests";
 import { SongList } from "../song-list";
 import { Guestbook } from "../guestbook";
@@ -23,7 +24,7 @@ import { Attire } from "../attire";
 import { Arrivals } from "../arrivals";
 import { runsByEvent } from "../event-inline";
 import { visibleDressCodes } from "@/lib/site/dress-codes";
-import { DressCode, MapBlock, PhotoBand, PhotoText, Playlist } from "./media";
+import { DressCode, MapBlock, PageBreak, PhotoBand, PhotoText, Playlist } from "./media";
 import type { RenderContext } from "@/server/queries/site-render";
 
 /**
@@ -49,7 +50,56 @@ const BACKGROUND_CLASS: Record<NonNullable<BlockStyle["background"]>, string> = 
   paper: "",
   tinted: "bg-[color-mix(in_srgb,var(--site-accent)_8%,var(--site-paper))]",
   ink: "bg-ink text-paper",
+  // Photograph is markup rather than a class — see `Background` below.
+  photograph: "",
 };
+
+/**
+ * The block's ground: paper, a tint, solid ink, or a photograph.
+ *
+ * **The scrim over a photograph is not optional.** Same argument the hero
+ * makes: without it a block passes contrast against whatever the couple
+ * happened to upload, which is not a guarantee — and unlike the hero, nobody
+ * is looking at this block when they choose the picture. `rgba(18,22,19,0.62)`
+ * is a fixed value rather than a theme token because it has to hold over a
+ * photograph, and a pale palette's `ink` would not.
+ *
+ * A `photograph` background whose asset has gone missing renders as plain
+ * paper rather than as a dark band over nothing — one lost object costs its
+ * own decoration, never the block's readability.
+ */
+function Background({
+  style,
+  url,
+  children,
+}: {
+  style: BlockStyle;
+  url: string | null;
+  children: React.ReactNode;
+}) {
+  const treatment = style.background ?? "paper";
+
+  if (treatment !== "photograph" || !url) {
+    return <div className={BACKGROUND_CLASS[treatment === "photograph" ? "paper" : treatment]}>{children}</div>;
+  }
+
+  return (
+    <div className="relative isolate text-paper [&_*]:text-paper">
+      {/* eslint-disable-next-line @next/next/no-img-element -- a signed URL
+          from a private bucket, so next/image's optimiser has nothing to
+          cache and would re-fetch an expiring URL. Same as PhotoBand. */}
+      <img
+        src={url}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        className="absolute inset-0 -z-10 h-full w-full object-cover"
+      />
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[rgba(18,22,19,0.62)]" />
+      {children}
+    </div>
+  );
+}
 
 /** A full-bleed block gets no section shell at all — that is what full means. */
 function Shell({
@@ -57,6 +107,7 @@ function Shell({
   heading,
   intro,
   mark,
+  bgUrl = null,
   children,
 }: {
   block: SiteBlock;
@@ -64,14 +115,19 @@ function Shell({
   intro?: string | null;
   /** `04 · ATTIRE` (spec 25 §8). Absent on a block that is not a destination. */
   mark?: SectionMark;
+  /** The signed asset behind a `photograph` background, when there is one. */
+  bgUrl?: string | null;
   children: React.ReactNode;
 }) {
   const style = block.style ?? {};
-  const background = BACKGROUND_CLASS[style.background ?? "paper"];
   const label = heading ?? BLOCKS[block.type].heading ?? BLOCKS[block.type].label;
 
   if (style.width === "full") {
-    return <div className={`site-reveal ${background}`}>{children}</div>;
+    return (
+      <Background style={style} url={bgUrl}>
+        <div className="site-reveal">{children}</div>
+      </Background>
+    );
   }
 
   // An explicitly empty heading means this block has none — a prose block the
@@ -79,16 +135,16 @@ function Shell({
   // the vertical space of a heading with nothing in them.
   if (label === "") {
     return (
-      <div className={background}>
+      <Background style={style} url={bgUrl}>
         <section id={block.type} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
           <div className={`mx-auto ${WIDTH_CLASS[style.width ?? "contained"]}`}>{children}</div>
         </section>
-      </div>
+      </Background>
     );
   }
 
   return (
-    <div className={background}>
+    <Background style={style} url={bgUrl}>
       <SiteSection
         id={block.type}
         heading={label}
@@ -97,7 +153,7 @@ function Shell({
       >
         <div className={`mx-auto ${WIDTH_CLASS[style.width ?? "contained"]}`}>{children}</div>
       </SiteSection>
-    </div>
+    </Background>
   );
 }
 
@@ -119,6 +175,11 @@ export function SiteBlockView({
   const coachByEvent = runsByEvent(ctx.travel.runs);
   const dressCodes = ctx.extras.dressCodes;
 
+  // The asset behind a `photograph` background, signed. Read once here rather
+  // than in `Shell`, so the shell stays a layout component and never touches
+  // the render context.
+  const bgUrl = ctx.imageUrls.get(block.style?.bgImage ?? "") ?? null;
+
   switch (block.type) {
     // -- essentials ---------------------------------------------------------
     case "hero": {
@@ -132,17 +193,24 @@ export function SiteBlockView({
         <>
           <SiteHero
             style={ctx.theme.heroStyle}
+            preset={ctx.theme.preset}
             headline={headline}
             dateLabel={dateLabel}
             location={text(payload, "location")}
             imagePath={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? text(payload, "image_path")}
             imageAlt={text(payload, "image_alt")}
             monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
+            weddingDate={ctx.wedding.wedding_date}
+            // Computed on the server so the number is right in the HTML and
+            // identical on both sides of hydration.
+            timeLeft={timeLeft(ctx.wedding.wedding_date)}
           />
           {/* A line about why, under the date — "to celebrate those closest to
               us". Short, and the only sentence in the hero. */}
           {intro ? (
-            <p className="px-5 pt-6 text-center text-[1.0625rem] italic text-muted">{intro}</p>
+            <div className="mx-auto w-full max-w-5xl px-5 pt-6 sm:px-10">
+              <p className="site-intro text-center text-[1.0625rem] italic text-muted">{intro}</p>
+            </div>
           ) : null}
           {/* The countdown lives here now (spec 25 §7) rather than being a
               separate block that could end up three sections from the date it
@@ -185,7 +253,7 @@ export function SiteBlockView({
 
     case "story":
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <Story payload={payload} />
         </Shell>
       );
@@ -194,7 +262,7 @@ export function SiteBlockView({
       const body = text(payload, "body");
       if (!body) return null;
       return (
-        <Shell block={block} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? ""}>
           <Prose body={body} />
         </Shell>
       );
@@ -248,7 +316,7 @@ export function SiteBlockView({
       // public, for a reader we do not know.
       return personal ? (
         personal.events.length === 0 ? null : (
-          <Shell block={block} heading="You're invited to" intro={intro} mark={mark}>
+          <Shell block={block} bgUrl={bgUrl} heading="You're invited to" intro={intro} mark={mark}>
             <InvitedEvents
               events={personal.events}
               members={personal.members}
@@ -256,11 +324,12 @@ export function SiteBlockView({
               timeZone={ctx.wedding.timezone}
               dressCodes={dressCodes}
               coachByEvent={coachByEvent}
+              preset={ctx.theme.preset}
             />
           </Shell>
         )
       ) : (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <Schedule
             events={ctx.events}
             payload={payload}
@@ -268,6 +337,7 @@ export function SiteBlockView({
             invitedEventIds={null}
             dressCodes={dressCodes}
             coachByEvent={coachByEvent}
+            preset={ctx.theme.preset}
           />
         </Shell>
       );
@@ -277,7 +347,7 @@ export function SiteBlockView({
       const hasNotes = personal.events.some((event) => event.guest_note?.trim());
       if (!hasNotes) return null;
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <OnTheDay events={personal.events} timeZone={ctx.wedding.timezone} />
         </Shell>
       );
@@ -286,7 +356,7 @@ export function SiteBlockView({
     case "rsvp":
       if (!personal) {
         return (
-          <Shell block={block} heading="RSVP" mark={mark}>
+          <Shell block={block} bgUrl={bgUrl} heading="RSVP" mark={mark}>
             <RsvpPointer payload={payload} />
           </Shell>
         );
@@ -322,7 +392,7 @@ export function SiteBlockView({
 
     case "faq":
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <Faq payload={payload} />
         </Shell>
       );
@@ -340,7 +410,7 @@ export function SiteBlockView({
       );
 
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <DressCode payload={payload}>
             {codes.length > 0 ? <Attire codes={codes} boards={ctx.boards} /> : null}
             {board ? <PublicBoardView board={board} /> : null}
@@ -351,14 +421,14 @@ export function SiteBlockView({
 
     case "party":
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <Party payload={payload} />
         </Shell>
       );
 
     case "things_to_do":
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <ThingsToDo payload={payload} />
         </Shell>
       );
@@ -368,7 +438,7 @@ export function SiteBlockView({
       const images = ctx.gallery;
       if (images.length === 0 && !personal) return null;
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <div className="space-y-10">
             <GalleryGrid images={images} />
             {/* Uploading is a thing only a household can do — the open
@@ -385,9 +455,19 @@ export function SiteBlockView({
       );
     }
 
+    case "page_break": {
+      const url = ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null;
+      // Nothing to punctuate with. An empty band is a dark gap the planner
+      // cannot see the cause of, so it renders as nothing at all.
+      if (!url) return null;
+      return (
+        <PageBreak url={url} alt={text(payload, "image_alt")} shape={block.style?.shape} />
+      );
+    }
+
     case "photo_band":
       return (
-        <Shell block={block}>
+        <Shell block={block} bgUrl={bgUrl}>
           <PhotoBand
             url={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
             alt={text(payload, "image_alt")}
@@ -399,7 +479,7 @@ export function SiteBlockView({
 
     case "photo_text":
       return (
-        <Shell block={block} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? ""}>
           <PhotoText
             url={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
             alt={text(payload, "image_alt")}
@@ -413,7 +493,7 @@ export function SiteBlockView({
     // -- travel -------------------------------------------------------------
     case "map":
       return (
-        <Shell block={block} heading={text(payload, "heading") ?? "Where"} intro={intro}>
+        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? "Where"} intro={intro}>
           <MapBlock
             payload={payload}
             embed={block.style?.embed === true}
@@ -430,7 +510,7 @@ export function SiteBlockView({
       // one that has not gets exactly the list it had before (spec 25 §5).
       const hasArrivals = ctx.extras.arrivals.length > 0;
       return (
-        <Shell block={block} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} mark={mark}>
           <div className="space-y-10">
             {prose ? <Prose body={prose} /> : null}
             <CoachSection runs={ctx.travel.runs} timeZone={ctx.wedding.timezone} bookable={false} />
@@ -446,7 +526,7 @@ export function SiteBlockView({
 
     case "stays":
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <div className="space-y-10">
             <StaysList stays={ctx.travel.stays} />
           </div>
@@ -456,7 +536,7 @@ export function SiteBlockView({
     case "coach": {
       if (ctx.travel.runs.length === 0) return null;
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           {personal && personal.token ? (
             <CoachBooking
               token={personal.token}
@@ -471,10 +551,25 @@ export function SiteBlockView({
       );
     }
 
+    case "gift_funds": {
+      // No funds means nothing to say. The heading over an empty list reads
+      // as "we wanted presents and could not think of any".
+      if (ctx.extras.giftFunds.length === 0) return null;
+      const background = block.style?.background;
+      return (
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+          <GiftFunds
+            funds={ctx.extras.giftFunds}
+            dark={background === "ink" || (background === "photograph" && bgUrl !== null)}
+          />
+        </Shell>
+      );
+    }
+
     // -- music --------------------------------------------------------------
     case "song_requests":
       return (
-        <Shell block={block} intro={null} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={null} mark={mark}>
           <SongRequestForm
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
@@ -492,7 +587,7 @@ export function SiteBlockView({
 
     case "guestbook":
       return (
-        <Shell block={block} intro={intro} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
           <Guestbook
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
@@ -504,7 +599,7 @@ export function SiteBlockView({
 
     case "playlist":
       return (
-        <Shell block={block} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
+        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
           <Playlist
             payload={payload}
             embed={block.style?.embed === true}

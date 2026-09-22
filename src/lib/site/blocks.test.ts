@@ -261,3 +261,31 @@ describe("palletableBlocks", () => {
     expect(palletableBlocks().some((def) => def.type === "guestbook")).toBe(true);
   });
 });
+
+describe("the page break band", () => {
+  it("is punctuation, so it is never numbered and never in the nav", () => {
+    // Two bands and two destinations: the page still reads 01, 02.
+    const marks = sectionNumbers([
+      block({ id: "a", type: "schedule" }),
+      block({ id: "b", type: "page_break" }),
+      block({ id: "c", type: "rsvp" }),
+      block({ id: "d", type: "page_break" }),
+    ]);
+    expect([...marks.keys()]).toEqual(["a", "c"]);
+    expect(marks.get("c")?.number).toBe("02");
+
+    expect(
+      blockNavItems([block({ type: "page_break" }), block({ type: "rsvp" })]).map((i) => i.label),
+    ).toEqual(["Will you be there?"]);
+  });
+
+  it("is repeatable — a long page wants more than one", () => {
+    const blocks = [block({ type: "page_break" }), block({ type: "page_break" })];
+    expect(typesAtLimit(blocks).has("page_break")).toBe(false);
+    expect(BLOCKS.page_break.max).toBeUndefined();
+  });
+
+  it("is offered in the palette", () => {
+    expect(palletableBlocks().map((def) => def.type)).toContain("page_break");
+  });
+});

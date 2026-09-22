@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -12,20 +12,16 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   BLOCKS,
-  BLOCK_FAMILIES,
   STARTER_LAYOUTS,
   palletableBlocks,
   pageNotes,
+  sectionNumbers,
   typesAtLimit,
-  type BlockType,
+  visibleBlocks,
   type SiteBlock,
 } from "@/lib/site/blocks";
 import { BLOCK_FORMS } from "@/lib/site/block-fields";
@@ -33,55 +29,91 @@ import {
   addBlock,
   applyStarterLayout,
   deleteBlock,
-  duplicateBlock,
   publishSite,
   reorderBlocks,
+  saveBlock,
   setBlockVisible,
 } from "@/server/actions/site-blocks";
 import { formatRelative } from "@/lib/format";
+import type { SiteTheme } from "@/lib/theme/presets";
 import { BlockInspector } from "./block-inspector";
+import { LookSections, Section } from "./rail";
 import type { PhotoOption } from "./photo-picker";
 
 /**
- * The builder (spec 23 §5).
+ * The builder (spec 23 §5, recomposed by spec 24).
  *
- *   ┌─ Blocks ──────────┬─ Preview ──────────[▯][▭]─┐
- *   │ ⠿ Hero · photo    │                            │
- *   │ ⠿ Countdown       │        Ray & Olivia        │
- *   │ + Add a block     │        12 June 2027        │
- *   └───────────────────┴────────────────────────────┘
+ *   ┌─ Your site · N unpublished changes ······ History · Publish ─┐
+ *   │ rail (25rem)         │ preview                               │
+ *   │  Names & date        │  [Phone][Desktop]                     │
+ *   │  Cover photo         │  ┌──────────────────────────────┐     │
+ *   │  Theme               │  │ the real renderer, zoomed    │     │
+ *   │  Palette             │  │                              │     │
+ *   │  Typography          │  └──────────────────────────────┘     │
+ *   │  Chapters (drag)     │                                       │
+ *   │  Block inspector     │                                       │
+ *   └──────────────────────┴───────────────────────────────────────┘
  *
- * The preview on the right is an iframe of `/site/preview`, which renders the
- * draft through the **same components a guest gets**. Not a mock-up and not a
- * second implementation: a preview that is its own renderer is a preview that
- * lies as soon as anybody changes the real one.
+ * What changed from the block-list-and-iframe version: the controls that used
+ * to live on `/site/theme` are in the rail, beside the thing they change.
+ * Choosing a palette from a page that does not show you the page was always
+ * the wrong shape.
  *
- * Drag-to-reorder is desktop only (Q7). On a phone the list still edits,
+ * **What did not change, and must not:** the preview is an iframe of
+ * `/site/preview`, which renders the draft through the same components a
+ * guest gets. Not a mock-up and not a second implementation — a preview that
+ * is its own renderer is a preview that lies as soon as anybody changes the
+ * real one. The `previewKey` remount is what makes an edit appear without a
+ * manual refresh.
+ *
+ * Drag-to-reorder stays desktop only (Q7). On a phone the list still edits,
  * hides and publishes; dragging a dozen blocks around a 390px screen is real
  * work for a task nobody does on a bus.
  */
 
+/** Desktop is shown at a readable fraction of 1280px; a phone nearly full size. */
+const DEVICE = {
+  phone: { width: 430, zoom: 0.9 },
+  desktop: { width: 1280, zoom: 0.52 },
+} as const;
+
+type Device = keyof typeof DEVICE;
+
 export function SiteBuilder({
   blocks,
   photos,
+  theme,
   publishedAt,
   unpublished,
   previewKey,
+  siteHref,
 }: {
   blocks: SiteBlock[];
   photos: PhotoOption[];
+  theme: SiteTheme;
   publishedAt: string | null;
   unpublished: number;
   /** Changes whenever the draft does, so the iframe reloads. */
   previewKey: string;
+  siteHref: string;
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<string | null>(blocks[0]?.id ?? null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
-  const [device, setDevice] = useState<"phone" | "desktop">("phone");
-  const [showPalette, setShowPalette] = useState(false);
+  const [device, setDevice] = useState<Device>("desktop");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // A block added or deleted on the server changes the list under us. Without
+  // this the new block never joins `order` and simply does not appear.
+  useEffect(() => {
+    setOrder((was) => {
+      const ids = blocks.map((block) => block.id);
+      const kept = was.filter((id) => ids.includes(id));
+      const added = ids.filter((id) => !kept.includes(id));
+      return added.length === 0 && kept.length === was.length ? was : [...kept, ...added];
+    });
+  }, [blocks]);
 
   const byId = useMemo(() => new Map(blocks.map((block) => [block.id, block])), [blocks]);
   const ordered = useMemo(
@@ -91,6 +123,22 @@ export function SiteBuilder({
   const atLimit = useMemo(() => typesAtLimit(blocks), [blocks]);
   const notes = useMemo(() => pageNotes(ordered), [ordered]);
 
+  /**
+   * The number each chapter will actually wear on the page.
+   *
+   * Computed over the *visible* blocks, exactly as the renderer does, so the
+   * rail and the page agree — hide block 03 and everything after it
+   * renumbers in both places at once. A band has no eyebrow and so has no
+   * number; the rail shows an em dash for it rather than a gap.
+   *
+   * `false` for `forHousehold`, which is what `/site/preview` passes with no
+   * `?as=`: these numbers match the preview sitting beside them. A block set
+   * to "invited only" therefore shows no number here, because it has none on
+   * the page this rail is numbering.
+   */
+  const marks = useMemo(() => sectionNumbers(visibleBlocks(ordered, false)), [ordered]);
+
+  const hero = useMemo(() => ordered.find((block) => block.type === "hero") ?? null, [ordered]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, note?: string) {
@@ -123,7 +171,7 @@ export function SiteBuilder({
   // somebody with no design training to invent a page from nothing.
   if (blocks.length === 0) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-3xl space-y-4 p-6">
         <h1 className="font-serif text-2xl">Your site</h1>
         <p className="text-sm text-muted">
           Start from one of these and change anything you like — deleting a block you do not want is
@@ -151,27 +199,33 @@ export function SiteBuilder({
     );
   }
 
+  const selectedBlock = selected ? byId.get(selected) : undefined;
+
   return (
-    <div className="space-y-4">
-      {/* The publish bar. A draft system whose state is invisible is a bug
-          generator — somebody edits for an hour and cannot work out why
-          nothing changed. */}
-      <div className="card flex flex-wrap items-center justify-between gap-3 p-3">
-        <div className="text-sm">
-          {unpublished > 0 ? (
-            <span className="font-medium">
-              {unpublished} unpublished {unpublished === 1 ? "change" : "changes"}
-            </span>
-          ) : (
-            <span className="text-muted">Everything here is published</span>
-          )}
-          <span className="ml-2 text-muted">
+    <div className="-m-4 sm:-m-6">
+      {/* ---- the publish bar ----
+          A draft system whose state is invisible is a bug generator: somebody
+          edits for an hour and cannot work out why nothing changed. */}
+      <header className="flex h-[62px] flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5">
+        <div className="flex items-baseline gap-3">
+          <span className="font-serif text-lg">Your site</span>
+          <span className="text-sm">
+            {unpublished > 0 ? (
+              <span className="font-medium">
+                {unpublished} unpublished {unpublished === 1 ? "change" : "changes"}
+              </span>
+            ) : (
+              <span className="text-muted">Everything here is published</span>
+            )}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="hidden text-xs text-muted sm:inline">
             {publishedAt
               ? `Guests are seeing the version from ${formatRelative(publishedAt)}`
               : "Nothing published yet — guests see an empty page"}
           </span>
-        </div>
-        <div className="flex items-center gap-2">
           <Link href="/site/history" className="btn">
             History
           </Link>
@@ -184,160 +238,295 @@ export function SiteBuilder({
             Publish
           </button>
         </div>
-      </div>
+      </header>
 
-      {notes.length > 0 ? (
-        <ul className="space-y-1">
-          {notes.map((note, index) => (
-            <li key={index} className="text-xs text-muted">
-              {note.text}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <div className="grid lg:grid-cols-[minmax(300px,25rem)_minmax(0,1fr)]">
+        {/* ---- the rail ---- */}
+        <div className="divide-y divide-[#f0ece5] border-r border-line bg-white lg:max-h-[calc(100vh-62px)] lg:overflow-y-auto">
+          <NamesAndDate
+            key={hero?.id ?? "no-hero"}
+            hero={hero}
+            pending={pending}
+            onSaved={() => router.refresh()}
+          />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,26rem)_1fr]">
-        {/* ---- the page, as a list ---- */}
-        <div className="space-y-3">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis]}
-            onDragEnd={onDragEnd}
+          <Section title="Cover photo">
+            <p className="text-xs leading-relaxed text-muted">
+              The photograph behind your names. Select the <strong>Hero</strong> chapter below and
+              pick it there — it is the same picker, and this way you can see what you are choosing
+              against the words that sit on it.
+            </p>
+          </Section>
+
+          <LookSections theme={theme} />
+
+          <Section
+            title="Chapters"
+            blurb="Drag to reorder. The numbers are worked out from what is showing, so the page always reads 01 to the end."
           >
-            <SortableContext items={order} strategy={verticalListSortingStrategy}>
-              <ul className="card divide-y divide-line">
-                {ordered.map((block) => (
-                  <BlockRow
-                    key={block.id}
-                    block={block}
-                    selected={block.id === selected}
-                    pending={pending}
-                    onSelect={() => setSelected(block.id === selected ? null : block.id)}
-                    onToggle={() => run(() => setBlockVisible(block.id, !block.visible))}
-                    onDuplicate={() => run(() => duplicateBlock(block.id))}
-                    onDelete={() => {
-                      if (!window.confirm(`Delete the ${BLOCKS[block.type].label} block?`)) return;
-                      run(() => deleteBlock(block.id));
-                      if (selected === block.id) setSelected(null);
-                    }}
-                  />
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={onDragEnd}
+            >
+              <SortableContext items={order} strategy={verticalListSortingStrategy}>
+                <ul className="divide-y divide-[#f0ece5] rounded-md border border-line">
+                  {ordered.map((block) => (
+                    <ChapterRow
+                      key={block.id}
+                      block={block}
+                      number={marks.get(block.id)?.number ?? null}
+                      selected={block.id === selected}
+                      pending={pending}
+                      onSelect={() => setSelected(block.id === selected ? null : block.id)}
+                      onToggle={() => run(() => setBlockVisible(block.id, !block.visible))}
+                      onDelete={() => {
+                        if (!window.confirm(`Delete the ${BLOCKS[block.type].label} block?`)) return;
+                        run(() => deleteBlock(block.id));
+                        if (selected === block.id) setSelected(null);
+                      }}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+
+            {/* Dashed chips rather than a palette panel: everything you can
+                add, including a second page-break band, visible at a glance. */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {palletableBlocks()
+                .filter((def) => !atLimit.has(def.type))
+                .map((def) => (
+                  <button
+                    key={def.type}
+                    type="button"
+                    disabled={pending}
+                    title={def.blurb}
+                    onClick={() => run(() => addBlock(def.type, selected ?? undefined))}
+                    className="rounded border border-dashed border-line px-2 py-1 text-xs text-muted hover:border-ink hover:text-ink"
+                  >
+                    + {def.label}
+                  </button>
+                ))}
+            </div>
+
+            {notes.length > 0 ? (
+              <ul className="mt-3 space-y-1">
+                {notes.map((note, index) => (
+                  <li key={index} className="text-xs text-[#8b8378]">
+                    {note.text}
+                  </li>
                 ))}
               </ul>
-            </SortableContext>
-          </DndContext>
+            ) : null}
 
-          <button type="button" className="btn w-full" onClick={() => setShowPalette((was) => !was)}>
-            {showPalette ? "Close" : "+ Add a block"}
-          </button>
+            {message ? <p className="mt-3 text-xs text-muted">{message}</p> : null}
+          </Section>
 
-          {showPalette ? (
-            <div className="card space-y-4 p-3">
-              {BLOCK_FAMILIES.map((family) => {
-                // palletableBlocks() rather than BLOCKS: a deprecated type still
-                // renders on pages that have one, but is not offered again.
-                const inFamily = palletableBlocks().filter((def) => def.family === family);
-                if (inFamily.length === 0) return null;
-                return (
-                  <div key={family}>
-                    <h3 className="mb-1 text-xs uppercase tracking-wide text-muted">{family}</h3>
-                    <ul className="space-y-1">
-                      {inFamily.map((def) => {
-                        const full = atLimit.has(def.type);
-                        return (
-                          <li key={def.type}>
-                            <button
-                              type="button"
-                              disabled={pending || full}
-                              onClick={() => {
-                                run(() => addBlock(def.type, selected ?? undefined));
-                                setShowPalette(false);
-                              }}
-                              className="w-full rounded p-2 text-left hover:bg-paper disabled:opacity-40"
-                              // Greyed out rather than hidden: "why can't I add
-                              // another hero" is answerable, "where did the
-                              // hero go" is not.
-                              title={full ? "Your page already has one of these" : undefined}
-                            >
-                              <span className="block text-sm font-medium">{def.label}</span>
-                              <span className="block text-xs text-muted">{def.blurb}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
+          {selectedBlock ? (
+            <Section title="Selected chapter">
+              <BlockInspector
+                key={selectedBlock.id}
+                block={selectedBlock}
+                form={BLOCK_FORMS[selectedBlock.type]}
+                photos={photos}
+                onDone={() => router.refresh()}
+              />
+            </Section>
           ) : null}
 
-          {selected && byId.get(selected) ? (
-            <BlockInspector
-              key={selected}
-              block={byId.get(selected)!}
-              form={BLOCK_FORMS[byId.get(selected)!.type]}
-              photos={photos}
-              onDone={() => router.refresh()}
-            />
-          ) : null}
-
-          {message ? <p className="text-sm text-muted">{message}</p> : null}
+          {/* The screens a block's content lives on. The inspector links to
+              whichever one belongs to the selected block; these are here so
+              none of them is reachable only through a block you happen to
+              have added. */}
+          <Section title="Elsewhere">
+            <ul className="space-y-1 text-sm">
+              {[
+                ["/site/attire", "What to wear"],
+                ["/site/gifts", "A gift"],
+                ["/site/songs", "Song requests"],
+                ["/site/guestbook", "Guestbook"],
+                [siteHref, "See it live"],
+              ].map(([href, label]) => (
+                <li key={href}>
+                  <Link
+                    href={href!}
+                    target={href === siteHref ? "_blank" : undefined}
+                    className="text-accent underline underline-offset-2"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Section>
         </div>
 
         {/* ---- the preview ---- */}
-        <div className="hidden lg:block">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-muted">Preview</span>
-            <button
-              type="button"
-              className={`btn px-2 py-0.5 text-xs ${device === "phone" ? "border-accent" : ""}`}
-              onClick={() => setDevice("phone")}
-            >
-              Phone
-            </button>
-            <button
-              type="button"
-              className={`btn px-2 py-0.5 text-xs ${device === "desktop" ? "border-accent" : ""}`}
-              onClick={() => setDevice("desktop")}
-            >
-              Desktop
-            </button>
-            <Link href="/site/preview" target="_blank" className="text-xs text-muted underline">
+        <div className="hidden bg-paper lg:block">
+          <div className="flex items-center gap-2 px-5 py-3">
+            {(["phone", "desktop"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={device === option}
+                className={`btn px-2.5 py-1 text-xs capitalize ${
+                  device === option ? "border-accent bg-[#f6f3ee]" : ""
+                }`}
+                onClick={() => setDevice(option)}
+              >
+                {option}
+              </button>
+            ))}
+            <Link href="/site/preview" target="_blank" className="ml-auto text-xs text-muted underline">
               Open in a tab
             </Link>
           </div>
-          <div className="flex justify-center border border-line bg-paper p-3">
-            <iframe
-              // The key remounts the frame whenever the draft changes, which
-              // is what makes an edit show up without a manual refresh.
-              key={previewKey}
-              src="/site/preview"
-              title="Preview"
-              className={`h-[75vh] bg-white ${device === "phone" ? "w-[390px]" : "w-full"}`}
-            />
-          </div>
+
+          <PreviewFrame device={device} previewKey={previewKey} />
         </div>
       </div>
     </div>
   );
 }
 
-function BlockRow({
+/**
+ * The preview, scaled.
+ *
+ * The iframe is laid out at the real device width and then transformed, so
+ * the page inside it genuinely believes it is 430px or 1280px wide. Setting
+ * the frame to the *scaled* width instead would show a 1280px layout's media
+ * queries resolving at 666px, which is a preview of a page nobody will ever
+ * see. The outer box takes the scaled size so the surrounding layout is not
+ * pushed around by the untransformed element.
+ */
+function PreviewFrame({ device, previewKey }: { device: Device; previewKey: string }) {
+  const { width, zoom } = DEVICE[device];
+
+  return (
+    <div className="flex justify-center px-5 pb-5">
+      <div
+        className="overflow-hidden border border-line bg-white"
+        // The visible box is the scaled size. Heights are viewport units and
+        // a `calc`, not a measurement, so nothing here touches `window` —
+        // this component server-renders as part of the page.
+        style={{ width: width * zoom, height: "78vh" }}
+      >
+        <iframe
+          // The key remounts the frame whenever the draft changes, which is
+          // what makes an edit show up without a manual refresh.
+          key={previewKey}
+          src="/site/preview"
+          title="Preview"
+          style={{
+            width,
+            height: `calc(78vh / ${zoom})`,
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+            border: 0,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Names, date and place — written straight through to the hero block.
+ *
+ * Not a fourth place to type the couple's names: these are the hero's own
+ * payload fields, which is why the section disappears entirely when the page
+ * has no hero rather than writing somewhere else.
+ */
+function NamesAndDate({
+  hero,
+  pending,
+  onSaved,
+}: {
+  hero: SiteBlock | null;
+  pending: boolean;
+  onSaved: () => void;
+}) {
+  const payload = (hero?.payload ?? {}) as Record<string, unknown>;
+  const asText = (key: string) => (typeof payload[key] === "string" ? (payload[key] as string) : "");
+
+  const [values, setValues] = useState({
+    headline: asText("headline"),
+    date_label: asText("date_label"),
+    location: asText("location"),
+  });
+  const [saving, startSaving] = useTransition();
+  const [saved, setSaved] = useState(false);
+
+  if (!hero) {
+    return (
+      <Section title="Names & date">
+        <p className="text-xs text-muted">
+          Add the <strong>Hero</strong> chapter below and these appear here.
+        </p>
+      </Section>
+    );
+  }
+
+  function commit() {
+    startSaving(async () => {
+      const result = await saveBlock(hero!.id, { ...payload, ...values });
+      setSaved(result.ok);
+      if (result.ok) onSaved();
+    });
+  }
+
+  const fields: [keyof typeof values, string, string][] = [
+    ["headline", "The two of you", "Ray & Olivia"],
+    ["date_label", "The date, as guests read it", "Saturday 12 June 2027"],
+    ["location", "Where", "The Swan, Wells"],
+  ];
+
+  return (
+    <Section title="Names & date">
+      <div className="space-y-2">
+        {fields.map(([name, label, placeholder]) => (
+          <label key={name} className="block">
+            <span className="mb-1 block text-xs text-muted">{label}</span>
+            <input
+              className="w-full rounded border border-line px-2.5 py-2 text-sm outline-none focus:border-accent"
+              value={values[name]}
+              placeholder={placeholder}
+              disabled={pending || saving}
+              onChange={(event) => {
+                setValues((was) => ({ ...was, [name]: event.target.value }));
+                setSaved(false);
+              }}
+              // Saved when the field is left rather than on every keystroke:
+              // a write per character would be a write per character, and the
+              // preview remounts on each one.
+              onBlur={commit}
+            />
+          </label>
+        ))}
+        {saved ? <p className="text-xs text-muted">Saved to your draft</p> : null}
+      </div>
+    </Section>
+  );
+}
+
+function ChapterRow({
   block,
+  number,
   selected,
   pending,
   onSelect,
   onToggle,
-  onDuplicate,
   onDelete,
 }: {
   block: SiteBlock;
+  /** Null for a block the page does not number — a band, or a hidden one. */
+  number: string | null;
   selected: boolean;
   pending: boolean;
   onSelect: () => void;
   onToggle: () => void;
-  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -349,13 +538,13 @@ function BlockRow({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center gap-2 px-3 py-2 ${isDragging ? "opacity-60" : ""} ${
-        selected ? "bg-paper" : ""
+      className={`flex items-center gap-2 px-2.5 py-2 ${isDragging ? "opacity-60" : ""} ${
+        selected ? "bg-[#f6f3ee]" : ""
       }`}
     >
       <button
         type="button"
-        className="hidden cursor-grab text-muted lg:block"
+        className="hidden cursor-grab text-[#a9a298] lg:block"
         aria-label={`Reorder ${def.label}`}
         {...attributes}
         {...listeners}
@@ -363,12 +552,16 @@ function BlockRow({
         ⠿
       </button>
 
-      <button type="button" onClick={onSelect} className="flex-1 text-left">
-        <span className={`text-sm ${block.visible ? "" : "text-muted line-through"}`}>
+      <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-[#a9a298]">
+        {number ?? "—"}
+      </span>
+
+      <button type="button" onClick={onSelect} className="flex-1 truncate text-left">
+        <span className={`text-sm ${block.visible ? "" : "text-[#a9a298] line-through"}`}>
           {def.label}
         </span>
         {block.audience !== "everyone" ? (
-          <span className="ml-2 text-xs text-muted">
+          <span className="ml-2 text-xs text-[#8b8378]">
             {block.audience === "invited" ? "invited only" : "shared site only"}
           </span>
         ) : null}
@@ -382,19 +575,9 @@ function BlockRow({
       >
         {block.visible ? "Hide" : "Show"}
       </button>
-      {def.max === undefined ? (
-        <button
-          type="button"
-          className="text-xs text-muted hover:underline"
-          disabled={pending}
-          onClick={onDuplicate}
-        >
-          Duplicate
-        </button>
-      ) : null}
       <button
         type="button"
-        className="text-xs text-red-700 hover:underline"
+        className="text-xs text-[#a33a3a] hover:underline"
         disabled={pending}
         onClick={onDelete}
       >

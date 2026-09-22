@@ -179,6 +179,15 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     image: "band",
     fields: [ALT, { name: "caption", label: "Caption", kind: "text" }],
   },
+  page_break: {
+    blurb: "A full-width photograph with nothing on it. Punctuation between two sections.",
+    image: "band",
+    // Alt text and nothing else. A band carries no words on purpose, but a
+    // reader using a screen reader still deserves to know a photograph is
+    // there, and an empty alt would say "decorative" about a photograph of
+    // the venue.
+    fields: [ALT],
+  },
   photo_text: {
     blurb: "A photograph beside a paragraph.",
     image: "side",
@@ -220,6 +229,11 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     blurb:
       "Runs and stops come from Travel. On a guest's own page they can reserve seats here.",
     managedElsewhere: "/travel",
+    fields: [INTRO],
+  },
+  gift_funds: {
+    blurb: "Two or three things you'd like help with. The funds themselves live on their own screen.",
+    managedElsewhere: "/site/gifts",
     fields: [INTRO],
   },
   song_requests: {

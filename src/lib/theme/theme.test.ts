@@ -146,14 +146,30 @@ describe("resolveTheme", () => {
 
   it("reads a full payload", () => {
     expect(
-      resolveTheme({ preset: "sans", palette: "slate", hero_style: "type", monogram: false }),
+      resolveTheme({
+        preset: "sans",
+        palette: "slate",
+        hero_style: "type",
+        monogram: false,
+        typography: "garamond_inter",
+      }),
     ).toEqual({
       preset: "sans",
       palette: "slate",
       customTokens: null,
       heroStyle: "type",
       monogram: false,
+      typography: "garamond_inter",
     });
+  });
+
+  it("falls back to the default pairing for a typography it does not know", () => {
+    // A pairing that was removed — Newsreader · Manrope, if it is ever added
+    // and then taken out again — must not cost the page its theme.
+    expect(resolveTheme({ preset: "editorial", typography: "newsreader_manrope" }).typography).toBe(
+      DEFAULT_THEME.typography,
+    );
+    expect(resolveTheme({ preset: "editorial" }).typography).toBe(DEFAULT_THEME.typography);
   });
 
   it("falls back per field rather than wholesale", () => {

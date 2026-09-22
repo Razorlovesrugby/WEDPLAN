@@ -70,7 +70,7 @@ export function ShuttleLines({
         (run.stops.length > 0 ? run.stops : [null]).map((stop, index) => {
           const at = stop?.pickup_at ?? run.departs_at;
           return (
-            <li key={`${run.id}-${stop?.id ?? index}`} className="flex gap-2 text-[0.95rem]">
+            <li key={`${run.id}-${stop?.id ?? index}`} className="site-shuttle flex gap-2 text-[0.95rem]">
               <span aria-hidden="true" className="text-muted">
                 ↳
               </span>
@@ -99,6 +99,45 @@ export function runsByEvent(runs: CoachRun[]): Map<string, CoachRun[]> {
     else byEvent.set(run.event_id, [run]);
   }
   return byEvent;
+}
+
+/**
+ * One itinerary row, Editorial's three-column version.
+ *
+ * `minmax(84px,120px) minmax(0,1fr) minmax(0,auto)` — the time, the event,
+ * and the dress code hard right. The grid itself is in `globals.css` under
+ * `[data-site-theme="editorial"]`; this is only the markup it needs, which is
+ * three children instead of a stack.
+ *
+ * It takes slots rather than an event, because the shared site's row and a
+ * household's row carry different extras — a map link and a calendar link on
+ * one, "For Chidi and Ada" on the other — and the thing they must share is
+ * the grid, not the content. Two copies of the grid is how one of them ends
+ * up with a different time column.
+ */
+export function EditorialEventRow({
+  time,
+  name,
+  children,
+  aside,
+}: {
+  time: React.ReactNode;
+  name: string;
+  /** Column two, under the name: venue, address, shuttle, whatever the caller has. */
+  children?: React.ReactNode;
+  /** Column three, right-aligned. The dress code, in practice. */
+  aside?: React.ReactNode;
+}) {
+  return (
+    <li className="site-event">
+      <div className="site-event-time">{time}</div>
+      <div className="site-event-body">
+        <p className="site-event-name site-heading text-xl text-ink">{name}</p>
+        {children}
+      </div>
+      <div className="site-event-aside">{aside}</div>
+    </li>
+  );
 }
 
 /** Re-exported so callers do not need two imports for one row of metadata. */

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { siteFontClasses } from "@/lib/fonts";
+import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { findWeddingBySlug } from "@/server/queries/site";
 import { loadPublishedBlocks } from "@/server/queries/site-blocks";
 import { buildRenderContext } from "@/server/queries/site-render";
@@ -9,6 +9,7 @@ import { themeCssVars } from "@/lib/theme/presets";
 import { SiteNav } from "@/components/site/site-nav";
 import { Monogram } from "@/components/site/monogram";
 import { SiteBlocks } from "@/components/site/blocks/render";
+import { SectionRail } from "@/components/site/section-rail";
 
 /**
  * The public site (spec 14, rebuilt onto blocks by spec 23).
@@ -57,7 +58,12 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
     // components like the moodboard grid included — resolves to this wedding's
     // palette rather than the planner's.
     <div
-      style={themeCssVars(ctx.theme)}
+      style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
+      // The preset's own name, so `globals.css` can carry everything that
+      // separates one theme from another — type scale, alignment, the
+      // itinerary grid — without a `preset === "editorial"` branch in a dozen
+      // render functions. Adding a fourth preset stays a stylesheet.
+      data-site-theme={ctx.theme.preset}
       className={`site-print ${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       {nav.length > 0 ? (
@@ -67,6 +73,8 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
           monogram={<Monogram name={ctx.theme.monogram ? wedding.name : null} />}
         />
       ) : null}
+
+      <SectionRail blocks={shown} />
 
       <SiteBlocks blocks={shown} ctx={ctx} />
     </div>
