@@ -3,7 +3,39 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 30 — **the Editorial theme is built out, `/site` is a
+Last updated: session 31 — **a save-the-date is now a page, one link per
+household, and Guests shows when each household last opened it.**
+
+**The planner asked for it to be built, in those words**, and three scope calls
+were put to them before any code was written; they took the recommended option
+each time: per-household links (a shared URL can only count, never say who),
+photos drawn from the site's existing ones (no new picker), and save-the-date
+opens counted apart from invitation opens.
+
+- `/w/<wedding>/<household>/save-the-date` — names, date, location, up to five
+  of the couple's own photos (hero, then story, then their gallery; never a
+  guest's upload — `pickSaveTheDatePhotos` in `src/lib/site/save-the-date.ts`),
+  and "invitation to follow". Always set in the Editorial composition with the
+  site's palette. Resolved through the same throttled `resolveHouseholdAddress`
+  as the invitation page, so the suffix is still the credential.
+- `0031_save_the_date_views.sql` — `invitation_views.source` gains
+  `save_the_date`; `v_household_rsvp`'s `last_viewed_at`/`view_count` now
+  **exclude** those, and appended `std_last_viewed_at`/`std_view_count` carry
+  them. Without that split, "read, no reply" on `/invitations` would count
+  somebody who only saw the save-the-date. `supabase/tests/14_…` pins it.
+- Logged from the browser by `SaveTheDateViewLogger` → `logSaveTheDateView`,
+  keyed by address rather than token because a save-the-date usually predates
+  the invitation. Same 30-minute collapse; `?preview=1` never counts.
+- Guests gains a **Save the date** column: last opened (hover for the count)
+  and a *Copy link* button. `sendSaveTheDates` now emails that page instead of
+  the household's full invitation page.
+
+637 tests, 444 SQL assertions, typecheck, both migration checks, bootstrap and
+build (placeholder env) clean. **Not opened in a browser**, and `0031` is not
+applied to the live project — until it is, the Guests page will fail to load,
+because it selects the new view columns.
+
+Previously in session 30 — **the Editorial theme is built out, `/site` is a
 rail beside a live preview, and there is a gift list.**
 
 Built from a design handoff the planner brought in (four HTML prototypes plus

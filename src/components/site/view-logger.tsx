@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { logInvitationView } from "@/server/actions/views";
+import { logInvitationView, logSaveTheDateView } from "@/server/actions/views";
 
 /**
  * Records that this household opened their invitation (spec 22 §9).
@@ -30,6 +30,31 @@ export function ViewLogger({
     logged.current = true;
     void logInvitationView({ token, source });
   }, [token, enabled, source]);
+
+  return null;
+}
+
+/**
+ * The same, for the save-the-date page (0031). Keyed by the household's
+ * address because a save-the-date usually goes out before any invitation
+ * token exists.
+ */
+export function SaveTheDateViewLogger({
+  weddingSlug,
+  address,
+  enabled,
+}: {
+  weddingSlug: string;
+  address: string;
+  enabled: boolean;
+}) {
+  const logged = useRef(false);
+
+  useEffect(() => {
+    if (!enabled || logged.current) return;
+    logged.current = true;
+    void logSaveTheDateView({ weddingSlug, address });
+  }, [weddingSlug, address, enabled]);
 
   return null;
 }

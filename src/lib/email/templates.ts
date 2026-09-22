@@ -108,9 +108,10 @@ export function invitationEmail(options: {
  *
  * Sent months before the invitation and asking nothing: no RSVP, no deadline,
  * no form. Its whole job is to get the date into a calendar before somebody
- * books a holiday over it, so it is short and it links to the card rather than
- * to the RSVP page — the RSVP is not open yet, and sending people to a form
- * that says "replies aren't open" is worse than not linking at all.
+ * books a holiday over it, so it is short and it links to the household's
+ * save-the-date page (0031) rather than to the RSVP — the RSVP is not open
+ * yet, and sending people to a form that says "replies aren't open" is worse
+ * than not linking at all.
  *
  * Carries the same household token as everything else (§12.1), so the link in
  * it keeps working when it becomes the invitation months later.

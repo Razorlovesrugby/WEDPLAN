@@ -10,6 +10,9 @@ import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
 import { text } from "@/lib/site/sections";
 import { SEND_BATCH } from "@/lib/email/batch";
+import { absoluteUrl } from "@/lib/env";
+import { saveTheDatePath } from "@/lib/site/save-the-date";
+import type { HouseholdAddress } from "@/lib/site/household-slug";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -36,6 +39,7 @@ type Target = {
   token: string;
   /** The household's own page — one link per household (spec 21 Q6). */
   url: string;
+  address: HouseholdAddress;
   recipients: string[];
 };
 
@@ -98,6 +102,7 @@ async function loadTargets(
           slug: household.slug,
           suffix: household.slug_suffix,
         }),
+        address: { slug: household.slug, suffix: household.slug_suffix },
         recipients: emails.get(invitation.household_id) ?? [],
       },
     ];
@@ -268,10 +273,10 @@ export async function sendSaveTheDates(
         householdName: target.householdName,
         dateLabel,
         location,
-        // Their own page. It opens on the card — the couple's names and the
-        // date — with the RSVP form further down, which is the right thing to
-        // send before replies are open (spec 21 Q6 merged the two surfaces).
-        url: target.url,
+        // Their own save-the-date page (0031): names, date, photographs and
+        // nothing to fill in. Opening it is what Guests' "Save the date"
+        // column counts, apart from opens of the invitation itself.
+        url: absoluteUrl(saveTheDatePath(wedding.slug, target.address)),
       }),
     // Scoped to the date, so moving the wedding lets a corrected save-the-date
     // go out rather than being swallowed as a duplicate of the old one.

@@ -6,6 +6,7 @@ import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { countActiveFilters, guestFiltersToQuery, parseGuestFilters } from "@/lib/filters";
 import { listGuests, listHouseholds } from "@/server/queries/guests";
 import { listInvites } from "@/server/queries/invites";
+import { listSaveTheDateOpens } from "@/server/queries/save-the-date";
 import { getCollaborators, getCutLines, getEvents, getTags, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Guests" };
@@ -20,7 +21,8 @@ export default async function GuestsPage({
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
 
-  const [guests, tags, events, households, cutLines, collaborators, invites] = await Promise.all([
+  const [guests, tags, events, households, cutLines, collaborators, invites, saveTheDateOpens] =
+    await Promise.all([
     listGuests(wedding.id, filters),
     getTags(wedding.id),
     getEvents(wedding.id),
@@ -28,6 +30,7 @@ export default async function GuestsPage({
     getCutLines(wedding.id),
     getCollaborators(wedding.id),
     listInvites(wedding.id),
+    listSaveTheDateOpens(wedding.id),
   ]);
 
   return (
@@ -69,6 +72,8 @@ export default async function GuestsPage({
         households={households}
         collaborators={collaborators}
         invites={invites}
+        weddingSlug={wedding.slug}
+        saveTheDateOpens={saveTheDateOpens}
       />
     </div>
   );
