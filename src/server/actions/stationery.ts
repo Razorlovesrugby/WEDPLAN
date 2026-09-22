@@ -8,10 +8,14 @@ import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { broadcastEmail, saveTheDateEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
-import { text } from "@/lib/site/sections";
 import { SEND_BATCH } from "@/lib/email/batch";
 import { absoluteUrl } from "@/lib/env";
-import { saveTheDatePath } from "@/lib/site/save-the-date";
+import {
+  SAVE_THE_DATE_BLOCK_KEY,
+  resolveSaveTheDate,
+  saveTheDateDisplay,
+  saveTheDatePath,
+} from "@/lib/site/save-the-date";
 import type { HouseholdAddress } from "@/lib/site/household-slug";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -244,15 +248,19 @@ export async function sendSaveTheDates(
   }
 
   const supabase = await createClient();
-  const { data: heroRow } = await supabase
+  // The words the couple designed on /invitations/save-the-date, so the email
+  // and the page it links to say the same thing. Through the planner's own
+  // session, not the service role the guest page uses.
+  const { data: designRow } = await supabase
     .from("site_content")
     .select("payload")
     .eq("wedding_id", wedding.id)
-    .eq("block_key", "hero")
+    .eq("block_key", SAVE_THE_DATE_BLOCK_KEY)
     .maybeSingle();
-
-  const dateLabel = formatDate(wedding.wedding_date, wedding.timezone);
-  const location = text(heroRow?.payload ?? null, "location");
+  const content = resolveSaveTheDate(designRow?.payload ?? null);
+  const display = saveTheDateDisplay(content, wedding);
+  const dateLabel = display.dateLabel ?? formatDate(wedding.wedding_date, wedding.timezone);
+  const location = display.location;
 
   const targets = await loadTargets(
     supabase,
@@ -269,7 +277,7 @@ export async function sendSaveTheDates(
     "save_the_date",
     (target) =>
       saveTheDateEmail({
-        weddingName: wedding.name,
+        weddingName: display.headline,
         householdName: target.householdName,
         dateLabel,
         location,

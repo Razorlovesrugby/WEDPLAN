@@ -6,6 +6,7 @@ export const GUESTS_TABS = [
   { href: "/guests", label: "Guests" },
   { href: "/guests/rank", label: "Ranking" },
   { href: "/invitations", label: "Invitations" },
+  { href: "/invitations/save-the-date", label: "Save the date" },
 ];
 
 export const TASKS_TABS = [

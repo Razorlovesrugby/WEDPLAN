@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildIcs, foldLine, icsStamp, icsText } from "./ics";
+import { buildAllDayIcs, buildIcs, foldLine, icsStamp, icsText } from "./ics";
 
 describe("icsStamp", () => {
   it("emits UTC with no punctuation", () => {
@@ -120,5 +120,26 @@ describe("buildIcs", () => {
     );
     expect(ics.endsWith("\r\n")).toBe(true);
     expect(ics.replace(/\r\n/g, "")).not.toContain("\n");
+  });
+});
+
+describe("buildAllDayIcs", () => {
+  it("is a date, not a time, with an exclusive end", () => {
+    const ics = buildAllDayIcs(
+      {
+        id: "std-1",
+        name: "Ray & Olivia",
+        start: "20270314",
+        end: "20270315",
+        location: "Wanaka, Otago",
+        description: null,
+      },
+      new Date("2026-09-22T00:00:00Z"),
+    );
+    expect(ics).toContain("DTSTART;VALUE=DATE:20270314\r\n");
+    expect(ics).toContain("DTEND;VALUE=DATE:20270315\r\n");
+    expect(ics).toContain("LOCATION:Wanaka\\, Otago\r\n");
+    expect(ics).not.toContain("DESCRIPTION");
+    expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
   });
 });

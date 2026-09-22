@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
-import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { findWeddingBySlug } from "@/server/queries/site";
-import { getSaveTheDatePhotos } from "@/server/queries/save-the-date";
+import { loadSaveTheDate, loadSaveTheDateContent } from "@/server/queries/save-the-date";
 import { resolveHouseholdAddress } from "@/server/rsvp/address";
 import { resolveCardByAddress } from "@/server/rsvp/card";
 import { formatAddress } from "@/lib/site/household-slug";
-import { saveTheDatePath } from "@/lib/site/save-the-date";
-import { splitHeadline } from "@/lib/site/names";
+import {
+  googleCalendarUrl,
+  saveTheDateDisplay,
+  saveTheDateIcsPath,
+  saveTheDatePath,
+} from "@/lib/site/save-the-date";
 import { themeCssVars } from "@/lib/theme/presets";
-import { formatDate } from "@/lib/format";
+import { SaveTheDateCard } from "@/components/save-the-date/card";
 import { SaveTheDateViewLogger } from "@/components/site/view-logger";
 
 /**
@@ -17,10 +20,10 @@ import { SaveTheDateViewLogger } from "@/components/site/view-logger";
  *
  *     /w/ray-and-olivia/okonkwo-4f7ak/save-the-date
  *
- * The whole of it is one link. Names, the date, where, a few photographs, and
- * "invitation to follow" — nothing to fill in, because a save-the-date asks
- * nothing. It is always set in the Editorial composition, whatever theme the
- * site uses, and takes the site's palette so the two still look related.
+ * The whole of it is one link. What it says, which photographs and which
+ * layout are designed on `/invitations/save-the-date`; this page only
+ * resolves who is reading and renders `SaveTheDateCard`, the same component
+ * the editor previews with.
  *
  * Per household so the planner can see who opened it (Guests → "Save the
  * date"). The suffix is the credential, resolved through the same throttled
@@ -34,30 +37,24 @@ type Search = Promise<{ preview?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug, household } = await params;
+  // The unthrottled lookup, like the invitation page's metadata: this runs for
+  // every link preview a group chat fetches.
   const card = await resolveCardByAddress(slug, household);
   const robots = { index: false, follow: false, nocache: true };
   if (!card) return { title: "Save the date", robots };
 
-  const dateLabel =
-    card.hero.dateLabel ??
-    (card.wedding.wedding_date ? formatDate(card.wedding.wedding_date, card.wedding.timezone) : null);
-  const title = `Save the date — ${card.hero.headline ?? card.wedding.name}`;
-  const description = [dateLabel, card.hero.location].filter(Boolean).join(" · ") || "Save the date";
+  const { content } = await loadSaveTheDateContent(card.wedding.id);
+  const display = saveTheDateDisplay(content, card.wedding);
+  const title = `${display.eyebrow} — ${display.headline}`;
+  const description = [display.dateLabel, display.location].filter(Boolean).join(" · ") || title;
 
   return {
     title,
     description,
     robots,
-    // The household page's preview image already carries the names and the
-    // date, which is everything a save-the-date says.
-    openGraph: {
-      title,
-      description,
-      type: "website",
-      images: [
-        { url: `/w/${slug}/${household}/opengraph-image`, width: 1200, height: 630, alt: title },
-      ],
-    },
+    // The image itself is `opengraph-image.tsx` beside this file; Next adds
+    // it to both tags on its own.
+    openGraph: { title, description, type: "website" },
     twitter: { card: "summary_large_image", title, description },
   };
 }
@@ -94,91 +91,41 @@ export default async function SaveTheDatePage({
   if (resolved.kind === "redirect") permanentRedirect(saveTheDatePath(slug, resolved.to));
   if (resolved.kind !== "ok") return <Unavailable throttled={resolved.kind === "throttled"} />;
 
-  const [card, photos] = await Promise.all([
-    resolveCardByAddress(slug, segment),
-    getSaveTheDatePhotos(wedding.id),
-  ]);
-  if (!card) return <Unavailable throttled={false} />;
+  const { content, siteTheme, photos } = await loadSaveTheDate(wedding.id);
+  const display = saveTheDateDisplay(content, wedding);
+  const palette =
+    content.palette === "site" ? siteTheme : { ...siteTheme, palette: content.palette };
 
-  const headline = card.hero.headline ?? wedding.name;
-  const split = splitHeadline(headline);
-  const dateLabel =
-    card.hero.dateLabel ??
-    (wedding.wedding_date ? formatDate(wedding.wedding_date, wedding.timezone) : null);
-  const location = card.hero.location;
-  const [lead, ...rest] = photos;
+  const google = content.showCalendar
+    ? googleCalendarUrl({
+        title: display.headline,
+        weddingDate: wedding.wedding_date,
+        location: display.location,
+        details: display.message,
+      })
+    : null;
 
   return (
-    <div
-      style={{ ...themeCssVars(card.theme), ...typographyCssVars("editorial", card.theme.typography) }}
-      data-site-theme="editorial"
-      className={`${siteFontClasses("editorial")} min-h-screen bg-paper font-body text-ink antialiased`}
-    >
+    <>
       {/* Counted from the browser, never from the planner's own preview. */}
       <SaveTheDateViewLogger
         weddingSlug={slug}
         address={formatAddress(resolved.address)}
         enabled={preview !== "1"}
       />
-
-      <main className="mx-auto w-full max-w-5xl px-5 pb-20 pt-14 sm:px-10 sm:pt-24">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 text-muted">
-          <p className="site-label site-eyebrow">Save the date</p>
-          <p className="site-label site-eyebrow">For {resolved.household.display_name}</p>
-        </div>
-
-        <h1 className="site-h1 site-heading mt-10 sm:mt-14">
-          {split ? (
-            <>
-              {split.left}
-              <span aria-hidden="true" className="site-h1-amp">
-                {split.joiner}
-              </span>
-              <span className="sr-only"> {split.joiner} </span>
-              {split.right}
-            </>
-          ) : (
-            headline
-          )}
-        </h1>
-
-        <div className="mt-10 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3 border-t border-line pt-6">
-          {dateLabel ? <p className="site-h3 site-heading">{dateLabel}</p> : null}
-          {location ? <p className="site-label site-eyebrow text-muted">{location}</p> : null}
-        </div>
-
-        {lead ? (
-          <figure className="mt-12 sm:mt-16">
-            {/* eslint-disable-next-line @next/next/no-img-element -- signed
-                URLs from a private bucket; see blocks/media.tsx. */}
-            <img
-              src={lead.url}
-              alt={lead.alt ?? ""}
-              className="aspect-[4/5] w-full object-cover sm:aspect-[16/9]"
-            />
-          </figure>
-        ) : null}
-
-        {rest.length > 0 ? (
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {rest.map((photo) => (
-              // eslint-disable-next-line @next/next/no-img-element -- as above
-              <img
-                key={photo.id}
-                src={photo.url}
-                alt={photo.alt ?? ""}
-                loading="lazy"
-                className="aspect-[3/4] w-full object-cover"
-              />
-            ))}
-          </div>
-        ) : null}
-
-        <p className="site-intro site-body mt-14 max-w-xl text-muted">
-          Nothing to do yet — just keep the day free. The invitation, with all the details, follows
-          nearer the time.
-        </p>
-      </main>
-    </div>
+      <div className="min-h-screen bg-paper" style={themeCssVars(palette)}>
+        <SaveTheDateCard
+          display={display}
+          greeting={content.showGreeting ? resolved.household.display_name : null}
+          photos={photos}
+          layout={content.layout}
+          colourVars={themeCssVars(palette)}
+          typography={siteTheme.typography}
+          countdownDate={content.showCountdown ? wedding.wedding_date : null}
+          calendar={google ? { icsHref: saveTheDateIcsPath(slug), googleHref: google } : null}
+          animate
+        />
+      </div>
+    </>
   );
 }

@@ -17,11 +17,16 @@ import { usePathname } from "next/navigation";
  */
 export function SubTabs({ tabs }: { tabs: { href: string; label: string }[] }) {
   const pathname = usePathname();
+  // The most specific match wins, so /invitations/save-the-date lights its
+  // own tab and not /invitations as well.
+  const activeHref = tabs
+    .filter((tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <nav aria-label="Section" className="mb-4 flex flex-wrap gap-1">
       {tabs.map((tab) => {
-        const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+        const active = tab.href === activeHref;
         return (
           <Link
             key={tab.href}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { sendBroadcast, sendSaveTheDates, type SendSummary } from "@/server/actions/stationery";
@@ -154,8 +155,11 @@ export function StationeryPanel({
         <div className="mt-4 border-t border-line pt-4">
           <p className="text-sm text-muted">
             Goes to every household with an invitation link. It asks for nothing — no RSVP, no
-            deadline — and links to their card so they can put the date in the diary. The invitation
-            itself comes later, on the same link.
+            deadline — and links to their own save-the-date page, with add-to-calendar buttons. The
+            invitation itself comes later.{" "}
+            <Link href="/invitations/save-the-date" className="underline">
+              Design the save-the-date →
+            </Link>
           </p>
           {!weddingDateSet ? (
             <p className="mt-2 text-sm text-tierB">
