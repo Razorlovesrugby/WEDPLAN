@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCollaborators, getCurrentWedding } from "@/server/queries/wedding";
-import { listGuests } from "@/server/queries/guests";
+import { listGuests, listHouseholds } from "@/server/queries/guests";
+import { listSaveTheDateOpens } from "@/server/queries/save-the-date";
+import { absoluteUrl } from "@/lib/env";
+import { saveTheDatePath } from "@/lib/site/save-the-date";
 import { listInvites } from "@/server/queries/invites";
 import { getItemsForExport } from "@/server/queries/lists";
 import { parseGuestFilters } from "@/lib/filters";
@@ -154,9 +157,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
     filename = `catering-numbers-${stamp}.csv`;
   } else if (kind === "households") {
-    const byHousehold = new Map<string, { name: string; address: string | null; members: string[] }>();
+    // Each household's save-the-date link and when they last opened it, so
+    // sending a hundred links is a mail merge rather than a hundred copies
+    // from the Guests table.
+    const [households, opens] = await Promise.all([
+      listHouseholds(wedding.id),
+      listSaveTheDateOpens(wedding.id),
+    ]);
+    const addressById = new Map(
+      households.map((row) => [row.id, { slug: row.slug, suffix: row.slug_suffix }]),
+    );
+    const byHousehold = new Map<
+      string,
+      { id: string; name: string; address: string | null; members: string[] }
+    >();
     for (const guest of guests) {
       const entry = byHousehold.get(guest.household_id) ?? {
+        id: guest.household_id,
         name: guest.household_name,
         address: guest.household_address,
         members: [],
@@ -165,13 +182,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       byHousehold.set(guest.household_id, entry);
     }
     body = csvDocument(
-      ["Household", "Address", "People", "Members"],
-      [...byHousehold.values()].map((entry) => [
-        entry.name,
-        entry.address ?? "",
-        entry.members.length,
-        entry.members.join(", "),
-      ]),
+      ["Household", "Address", "People", "Members", "Save-the-date link", "Save-the-date last opened"],
+      [...byHousehold.values()].map((entry) => {
+        const address = addressById.get(entry.id);
+        const lastOpened = opens[entry.id]?.lastViewedAt;
+        return [
+          entry.name,
+          entry.address ?? "",
+          entry.members.length,
+          entry.members.join(", "),
+          address ? absoluteUrl(saveTheDatePath(wedding.slug, address)) : "",
+          lastOpened ? formatDateTime(lastOpened, wedding.timezone) : "",
+        ];
+      }),
     );
     filename = `households-${stamp}.csv`;
   } else {

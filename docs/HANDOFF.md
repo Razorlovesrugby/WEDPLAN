@@ -3,37 +3,61 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-Last updated: session 31 — **a save-the-date is now a page, one link per
-household, and Guests shows when each household last opened it.**
+Last updated: session 31 — **the save-the-date is a designed page, one link
+per household, with its own editor; Guests shows who opened it.**
 
-**The planner asked for it to be built, in those words**, and three scope calls
-were put to them before any code was written; they took the recommended option
-each time: per-household links (a shared URL can only count, never say who),
-photos drawn from the site's existing ones (no new picker), and save-the-date
-opens counted apart from invitation opens.
+Two rounds, both built on the planner's explicit word ("build me", then "let's
+build the fuck out of this"). Round one shipped the page and the open tracking,
+and it had a real flaw: it read names/date/location from the legacy
+`site_content['hero']` row, which **nothing has written since spec 23** — so it
+was un-editable. Round two replaced that with a designer.
 
-- `/w/<wedding>/<household>/save-the-date` — names, date, location, up to five
-  of the couple's own photos (hero, then story, then their gallery; never a
-  guest's upload — `pickSaveTheDatePhotos` in `src/lib/site/save-the-date.ts`),
-  and "invitation to follow". Always set in the Editorial composition with the
-  site's palette. Resolved through the same throttled `resolveHouseholdAddress`
-  as the invitation page, so the suffix is still the credential.
-- `0031_save_the_date_views.sql` — `invitation_views.source` gains
-  `save_the_date`; `v_household_rsvp`'s `last_viewed_at`/`view_count` now
-  **exclude** those, and appended `std_last_viewed_at`/`std_view_count` carry
-  them. Without that split, "read, no reply" on `/invitations` would count
-  somebody who only saw the save-the-date. `supabase/tests/14_…` pins it.
-- Logged from the browser by `SaveTheDateViewLogger` → `logSaveTheDateView`,
-  keyed by address rather than token because a save-the-date usually predates
-  the invitation. Same 30-minute collapse; `?preview=1` never counts.
-- Guests gains a **Save the date** column: last opened (hover for the count)
-  and a *Copy link* button. `sendSaveTheDates` now emails that page instead of
-  the household's full invitation page.
+- **Designer: `/invitations/save-the-date`** (a fourth Guests sub-tab;
+  `SubTabs` now lights only the most specific match). Words (eyebrow, names,
+  date line, where, message — every blank falls back to the wedding's own),
+  photos (automatic, or pick/reorder/upload up to 6), layout (Cover, Editorial,
+  Postcard), palette ("match site" or one of the six), and toggles for the
+  household greeting, add-to-calendar and a countdown. Live preview beside it,
+  phone or desktop.
+- **Stored as `site_content['save_the_date']`** — one config row like the
+  theme, so **no migration** this round. `resolveSaveTheDate` never throws and
+  falls back field by field. `photo_ids: null` means automatic;
+  `[]` means "no photos" on purpose — keep them apart.
+- **One renderer.** `components/save-the-date/card.tsx` is used by the guest
+  page and the editor preview both. Sizes are container-query units (`cqw`,
+  `@container`) in `globals.css` under `.std-*`, not `vw`/`sm:` — that is what
+  makes the phone frame in the editor tell the truth. Don't "simplify" them to
+  Tailwind breakpoints.
+- **Add to calendar:** `/api/public/save-the-date/<slug>` serves an all-day
+  `.ics` (`buildAllDayIcs`, `VALUE=DATE`); Google gets a template URL. Both
+  built from the date's own parts (`parseWeddingDate`/`writeOutDate`), never
+  `new Date("YYYY-MM-DD")` in a timezone, which prints the day before west of
+  UTC.
+- **Link preview:** `save-the-date/opengraph-image.tsx`, type-only in the
+  chosen palette. No photo on purpose: the photos are WebP in a private bucket
+  and a failed Satori image is a bare URL in the chat.
+- **Every link at once:** the households CSV (`/api/export/households`, button
+  on the designer) gains "Save-the-date link" and "last opened".
+- `sendSaveTheDates` now emails the designed words and links to the page.
+- `uploadSitePhoto()` was lifted out of the site builder's `PhotoPicker` so both
+  editors share one upload path.
 
-637 tests, 444 SQL assertions, typecheck, both migration checks, bootstrap and
-build (placeholder env) clean. **Not opened in a browser**, and `0031` is not
-applied to the live project — until it is, the Guests page will fail to load,
-because it selects the new view columns.
+**Opens** (round one, unchanged): `0031_save_the_date_views.sql` —
+`invitation_views.source` gains `save_the_date`; `v_household_rsvp` keeps those
+**out** of `last_viewed_at`/`view_count` and appends `std_last_viewed_at` /
+`std_view_count`, so "read, no reply" never counts someone who only saw the
+save-the-date. Logged from the browser, keyed by household address (a
+save-the-date usually predates the token), 30-minute collapse, `?preview=1`
+never counts. Guests has a "Save the date" column: last opened + Copy link.
+
+648 tests, 444 SQL assertions, typecheck, migration checks, bootstrap and
+build (placeholder env) clean. **Seen in a browser, partly:** the card in all
+three layouts at phone and desktop widths, and the designer with its preview,
+were rendered in local Chromium from a throwaway page fed sample data
+(placeholder images — the sandbox cannot reach any photo host). **Never run
+against Supabase**: saving, uploading, signed photo URLs, the .ics download and
+the OG image are typechecked and built, not exercised. `0031` is not applied
+to the live project, and Guests will not load until it is.
 
 Previously in session 30 — **the Editorial theme is built out, `/site` is a
 rail beside a live preview, and there is a gift list.**

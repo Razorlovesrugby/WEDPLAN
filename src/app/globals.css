@@ -389,3 +389,199 @@
     display: block;
   }
 }
+
+/* ---- the save-the-date ---------------------------------------------------
+   One card, three layouts (`data-std-layout`). Sized with container query
+   units rather than `vw` or Tailwind's `sm:`, because the same component
+   renders full-screen for a guest and inside a 390px phone frame in the
+   planner's editor — and a preview that sizes itself from the editor's
+   window is a preview that lies about the phone.
+-------------------------------------------------------------------------- */
+.std {
+  container-type: inline-size;
+}
+
+.std-pad {
+  padding-inline: 22px;
+}
+@container (min-width: 720px) {
+  .std-pad {
+    padding-inline: 64px;
+  }
+}
+
+.std-measure {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1120px;
+}
+
+.std-eyebrow {
+  font-family: var(--font-label, var(--font-body));
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.std-names {
+  /* 16cqw is ~62px on a phone: large enough to be the whole point of the
+     page, small enough that "Christopher" still fits on one line. */
+  font-size: clamp(48px, 16cqw, 176px);
+  font-weight: 300;
+  line-height: 0.88;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.std-amp {
+  display: block;
+  font-size: 0.48em;
+  font-style: italic;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.std-date {
+  font-size: clamp(26px, 5.4cqw, 60px);
+  font-weight: 300;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+
+.std-message {
+  font-size: clamp(18px, 2.1cqw, 22px);
+  font-style: italic;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.std-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  border: 1px solid rgb(var(--site-ink) / 0.25);
+  border-radius: 999px;
+  padding: 0.7em 1.25em;
+  font-family: var(--font-label, var(--font-body));
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+.std-button:hover {
+  background: rgb(var(--site-ink));
+  border-color: rgb(var(--site-ink));
+  color: rgb(var(--site-paper));
+}
+
+.std-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@container (min-width: 720px) {
+  .std-grid {
+    grid-template-columns: repeat(var(--std-cols, 4), minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
+/* Cover: the lead photograph fills the first screen, the names sit on it. */
+.std-cover {
+  position: relative;
+  display: flex;
+  min-height: 560px;
+  aspect-ratio: 3 / 4.4;
+}
+@container (min-width: 720px) {
+  .std-cover {
+    aspect-ratio: 16 / 10;
+    min-height: 620px;
+  }
+}
+.std-cover[data-has-photo="false"] {
+  aspect-ratio: auto;
+  min-height: 0;
+}
+/* Fixed, not a token: it has to hold over a photograph, and a pale
+   palette's ink would not. Heavier at the foot, where the names sit. */
+.std-scrim {
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 22, 19, 0.38) 0%,
+    rgba(18, 22, 19, 0.18) 38%,
+    rgba(18, 22, 19, 0.72) 100%
+  );
+}
+
+/* Postcard: centred and framed. */
+.std-frame {
+  border: 1px solid rgb(var(--site-line));
+  padding: 14px;
+}
+@container (min-width: 720px) {
+  .std-frame {
+    padding: 22px;
+  }
+}
+[data-std-layout="postcard"] .std-names {
+  font-size: clamp(48px, 14cqw, 120px);
+  text-align: center;
+}
+
+.std-rule {
+  height: 1px;
+  width: 56px;
+  background: rgb(var(--site-accent));
+}
+
+/* A slow rise on arrival. Once, on the guest's page only, and never for
+   somebody who has asked the system for less motion. */
+@keyframes std-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.std[data-animate="true"] .std-rise {
+  animation: std-rise 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--std-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .std[data-animate="true"] .std-rise {
+    animation: none;
+  }
+}
+
+/* The lead photograph: portrait on a phone, landscape once there is room. */
+.std-lead-wide,
+.std-lead-card {
+  aspect-ratio: 4 / 5;
+}
+@container (min-width: 720px) {
+  .std-lead-wide {
+    aspect-ratio: 16 / 9;
+  }
+  .std-lead-card {
+    aspect-ratio: 3 / 2;
+  }
+}
+
+.std-grid-lead {
+  grid-column: span 2;
+  aspect-ratio: 3 / 2;
+}
+@container (min-width: 720px) {
+  .std-grid-lead {
+    grid-column: auto;
+    aspect-ratio: 3 / 4;
+  }
+}

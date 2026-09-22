@@ -95,3 +95,43 @@ export function buildIcs(event: IcsEvent, now: Date = new Date()): string {
   // CRLF, not LF: required by the spec, and several clients reject LF-only.
   return lines.map(foldLine).join("\r\n") + "\r\n";
 }
+
+/**
+ * An all-day event — the save-the-date's "keep the day free".
+ *
+ * `VALUE=DATE` rather than a timed event: nobody knows the ceremony time yet,
+ * and a 00:00–01:00 block reads as a real appointment at midnight. The end is
+ * exclusive (RFC 5545 §3.6.1), so a one-day event ends on the next day.
+ */
+export function buildAllDayIcs(
+  event: {
+    id: string;
+    name: string;
+    start: string;
+    end: string;
+    location: string | null;
+    description: string | null;
+  },
+  now: Date = new Date(),
+): string {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Wedding//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${event.id}@wedding`,
+    `DTSTAMP:${icsStamp(now)}`,
+    `DTSTART;VALUE=DATE:${event.start}`,
+    `DTEND;VALUE=DATE:${event.end}`,
+    `SUMMARY:${icsText(event.name)}`,
+    "TRANSP:OPAQUE",
+    event.location ? `LOCATION:${icsText(event.location)}` : null,
+    event.description ? `DESCRIPTION:${icsText(event.description)}` : null,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].filter((line): line is string => line !== null);
+
+  return lines.map(foldLine).join("\r\n") + "\r\n";
+}

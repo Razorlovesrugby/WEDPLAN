@@ -2,12 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toWebp } from "@/lib/site/encode-image";
-import { MAX_UPLOAD_BYTES } from "@/lib/site/assets";
-import {
-  confirmSitePhotoUpload,
-  requestSitePhotoUpload,
-} from "@/server/actions/site-photos";
+import { uploadSitePhoto } from "./upload-photo";
 
 export type PhotoOption = { id: string; url: string; alt: string | null };
 
@@ -46,51 +41,14 @@ export function PhotoPicker({
     setBusy(true);
     setError(null);
 
-    if (file.size > MAX_UPLOAD_BYTES * 3) {
-      // Checked before decoding: a 200MB video would otherwise be read into
-      // memory before anything rejected it.
-      setError("That's far too big to be a photo.");
+    const result = await uploadSitePhoto(file, kind);
+    if (!result.ok) {
+      setError(result.error);
       setBusy(false);
       return;
     }
 
-    const encoded = await toWebp(file);
-    if (!encoded) {
-      setError("Couldn't read that one — is it definitely a photo?");
-      setBusy(false);
-      return;
-    }
-
-    const slot = await requestSitePhotoUpload({
-      kind,
-      content_type: "image/webp",
-      byte_size: encoded.blob.size,
-    });
-    if (!slot.ok) {
-      setError(slot.error);
-      setBusy(false);
-      return;
-    }
-
-    const put = await fetch(slot.data.uploadUrl, {
-      method: "PUT",
-      body: encoded.blob,
-      headers: { "content-type": "image/webp" },
-    }).catch(() => null);
-
-    if (!put?.ok) {
-      setError("That upload didn't finish. Try again?");
-      setBusy(false);
-      return;
-    }
-
-    await confirmSitePhotoUpload({
-      asset_id: slot.data.assetId,
-      width: encoded.width,
-      height: encoded.height,
-    });
-
-    onChange(slot.data.assetId);
+    onChange(result.assetId);
     setBusy(false);
     if (inputRef.current) inputRef.current.value = "";
     startTransition(() => router.refresh());
