@@ -12,6 +12,7 @@ import {
 import { whatsappMessage } from "@/lib/email/templates-client";
 import { formatRelative } from "@/lib/format";
 import type { InvitationListItem } from "@/server/queries/invitations";
+import { SaveTheDateActions, type SaveTheDateWords } from "./save-the-date-actions";
 import type { EventRow } from "@/lib/types/database";
 
 export function InvitationsTable({
@@ -19,15 +20,18 @@ export function InvitationsTable({
   events,
   weddingName,
   dateLabel,
+  saveTheDate,
 }: {
   rows: InvitationListItem[];
   events: EventRow[];
   weddingName: string;
   dateLabel: string;
+  saveTheDate: SaveTheDateWords;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [chosenEvents, setChosenEvents] = useState<Set<string>>(new Set(events.map((e) => e.id)));
   const [links, setLinks] = useState<Record<string, string>>({});
+  const [saveTheDateLinks, setSaveTheDateLinks] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -106,16 +110,21 @@ export function InvitationsTable({
       </section>
 
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[54rem] text-sm">
+        <table className="w-full min-w-[68rem] text-sm">
           <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
             <tr>
               <th scope="col" className="w-10 px-3 py-2" />
               <th scope="col" className="px-3 py-2">Household</th>
               <th scope="col" className="px-3 py-2">Seats</th>
-              <th scope="col" className="px-3 py-2">Sent</th>
-              <th scope="col" className="px-3 py-2">Opened</th>
+              {/* Two links per household, in two columns that never share a
+                  button: the save-the-date first, because it goes out first. */}
+              <th scope="col" className="border-l border-line bg-paper px-3 py-2">
+                Save the date
+              </th>
+              <th scope="col" className="border-l border-line px-3 py-2">Invite sent</th>
+              <th scope="col" className="px-3 py-2">Invite opened</th>
               <th scope="col" className="px-3 py-2">Answers</th>
-              <th scope="col" className="px-3 py-2">Actions</th>
+              <th scope="col" className="px-3 py-2">Invitation</th>
             </tr>
           </thead>
           <tbody>
@@ -142,7 +151,21 @@ export function InvitationsTable({
                     ) : null}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-muted">{row.household.seat_count}</td>
-                  <td className="px-3 py-2 text-muted">
+                  <td className="border-l border-line bg-paper px-3 py-2 align-top">
+                    <SaveTheDateActions
+                      householdName={row.household.display_name}
+                      address={{ slug: row.household.slug, suffix: row.household.slug_suffix }}
+                      words={saveTheDate}
+                      lastViewedAt={row.summary?.std_last_viewed_at ?? null}
+                      viewCount={row.summary?.std_view_count ?? 0}
+                      link={saveTheDateLinks[id] ?? null}
+                      onCopy={(text, note, link) => {
+                        setSaveTheDateLinks((prev) => ({ ...prev, [id]: link }));
+                        void copy(text, note);
+                      }}
+                    />
+                  </td>
+                  <td className="border-l border-line px-3 py-2 text-muted">
                     {row.summary?.sent_at ? formatRelative(row.summary.sent_at) : "—"}
                   </td>
                   <td className="px-3 py-2 text-muted">
@@ -214,7 +237,7 @@ export function InvitationsTable({
                                 return;
                               }
                               setLinks((prev) => ({ ...prev, [id]: result.data.url }));
-                              await copy(result.data.url, "Link copied");
+                              await copy(result.data.url, "Invitation link copied");
                             })
                           }
                         >
@@ -251,7 +274,7 @@ export function InvitationsTable({
                                   dateLabel,
                                   url: result.data.url,
                                 }),
-                                "WhatsApp message copied — paste it straight in",
+                                "Invitation message copied — paste it into WhatsApp",
                               );
                             })
                           }

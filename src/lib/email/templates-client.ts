@@ -22,3 +22,30 @@ export function whatsappMessage(options: {
     `No account needed, just tap the link.`,
   ].join("\n");
 }
+
+/**
+ * The save-the-date's WhatsApp text — deliberately *not* the invitation's.
+ *
+ * Different opening line, no mention of an RSVP, and a closing line that says
+ * the invitation is still to come, so neither the guest nor the planner can
+ * mistake one message for the other in a chat history. The link it carries
+ * ends in `/save-the-date`; the invitation's never does.
+ */
+export function saveTheDateWhatsappMessage(options: {
+  householdName: string;
+  dateLabel: string | null;
+  location: string | null;
+  url: string;
+}): string {
+  const when = options.dateLabel ? ` on ${options.dateLabel}` : "";
+  const where = options.location ? ` in ${options.location}` : "";
+  return [
+    `${options.householdName} — save the date!`,
+    "",
+    `We're getting married${when}${where}, and we'd love you to be there.`,
+    "",
+    options.url,
+    "",
+    "Nothing to do yet — the invitation follows nearer the time.",
+  ].join("\n");
+}
