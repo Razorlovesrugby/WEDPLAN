@@ -103,3 +103,46 @@ export function siteFontClasses(preset: string): string {
   const base = `${script.variable} ${body.variable}`;
   return preset === "editorial" ? `${base} ${display.variable} ${label.variable}` : base;
 }
+
+/**
+ * The CSS variables a typography pairing needs, for the site root's inline
+ * `style`.
+ *
+ * `siteFontClasses` loads the faces; this decides which role each one plays.
+ * The two are separate because a pairing never adds a face — both pairings
+ * draw from the same three already loaded for Editorial, so switching costs
+ * no extra bytes and cannot make a page render in a face it did not download.
+ *
+ * Inline rather than a class, because these override the `--font-display` and
+ * `--font-body` that `next/font/local` sets through those same classes on the
+ * same element. A second class would be a specificity tie decided by whatever
+ * order Next happened to emit the stylesheets in.
+ *
+ * Script returns nothing: its two faces *are* the theme, and setting
+ * `--font-display` there would replace Pinyon on every heading. That is the
+ * same trap `siteFontClasses` documents from the other side.
+ */
+export function typographyCssVars(
+  preset: string,
+  pairing: string,
+): Record<string, string> {
+  if (preset !== "editorial") return {};
+
+  if (pairing === "garamond_inter") {
+    return {
+      "--font-display": body.style.fontFamily,
+      "--font-body": label.style.fontFamily,
+      "--font-label": label.style.fontFamily,
+    };
+  }
+
+  // fraunces_garamond — the default, and what the variables already resolve
+  // to. Stated rather than left implicit so a page that switches back to it
+  // actually switches back: the previous pairing's inline values would
+  // otherwise still be sitting on the element.
+  return {
+    "--font-display": display.style.fontFamily,
+    "--font-body": body.style.fontFamily,
+    "--font-label": label.style.fontFamily,
+  };
+}

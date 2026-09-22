@@ -51,6 +51,45 @@ export function PhotoBand({
   );
 }
 
+/**
+ * A page break: a full-bleed photograph with nothing on it.
+ *
+ * Not a `PhotoBand` with the caption removed. A band is a figure inside the
+ * page's measure; this is punctuation that runs edge to edge and sets its own
+ * height, so the page has a beat between two chapters. It carries no heading
+ * and no eyebrow, which is what keeps `sectionNumbers` from counting it — the
+ * page still reads 01…N.
+ *
+ * Two heights, driven by the one style control it offers, because the design
+ * uses a tall band early in the page and a shorter one later: a second band
+ * the same size as the first reads as a repeat rather than a rhythm.
+ */
+const BAND_HEIGHT: Record<NonNullable<BlockStyle["shape"]>, string> = {
+  natural: "h-[clamp(280px,42vw,520px)]",
+  wide: "h-[clamp(240px,34vw,420px)]",
+  // Square and portrait are the gallery's shapes and mean nothing full-bleed;
+  // they fall back to the tall band rather than to a 1:1 crop of the viewport.
+  square: "h-[clamp(280px,42vw,520px)]",
+  portrait: "h-[clamp(280px,42vw,520px)]",
+};
+
+export function PageBreak({
+  url,
+  alt,
+  shape = "natural",
+}: {
+  url: string;
+  alt: string | null;
+  shape?: BlockStyle["shape"];
+}) {
+  return (
+    <div className={`site-reveal relative w-full overflow-hidden ${BAND_HEIGHT[shape ?? "natural"]}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- see PhotoBand */}
+      <img src={url} alt={alt ?? ""} className="h-full w-full object-cover" loading="lazy" />
+    </div>
+  );
+}
+
 export function PhotoText({
   url,
   alt,

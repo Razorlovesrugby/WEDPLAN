@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monogramFromName } from "./names";
+import { monogramFromName, splitHeadline } from "./names";
 
 describe("monogramFromName", () => {
   it("splits on the usual joiners", () => {
@@ -34,5 +34,33 @@ describe("monogramFromName", () => {
 
   it("ignores anything past the second name", () => {
     expect(monogramFromName("Alex & Sam & Jo")).toEqual({ left: "A", right: "S" });
+  });
+});
+
+describe("splitHeadline", () => {
+  it("splits around the joiner and keeps the one they wrote", () => {
+    expect(splitHeadline("Ray & Olivia")).toEqual({ left: "Ray", joiner: "&", right: "Olivia" });
+    expect(splitHeadline("Chidi and Ada")).toEqual({ left: "Chidi", joiner: "and", right: "Ada" });
+    expect(splitHeadline("Sam + Alex")).toEqual({ left: "Sam", joiner: "+", right: "Alex" });
+  });
+
+  it("keeps multi-word names on their own side", () => {
+    expect(splitHeadline("Mary Jane & Peter Parker")).toEqual({
+      left: "Mary Jane",
+      joiner: "&",
+      right: "Peter Parker",
+    });
+  });
+
+  it("returns null rather than inventing a break", () => {
+    // The hero sets these as one run. A split here would put "Wedding" on a
+    // line of its own at 150px.
+    expect(splitHeadline("The Okonkwo Wedding")).toBeNull();
+    expect(splitHeadline("")).toBeNull();
+    expect(splitHeadline(null)).toBeNull();
+  });
+
+  it("does not split a name that merely contains a joiner's letters", () => {
+    expect(splitHeadline("Alexander Andrews")).toBeNull();
   });
 });

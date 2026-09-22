@@ -1,8 +1,9 @@
 import { Label } from "./section";
-import { DressCodeTag, ShuttleLines } from "./event-inline";
+import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
 import { FindInvitation } from "./find-invitation";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
+import type { ThemePresetId } from "@/lib/theme/presets";
 import { faqItems, groupByTag, rows, splitFaq, text } from "@/lib/site/sections";
 import { formatDate, formatTime } from "@/lib/format";
 
@@ -10,7 +11,7 @@ import { formatDate, formatTime } from "@/lib/format";
 export function Prose({ body }: { body: string }) {
   const paragraphs = body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
   return (
-    <div className="space-y-4 text-[1.0625rem] leading-relaxed text-ink">
+    <div className="site-body space-y-4 text-[1.0625rem] leading-relaxed text-ink">
       {paragraphs.map((paragraph, index) => (
         <p key={index} className="whitespace-pre-line">
           {paragraph}
@@ -55,6 +56,7 @@ export function Schedule({
   invitedEventIds,
   dressCodes = [],
   coachByEvent,
+  preset = "script",
 }: {
   events: PublicEvent[];
   payload: unknown;
@@ -64,7 +66,11 @@ export function Schedule({
   /** Spec 25 §6 — the tag goes on the event, not in a section of its own. */
   dressCodes?: DressCode[];
   coachByEvent?: Map<string, CoachRun[]>;
+  /** Editorial lays a row out as three columns; Script stacks them. */
+  preset?: ThemePresetId;
 }) {
+  const editorial = preset === "editorial";
+
   const days = new Map<string, PublicEvent[]>();
   for (const event of events) {
     const day = event.starts_at ? formatDate(event.starts_at, timeZone) : "To be confirmed";
@@ -77,10 +83,10 @@ export function Schedule({
     <div className="space-y-10">
       {[...days.entries()].map(([day, dayEvents]) => (
         <div key={day}>
-          <h3 className="text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
+          <h3 className="site-h3 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
             {day}
           </h3>
-          <ul className="mt-5 space-y-6">
+          <ul className={editorial ? "mt-5" : "mt-5 space-y-6"}>
             {dayEvents.map((event) => {
               const extras = eventExtras(payload, event.id);
               // Events the household is not invited to stay listed and are
@@ -88,23 +94,32 @@ export function Schedule({
               // conversation: somebody mentions the dinner and a guest who was
               // not invited discovers it was concealed.
               const notInvited = invitedEventIds !== null && !invitedEventIds.has(event.id);
-              return (
-                <li key={event.id} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <p className="text-xl text-ink">{event.name}</p>
-                    {event.starts_at && !extras.hideTime ? (
-                      <Label>{formatTime(event.starts_at, timeZone)}</Label>
-                    ) : null}
-                  </div>
-                  {event.venue ? <p className="mt-1 text-[1.0625rem] text-ink">{event.venue}</p> : null}
-                  {event.address ? <p className="text-[0.95rem] text-muted">{event.address}</p> : null}
+              const time =
+                event.starts_at && !extras.hideTime ? (
+                  <Label>{formatTime(event.starts_at, timeZone)}</Label>
+                ) : null;
+              const dressCode = (
+                <DressCodeTag event={event} codes={dressCodes} fallback={extras.dressCode} />
+              );
+              const body = (
+                <>
+                  {event.venue ? (
+                    <p className="site-event-detail mt-1 text-[1.0625rem] text-ink">{event.venue}</p>
+                  ) : null}
+                  {event.address ? (
+                    <p className="site-event-detail text-[0.95rem] text-muted">{event.address}</p>
+                  ) : null}
                   {/* The shuttle that gets them here, then what to wear when
                       they arrive — both answered where the question is asked
                       rather than two sections away (spec 25 §6). */}
                   <ShuttleLines runs={coachByEvent?.get(event.id) ?? []} timeZone={timeZone} />
-                  <DressCodeTag event={event} codes={dressCodes} fallback={extras.dressCode} />
+                  {/* Editorial moves the code to the row's third column; Script
+                      keeps it under the shuttle. Same component either way. */}
+                  {editorial ? null : dressCode}
                   {extras.detail ? (
-                    <p className="mt-2 whitespace-pre-line text-[0.95rem] text-muted">{extras.detail}</p>
+                    <p className="site-event-detail mt-2 whitespace-pre-line text-[0.95rem] text-muted">
+                      {extras.detail}
+                    </p>
                   ) : null}
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                     {extras.mapUrl ? (
@@ -131,6 +146,24 @@ export function Schedule({
                       Invitation only — this one isn&rsquo;t on your invitation.
                     </p>
                   ) : null}
+                </>
+              );
+
+              if (editorial) {
+                return (
+                  <EditorialEventRow key={event.id} time={time} name={event.name} aside={dressCode}>
+                    {body}
+                  </EditorialEventRow>
+                );
+              }
+
+              return (
+                <li key={event.id} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="text-xl text-ink">{event.name}</p>
+                    {time}
+                  </div>
+                  {body}
                 </li>
               );
             })}
@@ -148,7 +181,7 @@ function FaqRow({ q, a, open }: { q: string; a: string; open: boolean }) {
       <summary className="cursor-pointer list-none text-[1.0625rem] text-ink marker:content-none">
         <span className="flex items-start justify-between gap-4">
           <span>{q}</span>
-          <span className="mt-1 shrink-0 text-muted transition-transform group-open:rotate-45" aria-hidden="true">
+          <span className="mt-1 shrink-0 text-muted transition-transform duration-[220ms] group-open:rotate-45" aria-hidden="true">
             +
           </span>
         </span>

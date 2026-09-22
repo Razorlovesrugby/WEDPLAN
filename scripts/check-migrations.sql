@@ -20,6 +20,12 @@
 -- "What success looks like" queries in the migrations README) if a row
 -- shows MISSING but the app is working fine.
 --
+-- This list had gone stale at 0015 while the directory held files through
+-- 0029 -- the exact failure its own instruction above describes, and the
+-- fourth status document in this repo to do it (see docs/HANDOFF.md, session
+-- 29). Current through 0030. If you are reading this and the directory holds
+-- a higher number, it has gone stale again.
+--
 -- Also note 0011 is split across two files that share the same numeric
 -- prefix (0011_budget_manual_quantity.sql and
 -- 0011_budget_manual_quantity_columns.sql, split apart to dodge a Postgres
@@ -45,7 +51,22 @@ with expected(version, files) as (
     ('0012', 'budget_tier_position.sql'),
     ('0013', 'moodboards.sql'),
     ('0014', 'moodboard_clipper.sql'),
-    ('0015', 'wedding_slug.sql')
+    ('0015', 'wedding_slug.sql'),
+    ('0016', 'list_content_and_calculated_dates.sql + save_the_date.sql'),
+    ('0017', 'budget_section_links.sql + public_site.sql'),
+    ('0018', 'section_notes.sql'),
+    ('0019', 'budget_nzd_and_gst.sql'),
+    ('0020', 'budget_allocations.sql'),
+    ('0021', 'budget_zero_is_not_a_figure.sql'),
+    ('0022', 'household_slugs.sql'),
+    ('0023', 'per_event_invites.sql'),
+    ('0024', 'block_audience.sql'),
+    ('0025', 'site_blocks.sql'),
+    ('0026', 'dress_codes_and_travel.sql'),
+    ('0027', 'guest_participation.sql'),
+    ('0028', 'editorial_default.sql'),
+    ('0029', 'vendors.sql'),
+    ('0030', 'gift_funds.sql')
 ),
 applied as (
   select version from supabase_migrations.schema_migrations
@@ -67,7 +88,10 @@ with expected(version) as (
   values
     ('0001'), ('0002'), ('0003'), ('0004'), ('0005'),
     ('0006'), ('0007'), ('0008'), ('0009'), ('0010'),
-    ('0011'), ('0012'), ('0013'), ('0014'), ('0015')
+    ('0011'), ('0012'), ('0013'), ('0014'), ('0015'),
+    ('0016'), ('0017'), ('0018'), ('0019'), ('0020'),
+    ('0021'), ('0022'), ('0023'), ('0024'), ('0025'),
+    ('0026'), ('0027'), ('0028'), ('0029'), ('0030')
 )
 select version as unexpected_applied_version
 from supabase_migrations.schema_migrations

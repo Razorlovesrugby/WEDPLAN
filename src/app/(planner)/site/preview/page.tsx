@@ -1,4 +1,4 @@
-import { siteFontClasses } from "@/lib/fonts";
+import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
 import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-render";
@@ -66,7 +66,13 @@ export default async function SitePreviewPage({
 
   return (
     <div
-      style={themeCssVars(ctx.theme)}
+      style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
+      data-site-theme={ctx.theme.preset}
+      // The section rail is `position: fixed`, which inside this frame would
+      // pin it to the editor window rather than to the page it belongs to.
+      // The builder's iframe is the only place that is true, so the flag is
+      // set here rather than passed down through the renderer.
+      data-site-preview="true"
       className={`${siteFontClasses(ctx.theme.preset)} -m-4 min-h-screen bg-paper font-body text-ink antialiased sm:-m-6`}
     >
       {shown.length === 0 ? (

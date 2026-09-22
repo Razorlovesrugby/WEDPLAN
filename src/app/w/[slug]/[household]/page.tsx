@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
-import { siteFontClasses } from "@/lib/fonts";
+import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { findWeddingBySlug } from "@/server/queries/site";
 import { loadPublishedBlocks } from "@/server/queries/site-blocks";
 import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-render";
@@ -16,6 +16,7 @@ import { formatDate } from "@/lib/format";
 import { SiteNav } from "@/components/site/site-nav";
 import { Monogram } from "@/components/site/monogram";
 import { SiteBlocks } from "@/components/site/blocks/render";
+import { SectionRail } from "@/components/site/section-rail";
 import { ReplyBanner } from "@/components/site/reply-banner";
 import { ViewLogger } from "@/components/site/view-logger";
 
@@ -132,7 +133,12 @@ export default async function HouseholdSitePage({
 
   return (
     <div
-      style={themeCssVars(ctx.theme)}
+      style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
+      // The preset's own name, so `globals.css` can carry everything that
+      // separates one theme from another — type scale, alignment, the
+      // itinerary grid — without a `preset === "editorial"` branch in a dozen
+      // render functions. Adding a fourth preset stays a stylesheet.
+      data-site-theme={ctx.theme.preset}
       className={`site-print ${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       {/* Counted from the browser, and never when the planner is previewing
@@ -158,6 +164,8 @@ export default async function HouseholdSitePage({
           names={listNames(personal.members.map((member) => member.name))}
         />
       ) : null}
+
+      <SectionRail blocks={shown} />
 
       <SiteBlocks blocks={shown} ctx={ctx} />
 

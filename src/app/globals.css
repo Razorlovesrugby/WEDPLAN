@@ -149,6 +149,8 @@
   }
 
   .site-print nav[aria-label="Sections"],
+  .site-print nav[aria-label="Chapters"],
+  .site-print .site-rail,
   .site-print .no-print-site {
     display: none !important;
   }
@@ -219,5 +221,171 @@
   * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Editorial (spec 25 Part C, built out)
+   ---------------------------------------------------------------------------
+   Script and Editorial share every component. What separates them is type and
+   composition, so the difference lives here, scoped to the site root's
+   `data-site-theme`, rather than as a `preset === "editorial"` branch in a
+   dozen render functions.
+
+   The hook classes below (`.site-h1`, `.site-h2`, `.site-eyebrow`, …) carry no
+   rules of their own. Under Script they are inert and the Tailwind utilities
+   on the element win exactly as they did before this block existed; under
+   Editorial `[data-site-theme] .hook` is two selectors to a utility's one, so
+   these override without `!important`. That is the whole trick, and it is why
+   adding a third preset is a stylesheet rather than a refactor.
+
+   `--line` and `--muted` are NOT derived with color-mix here, though the
+   design notes offer it as an option. Every palette in `presets.ts` states
+   both explicitly and `theme.test.ts` asserts their contrast; deriving them
+   would move five checked values to a formula and quietly drop the gate.
+--------------------------------------------------------------------------- */
+[data-site-theme="editorial"] {
+  /* The one place the scale is written down. Every rule below reads it. */
+  --ed-h1: clamp(56px, 11vw, 150px);
+  --ed-h2: clamp(38px, 6vw, 82px);
+  --ed-h3: clamp(24px, 2.6vw, 34px);
+  --ed-event: clamp(24px, 2.4vw, 32px);
+}
+
+[data-site-theme="editorial"] .site-h1 {
+  font-size: var(--ed-h1);
+  font-weight: 300;
+  line-height: 0.88;
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+/* The ampersand is its own line at 0.42em, which is what stops two long names
+   setting as one unreadable 150px run. It is rendered as a separate element so
+   a screen reader still hears "Ray and Olivia" in one breath. */
+[data-site-theme="editorial"] .site-h1-amp {
+  display: block;
+  font-size: 0.42em;
+  font-style: italic;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+[data-site-theme="editorial"] .site-h2 {
+  font-size: var(--ed-h2);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  /* Left, not centred. Script centres its headings over left-aligned content;
+     Editorial's whole composition is a left margin the eye can return to. */
+  text-align: left;
+}
+
+[data-site-theme="editorial"] .site-h3 {
+  font-size: var(--ed-h3);
+  font-style: italic;
+  font-weight: 300;
+  line-height: 1.15;
+  text-align: left;
+}
+
+[data-site-theme="editorial"] .site-intro {
+  font-size: 21px;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: left;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+[data-site-theme="editorial"] .site-body {
+  font-size: 19px;
+  line-height: 1.62;
+  /* Avoids a one-word last line under a 19px measure. Ignored where
+     unsupported, which costs nothing. */
+  text-wrap: pretty;
+}
+
+[data-site-theme="editorial"] .site-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+}
+
+/* ---- the itinerary row ---------------------------------------------------
+   Three columns: the time, the event, and the dress code hard right. Below
+   the grid's breakpoint it stacks, because 84px of time column beside a
+   32px event name on a 390px screen is not a compromise worth shipping.
+-------------------------------------------------------------------------- */
+[data-site-theme="editorial"] li.site-event {
+  display: grid;
+  grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) minmax(0, auto);
+  gap: 8px 28px;
+  padding: 30px 0;
+  border-bottom: 1px solid rgb(var(--site-line));
+  border-top: 0;
+}
+
+@media (max-width: 640px) {
+  [data-site-theme="editorial"] li.site-event {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 22px 0;
+  }
+}
+
+[data-site-theme="editorial"] .site-event-time {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+[data-site-theme="editorial"] .site-event-name {
+  font-size: var(--ed-event);
+  font-weight: 300;
+  line-height: 1.15;
+}
+
+[data-site-theme="editorial"] .site-event-detail {
+  font-size: 18px;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+/* `↳ 6.30PM  Bourne End station — coach to the Bell`. Accent-coloured and
+   smaller than the detail above it, so it reads as an aside to the event
+   rather than another line of it. */
+[data-site-theme="editorial"] .site-shuttle,
+[data-site-theme="editorial"] .site-shuttle .site-label {
+  font-size: 11.5px;
+  color: rgb(var(--site-accent));
+}
+
+[data-site-theme="editorial"] .site-event-aside {
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  [data-site-theme="editorial"] .site-event-aside {
+    text-align: left;
+  }
+}
+
+/* ---- the section rail ----------------------------------------------------
+   Fixed to the right edge. Hidden inside the builder's preview, where
+   `position: fixed` would pin it to the editor window rather than to the
+   page it belongs to, and hidden on any screen too narrow to spare the
+   margin it sits in.
+-------------------------------------------------------------------------- */
+.site-rail {
+  position: fixed;
+  right: 22px;
+  top: 38vh;
+  z-index: 20;
+  display: none;
+}
+
+@media (min-width: 1180px) {
+  [data-site-theme="editorial"]:not([data-site-preview="true"]) .site-rail {
+    display: block;
   }
 }

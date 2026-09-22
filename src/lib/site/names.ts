@@ -46,3 +46,32 @@ export function monogramFromName(name: string | null | undefined): Monogram | nu
 
   return { left, right };
 }
+
+/**
+ * A headline split around its joiner — "Ray", "&", "Olivia".
+ *
+ * Editorial sets the names at up to 150px, where two of them on one line is
+ * either unreadable or not a line at all. The ampersand drops to its own row
+ * at 0.42em, so the split has to happen somewhere; it happens here rather than
+ * in the hero because "what counts as a joiner" is the same question
+ * `monogramFromName` already answers, and two regexes for one rule is how one
+ * of them quietly stops matching "og".
+ *
+ * Null when the name will not split — "The Okonkwo Wedding" has no two halves,
+ * and the hero sets it as one run rather than inventing a break.
+ */
+export type Headline = { left: string; joiner: string; right: string };
+
+export function splitHeadline(name: string | null | undefined): Headline | null {
+  if (!name) return null;
+
+  // The same joiners as the monogram, captured rather than discarded: the
+  // couple wrote "and" or "+" on purpose and the hero should say it back.
+  const match = /^(.+?)\s+(&|\+|and|og|et|y|e)\s+(.+)$/i.exec(name.trim());
+  if (!match) return null;
+
+  const [, left, joiner, right] = match;
+  if (!left?.trim() || !right?.trim()) return null;
+
+  return { left: left.trim(), joiner: joiner!, right: right.trim() };
+}

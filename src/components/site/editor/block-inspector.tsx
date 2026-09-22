@@ -43,9 +43,22 @@ const AUDIENCE_LABEL: Record<(typeof BLOCK_AUDIENCES)[number], string> = {
 
 const STYLE_OPTIONS: Record<string, readonly string[]> = {
   width: BLOCK_WIDTHS,
-  background: BLOCK_BACKGROUNDS,
   align: BLOCK_ALIGNS,
   shape: IMAGE_SHAPES,
+};
+
+/**
+ * The four grounds a block can take.
+ *
+ * Buttons rather than a `<select>`, unlike the other style controls: this is
+ * the one choice that changes what the block looks like from across the room,
+ * and it is the one somebody tries all four of.
+ */
+const BACKGROUND_LABEL: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
+  paper: "Plain",
+  tinted: "Tinted",
+  ink: "Ink",
+  photograph: "Photograph",
 };
 
 export function BlockInspector({
@@ -97,7 +110,9 @@ export function BlockInspector({
   }
 
   return (
-    <section className="card space-y-4 p-4">
+    // No card of its own: this lives inside one of the builder rail's
+    // sections, which already draws the box.
+    <div className="space-y-4">
       <div>
         <h2 className="font-medium">{def.label}</h2>
         <p className="mt-0.5 text-sm text-muted">{form.blurb}</p>
@@ -213,9 +228,54 @@ export function BlockInspector({
       {def.styles.length > 0 ? (
         <div className="space-y-2 border-t border-line pt-3">
           <h3 className="text-xs uppercase tracking-wide text-muted">How it looks</h3>
+          {def.styles.includes("background") ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {BLOCK_BACKGROUNDS.map((option) => {
+                  const current = block.style.background ?? "paper";
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={pending}
+                      aria-pressed={current === option}
+                      onClick={() => style({ background: option })}
+                      className={`rounded border px-2.5 py-1 text-xs ${
+                        current === option
+                          ? "border-accent bg-[#f6f3ee] font-medium"
+                          : "border-line hover:border-ink"
+                      }`}
+                    >
+                      {BACKGROUND_LABEL[option]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {block.style.background === "photograph" ? (
+                <div className="space-y-2">
+                  <PhotoPicker
+                    value={block.style.bgImage ?? null}
+                    photos={photos}
+                    kind="gallery"
+                    onChange={(assetId) => style({ bgImage: assetId ?? undefined })}
+                  />
+                  {/* Said at the moment of choosing, because the planner is
+                      looking at a photograph they already like and the scrim
+                      is about to darken it. */}
+                  <p className="text-xs text-muted">
+                    The photograph is dimmed behind the words and the text turns pale. That
+                    isn&rsquo;t a taste call — it is what keeps the block readable over a picture
+                    nobody has checked the contrast of.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-3">
             {def.styles
-              .filter((key) => key !== "embed")
+              .filter((key) => key !== "embed" && key !== "background" && key !== "bgImage")
               .map((key) => (
                 <label key={key} className="text-sm">
                   <span className="mr-1 capitalize text-muted">{key}</span>
@@ -286,6 +346,6 @@ export function BlockInspector({
         </button>
         {message ? <span className="text-sm text-muted">{message}</span> : null}
       </div>
-    </section>
+    </div>
   );
 }

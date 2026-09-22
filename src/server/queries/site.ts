@@ -1,5 +1,8 @@
 import "server-only";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
 
 /**
  * Finding the wedding a public URL points at (spec 14 §3).
@@ -51,3 +54,26 @@ export async function firstWeddingSlug(): Promise<string | null> {
     .maybeSingle();
   return data?.slug ?? null;
 }
+
+/**
+ * The planner's own view of the theme.
+ *
+ * The public page reads its theme inside `buildRenderContext`, through the
+ * service role, because a guest has no session. The builder needs the same
+ * row through the planner's client so RLS scopes it — same payload, same
+ * `resolveTheme`, two callers with two different credentials.
+ *
+ * Cached per request: `/site` reads it for the rail and the preview frame
+ * resolves it again on its own request.
+ */
+export const getSiteTheme = cache(async (weddingId: string): Promise<SiteTheme> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("site_content")
+    .select("payload")
+    .eq("wedding_id", weddingId)
+    .eq("block_key", "theme")
+    .maybeSingle();
+
+  return resolveTheme(data?.payload ?? null);
+});

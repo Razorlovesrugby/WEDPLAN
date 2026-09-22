@@ -27,7 +27,7 @@ export const BLOCK_FAMILIES = ["essentials", "photos", "the day", "music", "trav
 export type BlockFamily = (typeof BLOCK_FAMILIES)[number];
 
 export const BLOCK_WIDTHS = ["contained", "wide", "full"] as const;
-export const BLOCK_BACKGROUNDS = ["paper", "tinted", "ink"] as const;
+export const BLOCK_BACKGROUNDS = ["paper", "tinted", "ink", "photograph"] as const;
 export const BLOCK_ALIGNS = ["left", "centre"] as const;
 export const IMAGE_SHAPES = ["natural", "square", "portrait", "wide"] as const;
 
@@ -36,6 +36,15 @@ export type BlockStyle = {
   background?: (typeof BLOCK_BACKGROUNDS)[number];
   align?: (typeof BLOCK_ALIGNS)[number];
   shape?: (typeof IMAGE_SHAPES)[number];
+  /**
+   * The asset behind a `photograph` background — a `site_assets` id, never a
+   * URL or a storage path. Ignored under every other background, so switching
+   * to Plain and back does not lose the choice.
+   *
+   * A photograph background with no asset falls back to Plain rather than
+   * rendering a scrim over nothing, which would be an unexplained dark band.
+   */
+  bgImage?: string;
   /**
    * Load this block's third-party embed (spec 23 Q1). Off by default, always:
    * an embed discloses every viewer to that company, and on a personalised
@@ -99,10 +108,12 @@ export const BLOCK_TYPES = [
   "gallery",
   "photo_band",
   "photo_text",
+  "page_break",
   "map",
   "travel",
   "stays",
   "coach",
+  "gift_funds",
   "song_requests",
   "playlist",
   "guestbook",
@@ -227,6 +238,22 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     styles: ["width", "shape"],
     heading: "Photos",
   },
+  /**
+   * A full-bleed photograph with nothing on it, between two chapters.
+   *
+   * Deliberately separate from `photo_band`, which is a figure inside the
+   * page's measure and can carry a caption. This one is punctuation: no
+   * heading, no eyebrow — so `sectionNumbers` never numbers it and the page
+   * still reads 01…N — no caption, and nothing in its payload but an asset
+   * id. Repeatable, because a long page wants more than one.
+   */
+  page_break: {
+    type: "page_break",
+    label: "Page break",
+    family: "photos",
+    blurb: "A full-width photograph with nothing on it, to separate two sections.",
+    styles: ["shape"],
+  },
   photo_band: {
     type: "photo_band",
     label: "Photo band",
@@ -279,6 +306,16 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     styles: ["width", "background"],
     personal: true,
     heading: "The coach",
+  },
+  gift_funds: {
+    type: "gift_funds",
+    label: "A gift",
+    family: "the day",
+    blurb: "What you're saving towards, and where to send something if they'd like to.",
+    eyebrow: "A gift",
+    max: 1,
+    styles: ["width", "background"],
+    heading: "A gift, if you are moved.",
   },
   song_requests: {
     type: "song_requests",
@@ -520,6 +557,7 @@ const NOT_IN_NAV = new Set<BlockType>([
   "footer",
   "photo_band",
   "photo_text",
+  "page_break",
   "prose",
   "playlist",
 ]);

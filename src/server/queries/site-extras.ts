@@ -3,11 +3,13 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveDressCodes, type ResolvedDressCode } from "@/lib/site/dress-codes";
+import { toPublicFund, type PublicFund } from "@/lib/site/gift-funds";
 import type { ArrivalPoint } from "@/lib/site/travel";
 import type {
   ArrivalPointRow,
   DressCodeNoteRow,
   DressCodeRow,
+  GiftFundRow,
   GuestNoteRow,
   SongRequestRow,
 } from "@/lib/types/database";
@@ -48,6 +50,7 @@ export type SiteExtras = {
   arrivals: ArrivalPoint[];
   songs: PublicSong[];
   notes: PublicNote[];
+  giftFunds: PublicFund[];
 };
 
 type EventLike = { id: string; name: string; dress_code_id?: string | null };
@@ -85,7 +88,7 @@ export async function getPublicSiteExtras(
 ): Promise<SiteExtras> {
   const supabase = createAdminClient();
 
-  const [dressCodes, arrivals, songRows, voteRows, noteRows] = await Promise.all([
+  const [dressCodes, arrivals, songRows, voteRows, noteRows, fundRows] = await Promise.all([
     readDressCodes(supabase, weddingId, events),
     supabase.from("arrival_points").select("*").eq("wedding_id", weddingId).order("sort_order"),
     supabase
@@ -105,6 +108,14 @@ export async function getPublicSiteExtras(
       .eq("status", "approved")
       .order("created_at", { ascending: false })
       .limit(100),
+    // No status ladder: a fund exists or it does not. Nothing a guest writes
+    // reaches this table, so there is nothing here to moderate.
+    supabase
+      .from("gift_funds")
+      .select("*")
+      .eq("wedding_id", weddingId)
+      .order("sort_order")
+      .order("created_at"),
   ]);
 
   const votes = (voteRows.data ?? []) as { song_request_id: string; household_id: string }[];
@@ -142,6 +153,7 @@ export async function getPublicSiteExtras(
     arrivals: (arrivals.data ?? []) as ArrivalPointRow[],
     songs,
     notes,
+    giftFunds: ((fundRows.data ?? []) as GiftFundRow[]).map(toPublicFund),
   };
 }
 
@@ -192,4 +204,16 @@ export const getGuestNotes = cache(async (weddingId: string): Promise<PlannerNot
   return ((data ?? []) as (GuestNoteRow & { households: { display_name: string } | null })[]).map(
     (row) => ({ ...row, householdName: row.households?.display_name ?? null }),
   );
+});
+
+/** The funds, for the planner's own screen. Every one, in their own order. */
+export const getGiftFunds = cache(async (weddingId: string): Promise<GiftFundRow[]> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("gift_funds")
+    .select("*")
+    .eq("wedding_id", weddingId)
+    .order("sort_order")
+    .order("created_at");
+  return (data ?? []) as GiftFundRow[];
 });
