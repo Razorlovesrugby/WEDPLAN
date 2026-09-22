@@ -298,6 +298,15 @@ export function allDayRange(weddingDate: string | null): { start: string; end: s
   return { start: compactDate(parts), end: compactDate(nextDay(parts)) };
 }
 
+/**
+ * What the entry is called in somebody's calendar. "Ray & Olivia" alone, seen
+ * a year from now in a month view, could be dinner; the word "wedding" makes
+ * it unmistakable. Left alone when the couple already wrote it themselves.
+ */
+export function calendarEventTitle(headline: string): string {
+  return /wedding/i.test(headline) ? headline : `${headline}'s wedding`;
+}
+
 export function googleCalendarUrl(options: {
   title: string;
   weddingDate: string | null;

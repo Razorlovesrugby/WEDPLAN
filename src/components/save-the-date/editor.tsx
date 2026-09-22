@@ -11,6 +11,7 @@ import {
   SAVE_THE_DATE_LAYOUT_LABELS,
   SAVE_THE_DATE_PHOTO_LIMIT,
   SAVE_THE_DATE_TEXT_LIMITS as LIMITS,
+  calendarEventTitle,
   googleCalendarUrl,
   saveTheDateDisplay,
   writeOutDate,
@@ -144,7 +145,7 @@ export function SaveTheDateEditor({
 
   const google = draft.showCalendar
     ? googleCalendarUrl({
-        title: display.headline,
+        title: calendarEventTitle(display.headline),
         weddingDate: wedding.wedding_date,
         location: display.location,
         details: display.message,

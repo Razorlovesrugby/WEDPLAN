@@ -6,6 +6,7 @@ import { resolveHouseholdAddress } from "@/server/rsvp/address";
 import { resolveCardByAddress } from "@/server/rsvp/card";
 import { formatAddress } from "@/lib/site/household-slug";
 import {
+  calendarEventTitle,
   googleCalendarUrl,
   saveTheDateDisplay,
   saveTheDateIcsPath,
@@ -98,7 +99,7 @@ export default async function SaveTheDatePage({
 
   const google = content.showCalendar
     ? googleCalendarUrl({
-        title: display.headline,
+        title: calendarEventTitle(display.headline),
         weddingDate: wedding.wedding_date,
         location: display.location,
         details: display.message,

@@ -122,7 +122,10 @@ function Calendar({
   if (!calendar) return null;
   return (
     <div className={`flex flex-wrap gap-3 ${className}`}>
-      <a href={calendar.icsHref} className="std-button" download>
+      {/* No `download` attribute: on an iPhone that saves the file into Files
+          instead of opening the "Add to Calendar" sheet. The route serves
+          text/calendar inline and the phone does the right thing with it. */}
+      <a href={calendar.icsHref} className="std-button">
         Add to Apple / Outlook
       </a>
       <a href={calendar.googleHref} className="std-button" target="_blank" rel="noreferrer">

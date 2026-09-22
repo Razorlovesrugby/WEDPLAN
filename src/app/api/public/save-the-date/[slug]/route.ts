@@ -1,5 +1,5 @@
 import { buildAllDayIcs } from "@/lib/ics";
-import { allDayRange, saveTheDateDisplay } from "@/lib/site/save-the-date";
+import { allDayRange, calendarEventTitle, saveTheDateDisplay } from "@/lib/site/save-the-date";
 import { findWeddingBySlug } from "@/server/queries/site";
 import { loadSaveTheDateContent } from "@/server/queries/save-the-date";
 
@@ -27,7 +27,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     // Stable per wedding and date, so a guest who taps twice updates the one
     // entry rather than getting two — and a moved date is a new entry.
     id: `save-the-date-${wedding.id}-${range.start}`,
-    name: display.headline,
+    name: calendarEventTitle(display.headline),
     start: range.start,
     end: range.end,
     location: display.location,
@@ -37,7 +37,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   return new Response(ics, {
     headers: {
       "content-type": "text/calendar; charset=utf-8",
-      "content-disposition": `attachment; filename="save-the-date.ics"`,
+      // Inline, not attachment: iOS Safari only offers "Add to Calendar" for
+      // a calendar it is allowed to open. Desktop browsers still download it.
+      "content-disposition": `inline; filename="save-the-date.ics"`,
       "cache-control": "no-store",
     },
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SAVE_THE_DATE,
   allDayRange,
+  calendarEventTitle,
   googleCalendarUrl,
   orderByIds,
   pickSaveTheDatePhotos,
@@ -162,5 +163,12 @@ describe("photos", () => {
       { id: "b" },
       { id: "a" },
     ]);
+  });
+});
+
+describe("calendarEventTitle", () => {
+  it("says it is a wedding, unless the couple already did", () => {
+    expect(calendarEventTitle("Ray & Olivia")).toBe("Ray & Olivia's wedding");
+    expect(calendarEventTitle("The Okafor Wedding")).toBe("The Okafor Wedding");
   });
 });
