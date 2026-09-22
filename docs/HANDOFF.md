@@ -3,6 +3,20 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 31, follow-up (after PR #57 merged):** `/invitations` now has a
+**Save the date** column beside the invitation's — Copy link, a WhatsApp
+message of its own (`saveTheDateWhatsappMessage`, which never mentions an
+RSVP), View (`?preview=1`, not counted), and opened/×count. It works for a
+household with no invitation, because a save-the-date predates one. The old
+Sent/Opened/Actions headers are now "Invite sent", "Invite opened" and
+"Invitation", and a line above the table says the save-the-date link is the one
+ending in `/save-the-date`. **Email was deliberately left alone:** the planner
+has no guest emails and sends links by hand, so the bulk "Send save-the-dates"
+email still exists and is still gated on invitations — revisit (and decide who
+a bulk send should reach; the first cut line was the proposal) if email is ever
+wanted. Checked in local Chromium with sample rows; 652 tests, typecheck and
+build clean.
+
 Last updated: session 31 — **the save-the-date is a designed page, one link
 per household, with its own editor; Guests shows who opened it.**
 

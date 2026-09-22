@@ -152,3 +152,20 @@ export const listSaveTheDateOpens = cache(
     );
   },
 );
+
+/**
+ * The save-the-date's words, through the planner's own session — for
+ * `/invitations`, where the WhatsApp text is composed and no photos are needed.
+ */
+export const getSaveTheDateContent = cache(
+  async (weddingId: string): Promise<SaveTheDateContent> => {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("site_content")
+      .select("payload")
+      .eq("wedding_id", weddingId)
+      .eq("block_key", SAVE_THE_DATE_BLOCK_KEY)
+      .maybeSingle();
+    return resolveSaveTheDate(data?.payload ?? null);
+  },
+);

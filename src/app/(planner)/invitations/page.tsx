@@ -7,6 +7,8 @@ import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { listInvitations } from "@/server/queries/invitations";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatDate } from "@/lib/format";
+import { saveTheDateDisplay } from "@/lib/site/save-the-date";
+import { getSaveTheDateContent } from "@/server/queries/save-the-date";
 
 export const metadata = { title: "Invitations" };
 
@@ -38,11 +40,13 @@ export default async function InvitationsPage({
 
   const wedding = await requireWedding();
   const supabase = await createClient();
-  const [allRows, events, { data: tags }] = await Promise.all([
+  const [allRows, events, { data: tags }, saveTheDate] = await Promise.all([
     listInvitations(wedding.id),
     getEvents(wedding.id),
     supabase.from("tags").select("id, name").eq("wedding_id", wedding.id).order("name"),
+    getSaveTheDateContent(wedding.id),
   ]);
+  const saveTheDateWords = saveTheDateDisplay(saveTheDate, wedding);
 
   const rows = active
     ? allRows.filter((row) =>
@@ -96,6 +100,19 @@ export default async function InvitationsPage({
         </Link>
       </p>
 
+      {/* Two links per household look alike in a chat, so say which is which
+          where both sets of buttons live. */}
+      <p className="max-w-2xl rounded border border-line bg-white px-3 py-2 text-sm">
+        <strong className="font-medium">Two links per household.</strong> The{" "}
+        <strong className="font-medium">save the date</strong> ends in{" "}
+        <code className="text-xs">/save-the-date</code> — names, date and photos, nothing to answer.
+        The <strong className="font-medium">invitation</strong> is the household&rsquo;s full page
+        with the RSVP. Each has its own column below.{" "}
+        <Link href="/invitations/save-the-date" className="underline">
+          Design the save the date →
+        </Link>
+      </p>
+
       <StationeryPanel
         tags={(tags ?? []) as { id: string; name: string }[]}
         weddingDateSet={wedding.wedding_date != null}
@@ -110,6 +127,11 @@ export default async function InvitationsPage({
             ? formatDate(wedding.wedding_date, wedding.timezone)
             : "date to be confirmed"
         }
+        saveTheDate={{
+          weddingSlug: wedding.slug,
+          dateLabel: saveTheDateWords.dateLabel,
+          location: saveTheDateWords.location,
+        }}
       />
     </div>
   );
