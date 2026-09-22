@@ -60,6 +60,23 @@ reversing an answered spec question is not a coding decision. It is two lines
 in `TO_LOAD` once settled, and the §5 gift calculator is blocked behind the
 same call, since it was specified as a header on the registry checklist.
 
+**What was in the bundle and what was taken.** Seven files. The two spec
+documents are in **whole and unedited** — the reconciliation is appended, and
+not one original line was removed. `budget-categories.json` and `checks.json`
+are in byte-identical; `checklists.json` was already identical to main's.
+`task-timeline.json` was **not** taken, because main's copy is the same 175
+tasks (verified title, offset, bucket and note, in the same order) already
+reshaped into the `list_templates` payload that `0004` and
+`scripts/seed-templates.mjs` consume — the bundle's flat array is the older
+shape and taking it would have broken seeding.
+
+The bundle's own `HANDOFF.md` was not taken either: it is the session-5
+version, and its substance — V1.5 as the next release, the Gmail question,
+"every new table lands in `0004`" — is superseded by everything between
+sessions 5 and 29. **One fact in it was not superseded and existed nowhere
+else: the connector's organisation id.** It has been lifted into section 0's
+live-project block rather than lost with the rest of that file.
+
 Previously in session 29 — **specs 24 and 25 written, 25 and 8 built, and four
 stale status documents corrected. Vendors exist.**
 
@@ -2343,6 +2360,12 @@ Run it, then replace this block with what it actually reported.
 > planner has asked explicitly that it not be touched. If `list_projects` does
 > not return `lsgbwxisqqazahgkibmj`, the connector is scoped to the wrong
 > organisation: that is a permissions problem to fix, not an empty account.
+> **The wrong organisation has a name: `ijdydhhjlvvduodssggn`**, which holds
+> `arm15lite_PROD` and nothing else. Recovered in session 30 from the bundled
+> session-5 handoff, which is the only place it was ever written down. If
+> `get_organization` reports that id, stop diagnosing and reach for
+> `scripts/verify-live.mjs` with the project's own keys instead — it needs no
+> connector at all, and three separate sessions have now lost time to this.
 
 ---
 
