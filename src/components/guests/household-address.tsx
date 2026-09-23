@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { setHouseholdSlug } from "@/server/actions/guests";
 import { formatAddress, householdPath, householdSlugify } from "@/lib/site/household-slug";
+import { absoluteUrl } from "@/lib/env";
 
 /**
  * A household's own page, on the household screen (spec 21 §6).
@@ -41,9 +42,10 @@ export function HouseholdAddress({
   const [pending, startTransition] = useTransition();
 
   const path = householdPath(weddingSlug, { slug, suffix });
-  // The origin is the browser's, so this is the link that actually works from
-  // wherever the planner is — a preview deployment included.
-  const fullUrl = typeof window === "undefined" ? path : `${window.location.origin}${path}`;
+  // The site's public address, not the browser's. Copying from a
+  // deployment-specific *.vercel.app address used to hand guests a link behind
+  // Vercel's login; this is the address emails and QR codes already use.
+  const fullUrl = absoluteUrl(path);
 
   const suggestion = householdSlugify(displayName);
   const suggestable = suggestion !== slug;

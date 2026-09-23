@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { absoluteUrl } from "@/lib/env";
 import { formatRelative } from "@/lib/format";
 import { saveTheDatePath } from "@/lib/site/save-the-date";
 import type { HouseholdAddress } from "@/lib/site/household-slug";
@@ -26,8 +27,9 @@ export function SaveTheDateCell({
 
   async function copy() {
     if (!address) return;
-    // The browser's origin, so the link works from a preview deployment too.
-    const url = `${window.location.origin}${saveTheDatePath(weddingSlug, address)}`;
+    // The site's public address, not the browser's: a deployment-specific
+    // *.vercel.app address sits behind Vercel's login, and guests can't open it.
+    const url = absoluteUrl(saveTheDatePath(weddingSlug, address));
     try {
       await navigator.clipboard.writeText(url);
       setCopied("ok");
