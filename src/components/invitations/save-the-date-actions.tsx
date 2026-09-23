@@ -1,6 +1,7 @@
 "use client";
 
 import { saveTheDateWhatsappMessage } from "@/lib/email/templates-client";
+import { absoluteUrl } from "@/lib/env";
 import { formatRelative } from "@/lib/format";
 import { saveTheDatePath } from "@/lib/site/save-the-date";
 import type { HouseholdAddress } from "@/lib/site/household-slug";
@@ -39,9 +40,10 @@ export function SaveTheDateActions({
   onCopy: (text: string, note: string, link: string) => void;
 }) {
   const path = saveTheDatePath(words.weddingSlug, address);
-  // The browser's origin, like every other copy button here: the link that
-  // works from wherever the planner is.
-  const url = () => `${window.location.origin}${path}`;
+  // The site's public address, never the browser's: a planner who opened the
+  // app on a deployment-specific *.vercel.app address would otherwise hand
+  // guests a link behind Vercel's login.
+  const url = () => absoluteUrl(path);
 
   return (
     <>

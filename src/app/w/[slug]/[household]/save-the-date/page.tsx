@@ -13,6 +13,7 @@ import {
   saveTheDatePath,
 } from "@/lib/site/save-the-date";
 import { themeCssVars } from "@/lib/theme/presets";
+import { absoluteUrl } from "@/lib/env";
 import { SaveTheDateCard } from "@/components/save-the-date/card";
 import { SaveTheDateViewLogger } from "@/components/site/view-logger";
 
@@ -123,7 +124,14 @@ export default async function SaveTheDatePage({
           colourVars={themeCssVars(palette)}
           typography={siteTheme.typography}
           countdownDate={content.showCountdown ? wedding.wedding_date : null}
-          calendar={google ? { icsHref: saveTheDateIcsPath(slug), googleHref: google } : null}
+          calendar={
+            google
+              ? // Absolute, on the public address: the phone's calendar fetches
+                // this itself, and a relative link on a deployment-specific
+                // *.vercel.app page would be sent to Vercel's login instead.
+                { icsHref: absoluteUrl(saveTheDateIcsPath(slug)), googleHref: google }
+              : null
+          }
           animate
         />
       </div>
