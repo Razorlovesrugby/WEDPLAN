@@ -18,7 +18,7 @@
 // Calendar date helpers
 // ---------------------------------------------------------------------------
 
-function parseIsoDate(value: string): Date {
+export function parseIsoDate(value: string): Date {
   const [y, m, d] = value.split("-").map(Number);
   return new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
 }

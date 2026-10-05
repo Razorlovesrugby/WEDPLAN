@@ -13,6 +13,7 @@ import {
   getLists,
   getOpenItemCounts,
   getScheduledItems,
+  getOverdueItems,
   getTodayItems,
   type ListItemWithList,
 } from "@/server/queries/lists";
@@ -61,13 +62,16 @@ export default async function ListsPage({
     }
   })();
 
-  const [lists, templates, collaborators, openCounts, user, items] = await Promise.all([
+  const overduePromise: Promise<ListItemWithList[]> = view === "today" ? getOverdueItems(wedding.id) : Promise.resolve([]);
+
+  const [lists, templates, collaborators, openCounts, user, items, overdueItems] = await Promise.all([
     getLists(wedding.id),
     getListTemplates(),
     getCollaborators(wedding.id),
     getOpenItemCounts(wedding.id),
     userPromise,
     itemsPromise,
+    overduePromise,
   ]);
 
   // "Assigned to me" is meaningless without a session; every other view has
@@ -89,7 +93,7 @@ export default async function ListsPage({
               <NewListForm templates={templates} />
             </div>
           </div>
-          <SmartView view={view} items={items} collaborators={collaborators} currentUserId={user?.id} />
+          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} currentUserId={user?.id} />
         </div>
       </div>
     </div>

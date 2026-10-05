@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { isOverdue } from "@/lib/lists/overdue";
 import { generateTimelineItems, todayIso, type GeneratedListItem, type TemplateSection } from "@/lib/lists/generate";
 import { buildDigest, type DigestContent, type DigestItem } from "@/lib/reminders/digest";
 import type {
@@ -188,6 +189,28 @@ export const getTodayItems = cache(async (weddingId: string): Promise<ListItemWi
     .order("priority", { ascending: false });
   if (error) throw new Error(`Could not load today's items: ${error.message}`);
   return (data ?? []) as ListItemWithList[];
+});
+
+/**
+ * Not-done items due before today, oldest first, for the overdue group on
+ * Today (spec 26). Snoozed-past-today items are dropped by the same
+ * `isOverdue` rule the digest uses, so the three places agree.
+ */
+export const getOverdueItems = cache(async (weddingId: string): Promise<ListItemWithList[]> => {
+  const supabase = await createClient();
+  const activeListIds = await getActiveListIds(weddingId);
+  if (activeListIds.length === 0) return [];
+  const today = todayIso();
+  const { data, error } = await supabase
+    .from("list_items")
+    .select("*, lists(title, color, icon, kind)")
+    .eq("wedding_id", weddingId)
+    .lt("due_date", today)
+    .neq("status", "done")
+    .in("list_id", activeListIds)
+    .order("due_date", { ascending: true });
+  if (error) throw new Error(`Could not load overdue items: ${error.message}`);
+  return ((data ?? []) as ListItemWithList[]).filter((item) => isOverdue(item, today));
 });
 
 export const getScheduledItems = cache(async (weddingId: string): Promise<ListItemWithList[]> => {

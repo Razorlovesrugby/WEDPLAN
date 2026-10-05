@@ -1,5 +1,7 @@
 "use client";
 
+import { daysOverdue } from "@/lib/lists/overdue";
+import { todayIso } from "@/lib/lists/generate";
 import { sortCompletedLast } from "@/lib/lists/sort";
 import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow, type ItemWithList } from "./item-row";
@@ -21,17 +23,20 @@ const EMPTY_COPY: Record<string, string> = {
 export function SmartView({
   view,
   items,
+  overdueItems = [],
   collaborators,
   currentUserId,
 }: {
   view: "today" | "scheduled" | "flagged" | "all" | "mine";
   items: ItemWithList[];
+  /** Today only (spec 26): not-done items due before today, oldest first. */
+  overdueItems?: ItemWithList[];
   collaborators: CollaboratorRow[];
   currentUserId?: string;
 }) {
   const [hideCompleted, setHideCompleted] = useHideCompleted(`view:${view}`);
 
-  if (items.length === 0) {
+  if (items.length === 0 && overdueItems.length === 0) {
     return <p className="card p-6 text-sm text-muted">{EMPTY_COPY[view]}</p>;
   }
 
@@ -40,23 +45,50 @@ export function SmartView({
   const orderedItems = sortCompletedLast(items, (item) => item.status === "done");
   const visibleItems = hideCompleted ? orderedItems.filter((item) => item.status !== "done") : orderedItems;
 
+  const today = todayIso();
+
   return (
     <div className="space-y-2">
-      <div className="flex justify-end">
-        <HideCompletedToggle checked={hideCompleted} onChange={setHideCompleted} />
-      </div>
-      <div className="card divide-y divide-line/60 px-3">
-        {visibleItems.map((item) => (
-          <ItemRow
-            key={item.id}
-            item={item}
-            collaborators={collaborators}
-            currentUserId={currentUserId}
-            showListLabel
-          />
-        ))}
-        {visibleItems.length === 0 ? <p className="py-6 text-center text-sm text-muted">Everything is done.</p> : null}
-      </div>
+      {overdueItems.length > 0 ? (
+        <section className="space-y-1">
+          <h2 className="text-sm font-medium text-red-700">Overdue · {overdueItems.length}</h2>
+          <div className="card divide-y divide-line/60 border-red-200 px-3">
+            {overdueItems.map((item) => (
+              <ItemRow
+                key={item.id}
+                item={item}
+                collaborators={collaborators}
+                currentUserId={currentUserId}
+                showListLabel
+                overdueDays={item.due_date ? daysOverdue(item.due_date, today) : 0}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {view === "today" && overdueItems.length > 0 ? (
+        <h2 className="pt-2 text-sm font-medium text-muted">Due today</h2>
+      ) : null}
+      {items.length === 0 ? <p className="card p-6 text-sm text-muted">Nothing else due today.</p> : null}
+      {items.length > 0 ? (
+        <>
+          <div className="flex justify-end">
+            <HideCompletedToggle checked={hideCompleted} onChange={setHideCompleted} />
+          </div>
+          <div className="card divide-y divide-line/60 px-3">
+            {visibleItems.map((item) => (
+              <ItemRow
+                key={item.id}
+                item={item}
+                collaborators={collaborators}
+                currentUserId={currentUserId}
+                showListLabel
+              />
+            ))}
+            {visibleItems.length === 0 ? <p className="py-6 text-center text-sm text-muted">Everything is done.</p> : null}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
