@@ -1,7 +1,7 @@
 # Feature spec: Invite polish, round one — the planner's first findings
 
 **Status: proposed, not built (2026-10-05).** The planner went through the
-invitation and the `/site` editor and came back with fifteen findings. This
+invitation and the `/site` editor and came back with fifteen findings, then three more (§7a). This
 spec groups them, says what is actually behind each one (read off the
 source, not guessed), proposes how each should feel to use, and lists what
 only the planner can decide. **Nothing here is authorized to build.** Per
@@ -31,6 +31,14 @@ built, none applied to the live project in full.
 | 12 | Replace the default song suggestion with something funny | D — rework |
 | 13 | Re-order the questions in the Questions section | E — editor |
 | 14 | Edit the title of any section; they're fixed today | E — editor |
+| 15 | The top bar should only have the letter monogram + RSVP, not all the sections | C — layout (reshapes 6 and 7, see §5.2) |
+| 16 | Get rid of the Maybe option on the invite | F — added, §7a.1 |
+| 17 | All questions auto-expanded, not just the first six | F — added, §7a.2 |
+| 18 | Remove "Travel, where to stay and the rest of it are on the main site" from the bottom of the page — there is no main site, everything is in the invitation | F — added, §7a.3 |
+
+Findings 15–18 were added on 2026-10-05, after the first draft. Finding 15
+changes how 6 and 7 fit together: the initials come **off the hero** but
+stay **in the bar**, and the bar keeps only the initials and RSVP.
 
 Plus §9: eight things found while reading the code that the planner did
 not list but will hit.
@@ -176,33 +184,61 @@ in session 30** (`docs/HANDOFF.md`: "the only place `heroStyle`, the
 monogram and an existing custom palette can be edited"). So the planner
 had no way to find it.
 
-**Proposed fix.** A **"Show your initials"** switch in the rail's Page
-group, beside the other layout switches, with a one-line note of where
-they appear. §11 Q6: one switch for all three places, or the hero on its
-own.
+**Finding 15 settles where they go:** off the hero, kept in the top bar.
+One theme-wide flag can't express that, so it splits by place:
 
-### 5.2 Turn off the top menu bar (finding 7)
+- **The hero's initials** become a cover switch, *"Initials above your
+  names"*, beside the hero's other line switches (greeting, date, place —
+  spec 27 E9). **Default off.** The `monogram` theme flag stops being read
+  by the hero, so turning it off doesn't depend on finding `/site/theme`.
+- **The top bar's initials** are the bar's home link (tap to go back to the
+  top) and are always drawn when the bar is. If the wedding's name gives no
+  initials, the bar shows the two first names in small caps instead.
+- **The footer's initials** stay on the existing theme flag. §11 Q6.
 
-**What is there.** The sticky menu bar (`src/components/site/site-nav.tsx`)
-is drawn on the shared page whenever any block has a nav entry. There's
-no switch. **It is also not drawn in the preview at all** — the preview
-page renders `SiteBlocks` but not `SiteNav` — so the planner can't see
-it while editing, only on the live page.
+### 5.2 The top bar: initials and RSVP, nothing else (findings 7 and 15)
 
-**Proposed fix.**
+**What is there.** The sticky bar (`src/components/site/site-nav.tsx`) has
+three parts: the initials at the left, a row of every section's title in
+the middle (collapsed into a **Menu** sheet on a phone), and an RSVP
+button at the right. It's drawn on both the shared page and every
+household's page, whenever any block has a nav entry. There's no switch,
+and **it is not drawn in the preview at all** — `/site/preview` renders
+`SiteBlocks` but not `SiteNav` — so the planner has only ever seen it on
+the live page.
 
-- A new layout switch, `layout.top_nav`, "Menu bar at the top", default
-  on, in the same Page group as the chapter rail and reply bar
-  (`src/lib/site/switches.ts`). Off means the bar is not drawn; nothing
-  else on the page moves.
-- **Render the menu bar in the preview**, so the switch visibly does
-  something when flipped. Inside the iframe it is sticky to the iframe,
-  which is what a guest gets.
-- Check the household page too: if it draws its own bar, the switch
-  covers both.
+**Proposed bar.**
 
-With the bar off, a guest on a phone still has the reply bar for RSVP
-(spec 27). On desktop there's no shortcut to RSVP; §11 Q7.
+```
+ R & O                                                [ RSVP ]
+```
+
+- **Left:** the initials, linking to the top.
+- **Right:** **RSVP**, scrolling to the reply form. Once the household has
+  replied, it reads **Your reply** and still goes to the form, where they
+  can change it until the lock date.
+- **Nothing in the middle**, at any width. The phone **Menu** button and its
+  sheet go away with the section list. Getting around the page is the
+  chapter list down the side (desktop) and scrolling.
+- Thin, sticky, the same paper-and-line styling as now, so it reads as
+  part of the invitation rather than a website header.
+- **On a phone, the bar and spec 27's reply bar would both offer RSVP.**
+  Proposal: on a phone the top bar's RSVP button hides while the bottom
+  reply bar is showing, so there's never two. §11 Q7.
+
+**Plus the switch from finding 7:** `layout.top_nav`, *"Bar at the top"*,
+default on, in the rail's Page group (`src/lib/site/switches.ts`). Off
+means no bar at all; nothing else moves. Finding 15 suggests the planner
+may now want the slim bar rather than none — the switch costs little
+either way. §11 Q7.
+
+**And render the bar in the preview**, so the switch and the bar's new
+shape can be seen while editing. Inside the iframe it's sticky to the
+iframe, which is what a guest gets.
+
+`blockNavItems` and the section titles it produces stay, because the
+chapter list down the side still uses them (and §7.2's custom titles
+still flow into it).
 
 ### 5.3 Event notes in "You're invited to", not a second section (findings 8 and 9)
 
@@ -351,8 +387,8 @@ on the invitation; §11 Q13 confirms.
 inspector (`src/components/site/editor/block-inspector.tsx`). Rows can be
 added and removed, **not moved**. The same is true of the other three
 repeating blocks (Who's who, While you're here, Our story's moments).
-The order matters: with no "Show open" ticked, the first six are the ones
-guests see open.
+With finding 17 (§7a.2) every question shows open, so the order is
+simply the order guests read them in.
 
 **Proposed experience.**
 
@@ -362,9 +398,6 @@ guests see open.
 - Rows **collapse to their first line** (the question) when not being
   edited, so twenty questions fit on screen and dragging is practical. Click
   to expand.
-- A thin divider after the sixth row labelled **"Guests see these open ↑"**
-  when nothing is ticked "Show open" — so reordering visibly changes what
-  matters.
 - Undo (spec 27) covers a reorder.
 - One implementation, applied to all four repeating blocks.
 
@@ -381,8 +414,9 @@ in `src/lib/site/blocks.ts`): "Questions", "What to wear", "Getting there",
 context — "The weekend" on the shared page vs **"You're invited to"** on a
 household's page; "Will you be there?" vs **"RSVP"** on the shared page.
 Only four block types (Words, Photo and words, Map, Playlist) take a
-heading from their own content today. The menu bar's labels and the side
-chapter list read the same fixed headings.
+heading from their own content today. The side chapter list reads the
+same fixed headings (and the top bar did, until finding 15 takes the
+section list out of it).
 
 **Proposed experience.**
 
@@ -395,9 +429,8 @@ chapter list read the same fixed headings.
   preview updates as they type.
 - Clearing the field goes back to the default. A separate **"No title"**
   switch hides it entirely, for a block that speaks for itself.
-- The custom title flows everywhere the heading is used: the menu bar,
-  the chapter list down the side, and the reply bar's label for the RSVP
-  block.
+- The custom title flows everywhere the heading is used: the chapter list
+  down the side, and the reply bar's label for the RSVP block.
 - The small `04 · QUESTIONS` label above the heading: §11 Q14.
 
 For "You're invited to" and "RSVP", where the default differs by page, the
@@ -405,6 +438,82 @@ custom title is used on both. Leaving it blank keeps both defaults.
 
 Stored in the block's own `payload` (`heading`), which is how the four
 blocks that already have it work — no migration.
+
+## 7a. Group F — added 2026-10-05 (findings 16–18)
+
+### 7a.1 No "Maybe" on the invitation (finding 16)
+
+**What is there.** The RSVP form offers **Yes / No / Maybe** per guest per
+event (`CHOICES` in `src/components/rsvp/rsvp-form.tsx`). `maybe` is a value
+of the database enum `rsvp_status` (`0001_core_schema.sql`), counted in the
+guest-list summary views, and accepted by `submitRsvp`'s validation
+(`src/server/actions/rsvp.ts`). The household-level Yes/No pair added in
+session 30 already has no Maybe.
+
+**Proposed.**
+
+- The form offers **Yes / No** only, per person per event. Two clear
+  buttons are also kinder on a phone than three.
+- The reply action **stops accepting `maybe` from a guest**, so it can't be
+  sent by an old cached page either. The planner's own screens keep
+  accepting it, in case a couple wants to record "they said maybe on the
+  phone" by hand.
+- **The enum stays.** Removing a value from a Postgres enum means rebuilding
+  the type and every view over it, and existing `maybe` replies would have
+  nowhere to go. No migration.
+- **A guest who already answered Maybe** sees that person/event as
+  unanswered on the form (neither button pressed), with a gentle
+  *"Still deciding? Let us know when you can."* — rather than a third state
+  they can't select. Nothing is rewritten in the database until they
+  actually choose. §11 Q16.
+- The planner's guest list keeps its Maybe count, which will simply stop
+  growing.
+
+### 7a.2 Every question open (finding 17)
+
+**What is there.** `splitFaq` (`src/lib/site/sections.ts`) shows up to six
+questions open and collapses the rest into groups by tag, each a native
+`<details>`. The editor has a **"Show open"** tick per question to choose
+which six.
+
+**Proposed.**
+
+- **Every question renders open**, in the order the planner set (§7.1). No
+  collapsed remainder, no tag groups.
+- They render as **plain questions and answers**, not as open-but-closable
+  `<details>` toggles — a disclosure arrow on something already open invites
+  a guest to close it and wonder where it went. §11 Q17.
+- The **"Show open" tick disappears** from the editor. Its stored value is
+  left in the payload and ignored (removing it would only matter if this is
+  ever reversed).
+- The block's blurb in the palette changes from *"Six show open, the rest are
+  grouped and collapsed"* to say they're all shown.
+- With a long list, the planner is the one who keeps it short. The editor
+  could show a soft note at, say, 15 questions — *"That's a lot to read on a
+  phone"* — but never blocks. §11 Q17.
+
+### 7a.3 No "main site" line at the bottom (finding 18)
+
+**What is there.** A household's page (`src/app/w/[slug]/[household]/page.tsx`)
+ends with a hardcoded line: *"Travel, where to stay and the rest of it are
+on the main site."*, linking to the shared page `/w/<slug>`. It dates from
+spec 21, when a household's page was a short personal addition to a
+separate main site. Since spec 23 the household page renders the full block
+list, travel and stays included, so the line points somewhere that has
+nothing extra — exactly as the planner says.
+
+**Proposed.** Delete the line. Nothing replaces it; the page's footer block
+is the end of the page.
+
+**The bigger question this raises.** The shared page `/w/<slug>` still
+exists and is reachable by anyone with the slug. It currently does three
+jobs: it's the public version of the invitation (events marked public,
+no RSVP), it's where **"find my invitation"** lives for a guest who lost
+their link, and it's what a save-the-date points at. If "there is no main
+site", the planner may want the shared page reduced to just a landing:
+the couple's names, the date, and "find your invitation" — with nothing
+else public. That's a larger change than deleting a line, so it's a
+question here (§11 Q18), not part of this round's proposal.
 
 ## 8. What was considered and not recommended
 
@@ -424,8 +533,8 @@ blocks that already have it work — no migration.
 1. **The live migration state can't be verified from this session**
    (§2). Whoever applies `0026`–`0032` should do it against the right
    project and check `/api/health` after.
-2. **The preview has no menu bar** (§5.2) — so neither the menu bar
-   nor its monogram has ever been seen while editing.
+2. **The preview has no top bar** (§5.2) — so the bar and its initials
+   have never been seen while editing.
 3. **Every guest-interactive block is dead in the preview** (§4.3): RSVP,
    votes, coach booking, photo upload. Fixing finding 5 fixes all of them.
 4. **The preview's default household is whoever sorts first
@@ -439,9 +548,9 @@ blocks that already have it work — no migration.
 6. **Two blocks of the same type share an HTML id.** Blocks render
    `id={block.type}`, and Our story, What to wear, Photo gallery and Map
    can appear more than once — so a second "What to wear" has the same
-   anchor as the first and the menu bar skips it. Matters more once
-   titles are custom (§7.2): two differently titled sections, one menu
-   entry. Fix: anchor by block id.
+   anchor as the first and the chapter list skips it. Matters more once
+   titles are custom (§7.2): two differently titled sections, one
+   chapter entry. Fix: anchor by block id.
 7. **Once `0026` is applied**, the coach run editor's "which event"
    picker and the per-event dress code have never been exercised. Check
    edit and delete, not just add.
@@ -455,15 +564,18 @@ blocks that already have it work — no migration.
 0. **Apply `0026`–`0032` to the live project** and re-test findings 1–3.
    Not code; the planner or whoever holds the project does this.
 1. **Preview fidelity** — §4.3 (interactive-but-inert guest blocks),
-   §5.2's menu bar in the preview, §9.4's household picker, §4.1's
+   §5.2's top bar in the preview, §9.4's household picker, §4.1's
    preview calendar. Everything after this is easier to judge.
 2. **Reproduce and fix the shrinking preview** (§4.2).
-3. **Layout switches** — monogram (§5.1), menu bar (§5.2).
-4. **Event notes into "You're invited to"** and deprecate On the day (§5.3).
-5. **Section titles** (§7.2) with the anchor fix (§9.6).
-6. **Reorderable repeating rows** (§7.1) with stable keys.
-7. **Songs** — upvote button, placeholder (§6.2, §6.3).
-8. **Gifts** — migration, popup, editor (§6.1). Last because it's the only
+3. **Quick removals** — the "main site" line (§7a.3), Maybe (§7a.1), every
+   question open (§7a.2). Small, and each one visible straight away.
+4. **Initials and the top bar** — hero initials off (§5.1), the slim
+   initials-and-RSVP bar and its switch (§5.2).
+5. **Event notes into "You're invited to"** and deprecate On the day (§5.3).
+6. **Section titles** (§7.2) with the anchor fix (§9.6).
+7. **Reorderable repeating rows** (§7.1) with stable keys.
+8. **Songs** — upvote button, placeholder (§6.2, §6.3).
+9. **Gifts** — migration, popup, editor (§6.1). Last because it's the only
    one with a schema change and the most open questions.
 
 Each step is independently shippable.
@@ -488,11 +600,13 @@ answer.
    if they've replied, or always a blank form? *Recommend real answers —
    it's what they'd see coming back to change their reply — with a
    "Show blank" toggle.*
-6. **Initials switch:** one switch that removes them from the hero, menu
-   bar and footer, or the hero only? *Recommend one switch.*
-7. **With the menu bar off, on desktop:** nothing (the page is a single
-   scroll), or keep a small floating "RSVP" button? *Recommend nothing;
-   the chapter list down the side already gets you around.*
+6. **Initials in the footer:** keep them there (they close the page the way
+   the bar opens it), or off like the hero? *Recommend keep.*
+7. **The top bar:** now that it's just initials + RSVP, do you still want a
+   switch to turn it off entirely? And on a phone, should its RSVP button
+   hide while the bottom reply bar is showing, so there's only ever one?
+   *Recommend yes to both — the switch is cheap, and two RSVP buttons on
+   one small screen is one too many.*
 8. **Event notes on the shared page** (no household link): show them, or
    household pages only as today? *Recommend household only — a note can
    hold a gate code.*
@@ -515,7 +629,19 @@ answer.
     that label follow the custom title, stay as the fixed category, or
     also be editable? *Recommend: stays fixed (it names the job), and the
     existing "Numbers above headings" switch removes it.*
-15. **Anything to add to this round** before it's built, or anything here
+15. *(Moved to 19.)*
+16. **A guest who already answered Maybe:** show them as unanswered with
+    "Still deciding? Let us know when you can.", or quietly treat Maybe as
+    No? *Recommend unanswered — never decide for a guest.*
+17. **Every question open:** plain questions and answers (no arrows), or
+    open-but-closable toggles? And a soft "that's a lot" note past ~15
+    questions, or nothing? *Recommend plain, and the note.*
+18. **The shared page** (`/w/<slug>`): with no "main site", should it shrink
+    to a landing — names, date, "find your invitation" — with nothing else
+    public? Or stay as a public version of the invitation? *No
+    recommendation yet; it decides what a save-the-date and a lost link
+    land on, so it's yours. If it shrinks, that's its own spec.*
+19. **Anything to add to this round** before it's built, or anything here
     to cut?
 
 ## 12. Done when
@@ -523,9 +649,14 @@ answer.
 - Coach runs and dress codes can be added, edited and deleted on the live
   project.
 - In the preview: the RSVP form, song votes, coach booking, calendar
-  button and menu bar all appear and respond, and nothing they do is saved.
+  button and top bar all appear and respond, and nothing they do is saved.
 - The preview stays the same size whatever is selected.
-- Initials and the menu bar can each be switched off from the rail.
+- The hero has no initials; the top bar holds only the initials and RSVP,
+  and can be switched off from the rail.
+- The RSVP form offers Yes and No only; a guest's old Maybe shows as
+  unanswered.
+- Every question in the Questions block is shown open.
+- The household page no longer mentions a "main site".
 - Event notes appear under their event, grouped by date, in "You're
   invited to", and On the day no longer repeats them.
 - Gifts show no money figures; Contribute opens the bank details popup
@@ -533,7 +664,7 @@ answer.
   browser.
 - Songs can be upvoted from a household link, with an obvious button.
 - FAQ (and the other repeating) rows can be dragged and moved by keyboard.
-- Every titled section's title can be changed, and the menu bar follows.
+- Every titled section's title can be changed, and the chapter list follows.
 - `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh`,
   `npm run build` pass — and, separately stated, whether it was opened in
   a real browser against the live project.
