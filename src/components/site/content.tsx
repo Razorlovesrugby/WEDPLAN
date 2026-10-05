@@ -1,3 +1,4 @@
+import { stagger } from "./stagger";
 import { Label } from "./section";
 import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
 import { FindInvitation } from "./find-invitation";
@@ -86,8 +87,8 @@ export function Schedule({
           <h3 className="site-h3 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
             {day}
           </h3>
-          <ul className={editorial ? "mt-5" : "mt-5 space-y-6"}>
-            {dayEvents.map((event) => {
+          <ul className={editorial ? "site-stagger mt-5" : "site-stagger mt-5 space-y-6"}>
+            {dayEvents.map((event, index) => {
               const extras = eventExtras(payload, event.id);
               // Events the household is not invited to stay listed and are
               // marked, rather than hidden. Hiding them produces the worse
@@ -151,14 +152,24 @@ export function Schedule({
 
               if (editorial) {
                 return (
-                  <EditorialEventRow key={event.id} time={time} name={event.name} aside={dressCode}>
+                  <EditorialEventRow
+                    key={event.id}
+                    index={index}
+                    time={time}
+                    name={event.name}
+                    aside={dressCode}
+                  >
                     {body}
                   </EditorialEventRow>
                 );
               }
 
               return (
-                <li key={event.id} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+                <li
+                  key={event.id}
+                  style={stagger(index)}
+                  className="border-t border-line pt-5 first:border-t-0 first:pt-0"
+                >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-xl text-ink">{event.name}</p>
                     {time}
@@ -223,12 +234,12 @@ export function Faq({ payload }: { payload: unknown }) {
 export function Party({ payload }: { payload: unknown }) {
   const members = rows(payload, "members");
   return (
-    <ul className="grid gap-6 sm:grid-cols-2">
+    <ul className="site-stagger grid gap-6 sm:grid-cols-2">
       {members.map((member, index) => {
         const name = text(member, "name");
         if (!name) return null;
         return (
-          <li key={index}>
+          <li key={index} style={stagger(index)}>
             <p className="text-lg text-ink">{name}</p>
             {text(member, "role") ? <Label>{text(member, "role")}</Label> : null}
             {text(member, "blurb") ? (
@@ -244,13 +255,17 @@ export function Party({ payload }: { payload: unknown }) {
 export function ThingsToDo({ payload }: { payload: unknown }) {
   const items = rows(payload, "items");
   return (
-    <ul className="space-y-6">
+    <ul className="site-stagger space-y-6">
       {items.map((item, index) => {
         const title = text(item, "title");
         if (!title) return null;
         const link = text(item, "link");
         return (
-          <li key={index} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+          <li
+            key={index}
+            style={stagger(index)}
+            className="border-t border-line pt-5 first:border-t-0 first:pt-0"
+          >
             <p className="text-lg text-ink">{title}</p>
             {text(item, "body") ? (
               <p className="mt-1.5 text-[0.95rem] leading-relaxed text-muted">{text(item, "body")}</p>
@@ -279,12 +294,12 @@ export function Story({ payload }: { payload: unknown }) {
     <div className="space-y-8">
       {body ? <Prose body={body} /> : null}
       {milestones.length > 0 ? (
-        <ol className="space-y-6">
+        <ol className="site-stagger space-y-6">
           {milestones.map((milestone, index) => {
             const title = text(milestone, "title");
             if (!title) return null;
             return (
-              <li key={index} className="border-l border-line pl-5">
+              <li key={index} style={stagger(index)} className="border-l border-line pl-5">
                 {text(milestone, "date") ? <Label>{text(milestone, "date")}</Label> : null}
                 <p className="text-lg text-ink">{title}</p>
                 {text(milestone, "body") ? (

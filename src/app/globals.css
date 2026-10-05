@@ -81,26 +81,53 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The public site's motion (spec 14 §5)
+   The public site's motion (spec 14 §5, rebuilt by spec 27 §6)
    ---------------------------------------------------------------------------
-   Sections fade and rise 12px on first scroll into view, 300ms, once. The
-   countdown ticks. Nothing else moves.
+   The page root carries two attributes, written from the theme and never read
+   by React:
 
-   CSS-only, via `animation-timeline: view()`, so there is no IntersectionObserver
-   and no JavaScript on the critical path of a guest site. Browsers without
-   scroll-driven animation support simply show the content — the @supports
-   guard means the starting state (opacity 0) is never applied unless the
-   animation that undoes it can actually run. Getting that backwards is how a
-   page renders permanently blank on an older phone.
+     data-motion   still | gentle | cinematic
+     data-fx       the effects that level (plus the planner's overrides) runs,
+                   space-separated: "section_arrivals reading_line nav_condense"
+
+   Every rule below is switched by `[data-fx~="…"]`, so an effect is one word in
+   one list and nothing else about the page knows it exists. Adding an effect is
+   a keyframe, a rule here, and a row in `src/lib/site/motion.ts`.
+
+   **CSS-only, no JavaScript.** Scroll-driven animation (`animation-timeline:
+   view()` / `scroll()`) means no IntersectionObserver and nothing on the
+   critical path of a guest's phone. Two guards, both load-bearing:
+
+     @supports (animation-timeline: …)  A browser without the feature simply
+        shows the content. The *starting state* (opacity 0, a scale, a clip) is
+        applied only inside this guard, so it can never be applied by something
+        that cannot also undo it — which is how a page renders permanently blank
+        on an older phone.
+
+     prefers-reduced-motion  Keeps the fade and drops the movement. The request
+        is about motion, not contrast. This follows the guest's own system
+        setting and the planner cannot override it either way.
+
+   **Only `transform` and `opacity` animate on scroll** (plus `clip-path` on the
+   one wipe, which composites). Nothing here animates width, top, a shadow or a
+   filter: those repaint on every scroll frame.
+
+   No scroll-jacking, ever: nothing here snaps, pins or intercepts a wheel.
 --------------------------------------------------------------------------- */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .site-reveal {
-      animation: site-reveal-in linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 40%;
-    }
-  }
+:root {
+  /* One set of easings, shared with the save-the-date (`std-rise`). A soft
+     ease-out for things arriving; a spring for the few things that should have
+     weight (the reply confirmation). `linear()` is plain CSS — no library. */
+  --ease-out: cubic-bezier(0.22, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: linear(
+    0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.5%,
+    1.077 22.2%, 1.1 24.5%, 1.11 26.8%, 1.101 30.1%, 1.033 38.2%, 1.005 43%,
+    0.996 50%, 1
+  );
+  --dur-fast: 160ms;
+  --dur-base: 300ms;
+  --dur-slow: 700ms;
 }
 
 @keyframes site-reveal-in {
@@ -114,18 +141,6 @@
   }
 }
 
-/* Reduced motion keeps the fade and drops the movement, rather than removing
-   the transition entirely: the request is about motion, not contrast. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: reduce) {
-    .site-reveal {
-      animation: site-fade-in linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 40%;
-    }
-  }
-}
-
 @keyframes site-fade-in {
   from {
     opacity: 0;
@@ -133,6 +148,167 @@
   to {
     opacity: 1;
   }
+}
+
+/* The wipe: a section arrives with an inch of lift and its lower edge
+   un-clipped. A little more than the rise, which is why it is Cinematic's
+   default and not Gentle's. */
+@keyframes site-reveal-wipe {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+    clip-path: inset(0 0 14% 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes site-photo-in {
+  from {
+    opacity: 0.35;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes site-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes site-nav-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* -- Section arrivals ------------------------------------------------------ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="section_arrivals"] .site-reveal {
+      animation: site-reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    [data-motion="cinematic"][data-fx~="section_arrivals"] .site-reveal {
+      animation-name: site-reveal-wipe;
+    }
+    /* One block can ask for something other than the page's default. These
+       come after the rules above so that, at equal specificity, they win. */
+    [data-fx~="section_arrivals"] [data-enter="rise"] .site-reveal {
+      animation-name: site-reveal-in;
+    }
+    [data-fx~="section_arrivals"] [data-enter="fade"] .site-reveal {
+      animation-name: site-fade-in;
+    }
+    [data-fx~="section_arrivals"] [data-enter="reveal"] .site-reveal {
+      animation-name: site-reveal-wipe;
+    }
+    [data-fx~="section_arrivals"] [data-enter="none"] .site-reveal {
+      animation: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-fx~="section_arrivals"] .site-reveal {
+      animation: site-fade-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    [data-fx~="section_arrivals"] [data-enter="none"] .site-reveal {
+      animation: none;
+    }
+  }
+}
+
+/* -- Photographs arrive ---------------------------------------------------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="photo_arrival"] .site-photo {
+      animation: site-photo-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+    [data-fx~="photo_arrival"] [data-enter="none"] .site-photo {
+      animation: none;
+    }
+  }
+}
+
+/* -- Lists stagger in ------------------------------------------------------
+   Each child carries `--i`, its position in the list. With a scroll timeline
+   `animation-delay` means nothing, so the stagger is the *range* shifting
+   later by a few percent per row. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="stagger"] .site-stagger > * {
+      animation: site-reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry calc(0% + var(--i, 0) * 7%) entry calc(36% + var(--i, 0) * 7%);
+    }
+  }
+}
+
+/* -- The reading line ------------------------------------------------------ */
+.site-progress {
+  display: none;
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="reading_line"] .site-progress {
+      display: block;
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 40;
+      height: 2px;
+      background: rgb(var(--site-accent));
+      transform: scaleX(0);
+      transform-origin: 0 50%;
+      animation: site-progress linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+
+/* -- The menu settles -------------------------------------------------------
+   Bare at the top of the page, so the cover is clean, and gaining its bar over
+   the first 160px of scroll. The bar is a pseudo-element whose *opacity* is
+   what animates — fading a background colour would repaint. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="nav_condense"] .site-nav {
+      background: transparent;
+      border-color: transparent;
+      backdrop-filter: none;
+    }
+    [data-fx~="nav_condense"] .site-nav::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: rgb(var(--site-paper) / 0.92);
+      border-bottom: 1px solid rgb(var(--site-line));
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      animation: site-nav-in linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 160px;
+    }
+  }
+}
+
+/* Editorial's section eyebrow does the floral rule's job, and its theme never
+   drew the rule. With numbers switched off the eyebrow is gone, so the rule
+   would otherwise appear in a theme that has never had one. */
+[data-site-theme="editorial"] .site-rule {
+  display: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -151,8 +327,16 @@
   .site-print nav[aria-label="Sections"],
   .site-print nav[aria-label="Chapters"],
   .site-print .site-rail,
-  .site-print .no-print-site {
+  .site-print .no-print-site,
+  .site-print .site-progress {
     display: none !important;
+  }
+
+  /* A view() timeline has no scroll position on paper; an element that never
+     "entered" must not print at opacity 0. */
+  .site-print *,
+  .site-print *::before {
+    animation: none !important;
   }
 
   .site-print section {

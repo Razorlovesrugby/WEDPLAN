@@ -1,3 +1,4 @@
+import { stagger } from "./stagger";
 import { formatDate, formatTime } from "@/lib/format";
 import { invitedForLine, listNames } from "@/lib/invites";
 import { Label } from "./section";
@@ -72,8 +73,8 @@ export function InvitedEvents({
           <h3 className="site-h3 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
             {day}
           </h3>
-          <ul className={editorial ? "mt-5" : "mt-5 space-y-6"}>
-            {dayEvents.map((event) => {
+          <ul className={editorial ? "site-stagger mt-5" : "site-stagger mt-5 space-y-6"}>
+            {dayEvents.map((event, index) => {
               const invited = invitedByEvent.get(event.id) ?? new Set<string>();
               const forLine = invitedForLine(members, invited);
               const time = event.starts_at ? <Label>{formatTime(event.starts_at, timeZone)}</Label> : null;
@@ -98,6 +99,7 @@ export function InvitedEvents({
                 return (
                   <EditorialEventRow
                     key={event.id}
+                    index={index}
                     time={time}
                     name={event.name}
                     aside={<DressCodeTag event={event} codes={dressCodes} />}
@@ -110,7 +112,11 @@ export function InvitedEvents({
               }
 
               return (
-                <li key={event.id} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+                <li
+                  key={event.id}
+                  style={stagger(index)}
+                  className="border-t border-line pt-5 first:border-t-0 first:pt-0"
+                >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-xl text-ink">{event.name}</p>
                     {time}

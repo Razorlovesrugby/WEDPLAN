@@ -38,12 +38,14 @@ export function PhotoBand({
       {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs from
           a private bucket, so next/image's optimiser has nothing to cache and
           would re-fetch an expiring URL. */}
-      <img
-        src={url}
-        alt={alt ?? ""}
-        className={`w-full ${SHAPE_CLASS[shape ?? "wide"]}`}
-        loading="lazy"
-      />
+      <div className="overflow-hidden">
+        <img
+          src={url}
+          alt={alt ?? ""}
+          className={`site-photo w-full ${SHAPE_CLASS[shape ?? "wide"]}`}
+          loading="lazy"
+        />
+      </div>
       {caption ? (
         <figcaption className="mt-2 px-5 text-center text-[0.9rem] text-muted">{caption}</figcaption>
       ) : null}
@@ -85,7 +87,7 @@ export function PageBreak({
   return (
     <div className={`site-reveal relative w-full overflow-hidden ${BAND_HEIGHT[shape ?? "natural"]}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- see PhotoBand */}
-      <img src={url} alt={alt ?? ""} className="h-full w-full object-cover" loading="lazy" />
+      <img src={url} alt={alt ?? ""} className="site-photo h-full w-full object-cover" loading="lazy" />
     </div>
   );
 }
@@ -108,17 +110,16 @@ export function PhotoText({
   flip?: boolean;
 }) {
   const body = text(payload, "body");
-  const heading = text(payload, "heading");
 
   return (
     <div className={`grid items-center gap-8 sm:grid-cols-2 ${flip ? "sm:[&>figure]:order-2" : ""}`}>
       {url ? (
-        <figure>
+        <figure className="overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element -- see PhotoBand */}
           <img
             src={url}
             alt={alt ?? ""}
-            className={`w-full ${SHAPE_CLASS[shape ?? "square"]}`}
+            className={`site-photo w-full ${SHAPE_CLASS[shape ?? "square"]}`}
             loading="lazy"
           />
         </figure>
@@ -128,7 +129,8 @@ export function PhotoText({
         </figure>
       ) : null}
       <div>
-        {heading ? <h3 className="mb-3 font-script text-3xl text-ink">{heading}</h3> : null}
+        {/* The heading is the section's own (`Shell` draws it above), so it is
+            not drawn a second time beside the photograph. */}
         {body ? <Prose body={body} /> : null}
       </div>
     </div>

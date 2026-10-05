@@ -17,6 +17,7 @@ import { SiteNav } from "@/components/site/site-nav";
 import { Monogram } from "@/components/site/monogram";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { SectionRail } from "@/components/site/section-rail";
+import { motionAttributes } from "@/lib/site/motion";
 import { ReplyBanner } from "@/components/site/reply-banner";
 import { ViewLogger } from "@/components/site/view-logger";
 
@@ -139,6 +140,9 @@ export default async function HouseholdSitePage({
       // itinerary grid — without a `preset === "editorial"` branch in a dozen
       // render functions. Adding a fourth preset stays a stylesheet.
       data-site-theme={ctx.theme.preset}
+      // How much it moves (spec 27): the level and the effects it switches on,
+      // which `globals.css` reads. Nothing in React looks at them.
+      {...motionAttributes(ctx.theme.motion)}
       className={`site-print ${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       {/* Counted from the browser, and never when the planner is previewing
@@ -165,7 +169,7 @@ export default async function HouseholdSitePage({
         />
       ) : null}
 
-      <SectionRail blocks={shown} />
+      {ctx.theme.layout.chapterRail ? <SectionRail blocks={shown} /> : null}
 
       <SiteBlocks blocks={shown} ctx={ctx} />
 

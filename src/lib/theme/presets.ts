@@ -1,4 +1,12 @@
 import { toRgbChannels, type PaletteTokens } from "./contrast";
+import {
+  DEFAULT_LAYOUT,
+  DEFAULT_MOTION,
+  resolveLayout,
+  resolveMotion,
+  type MotionSettings,
+  type SiteLayout,
+} from "@/lib/site/motion";
 
 /**
  * The theme system for the public site (spec 14 §5, extended by spec 25 Part C).
@@ -162,6 +170,13 @@ export type SiteTheme = {
   monogram: boolean;
   /** Editorial only — Script's two faces are the theme. */
   typography: TypographyId;
+  /**
+   * How much the guest page moves (spec 27). A level and a short list of
+   * overrides; absent in a theme saved before it existed, which reads as Gentle.
+   */
+  motion: MotionSettings;
+  /** The chapter rail and section numbers — switches, not theme (spec 27 E9). */
+  layout: SiteLayout;
 };
 
 /**
@@ -182,6 +197,8 @@ export const DEFAULT_THEME: SiteTheme = {
   heroStyle: "full",
   monogram: false,
   typography: "fraunces_garamond",
+  motion: DEFAULT_MOTION,
+  layout: DEFAULT_LAYOUT,
 };
 
 /** What Script looked like when it was the default — used by its own tests. */
@@ -192,6 +209,8 @@ export const SCRIPT_THEME: SiteTheme = {
   heroStyle: "framed",
   monogram: true,
   typography: "fraunces_garamond",
+  motion: DEFAULT_MOTION,
+  layout: DEFAULT_LAYOUT,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -243,6 +262,8 @@ export function resolveTheme(payload: unknown): SiteTheme {
     heroStyle: pick(payload["hero_style"], HERO_STYLES, THEME_PRESETS[preset].defaultHero),
     monogram: typeof payload["monogram"] === "boolean" ? payload["monogram"] : DEFAULT_THEME.monogram,
     typography: pick(payload["typography"], TYPOGRAPHY_IDS, DEFAULT_THEME.typography),
+    motion: resolveMotion(payload["motion"]),
+    layout: resolveLayout(payload["layout"]),
   };
 }
 

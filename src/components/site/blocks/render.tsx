@@ -3,6 +3,7 @@ import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlo
 import { text } from "@/lib/site/sections";
 import { formatDate, daysUntil, timeLeft } from "@/lib/format";
 import { SiteHero } from "../hero";
+import { ReadingLine } from "../reading-line";
 import { SiteSection } from "../section";
 import { Countdown } from "../countdown";
 import { Monogram } from "../monogram";
@@ -633,15 +634,19 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
   // already dropped hidden blocks and ones for another audience, so a guest
   // never sees 01, 02, 04 and wonders what they missed (spec 25 §8).
   const marks = sectionNumbers(blocks);
+  // A switch, not a theme: the planner can have headings without the numbers
+  // above them (spec 27 E9). The chapter rail reads `sectionNumbers` itself.
+  const numbered = ctx.theme.layout.sectionNumbers;
 
   return (
     <>
+      <ReadingLine />
       {blocks.map((block) => (
         // The id is what the builder's preview uses to scroll to a block and to
         // tell the builder which one was clicked. It carries no content, and a
         // wrapper with no styling changes nothing about the layout.
         <div key={block.id} data-block-id={block.id} data-block-type={block.type}>
-          <SiteBlockView block={block} ctx={ctx} mark={marks.get(block.id)} />
+          <SiteBlockView block={block} ctx={ctx} mark={numbered ? marks.get(block.id) : undefined} />
         </div>
       ))}
     </>

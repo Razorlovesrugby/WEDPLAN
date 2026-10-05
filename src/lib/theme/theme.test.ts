@@ -160,7 +160,24 @@ describe("resolveTheme", () => {
       heroStyle: "type",
       monogram: false,
       typography: "garamond_inter",
+      // A theme saved before spec 27 has neither, and reads as Gentle with the
+      // rail and section numbers on — what the page already did.
+      motion: { level: "gentle", off: [], on: [] },
+      layout: { chapterRail: true, sectionNumbers: true },
     });
+  });
+
+  it("reads the motion level, its overrides and the layout switches", () => {
+    const theme = resolveTheme({
+      motion: { level: "cinematic", off: ["reading_line"], on: [] },
+      layout: { chapter_rail: false },
+    });
+    expect(theme.motion).toEqual({ level: "cinematic", off: ["reading_line"], on: [] });
+    expect(theme.layout).toEqual({ chapterRail: false, sectionNumbers: true });
+  });
+
+  it("survives a motion value it does not understand", () => {
+    expect(resolveTheme({ motion: "loud", layout: 4 }).motion.level).toBe("gentle");
   });
 
   it("falls back to the default pairing for a typography it does not know", () => {

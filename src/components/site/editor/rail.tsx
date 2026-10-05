@@ -3,6 +3,20 @@
 import { useState, useTransition } from "react";
 import { saveTheme } from "@/server/actions/site";
 import {
+  MOTION_EFFECTS,
+  MOTION_EFFECT_COPY,
+  MOTION_LEVELS,
+  MOTION_LEVEL_COPY,
+  activeEffects,
+  serialiseMotion,
+  setLevel,
+  toggleEffect,
+  type MotionEffect,
+  type MotionLevel,
+  type MotionSettings,
+  type SiteLayout,
+} from "@/lib/site/motion";
+import {
   PALETTES,
   PALETTE_IDS,
   THEME_PRESETS,
@@ -41,12 +55,24 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
   const [preset, setPreset] = useState<ThemePresetId>(theme.preset);
   const [palette, setPalette] = useState<PaletteId | "custom">(theme.palette);
   const [typography, setTypography] = useState<TypographyId>(theme.typography);
+  const [motion, setMotion] = useState<MotionSettings>(theme.motion);
+  const [layout, setLayout] = useState<SiteLayout>(theme.layout);
 
-  function save(next: Partial<{ preset: ThemePresetId; palette: PaletteId; typography: TypographyId }>) {
-    const merged = { preset, palette, typography, ...next };
+  function save(
+    next: Partial<{
+      preset: ThemePresetId;
+      palette: PaletteId;
+      typography: TypographyId;
+      motion: MotionSettings;
+      layout: SiteLayout;
+    }>,
+  ) {
+    const merged = { preset, palette, typography, motion, layout, ...next };
     setPreset(merged.preset);
     if (merged.palette !== "custom") setPalette(merged.palette);
     setTypography(merged.typography);
+    setMotion(merged.motion);
+    setLayout(merged.layout);
 
     startTransition(async () => {
       const result = await saveTheme({
@@ -55,6 +81,11 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
         hero_style: theme.heroStyle,
         monogram: theme.monogram,
         typography: merged.typography,
+        motion: serialiseMotion(merged.motion),
+        layout: {
+          chapter_rail: merged.layout.chapterRail,
+          section_numbers: merged.layout.sectionNumbers,
+        },
       });
       setError(result.ok ? null : result.error);
       if (result.ok) onSaved();
@@ -158,6 +189,100 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
             </p>
           ) : null}
         </div>
+      </Section>
+
+      <Section
+        title="Motion"
+        blurb="How much should it move when guests scroll? It never moves for anyone whose device is set to reduce motion."
+      >
+        <div className="space-y-1.5">
+          {MOTION_LEVELS.map((level: MotionLevel) => {
+            const selected = motion.level === level;
+            return (
+              <button
+                key={level}
+                type="button"
+                disabled={pending}
+                aria-pressed={selected}
+                onClick={() => save({ motion: setLevel(motion, level) })}
+                className={`block w-full rounded-md border p-3 text-left ${
+                  selected ? "border-accent bg-[#f6f3ee]" : "border-line hover:border-ink"
+                }`}
+              >
+                <span className="text-sm font-medium">{MOTION_LEVEL_COPY[level].label}</span>
+                <span className="mt-0.5 block text-xs leading-snug text-muted">
+                  {MOTION_LEVEL_COPY[level].description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* The three levels are the control; these are the escape hatch for
+            somebody who wants Gentle without one particular thing. */}
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs text-muted">Customise</summary>
+          <ul className="mt-2 space-y-2">
+            {MOTION_EFFECTS.map((effect: MotionEffect) => (
+              <li key={effect}>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={pending || motion.level === "still"}
+                    checked={activeEffects(motion).includes(effect)}
+                    onChange={() => save({ motion: toggleEffect(motion, effect) })}
+                  />
+                  <span>
+                    {MOTION_EFFECT_COPY[effect].label}
+                    <span className="block text-xs text-muted">{MOTION_EFFECT_COPY[effect].help}</span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          {motion.level === "still" ? (
+            <p className="mt-2 text-xs text-muted">Still turns every one of these off.</p>
+          ) : null}
+        </details>
+      </Section>
+
+      <Section title="Page">
+        <ul className="space-y-2">
+          <li>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending}
+                checked={layout.chapterRail}
+                onChange={(event) =>
+                  save({ layout: { ...layout, chapterRail: event.target.checked } })
+                }
+              />
+              <span>
+                Chapter list down the side
+                <span className="block text-xs text-muted">
+                  Wide screens, Editorial theme only.
+                </span>
+              </span>
+            </label>
+          </li>
+          <li>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending}
+                checked={layout.sectionNumbers}
+                onChange={(event) =>
+                  save({ layout: { ...layout, sectionNumbers: event.target.checked } })
+                }
+              />
+              <span>
+                Numbers above headings
+                <span className="block text-xs text-muted">04 · Attire — off leaves the heading alone.</span>
+              </span>
+            </label>
+          </li>
+        </ul>
       </Section>
 
       {error ? (
