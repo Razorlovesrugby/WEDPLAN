@@ -1,6 +1,6 @@
 # Feature spec: Invite polish, round one — the planner's first findings
 
-**Status: proposed, not built (2026-10-05).** The planner went through the
+**Status: questions answered, not built (2026-10-05).** The planner went through the
 invitation and the `/site` editor and came back with fifteen findings, then three more (§7a). This
 spec groups them, says what is actually behind each one (read off the
 source, not guessed), proposes how each should feel to use, and lists what
@@ -12,6 +12,32 @@ this file; building waits for an explicit "build it".
 invites), 23 (blocks), 24 (the rail), 25 (dress codes, coach-by-event, song
 votes, gift funds), 27 (the invitation experience, the preview harness). All
 built, none applied to the live project in full.
+
+## Answered — 2026-10-05
+
+The planner answered §11 in one sitting. **This is not authorization to
+build** — it settles the content; building waits for "build it".
+
+| Q | Answer | What it changes |
+| --- | --- | --- |
+| 1 | **The planner applies `0026`–`0032` themselves.** | Step 0 of §10 is theirs. Checklist: run each file in order in the SQL editor of the project the Vercel app's `NEXT_PUBLIC_SUPABASE_URL` points at, then load `/api/health`. |
+| 2 | **The 404 was in the preview.** | §4.1's diagnosis stands. |
+| 3 | **A real preview download.** | §4.1 option (a): a planner-authenticated `.ics` for the household being previewed. |
+| 4 | **Desktop view.** | §4.2 reproduces at the 1280px/0.52 desktop setting first. |
+| 5 | **Real answers, with a "Show blank" toggle.** | §4.3 as recommended. |
+| 6 | **Keep the initials in the footer.** | §5.1 as recommended. |
+| 7 | **Yes to all of it**: the switch to hide the bar entirely, the bar's RSVP hidden on phones while the reply bar shows, initials in the footer. | §5.2 as written. |
+| 8 | *Moot* — there is no shared page (Q18). | Event notes render on household pages only. |
+| 9 | **One set of bank details per wedding; keep funds.** | §6.1: funds stay as named things to give towards, every Contribute opens the same details. |
+| 10 | **Household links only** — and with Q18 there is nowhere else. | §6.1: no shared-page fallback needed. |
+| 11 | *Moot* (Q18). | The vote button is on every page a guest can reach. |
+| 12 | **The planner writes their own placeholder; a joke default until they do.** | §6.3: a "Placeholder song" field in the Song requests block's inspector. Default when blank: *"Anything but Wonderwall"*. |
+| 13 | **Both** — the Questions (FAQ) block *and* the RSVP questions on `/questions`. | §7.1 adds `/questions`: drag to reorder alongside its existing Move up/down. |
+| 14 | **Both editable** — the title and the small `04 · QUESTIONS` label. | §7.2: a second field, **Label**, defaulting to the block's category; the number stays automatic. |
+| 16 | **No such thing as Maybe; invites aren't out yet.** | §7a.1 simplifies: no old Maybe replies to handle, no "Still deciding?" nudge. |
+| 17 | **Plain Q&A, no arrows.** | §7a.2 as recommended. |
+| 18 | **Remove the shared page entirely; `/w/<slug>` is a 404.** | New §7a.4. |
+| 19 | Nothing further added. | — |
 
 ## 1. What was asked, verbatim and grouped
 
@@ -266,9 +292,8 @@ and the dress code — everything except the note.
   nobody reads the same notes twice. The rail shows it greyed with
   "Now part of You're invited to — you can delete this", and a one-click
   delete.
-- The **shared** page's schedule (no household) keeps showing no notes,
-  as today: `on_the_day` was invited-only by default, and a note can carry
-  a gate code. §11 Q8.
+- Notes only ever render on a household's page — which, with the shared
+  page gone (§7a.4), is every page.
 
 ## 6. Group D — reworking three features
 
@@ -295,9 +320,7 @@ and an optional `contribute_url` that the button links out to. The block
     One **Copy all** below copies the three as labelled lines for a
     guest pasting into a note.
   - The reference is pre-filled per household — their surname, e.g.
-    *"Okonkwo gift"* — so the couple can tell who sent what. On the
-    shared page it falls back to a line asking the guest to put their
-    name in the reference.
+    *"Okonkwo gift"* — so the couple can tell who sent what.
   - If clipboard access is blocked (older iOS webviews, some in-app
     browsers), the values are selectable text and the button says
     "Select and copy" — the popup never depends on the Clipboard API to
@@ -305,17 +328,20 @@ and an optional `contribute_url` that the button links out to. The block
   - Esc, the close button and tapping the backdrop all close it, and
     focus returns to the Contribute button.
 - **In the editor** (`/site/gifts`): the target and raised fields
-  disappear. Bank details are entered once (see §11 Q9 on whether
-  that's per wedding or per fund), with live validation of the account
-  number's shape.
+  disappear. **Bank details are entered once for the wedding** (Q9) —
+  account name, account number, and an optional note — at the top of the
+  page, with live validation of the account number's shape. The funds
+  below keep their name and blurb.
 
-**Schema.** New columns (or a small table) for the bank details — a new
+**Schema.** Wedding-level columns (or a one-row-per-wedding table) for the bank details — a new
 numbered migration, never an edit to `0030`. `target_minor` and
 `raised_minor` stay in the database (append-only; dropping a column the
 couple typed into is a data loss) but are no longer read by the page.
 `contribute_url` stays as an optional second button, "Or give online".
 
-**Bank details are private information on a public page.** §11 Q10.
+**Who sees them (Q10):** household links only — every page that exists
+after §7a.4. The details are still never put in any link preview, Open
+Graph image or page metadata; they render only inside the popup.
 
 ### 6.2 Song votes, made obvious (finding 11)
 
@@ -344,9 +370,6 @@ guests) seeing it:
   under a thumb is how people vote for the wrong song.)
 - A guest's own suggestion from their personal link appears at once with
   **"Your suggestion"** on it, and their vote already on it.
-- On the shared page, the vote button shows but opens a one-line note:
-  *"Voting is on your own invitation link."* — rather than not existing.
-  §11 Q11.
 - In the preview it's drawn and clickable, nothing saved (§4.3).
 
 ### 6.3 The default song suggestion (finding 12)
@@ -355,16 +378,11 @@ guests) seeing it:
 Queen* / *ABBA* (`src/components/site/song-requests.tsx`). Placeholders
 are greyed hints in empty fields, never submitted.
 
-**Proposed.** A small set of joke placeholders, one picked at random
-per page load, so it stays funny the second time somebody looks.
-Candidates for the planner to choose from (§11 Q12):
-
-- *Macarena* — Los del Río ("we will not be playing this")
-- *Never Gonna Give You Up* — Rick Astley
-- *Mr Brightside* — The Killers (the one everybody requests anyway)
-- *Achy Breaky Heart* — Billy Ray Cyrus
-- *The Chicken Dance* — the DJ's nemesis
-- Or a line in the couple's own voice: *"Anything but Wonderwall"*
+**Decided (Q12).** The planner writes their own. The Song requests
+block's inspector gets a **Placeholder song** field (and **Placeholder
+artist**, optional), shown greyed in the guest's empty song box. Until the
+planner writes one, the default is *"Anything but Wonderwall"* in the song
+box and nothing in the artist box.
 
 The form's intro line ("Tell us what will get you dancing.") is already
 editable per block; this doesn't change that.
@@ -380,8 +398,11 @@ editable per block; this doesn't change that.
 - the **RSVP questions** on `/questions` (dietary, song request, etc.),
   which already have Move up / Move down.
 
-This spec assumes the FAQ block, because that's the "Questions section"
-on the invitation; §11 Q13 confirms.
+**Decided (Q13): both.** The FAQ block gets the work below. `/questions`
+(`src/components/questions/questions-editor.tsx`) already has Move up/down
+via `reorderQuestion`; it gets the same drag handle on top, writing through
+the same action so there's still one ordering path. The RSVP form already
+reads them in `sort_order`.
 
 **What is there.** The FAQ's questions are a repeating list in the block
 inspector (`src/components/site/editor/block-inspector.tsx`). Rows can be
@@ -431,12 +452,17 @@ section list out of it).
   switch hides it entirely, for a block that speaks for itself.
 - The custom title flows everywhere the heading is used: the chapter list
   down the side, and the reply bar's label for the RSVP block.
-- The small `04 · QUESTIONS` label above the heading: §11 Q14.
+- **The small label above it is editable too (Q14).** A second field,
+  **Label**, under Title, with the block's category as its placeholder
+  (*"Questions"*). The number in front (`04 ·`) stays automatic, so
+  reordering sections can't leave them out of sequence. The existing
+  "Numbers above headings" switch still hides number and label together.
 
-For "You're invited to" and "RSVP", where the default differs by page, the
-custom title is used on both. Leaving it blank keeps both defaults.
+With the shared page gone (§7a.4), the household defaults are the only
+ones left — "You're invited to" and "Will you be there?" — and those are
+what the placeholders show.
 
-Stored in the block's own `payload` (`heading`), which is how the four
+Stored in the block's own `payload` (`heading`, `eyebrow`), which is how the four
 blocks that already have it work — no migration.
 
 ## 7a. Group F — added 2026-10-05 (findings 16–18)
@@ -461,11 +487,8 @@ session 30 already has no Maybe.
 - **The enum stays.** Removing a value from a Postgres enum means rebuilding
   the type and every view over it, and existing `maybe` replies would have
   nowhere to go. No migration.
-- **A guest who already answered Maybe** sees that person/event as
-  unanswered on the form (neither button pressed), with a gentle
-  *"Still deciding? Let us know when you can."* — rather than a third state
-  they can't select. Nothing is rewritten in the database until they
-  actually choose. §11 Q16.
+- **No guest has answered Maybe** — invitations haven't gone out (Q16) —
+  so there's nothing to migrate or explain. The form just doesn't offer it.
 - The planner's guest list keeps its Maybe count, which will simply stop
   growing.
 
@@ -482,7 +505,7 @@ which six.
   collapsed remainder, no tag groups.
 - They render as **plain questions and answers**, not as open-but-closable
   `<details>` toggles — a disclosure arrow on something already open invites
-  a guest to close it and wonder where it went. §11 Q17.
+  a guest to close it and wonder where it went. **Decided (Q17).**
 - The **"Show open" tick disappears** from the editor. Its stored value is
   left in the payload and ignored (removing it would only matter if this is
   ever reversed).
@@ -490,7 +513,8 @@ which six.
   grouped and collapsed"* to say they're all shown.
 - With a long list, the planner is the one who keeps it short. The editor
   could show a soft note at, say, 15 questions — *"That's a lot to read on a
-  phone"* — but never blocks. §11 Q17.
+  phone"* — but never blocks. (Not asked directly; included unless the
+  planner says otherwise.)
 
 ### 7a.3 No "main site" line at the bottom (finding 18)
 
@@ -512,8 +536,46 @@ no RSVP), it's where **"find my invitation"** lives for a guest who lost
 their link, and it's what a save-the-date points at. If "there is no main
 site", the planner may want the shared page reduced to just a landing:
 the couple's names, the date, and "find your invitation" — with nothing
-else public. That's a larger change than deleting a line, so it's a
-question here (§11 Q18), not part of this round's proposal.
+else public. **Answered (Q18): remove it entirely** — see §7a.4.
+
+### 7a.4 No shared page (Q18)
+
+**Decision.** `/w/<slug>` returns a plain **404**. The wedding's existence
+isn't confirmed at that address at all. Every guest-facing page is a
+household's own: `/w/<slug>/<household>` and its `/save-the-date`, both
+unchanged.
+
+**What else goes with it** (read off the source):
+
+- `src/app/w/[slug]/page.tsx` renders `notFound()` for everyone, the
+  planner included. The planner's view is the preview.
+- **"Find my invitation"** (`src/components/site/find-invitation.tsx`) and
+  the RSVP block's shared-page pointer (`RsvpPointer`) are no longer
+  reachable. Delete them rather than leave dead code. A guest who loses
+  their link asks the couple, who resend it from `/invitations`.
+- **The bare `/w`** (`src/app/w/page.tsx`) redirects to the shared page
+  today. It becomes a 404 too.
+- **Planner links that open the shared page** — "View site" on `/site`,
+  `/site/theme`, and the link on `/travel` — instead open the **preview**
+  (`/site/preview?as=…`), or a household's live page from
+  `/households/[id]`.
+- **"Who sees this block"** (`audience`: everyone / invited) only ever
+  differed on the shared page. Every reader is now invited. The control
+  leaves the inspector; stored values are ignored, not rewritten.
+- **Events' "show on the site" flag** (`events.is_public`) decided what the
+  shared page listed. Household pages already use per-event invitations
+  (spec 22). **But the preview still filters on `is_public`**
+  (`buildPreviewPersonal`), so an event not marked public is missing
+  from the preview while present on the household's real page. The
+  preview switches to the household's real invitations.
+- **Song requests** from the shared page were queued for approval
+  (`canPublishImmediately()`, spec 25). Every request now comes from a
+  household link and publishes immediately, so the approval queue on
+  `/site/songs` stops filling. Keep it as a place to hide a song.
+- **Publishing** still matters: household pages read the published
+  revision, not the draft.
+- Sitemaps and link-preview images for `/w/<slug>`, if any, go with the
+  page. Household pages already have their own Open Graph images.
 
 ## 8. What was considered and not recommended
 
@@ -568,7 +630,9 @@ question here (§11 Q18), not part of this round's proposal.
    preview calendar. Everything after this is easier to judge.
 2. **Reproduce and fix the shrinking preview** (§4.2).
 3. **Quick removals** — the "main site" line (§7a.3), Maybe (§7a.1), every
-   question open (§7a.2). Small, and each one visible straight away.
+   question open (§7a.2), and the shared page with everything in §7a.4.
+   The shared page goes before anything else is redesigned, so no later
+   step spends effort on a page that's about to 404.
 4. **Initials and the top bar** — hero initials off (§5.1), the slim
    initials-and-RSVP bar and its switch (§5.2).
 5. **Event notes into "You're invited to"** and deprecate On the day (§5.3).
@@ -582,8 +646,8 @@ Each step is independently shippable.
 
 ## 11. Open questions for the planner
 
-Each has a recommendation; "go with the recommendations" is a valid
-answer.
+**All answered 2026-10-05 — see "Answered" at the top.** Kept as asked,
+for the record.
 
 1. **Migrations.** Will you apply `0026`–`0032` yourself (SQL editor /
    CLI), or do you want the WEDPLAN Supabase project connected to a
@@ -657,6 +721,11 @@ answer.
   unanswered.
 - Every question in the Questions block is shown open.
 - The household page no longer mentions a "main site".
+- `/w/<slug>` and `/w` return 404; every planner link that used to open
+  them opens the preview instead; "find my invitation" is gone; the
+  preview shows the household's real invited events, public or not.
+- The song placeholder and both FAQ and `/questions` orderings are set by
+  the planner; every section's title and small label can be renamed.
 - Event notes appear under their event, grouped by date, in "You're
   invited to", and On the day no longer repeats them.
 - Gifts show no money figures; Contribute opens the bank details popup
