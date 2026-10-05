@@ -64,6 +64,24 @@ marked "to confirm"** — you did not answer these individually.
 | 4 "Preview as a household" picker | Yes (it is E7 here) | |
 | 5 The style labels | As proposed ("Plain / Tinted / Dark", "As taken / Square / Tall / Wide") | **To confirm** — they are copy |
 
+### Added after the round — 2026-10-05
+
+Two further instructions, given in the same session, once the greeting's
+design was seen:
+
+> "Please make house greeting custom and able to toggle, everything I should
+> be able to toggle."
+
+1. **The household greeting is customisable and can be switched off.** Its
+   wording is the planner's, built from tokens for the household's names
+   (§5, "The greeting"). Previously it was derived and fixed.
+2. **Everything this spec adds is a switch.** Not only the greeting: every
+   element, effect and personal touch has an on/off, a stated default, and
+   leaves no hole when off. This is now a rule (§4) with a complete list
+   (§9, E9), and a test that enforces it (§14).
+
+Both are spec content; neither authorizes a build.
+
 ---
 
 ## 1. What was asked
@@ -178,6 +196,13 @@ have looked at and would put our name to.
   stronger now: this page is opened on a phone, on mobile data, often on a
   venue's one bar of signal.
 
+**Everything is a switch** (added 2026-10-05). Anything this spec puts in front
+of a guest — an element, an effect, a personal touch — can be turned off by the
+planner, has a default we state, and **closes up cleanly when off**: no empty
+frame, no orphaned heading, no gap where it was. The cheap way to break this is
+to build a feature and add its switch later; the rule is that a feature has no
+render path without one. The full list is E9 (§9).
+
 **Personal means *for them*, and the credential stays a credential.** The
 household link is a secret (spec 21 §3). So: nothing personal ever renders on
 the shared `/w/<slug>` page; the `ViewLogger` and `ReplyBanner` rule that
@@ -204,8 +229,9 @@ the invitation's front — not the site's hero with a caption under it. It
 carries, large, in the theme's display face:
 
 ```
-                For Chidi, Ada and Zara          ← listNames(first names)
-                                                   (spec 22's helper exists)
+                For Chidi, Ada and Zara          ← the greeting: a template the
+                                                   planner writes, off if they
+                                                   want (see "The greeting")
                   Ray  &  Olivia
               invite you to their wedding
               Saturday 12 June 2027 · Wells
@@ -240,8 +266,67 @@ envelope after seeing the cover, it is buildable as a `<dialog>` that is
 - The cover is also what the Open Graph image already is for the household
   link (`opengraph-image.tsx`) — the preview in WhatsApp and the first screen
   should look like they belong together. A one-line check, not a build item.
-- Reads the existing hero payload; adds optional `cover_line` ("invite you to
-  their wedding" is the default) to the hero block's fields. No new block.
+- Reads the existing hero payload; adds `cover_line` ("invite you to their
+  wedding" by default) and the greeting's fields (below) to the hero block.
+  **Each line of the cover — greeting, cover line, date, place, "a line about
+  why", the scroll cue — has its own switch** (E9). No new block.
+
+### The greeting
+
+**What it is.** The line addressed to the household at the top of their page.
+It appears **only on a household's own page** (`ctx.personal` set), never on the
+shared site and never in any metadata — §7's rule, unchanged.
+
+**It is the planner's wording, not ours.** A single text field on the hero
+block, built from tokens the renderer fills in:
+
+| Token | Becomes | Example |
+| --- | --- | --- |
+| `{names}` | The household's members' first names, joined (`listNames`, spec 22) | `Chidi, Ada and Zara` |
+| `{household}` | The household's display name, which is already editable in Guests | `Okonkwo family` |
+
+| Template | Renders as |
+| --- | --- |
+| `For {names}` *(default)* | For Chidi, Ada and Zara |
+| `Dear {names}` | Dear Chidi, Ada and Zara |
+| `Dear {household}` | Dear Okonkwo family |
+| `Welcome, {names}` | Welcome, Chidi, Ada and Zara |
+| `Just for you` *(no tokens)* | Just for you |
+
+Choosing between *first names* and *the household name* is therefore choosing
+a token, not a second setting. A template with no token is allowed — "Welcome"
+is a legitimate greeting — and renders the same for everyone.
+
+**Switch.** `greeting` on/off, on the hero block, **default on**. Off means the
+line is not rendered and the cover closes up around the names. This is separate
+from the template: switching it off keeps your wording, so switching it back on
+does not mean retyping it.
+
+**Rules the renderer holds, so the planner cannot make it look wrong:**
+- **Plain text, 80 characters at most.** No HTML, no markup, escaped like every
+  other free text on this site. Unknown tokens (`{nickname}`) are rejected at
+  save with the allowed ones named, never rendered raw.
+- **A household with no named guests** falls back to `{household}` for
+  `{names}`, rather than rendering "For ".
+- **A very large household** (more than five first names) falls back to
+  `{household}` as well — "For Chidi, Ada, Zara, Ruth, Tobi, Kemi and Femi"
+  is a sentence, not a greeting. The threshold is one constant.
+- **A template that renders empty** after substitution hides the greeting
+  rather than leaving its space.
+- It is set in the display face at the cover's size; length never changes the
+  layout, only wraps (`text-wrap: balance`).
+
+**What the planner sees while editing.** The preview with no `?as=` is the
+*shared* site, which by rule has no greeting — so a planner switching the
+greeting on would see nothing and conclude it was broken. The builder therefore
+**previews as a real household by default** (the first on the list, with a
+visible "Previewing as the Okonkwos · change" control, E7), and says so beside
+the greeting field: "Only guests with their own link see this."
+
+**What it does not do:** there is still no per-household override — one
+household cannot have different wording from another. That was the couple's
+note (cut, Q3) and would need a column; the template plus the household's
+editable display name covers the cases that are not a one-off.
 
 ## 6. Part B — A scroll with a point
 
@@ -271,7 +356,7 @@ with the save-the-date's `std-rise`: a soft ease-out for entrances and, for the
 few places that want weight (the RSVP confirmation, §8), a `linear()` function
 easing that approximates a spring — plain CSS, no library.
 
-**A motion level, not a motion editor.** The planner gets one control, "How
+**A motion level first, and a short list of switches behind it (E9) — not a motion editor.** The planner gets one control, "How
 much should it move?", with three answers: **Still** (no scroll animation at
 all; the page is a quiet document), **Gentle** (chapter arrivals, hairline,
 nav — the default), **Cinematic** (adds the cover parallax, photo un-crop, the
@@ -472,7 +557,10 @@ not credible without it**.
 
 ### E7. See it as them, on a phone
 
-The `?as=<household>` picker (spec 24 Q4) in the preview toolbar, a real
+The `?as=<household>` picker (spec 24 Q4) in the preview toolbar — **and the
+preview opens as a real household by default**, labelled as such, because the
+greeting, the weekend card and the reply bar exist only there and a default
+preview of the shared site would show none of them, a real
 **phone toggle** on a narrow editor (spec 24 §3 row 6), and an "Open on my
 phone" QR that encodes a household's own link with `?preview=1` so the planner
 can scroll their own invitation with their own thumb. That last one is small
@@ -488,6 +576,59 @@ names, addresses or dietary notes**, only what the planner types into that one
 field; and it adds a third party to the planner's workflow (not the guest's —
 §4's guest-side no-third-party rule is untouched). Listed so it is a decision
 and not an omission; recommended **out** of this spec (§12 question 9).
+
+### E9. Everything is a switch
+
+The rule from §4, made concrete. **Where each switch lives:** *Page* switches
+are in the rail's Theme section; *Block* switches are in that block's inspector;
+*Per block* is the style area every block already has. **Default** is what a
+new or unchanged site gets, which is also what an existing site renders until
+somebody touches it — **every new switch's off-by-default or on-by-default
+value is chosen so that an existing published site looks the same the day this
+ships.**
+
+| Switch | Where | Default | When off |
+| --- | --- | --- | --- |
+| Greeting (and its wording) | Hero block | On (household pages only) | Names alone; the cover closes up |
+| Cover line ("invite you to their wedding") | Hero block | On | Names, then the date |
+| Date / Place / "a line about why" | Hero block | On if there is text | Line not drawn |
+| Countdown | Hero block | As today | Not drawn |
+| Scroll cue (the ↓ on the cover) | Hero block | On | Not drawn |
+| Cover hand-over (parallax, deepening scrim) | Page → Motion | By level | Static cover |
+| Section arrivals | Page → Motion | By level | Sections simply present |
+| Itinerary draws itself | Page → Motion | Cinematic | Line fully drawn |
+| Photo arrival (un-crop) | Page → Motion | Cinematic | Plain image |
+| Reading line | Page → Motion | Gentle and up | Not drawn |
+| Condensing nav | Page → Motion | Gentle and up | Always the condensed form |
+| Stagger | Page → Motion | Cinematic | Group arrives together |
+| Entrance on one block | Per block | Match the page | That block is still |
+| Chapter rail (Editorial) | Page → Layout | As today | Not drawn |
+| Section numbers (`04 · ATTIRE`) | Page → Layout | As today | Heading alone |
+| Weekend card | Guests' pages | On | Not drawn |
+| Calendar button on it | Weekend card | On | Card without the button |
+| Sticky reply bar | Page → Layout | On | The form alone, as today |
+| Reply-by date inside it | Reply bar | On when a lock date exists | Bar says "Reply" |
+| Lightbox | Gallery block, photo blocks | On | Photos are not enlargeable |
+| Every block | Block list (already exists) | Visible | Hidden, and renumbers |
+| Every block's audience | Block inspector (already exists) | Everyone | As chosen |
+
+**How the motion switches are stored without becoming a settings screen:** the
+page's `motion` is a level plus a short list of *overrides*, not eight
+independent booleans. The level sets every effect's default; an override turns
+one effect off (or on) from there. So "Gentle, but no reading line" is
+`{ level: "gentle", off: ["reading_line"] }`, and a new effect added later
+ships with a level default and needs no migration of anyone's saved theme.
+In the rail this is one control, "How much should it move?", with a "Customise"
+disclosure listing the effects as checkboxes — **the three-level control is the
+primary thing and the checkboxes are the escape hatch**, so a planner who just
+wants it calmer never has to read eight checkboxes.
+
+**What is deliberately not a switch:** the things that are *correctness*, not
+decoration. Reduced-motion handling (it follows the guest's system setting, not
+the planner's taste), the `@supports` guards, the privacy rules (§4 — the
+greeting cannot be forced onto the shared site), and the scrim over a
+photograph that makes text legible. A switch that can produce an unreadable or
+leaking page is the failure spec 23 §7 named.
 
 ## 10. What was considered and not recommended
 
@@ -512,13 +653,19 @@ and not an omission; recommended **out** of this spec (§12 question 9).
   The household note that would have been `0032` is cut (Q3); the numbering
   here assumes nothing else lands first.
 - No other schema. Everything else lives where it already lives.
+- **Hero block payload** gains `greeting` (boolean), `greeting_text`,
+  `cover_line` (+ its switch), and a switch per cover line (E9). These are
+  payload keys, not columns: **no migration**, but `BLOCK_SCHEMAS` and
+  `BLOCK_FORMS` must list them or the inspector cannot write them and the save
+  path rejects them. The greeting is validated server-side — plain text, 80
+  characters, known tokens only — in the action, not the form.
 - `site_blocks.style` gains `variant` and `enter`. **`styleSchema` is
   `.strict()`** (`actions/site-blocks.ts:44-55`): a key it does not list is
   rejected, so *the build must add the keys to the schema and to `BlockStyle`
   together*, or every save of a styled block fails with "That isn't a style this
   block offers". Same trap in the revision snapshot path (`site-blocks.ts:488+`).
   A test (§14) asserts the two stay in step.
-- The theme gains `motion` and (if E3 lands) `vibe`; stored in the existing
+- The theme gains `motion` (`{ level, off[] }` — E9) and (if E3 lands) `vibe`, plus the page-level layout switches (chapter rail, section numbers, reply bar); stored in the existing
   `site_content['theme']` row. `resolveTheme` already "never throws and falls
   back field by field" — the new keys follow that rule, so a theme saved last
   month still renders.
@@ -590,7 +737,20 @@ The pure parts are most of what this adds, and all are unit-testable:
 - **`resolveTheme` never throws on a theme saved before `motion` existed**, and
   falls back field by field.
 - **The greeting:** `listNames` over one, two, three and zero first names, a
-  household of one adult, non-Latin names.
+  household of one adult, non-Latin names. **The template renderer:** every
+  token on its own and combined; no token; an unknown token is rejected, not
+  rendered; a household with no named guests falls back to `{household}`; more
+  than five names falls back; a template that renders empty hides the greeting;
+  HTML in the template is rendered as text; 81 characters is refused.
+- **Every switch (E9) is in a registry** carrying its label, location and
+  default, and the test is total over it: for each switch, render the block or
+  page with it off and assert the markup contains no element it owns and no
+  empty wrapper where it was. Adding an effect without registering its switch
+  fails the build. Also asserts **no switch's default changes what an existing
+  published site renders** — the "looks the same the day this ships" rule.
+- **The motion model:** `{level, off[]}` resolves every effect, an unknown
+  effect in `off` is ignored rather than throwing, and a theme saved before
+  `motion` existed resolves to Gentle.
 - **The weekend `.ics`:** event times in the wedding's timezone, an all-day
   event, DST boundaries, a household invited to one event of three (spec 22's
   `v_guest_event_invites` is the source of truth).
