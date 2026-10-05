@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { Monogram } from "./monogram";
 import { HeroCounter } from "./hero-counter";
 import { splitHeadline } from "@/lib/site/names";
@@ -17,10 +16,14 @@ import type { HeroStyle, ThemePresetId } from "@/lib/theme/presets";
  * theme that is not a downgrade: a monogram and two names set in the script
  * face is what the front of an invitation looks like.
  *
- * **Same-origin images only.** An arbitrary URL here would put a third party
- * in front of every guest (§11) and needs `remotePatterns` in next.config to
- * work at all. A path beginning with a single "/" is this app; anything else
- * is dropped and the hero falls back to `type` rather than rendering broken.
+ * **Two sources, only one of them typed by a person.** `imageUrl` is a signed
+ * URL for a photo the planner uploaded (a private bucket, so absolute and
+ * expiring) and comes from the server, never from a text field. `imagePath` is
+ * the legacy typed path, and an arbitrary one would put a third party in front
+ * of every guest (§11): a path beginning with a single "/" is this app,
+ * anything else is dropped and the hero falls back to `type` rather than
+ * rendering broken. Do not run `imageUrl` through `sameOriginPath` — that is
+ * what made an uploaded hero photo vanish from the preview.
  */
 function sameOriginPath(value: string | null): string | null {
   if (!value) return null;
@@ -30,12 +33,30 @@ function sameOriginPath(value: string | null): string | null {
   return trimmed;
 }
 
+/**
+ * A plain `<img>`, as in `PhotoBand`: the signed URL comes from a private
+ * bucket, so next/image's optimiser has nothing to cache, would re-fetch an
+ * expiring URL, and refuses a host not listed in `remotePatterns`.
+ */
+function HeroImage({ src, alt }: { src: string; alt: string | null }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- see above
+    <img
+      src={src}
+      alt={alt ?? ""}
+      fetchPriority="high"
+      className="absolute inset-0 h-full w-full object-cover"
+    />
+  );
+}
+
 export function SiteHero({
   style,
   preset = "script",
   headline,
   dateLabel,
   location,
+  imageUrl = null,
   imagePath,
   imageAlt,
   monogramName,
@@ -54,6 +75,8 @@ export function SiteHero({
   headline: string;
   dateLabel: string | null;
   location: string | null;
+  /** A signed URL for an uploaded photo. Trusted: it is minted server-side. */
+  imageUrl?: string | null;
   imagePath: string | null;
   imageAlt: string | null;
   monogramName: string | null;
@@ -61,7 +84,7 @@ export function SiteHero({
   weddingDate?: string | null;
   timeLeft?: TimeLeft | null;
 }) {
-  const image = sameOriginPath(imagePath);
+  const image = imageUrl ?? sameOriginPath(imagePath);
   const effective: HeroStyle = image ? style : "type";
 
   if (preset === "editorial") {
@@ -107,14 +130,7 @@ export function SiteHero({
     return (
       <header id="hero" className="relative scroll-mt-16">
         <div className="relative h-[68vh] min-h-[420px] w-full">
-          <Image
-            src={image}
-            alt={imageAlt ?? ""}
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover"
-          />
+          <HeroImage src={image} alt={imageAlt} />
           {/* The scrim is what makes the text legible over an unknown photo.
               Without it the hero passes contrast against whatever the
               photographer happened to shoot, which is not a guarantee. */}
@@ -132,14 +148,7 @@ export function SiteHero({
       <div className="mx-auto max-w-2xl">
         <div className="border border-line p-2.5">
           <div className="relative aspect-[4/3] w-full sm:aspect-[3/2]">
-            <Image
-              src={image}
-              alt={imageAlt ?? ""}
-              fill
-              priority
-              sizes="(max-width: 672px) 100vw, 672px"
-              className="object-cover"
-            />
+            <HeroImage src={image} alt={imageAlt} />
           </div>
         </div>
         <div className="mt-9">{words}</div>
@@ -234,7 +243,7 @@ function EditorialHero({
   return (
     <header id="hero" className="relative scroll-mt-16">
       <div className="relative min-h-[560px] w-full sm:min-h-[88vh]">
-        <Image src={image} alt={imageAlt ?? ""} fill priority sizes="100vw" className="object-cover" />
+        <HeroImage src={image} alt={imageAlt} />
         <div className="absolute inset-0 bg-[rgba(18,22,19,0.62)]" />
 
         {weddingDate ? (
