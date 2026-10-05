@@ -52,9 +52,16 @@ function revalidateSite(): void {
 // Blocks
 // ---------------------------------------------------------------------------
 
+/**
+ * Add a block.
+ *
+ *   `afterId` a block id   — directly after it
+ *   `afterId` undefined    — at the end of the page
+ *   `afterId` null         — at the very top (a drop above the first block)
+ */
 export async function addBlock(
   type: string,
-  afterId?: string,
+  afterId?: string | null,
 ): Promise<ActionResult<{ id: string }>> {
   if (!isBlockType(type)) return fail("That isn't a kind of block");
 
@@ -70,7 +77,9 @@ export async function addBlock(
   // Gaps of 10, so an insert between two blocks has somewhere to land without
   // renumbering the page.
   const index = afterId ? blocks.findIndex((block) => block.id === afterId) : blocks.length - 1;
-  const sortOrder = (index + 1) * 10 + 5;
+  // Above the first block is a negative order, which sorts before the page's own
+  // 0, 10, 20…; the next reorder renumbers everything from 0 as it always does.
+  const sortOrder = afterId === null ? -5 : (index + 1) * 10 + 5;
 
   const supabase = await createClient();
   const { data, error } = await supabase

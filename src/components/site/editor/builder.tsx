@@ -5,18 +5,28 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   closestCenter,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import type { Modifier } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   BLOCKS,
   STARTER_LAYOUTS,
+  type BlockDef,
+  type BlockType,
   palletableBlocks,
   pageNotes,
   sectionNumbers,
@@ -38,7 +48,14 @@ import {
 } from "@/server/actions/site-blocks";
 import { formatRelative } from "@/lib/format";
 import { blockSnippet, blockStatus, blocksNeedingWork, type BlockStatus } from "@/lib/site/starter";
-import { PREVIEW_CHANNEL, isFromPreview, type ToPreview } from "@/lib/site/preview-messages";
+import {
+  PREVIEW_CHANNEL,
+  insertionAfter,
+  insertionLineY,
+  isFromPreview,
+  type BlockRect,
+  type ToPreview,
+} from "@/lib/site/preview-messages";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { BlockInspector } from "./block-inspector";
 import { LookSections, Section } from "./rail";
@@ -84,6 +101,26 @@ const DEVICE = {
 
 type Device = keyof typeof DEVICE;
 
+/** How long a delete can be taken back. */
+const UNDO_MS = 8000;
+
+/** The id of the droppable laid over the preview while a new block is dragged. */
+const PREVIEW_DROP = "preview-drop";
+
+type Removal = { id: string; label: string; wasVisible: boolean };
+
+/**
+ * Where a dragged-in block will go: after which block, and where to draw the line.
+ * `offscreen` is set when the foot of that block is outside the visible frame (a
+ * tall block), so the line is pinned to the frame's edge and says where it means.
+ */
+type Insertion = {
+  afterId: string | null;
+  top: number;
+  label: string;
+  offscreen: "above" | "below" | null;
+};
+
 /** A glyph per family, for blocks with no photograph to show in the list. */
 const FAMILY_GLYPH: Record<BlockFamily, string> = {
   essentials: "◆",
@@ -126,6 +163,20 @@ export function SiteBuilder({
   // preview of the shared site would show a planner none of what they are
   // editing. "shared" is the shared site, for when that is the question.
   const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "shared");
+
+  // ---- deleting with an undo (spec 24 §8, spec 27 E6) ----
+  // A delete is not performed when it is clicked. The block is hidden at once —
+  // so the preview follows and nothing is lost — and a toast offers to put it
+  // back for UNDO_MS; only then is it really deleted. Undo is "show it again as
+  // it was", which needs no schema: `visible` is already a column.
+  const [removals, setRemovals] = useState<Removal[]>([]);
+  const removalTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const removingIds = useMemo(() => new Set(removals.map((removal) => removal.id)), [removals]);
+
+  // ---- dragging a new block onto the page (spec 27 E5) ----
+  const [dragType, setDragType] = useState<BlockType | null>(null);
+  const [insertion, setInsertion] = useState<Insertion | null>(null);
+  const rects = useRef<{ blocks: BlockRect[]; scrollY: number }>({ blocks: [], scrollY: 0 });
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -171,8 +222,9 @@ export function SiteBuilder({
 
   const byId = useMemo(() => new Map(blocks.map((block) => [block.id, block])), [blocks]);
   const ordered = useMemo(
-    () => order.flatMap((id) => (byId.get(id) ? [byId.get(id)!] : [])),
-    [order, byId],
+    () =>
+      order.flatMap((id) => (byId.get(id) && !removingIds.has(id) ? [byId.get(id)!] : [])),
+    [order, byId, removingIds],
   );
   const atLimit = useMemo(() => typesAtLimit(blocks), [blocks]);
   const notes = useMemo(() => pageNotes(ordered), [ordered]);
@@ -202,6 +254,7 @@ export function SiteBuilder({
   // Selecting a block takes the preview to it, so the list and the page always
   // agree about where the planner is.
   useEffect(() => {
+    toPreview({ channel: PREVIEW_CHANNEL, type: "highlight", blockId: selected });
     if (selected) toPreview({ channel: PREVIEW_CHANNEL, type: "scroll-to", blockId: selected });
   }, [selected, toPreview]);
 
@@ -211,6 +264,12 @@ export function SiteBuilder({
       if (event.origin !== window.location.origin) return;
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (!isFromPreview(event.data)) return;
+
+      // Where every block is, in answer to `measure` — kept for the drop.
+      if (event.data.type === "rects") {
+        rects.current = { blocks: event.data.blocks, scrollY: event.data.scrollY };
+        return;
+      }
       if (!byId.has(event.data.blockId)) return;
 
       setSelected(event.data.blockId);
@@ -245,8 +304,96 @@ export function SiteBuilder({
     });
   }
 
+  /**
+   * Which droppable the pointer is over. A block being reordered is placed by
+   * its centre, as a sortable list always is; a new block being dragged in is
+   * placed by where the *pointer* is, because that is where the planner is
+   * pointing and the preview has no rows to be near.
+   */
+  const collisions: CollisionDetection = (args) =>
+    args.active.data.current?.kind === "palette" ? pointerWithin(args) : closestCenter(args);
+
+  // Where the pointer actually is, read from the pointer itself. dnd-kit's
+  // `delta` includes scroll adjustments (the rail scrolls under a drag that
+  // began near its foot), so "where it started plus how far it moved" drifts.
+  const pointer = useRef({ x: 0, y: 0 });
+  const trackPointer = useCallback((event: PointerEvent) => {
+    pointer.current = { x: event.clientX, y: event.clientY };
+  }, []);
+  useEffect(() => () => document.removeEventListener("pointermove", trackPointer, true), [trackPointer]);
+
+  /** The preview's on-screen box, and how much it is scaled. */
+  function frameGeometry() {
+    const frame = iframeRef.current;
+    if (!frame) return null;
+    const box = frame.getBoundingClientRect();
+    const zoom = frame.offsetWidth > 0 ? box.width / frame.offsetWidth : 1;
+    return { box, zoom: zoom || 1 };
+  }
+
+  function onDragStart(event: DragStartEvent) {
+    const data = event.active.data.current;
+    if (data?.kind !== "palette") return;
+    setDragType(data.type as BlockType);
+    pointer.current = { x: (event.activatorEvent as MouseEvent).clientX, y: (event.activatorEvent as MouseEvent).clientY };
+    document.addEventListener("pointermove", trackPointer, true);
+    // Ask the frame where its blocks are, once, now: nobody scrolls mid-drag.
+    toPreview({ channel: PREVIEW_CHANNEL, type: "measure" });
+  }
+
+  function onDragMove(event: DragMoveEvent) {
+    if (event.active.data.current?.kind !== "palette") return;
+    const geometry = frameGeometry();
+    if (!geometry || event.over?.id !== PREVIEW_DROP) {
+      setInsertion(null);
+      return;
+    }
+    // Pointer → the frame's own document coordinates.
+    const pageY = (pointer.current.y - geometry.box.top) / geometry.zoom + rects.current.scrollY;
+    const afterId = insertionAfter(rects.current.blocks, pageY);
+    const lineY = insertionLineY(rects.current.blocks, afterId);
+    const raw = (lineY - rects.current.scrollY) * geometry.zoom;
+    const inside = Math.min(Math.max(raw, 1), geometry.box.height - 2);
+    const after = afterId ? byId.get(afterId) : null;
+    setInsertion({
+      afterId,
+      top: inside,
+      label: after ? `After ${BLOCKS[after.type].label.toLowerCase()}` : "At the top",
+      offscreen: raw < 1 ? "above" : raw > geometry.box.height - 2 ? "below" : null,
+    });
+  }
+
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    const data = active.data.current;
+
+    // A new block dropped on the preview, or on a row of the list.
+    if (data?.kind === "palette") {
+      const type = data.type as BlockType;
+      const where = insertion;
+      document.removeEventListener("pointermove", trackPointer, true);
+      setDragType(null);
+      setInsertion(null);
+      if (!over) return;
+
+      let after: string | null | undefined;
+      if (over.id === PREVIEW_DROP) after = where?.afterId;
+      else if (byId.has(String(over.id))) after = String(over.id);
+      if (after === undefined) return;
+
+      startTransition(async () => {
+        const result = await addBlock(type, after);
+        if (!result.ok) {
+          setMessage(result.error);
+          return;
+        }
+        setMessage(null);
+        setSelected(result.data.id);
+        afterWrite();
+      });
+      return;
+    }
+
     if (!over || active.id === over.id) return;
 
     const from = order.indexOf(String(active.id));
@@ -258,6 +405,56 @@ export function SiteBuilder({
     setOrder(next);
     run(() => reorderBlocks(next));
   }
+
+  /** Hide it now, delete it for real once the undo window has passed. */
+  function removeBlock(block: SiteBlock) {
+    if (selected === block.id) setSelected(null);
+    setRemovals((was) => [
+      ...was,
+      { id: block.id, label: BLOCKS[block.type].label, wasVisible: block.visible },
+    ]);
+    startTransition(async () => {
+      const result = await setBlockVisible(block.id, false);
+      if (!result.ok) setMessage(result.error);
+      else afterWrite();
+    });
+    removalTimers.current.set(
+      block.id,
+      setTimeout(() => finishRemoval(block.id), UNDO_MS),
+    );
+  }
+
+  function finishRemoval(id: string) {
+    const timer = removalTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    removalTimers.current.delete(id);
+    setRemovals((was) => was.filter((removal) => removal.id !== id));
+    void deleteBlock(id).then(afterWrite);
+  }
+
+  function undoRemoval(removal: Removal) {
+    const timer = removalTimers.current.get(removal.id);
+    if (timer) clearTimeout(timer);
+    removalTimers.current.delete(removal.id);
+    setRemovals((was) => was.filter((entry) => entry.id !== removal.id));
+    startTransition(async () => {
+      await setBlockVisible(removal.id, removal.wasVisible);
+      afterWrite();
+    });
+  }
+
+  // Leaving with a delete still pending completes it: the planner asked for it,
+  // and a block left hidden forever is a worse outcome than one deleted.
+  useEffect(() => {
+    const timers = removalTimers.current;
+    return () => {
+      for (const [id, timer] of timers) {
+        clearTimeout(timer);
+        void deleteBlock(id);
+      }
+      timers.clear();
+    };
+  }, []);
 
   function move(id: string, delta: -1 | 1) {
     const from = order.indexOf(id);
@@ -386,6 +583,23 @@ export function SiteBuilder({
         ))}
       </div>
 
+      <DndContext
+        // A fixed id: dnd-kit numbers its accessibility nodes from a module
+        // counter, which differs between the server render and the browser and
+        // logs a hydration mismatch on every load.
+        id="site-builder"
+        sensors={sensors}
+        collisionDetection={collisions}
+        modifiers={[keepNewBlocksFree]}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => {
+          document.removeEventListener("pointermove", trackPointer, true);
+          setDragType(null);
+          setInsertion(null);
+        }}
+      >
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(300px,25rem)_minmax(0,1fr)]">
         {/* ---- the rail ---- */}
         <div
@@ -418,17 +632,10 @@ export function SiteBuilder({
               <UnfinishedNotice entries={unfinished} onSelect={(id) => setSelected(id)} />
             ) : null}
 
-            <DndContext
-              // A fixed id: dnd-kit numbers its accessibility nodes from a
-              // module counter, which differs between the server render and
-              // the browser and logs a hydration mismatch on every load.
-              id="site-chapters"
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={onDragEnd}
+            <SortableContext
+              items={ordered.map((block) => block.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <SortableContext items={order} strategy={verticalListSortingStrategy}>
                 <ul className="divide-y divide-[#f0ece5] rounded-md border border-line">
                   {ordered.map((block, index) => (
                     <ChapterRow
@@ -444,28 +651,26 @@ export function SiteBuilder({
                       onSelect={() => setSelected(block.id === selected ? null : block.id)}
                       onToggle={() => run(() => setBlockVisible(block.id, !block.visible))}
                       onDelete={() => {
-                        if (!window.confirm(`Delete the ${BLOCKS[block.type].label} block?`)) return;
-                        run(() => deleteBlock(block.id));
-                        if (selected === block.id) setSelected(null);
+                        removeBlock(block);
                       }}
                     />
                   ))}
                 </ul>
-              </SortableContext>
-            </DndContext>
+            </SortableContext>
 
             {/* Dashed chips rather than a palette panel: everything you can
-                add, including a second page-break band, visible at a glance. */}
+                add, including a second page-break band, visible at a glance.
+                Click adds it after the selected chapter; drag it onto the page
+                and it goes where the line says. */}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {palletableBlocks()
                 .filter((def) => !atLimit.has(def.type))
                 .map((def) => (
-                  <button
+                  <PaletteChip
                     key={def.type}
-                    type="button"
+                    def={def}
                     disabled={pending}
-                    title={def.blurb}
-                    onClick={() =>
+                    onAdd={() =>
                       startTransition(async () => {
                         const result = await addBlock(def.type, selected ?? undefined);
                         if (!result.ok) {
@@ -478,10 +683,7 @@ export function SiteBuilder({
                         afterWrite();
                       })
                     }
-                    className="rounded border border-dashed border-line px-2 py-1 text-xs text-muted hover:border-ink hover:text-ink"
-                  >
-                    + {def.label}
-                  </button>
+                  />
                 ))}
             </div>
 
@@ -576,12 +778,143 @@ export function SiteBuilder({
             </select>
           </div>
 
-          <PreviewFrame device={device} iframeRef={iframeRef} src={`/site/preview?as=${viewAs}`} />
+          <PreviewFrame
+            device={device}
+            iframeRef={iframeRef}
+            src={`/site/preview?as=${viewAs}`}
+            // A reload (a different household) forgets which block is selected.
+            onLoaded={() =>
+              toPreview({ channel: PREVIEW_CHANNEL, type: "highlight", blockId: selected })
+            }
+          >
+            <PreviewDropZone active={dragType !== null} insertion={insertion} />
+          </PreviewFrame>
         </div>
       </div>
+
+      {/* The block being dragged in, following the pointer. */}
+      <DragOverlay dropAnimation={null}>
+        {dragType ? (
+          <div className="rounded border border-ink bg-white px-2 py-1 text-xs shadow-lg">
+            + {BLOCKS[dragType].label}
+          </div>
+        ) : null}
+      </DragOverlay>
+      </DndContext>
+
+      {/* A delete is only a hide until this goes away (spec 24 §8). */}
+      {removals.length > 0 ? (
+        <div className="fixed bottom-4 left-4 z-50 space-y-2" role="status" aria-live="polite">
+          {removals.map((removal) => (
+            <div
+              key={removal.id}
+              className="flex items-center gap-4 rounded bg-[#2b2724] px-4 py-2.5 text-sm text-white shadow-lg"
+            >
+              <span>Deleted the {removal.label.toLowerCase()}</span>
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2"
+                onClick={() => undoRemoval(removal)}
+              >
+                Undo
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
+
+/** A palette entry: a click adds it, a drag places it. */
+function PaletteChip({
+  def,
+  disabled,
+  onAdd,
+}: {
+  def: BlockDef;
+  disabled: boolean;
+  onAdd: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette:${def.type}`,
+    data: { kind: "palette", type: def.type },
+  });
+  return (
+    <button
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      type="button"
+      disabled={disabled}
+      title={`${def.blurb} Click to add it, or drag it onto the page.`}
+      onClick={onAdd}
+      className={`rounded border border-dashed border-line px-2 py-1 text-xs text-muted hover:border-ink hover:text-ink ${
+        isDragging ? "opacity-40" : ""
+      }`}
+    >
+      + {def.label}
+    </button>
+  );
+}
+
+/**
+ * Laid over the preview only while a new block is being dragged.
+ *
+ * An iframe swallows pointer events, so dnd-kit cannot see a pointer that is
+ * over one; this transparent layer is what it drops onto. The line is where the
+ * block will go — the foot of the block it will follow — drawn in the preview's
+ * own scaled coordinates.
+ */
+function PreviewDropZone({
+  active,
+  insertion,
+}: {
+  active: boolean;
+  insertion: Insertion | null;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: PREVIEW_DROP });
+  // Always mounted, so dnd-kit has measured it by the time a drag starts; it
+  // only takes pointer events while one is under way. Mounting it on drag start
+  // meant it was not yet measured, and a drop found nothing under the pointer.
+  // It must take them then, because an iframe swallows the pointer and the
+  // sensor would otherwise never hear it cross the frame.
+  return (
+    <div
+      ref={setNodeRef}
+      className={`absolute inset-0 z-10 ${active ? "" : "pointer-events-none"} ${
+        active && isOver ? "bg-[#7a5c3c]/5" : ""
+      }`}
+      aria-hidden="true"
+    >
+      {active && insertion ? (
+        <>
+          <div
+            className="absolute left-0 right-0 h-0.5 bg-[#7a5c3c] shadow-[0_0_0_1px_rgba(255,255,255,0.8)]"
+            style={{ top: insertion.top }}
+          />
+          {/* Says where it means, which matters most when the foot of that block
+              is somewhere the frame is not showing. */}
+          <span
+            className="absolute right-2 -translate-y-full rounded-sm bg-[#7a5c3c] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white"
+            style={{ top: insertion.offscreen === "above" ? insertion.top + 22 : insertion.top }}
+          >
+            {insertion.offscreen === "below" ? "↓ " : insertion.offscreen === "above" ? "↑ " : ""}
+            {insertion.label}
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * dnd-kit's modifier for the chapter list keeps a reordered block on the
+ * vertical axis. A block being dragged *in* is not in the list, and has to be
+ * free to travel to the preview on the other side of the screen.
+ */
+const keepNewBlocksFree: Modifier = (args) =>
+  args.active?.data.current?.kind === "palette" ? args.transform : restrictToVerticalAxis(args);
 
 /** The photograph a block points at, for its thumbnail in the list. */
 function photoFor(block: SiteBlock, photos: Map<string, PhotoOption>): PhotoOption | null {
@@ -607,10 +940,15 @@ function PreviewFrame({
   device,
   iframeRef,
   src,
+  onLoaded,
+  children,
 }: {
   device: Device;
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
   src: string;
+  onLoaded?: () => void;
+  /** Laid over the frame — the drop zone, while a block is being dragged in. */
+  children?: React.ReactNode;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState<number | null>(null);
@@ -632,7 +970,7 @@ function PreviewFrame({
   return (
     <div ref={wrap} className="flex justify-center px-5 pb-5">
       <div
-        className="overflow-hidden border border-line bg-white"
+        className="relative overflow-hidden border border-line bg-white"
         // The visible box is the scaled size. Heights are viewport units and
         // a `calc`, not a measurement, so nothing here touches `window` —
         // this component server-renders as part of the page.
@@ -643,6 +981,7 @@ function PreviewFrame({
           // No `key`: the frame is never remounted. An edit is a message
           // asking it to re-render where it stands (`PreviewBridge`).
           src={src}
+          onLoad={onLoaded}
           title="Preview"
           style={{
             width,
@@ -652,6 +991,7 @@ function PreviewFrame({
             border: 0,
           }}
         />
+        {children}
       </div>
     </div>
   );
