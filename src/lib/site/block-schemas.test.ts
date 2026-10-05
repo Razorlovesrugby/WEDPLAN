@@ -25,3 +25,36 @@ describe("BLOCK_SCHEMAS", () => {
     expect(Object.keys(BLOCK_SCHEMAS).sort()).toEqual([...BLOCK_TYPES].sort());
   });
 });
+
+describe("the hero's cover", () => {
+  const hero = BLOCK_SCHEMAS.hero;
+
+  it("accepts a hero saved before the cover existed", () => {
+    // Every cover switch is optional, and absent means ON — so an old hero
+    // validates and renders exactly as it did.
+    expect(hero.safeParse({ headline: "Ray & Olivia", date_label: "12 June" }).success).toBe(true);
+    expect(hero.safeParse({}).success).toBe(true);
+  });
+
+  it("accepts a greeting built from the tokens, and none", () => {
+    for (const greeting of ["For {names}", "Dear {household}", "Just for you", ""]) {
+      expect(hero.safeParse({ greeting_text: greeting }).success, greeting).toBe(true);
+    }
+  });
+
+  it("refuses an unknown token, and says which", () => {
+    const result = hero.safeParse({ greeting_text: "For {nickname}" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(JSON.stringify(result.error.flatten().fieldErrors.greeting_text)).toContain("{nickname}");
+    }
+  });
+
+  it("refuses a greeting over 80 characters", () => {
+    expect(hero.safeParse({ greeting_text: "x".repeat(81) }).success).toBe(false);
+  });
+
+  it("stores an empty greeting as nothing, so the default applies", () => {
+    expect(hero.parse({ greeting_text: "   " }).greeting_text).toBeUndefined();
+  });
+});

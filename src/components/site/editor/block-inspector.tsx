@@ -133,6 +133,7 @@ export function BlockInspector({
           value={typeof values["image_id"] === "string" ? (values["image_id"] as string) : null}
           photos={photos}
           kind={block.type === "hero" ? "hero" : "gallery"}
+          onFocalSaved={onDone}
           onChange={(assetId) => {
             const next = { ...values, image_id: assetId ?? undefined };
             setValues(next);

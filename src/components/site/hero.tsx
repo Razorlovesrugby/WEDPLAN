@@ -35,6 +35,26 @@ function sameOriginPath(value: string | null): string | null {
   return trimmed;
 }
 
+/**
+ * The parts of the cover that exist only on a household's own page (spec 27 §5).
+ *
+ * `null` on the shared site, which gets the hero exactly as it always did — the
+ * personal cover is a branch inside the hero, not a second layout, which is
+ * what keeps "the site and the invitation are the same thing" true in the code.
+ * Every line is already decided by the caller (switched off, empty, or filled):
+ * nothing here knows what a household is.
+ */
+export type HeroCover = {
+  /** "For Chidi, Ada and Zara". Null when the planner switched it off. */
+  greeting: string | null;
+  /** "invite you to their wedding". Null when switched off. */
+  coverLine: string | null;
+  /** The small arrow that says there is more below. */
+  scrollCue: boolean;
+  /** First screen full height, on a phone. Off keeps the hero at the site's own height. */
+  tall: boolean;
+};
+
 /** What the hero draws: either an uploaded photograph or the legacy path. */
 type HeroPicture = Pick<SiteImageData, "src" | "srcSet" | "colour" | "focal" | "width" | "height">;
 
@@ -64,6 +84,20 @@ function HeroImage({ picture, alt }: { picture: HeroPicture; alt: string | null 
   );
 }
 
+/** The small arrow under the cover. Decorative, so hidden from assistive tech. */
+function ScrollCue({ className = "" }: { className?: string }) {
+  return (
+    <span aria-hidden="true" className={`site-cue ${className}`}>
+      <span className="site-cue-arrow">↓</span>
+    </span>
+  );
+}
+
+/** Greeting, in the theme's own voice. One element so a theme can restyle it. */
+function Greeting({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <p className={`site-greeting ${className}`}>{children}</p>;
+}
+
 export function SiteHero({
   style,
   preset = "script",
@@ -76,6 +110,7 @@ export function SiteHero({
   monogramName,
   weddingDate,
   timeLeft,
+  cover = null,
 }: {
   style: HeroStyle;
   /**
@@ -97,6 +132,8 @@ export function SiteHero({
   /** For the corner counter. Null when the wedding has no date yet. */
   weddingDate?: string | null;
   timeLeft?: TimeLeft | null;
+  /** Null on the shared site. See `HeroCover`. */
+  cover?: HeroCover | null;
 }) {
   const legacy = sameOriginPath(imagePath);
   const picture: HeroPicture | null =
@@ -117,16 +154,25 @@ export function SiteHero({
         imageAlt={imageAlt}
         weddingDate={weddingDate ?? null}
         timeLeft={timeLeft ?? null}
+        cover={cover}
       />
     );
   }
 
   const words = (
-    <div className="text-center">
+    <div className="site-cover-words text-center">
+      {cover?.greeting ? (
+        <Greeting className="mb-6 text-[1.25rem] italic text-muted">{cover.greeting}</Greeting>
+      ) : null}
       {monogramName ? (
         <Monogram name={monogramName} className="mb-5 block text-3xl text-muted" />
       ) : null}
       <h1 className="font-script text-[3.25rem] leading-[1.05] text-ink sm:text-7xl">{headline}</h1>
+      {cover?.coverLine ? (
+        <p className="site-cover-line mt-4 text-[0.78rem] uppercase tracking-[0.2em] text-muted">
+          {cover.coverLine}
+        </p>
+      ) : null}
       {dateLabel ? (
         <p className="mt-5 text-[0.78rem] uppercase tracking-[0.2em] text-muted">{dateLabel}</p>
       ) : null}
@@ -145,15 +191,23 @@ export function SiteHero({
   if (effective === "full") {
     return (
       <header id="hero" className="relative scroll-mt-16">
-        <div className="relative h-[68vh] min-h-[420px] w-full">
-          <HeroImage picture={picture} alt={imageAlt} />
+        <div
+          className={`relative w-full ${
+            cover?.tall ? "h-[calc(100dvh-52px)] min-h-[520px]" : "h-[68vh] min-h-[420px]"
+          }`}
+        >
+          <div className="site-cover-photo absolute inset-0 overflow-hidden">
+            <HeroImage picture={picture} alt={imageAlt} />
+          </div>
           {/* The scrim is what makes the text legible over an unknown photo.
               Without it the hero passes contrast against whatever the
               photographer happened to shoot, which is not a guarantee. */}
           <div className="absolute inset-0 bg-ink/45" />
+          <div className="site-cover-dim absolute inset-0 bg-ink/30" />
           <div className="absolute inset-0 flex items-center justify-center px-5">
             <div className="text-paper [&_*]:text-paper">{words}</div>
           </div>
+          {cover?.scrollCue ? <ScrollCue className="text-paper" /> : null}
         </div>
       </header>
     );
@@ -163,7 +217,7 @@ export function SiteHero({
     <header id="hero" className="scroll-mt-16 px-5 pb-14 pt-10 sm:pt-14">
       <div className="mx-auto max-w-2xl">
         <div className="border border-line p-2.5">
-          <div className="relative aspect-[4/3] w-full sm:aspect-[3/2]">
+          <div className="relative aspect-[4/3] w-full overflow-hidden sm:aspect-[3/2]">
             <HeroImage picture={picture} alt={imageAlt} />
           </div>
         </div>
@@ -200,6 +254,7 @@ function EditorialHero({
   imageAlt,
   weddingDate,
   timeLeft,
+  cover,
 }: {
   headline: string;
   dateLabel: string | null;
@@ -208,6 +263,7 @@ function EditorialHero({
   imageAlt: string | null;
   weddingDate: string | null;
   timeLeft: TimeLeft | null;
+  cover: HeroCover | null;
 }) {
   const split = splitHeadline(headline);
 
@@ -231,8 +287,18 @@ function EditorialHero({
     </h1>
   );
 
+  const greeting = cover?.greeting ? (
+    <Greeting className="site-heading mb-5 text-[clamp(1.25rem,3.4vw,1.9rem)] italic">
+      {cover.greeting}
+    </Greeting>
+  ) : null;
+
+  const coverLine = cover?.coverLine ? (
+    <p className="site-cover-line site-label site-eyebrow mt-6">{cover.coverLine}</p>
+  ) : null;
+
   const meta = (
-    <div className="mt-8 flex flex-wrap items-baseline gap-x-8 gap-y-2">
+    <div className={`${cover?.coverLine ? "mt-3" : "mt-8"} flex flex-wrap items-baseline gap-x-8 gap-y-2`}>
       {dateLabel ? <p className="site-label site-eyebrow">{dateLabel}</p> : null}
       {location ? <p className="site-label site-eyebrow">{location}</p> : null}
     </div>
@@ -248,9 +314,13 @@ function EditorialHero({
             className="absolute right-5 top-8 text-muted sm:right-10"
           />
         ) : null}
-        <div className="mx-auto w-full max-w-5xl text-ink">
+        <div className="site-cover-words mx-auto w-full max-w-5xl text-ink">
+          {greeting}
           {names}
-          <div className="text-muted">{meta}</div>
+          <div className="text-muted">
+            {coverLine}
+            {meta}
+          </div>
         </div>
       </header>
     );
@@ -258,9 +328,16 @@ function EditorialHero({
 
   return (
     <header id="hero" className="relative scroll-mt-16">
-      <div className="relative min-h-[560px] w-full sm:min-h-[88vh]">
-        <HeroImage picture={picture} alt={imageAlt} />
+      <div
+        className={`relative w-full ${
+          cover?.tall ? "min-h-[max(560px,calc(100dvh-52px))]" : "min-h-[560px] sm:min-h-[88vh]"
+        }`}
+      >
+        <div className="site-cover-photo absolute inset-0 overflow-hidden">
+          <HeroImage picture={picture} alt={imageAlt} />
+        </div>
         <div className="absolute inset-0 bg-[rgba(18,22,19,0.62)]" />
+        <div className="site-cover-dim absolute inset-0 bg-[rgba(18,22,19,0.4)]" />
 
         {weddingDate ? (
           <HeroCounter
@@ -273,11 +350,14 @@ function EditorialHero({
         {/* Bottom-aligned. Names this size centred in the frame leave the
             photograph with no room to be a photograph. */}
         <div className="absolute inset-x-0 bottom-0 px-5 pb-14 sm:px-10 sm:pb-20">
-          <div className="mx-auto w-full max-w-5xl text-paper [&_*]:text-paper">
+          <div className="site-cover-words mx-auto w-full max-w-5xl text-paper [&_*]:text-paper">
+            {greeting}
             {names}
+            {coverLine}
             {meta}
           </div>
         </div>
+        {cover?.scrollCue ? <ScrollCue className="text-paper" /> : null}
       </div>
     </header>
   );

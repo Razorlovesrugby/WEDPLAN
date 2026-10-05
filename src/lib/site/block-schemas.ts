@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { COVER_LINE_MAX_LENGTH } from "./cover";
+import { validateGreeting } from "./greeting";
 import {
   BLOCK_ALIGNS,
   BLOCK_BACKGROUNDS,
@@ -67,6 +69,30 @@ export const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
     intro: optionalText,
     image_id: uuid.optional(),
     image_alt: optionalText,
+    // The cover (spec 27 §5). Every line has a switch, and an absent switch
+    // means ON, so a hero saved before these existed renders as it always did.
+    show_greeting: z.boolean().optional(),
+    greeting_text: z
+      .string()
+      .trim()
+      .optional()
+      .superRefine((value, ctx) => {
+        if (!value) return;
+        const checked = validateGreeting(value);
+        if (!checked.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: checked.error });
+      })
+      .transform((v) => (v ? v : undefined)),
+    show_cover_line: z.boolean().optional(),
+    cover_line: trimmed
+      .max(COVER_LINE_MAX_LENGTH)
+      .optional()
+      .transform((v) => (v ? v : undefined)),
+    show_date: z.boolean().optional(),
+    show_location: z.boolean().optional(),
+    show_intro: z.boolean().optional(),
+    show_counter: z.boolean().optional(),
+    show_scroll_cue: z.boolean().optional(),
+    tall_cover: z.boolean().optional(),
   }),
   countdown: z.object({ label: optionalText }),
   story: z.object({

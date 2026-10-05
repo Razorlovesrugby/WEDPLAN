@@ -19,6 +19,16 @@ export function FieldInput({
   const id = `${idPrefix}-${field.name}`;
   const described = field.help || errors?.length ? `${id}-help` : undefined;
 
+  // A label over the fields beneath it, with nothing to type into.
+  if (field.kind === "heading") {
+    return (
+      <div className="border-t border-line pt-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">{field.label}</h4>
+        {field.help ? <p className="mt-1 text-xs text-muted">{field.help}</p> : null}
+      </div>
+    );
+  }
+
   if (field.kind === "checkbox") {
     return (
       <div>
@@ -26,7 +36,7 @@ export function FieldInput({
           <input
             id={id}
             type="checkbox"
-            checked={value === true}
+            checked={value === undefined ? field.defaultChecked === true : value === true}
             onChange={(event) => onChange(event.target.checked)}
             aria-describedby={described}
           />

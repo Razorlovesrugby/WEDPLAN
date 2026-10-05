@@ -105,6 +105,7 @@ export function SiteBuilder({
   publishedAt,
   unpublished,
   siteHref,
+  households,
 }: {
   blocks: SiteBlock[];
   photos: PhotoOption[];
@@ -112,12 +113,19 @@ export function SiteBuilder({
   publishedAt: string | null;
   unpublished: number;
   siteHref: string;
+  /** Who the preview can be shown as. */
+  households: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
   const [device, setDevice] = useState<Device>("desktop");
   const [pane, setPane] = useState<"edit" | "preview">("edit");
+  // Who the preview is of (spec 27 E7). A household by default: the greeting,
+  // the weekend and the reply bar exist only on a household's own page, and a
+  // preview of the shared site would show a planner none of what they are
+  // editing. "shared" is the shared site, for when that is the question.
+  const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "shared");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -179,12 +187,14 @@ export function SiteBuilder({
    * renumbers in both places at once. A band has no eyebrow and so has no
    * number; the rail shows an em dash for it rather than a gap.
    *
-   * `false` for `forHousehold`, which is what `/site/preview` passes with no
-   * `?as=`: these numbers match the preview sitting beside them. A block set
-   * to "invited only" therefore shows no number here, because it has none on
-   * the page this rail is numbering.
+   * Computed for whoever the preview is *of*: a block set to "invited only"
+   * has a number when previewing a household and none on the shared site,
+   * because that is what the page beside this list is showing.
    */
-  const marks = useMemo(() => sectionNumbers(visibleBlocks(ordered, false)), [ordered]);
+  const marks = useMemo(
+    () => sectionNumbers(visibleBlocks(ordered, viewAs !== "shared")),
+    [ordered, viewAs],
+  );
 
   const hero = useMemo(() => ordered.find((block) => block.type === "hero") ?? null, [ordered]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -535,12 +545,37 @@ export function SiteBuilder({
                 {option}
               </button>
             ))}
-            <Link href="/site/preview" target="_blank" className="ml-auto text-xs text-muted underline">
+            <Link
+              href={`/site/preview?as=${viewAs}`}
+              target="_blank"
+              className="ml-auto text-xs text-muted underline"
+            >
               Open in a tab
             </Link>
           </div>
 
-          <PreviewFrame device={device} iframeRef={iframeRef} />
+          {/* Who the page is shown to. The shared site is addressed to nobody;
+              a household's page is addressed to them. */}
+          <div className="flex items-center gap-2 px-5 pb-3 text-xs">
+            <label htmlFor="preview-as" className="text-muted">
+              Previewing as
+            </label>
+            <select
+              id="preview-as"
+              className="field w-auto max-w-[16rem] py-1 text-xs"
+              value={viewAs}
+              onChange={(event) => setViewAs(event.target.value)}
+            >
+              <option value="shared">The shared site</option>
+              {households.map((household) => (
+                <option key={household.id} value={household.id}>
+                  {household.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <PreviewFrame device={device} iframeRef={iframeRef} src={`/site/preview?as=${viewAs}`} />
         </div>
       </div>
     </div>
@@ -570,9 +605,11 @@ function photoFor(block: SiteBlock, photos: Map<string, PhotoOption>): PhotoOpti
 function PreviewFrame({
   device,
   iframeRef,
+  src,
 }: {
   device: Device;
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
+  src: string;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState<number | null>(null);
@@ -604,7 +641,7 @@ function PreviewFrame({
           ref={iframeRef}
           // No `key`: the frame is never remounted. An edit is a message
           // asking it to re-render where it stands (`PreviewBridge`).
-          src="/site/preview"
+          src={src}
           title="Preview"
           style={{
             width,

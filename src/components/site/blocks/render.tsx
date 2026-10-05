@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlock } from "@/lib/site/blocks";
-import { text } from "@/lib/site/sections";
+import { flag, text } from "@/lib/site/sections";
+import { DEFAULT_COVER_LINE } from "@/lib/site/cover";
+import { renderGreeting } from "@/lib/site/greeting";
 import { formatDate, daysUntil, timeLeft } from "@/lib/format";
-import { SiteHero } from "../hero";
+import { SiteHero, type HeroCover } from "../hero";
 import { ReadingLine } from "../reading-line";
 import { PhotoViewer } from "../photo-viewer";
 import { SiteImage } from "../site-image";
@@ -194,12 +196,40 @@ export function SiteBlockView({
   switch (block.type) {
     // -- essentials ---------------------------------------------------------
     case "hero": {
+      // Every line of the cover is a switch, and every switch is ON when the
+      // key is absent — so a hero saved before these existed renders exactly as
+      // it did (spec 27 E9).
+      const on = (key: string) => flag(payload, key, true);
+
       const headline = text(payload, "headline") ?? ctx.wedding.name;
-      const dateLabel =
-        text(payload, "date_label") ??
-        (ctx.wedding.wedding_date
-          ? formatDate(ctx.wedding.wedding_date, ctx.wedding.timezone)
-          : null);
+      const dateLabel = on("show_date")
+        ? (text(payload, "date_label") ??
+          (ctx.wedding.wedding_date
+            ? formatDate(ctx.wedding.wedding_date, ctx.wedding.timezone)
+            : null))
+        : null;
+      const aboutWhy = on("show_intro") ? intro : null;
+
+      // The personal cover exists only on a household's own page, and the
+      // greeting only ever from `personal` — never from anything the shared
+      // site, a link preview or a metadata field can see.
+      const cover: HeroCover | null = personal
+        ? {
+            greeting: on("show_greeting")
+              ? renderGreeting({
+                  template: text(payload, "greeting_text"),
+                  firstNames: personal.members.map((member) => member.name),
+                  householdName: personal.householdName,
+                })
+              : null,
+            coverLine: on("show_cover_line")
+              ? (text(payload, "cover_line") ?? DEFAULT_COVER_LINE)
+              : null,
+            scrollCue: on("show_scroll_cue"),
+            tall: on("tall_cover"),
+          }
+        : null;
+
       return (
         <>
           <SiteHero
@@ -207,28 +237,31 @@ export function SiteBlockView({
             preset={ctx.theme.preset}
             headline={headline}
             dateLabel={dateLabel}
-            location={text(payload, "location")}
+            location={on("show_location") ? text(payload, "location") : null}
             image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             imagePath={text(payload, "image_path")}
             imageAlt={text(payload, "image_alt")}
             monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
-            weddingDate={ctx.wedding.wedding_date}
+            // The days-to-go in the corner is its own switch, apart from the
+            // large countdown below: one is a detail, the other a feature.
+            weddingDate={on("show_counter") ? ctx.wedding.wedding_date : null}
             // Computed on the server so the number is right in the HTML and
             // identical on both sides of hydration.
             timeLeft={timeLeft(ctx.wedding.wedding_date)}
+            cover={cover}
           />
           {/* A line about why, under the date — "to celebrate those closest to
               us". Short, and the only sentence in the hero. */}
-          {intro ? (
+          {aboutWhy ? (
             <div className="mx-auto w-full max-w-5xl px-5 pt-6 sm:px-10">
-              <p className="site-intro text-center text-[1.0625rem] italic text-muted">{intro}</p>
+              <p className="site-intro text-center text-[1.0625rem] italic text-muted">{aboutWhy}</p>
             </div>
           ) : null}
           {/* The countdown lives here now (spec 25 §7) rather than being a
               separate block that could end up three sections from the date it
               counts to. The standalone `countdown` block still renders for any
               page that already has one. */}
-          {payload && (payload as Record<string, unknown>)["show_countdown"] === true &&
+          {flag(payload, "show_countdown") &&
           ctx.wedding.wedding_date &&
           daysUntil(ctx.wedding.wedding_date) !== null ? (
             <div className="pt-8">
@@ -238,13 +271,6 @@ export function SiteBlockView({
                 label={text(payload, "countdown_label")}
               />
             </div>
-          ) : null}
-          {/* Whose page this is. One line, and the only thing on the shared
-              site that is missing from it. */}
-          {personal ? (
-            <p className="px-5 pt-10 text-center text-[0.78rem] uppercase tracking-[0.2em] text-muted">
-              {personal.householdName}
-            </p>
           ) : null}
         </>
       );

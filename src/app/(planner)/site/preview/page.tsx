@@ -1,7 +1,7 @@
 import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
-import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-render";
+import { buildPreviewPersonal, buildRenderContext } from "@/server/queries/site-render";
 import { createClient } from "@/lib/supabase/server";
 import { visibleBlocks } from "@/lib/site/blocks";
 import { themeCssVars } from "@/lib/theme/presets";
@@ -36,21 +36,23 @@ export default async function SitePreviewPage({
   const wedding = await requireWedding();
   const blocks = await listDraftBlocks(wedding.id);
 
+  // Who the planner is previewing as. No `?as=` means the first household on
+  // the list, because the greeting, the weekend and the reply bar exist only on
+  // a household's own page and a default preview of the shared site would show
+  // none of them. `?as=shared` is the shared site, for when that is the
+  // question.
+  const supabase = await createClient();
   let personal = null;
-  if (as) {
-    const supabase = await createClient();
-    const { data: household } = await supabase
+  if (as !== "shared") {
+    let query = supabase
       .from("households")
       .select("id, display_name")
       .eq("wedding_id", wedding.id)
-      .eq("id", as)
-      .maybeSingle();
+      .is("deleted_at", null);
+    query = as ? query.eq("id", as) : query.order("display_name").limit(1);
+    const { data: household } = await query.maybeSingle();
 
-    if (household) {
-      // No token: the preview shows the shape of their page, and the RSVP
-      // form needs a credential this screen deliberately does not hold.
-      personal = await buildPersonalContext(wedding.id, household, null, null);
-    }
+    if (household) personal = await buildPreviewPersonal(wedding.id, household);
   }
 
   const built = await buildRenderContext(

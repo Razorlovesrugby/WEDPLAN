@@ -256,6 +256,110 @@
   }
 }
 
+/* -- The cover (spec 27 §5, §6) ---------------------------------------------
+   The household's first screen: a greeting, the names, a line of invitation,
+   and a small arrow. The greeting and cover line are written by the planner;
+   everything below is only how they sit. */
+.site-greeting {
+  text-wrap: balance;
+}
+.site-cover-line {
+  text-wrap: balance;
+}
+
+/* The arrow. The outer span fades it away once they scroll (where scroll
+   timelines exist); the inner one bobs, and only when the page moves at all. */
+.site-cue {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.site-cue-arrow {
+  display: block;
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-motion="gentle"] .site-cue,
+    [data-motion="cinematic"] .site-cue {
+      animation: site-cue-away linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 140px;
+    }
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="gentle"] .site-cue-arrow,
+  [data-motion="cinematic"] .site-cue-arrow {
+    animation: site-cue-bob 2.4s var(--ease-in-out) infinite;
+  }
+}
+@keyframes site-cue-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(7px);
+  }
+}
+@keyframes site-cue-away {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The extra dimming layer exists in the markup and does nothing until the
+   hand-over effect gives it somewhere to go. Opacity 0 here is the whole point:
+   a permanent second scrim would darken every cover. */
+.site-cover-dim {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The hand-over: as they scroll, the photograph eases back and the dimming
+   layer fades in, and the words travel at a fifth of the page's speed. `0 100vh`
+   is one screen of scroll from the top. Only transform and opacity animate. */
+@keyframes site-cover-photo {
+  to {
+    transform: scale(1.08) translateY(4vh);
+  }
+}
+@keyframes site-cover-words {
+  to {
+    transform: translateY(14vh);
+    opacity: 0.12;
+  }
+}
+@keyframes site-cover-dim {
+  to {
+    opacity: 1;
+  }
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="cover_handover"] .site-cover-photo > img {
+      animation: site-cover-photo linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 100vh;
+    }
+    [data-fx~="cover_handover"] .site-cover-words {
+      animation: site-cover-words linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 70vh;
+    }
+    [data-fx~="cover_handover"] .site-cover-dim {
+      animation: site-cover-dim linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 90vh;
+    }
+  }
+}
+
 /* -- The reading line ------------------------------------------------------ */
 .site-progress {
   display: none;

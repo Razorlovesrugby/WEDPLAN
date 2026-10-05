@@ -254,3 +254,60 @@ export async function buildPersonalContext(
     uploads,
   };
 }
+
+
+/**
+ * A household's page as the *planner* previews it (spec 27 E7).
+ *
+ * `buildPersonalContext` needs a resolved invitation, which carries a token —
+ * a credential this screen deliberately does not hold. So the preview builds
+ * the same shape from the household's guests and the wedding's public events,
+ * with everyone invited to everything, no RSVP form and no token. It shows the
+ * *shape* of their page: their names on the cover, the weekend, the personal
+ * blocks.
+ *
+ * Without this, previewing as a household showed a page whose schedule had
+ * vanished (no invited events) and whose greeting fell back to the household
+ * name (no guests), which is a preview that lies about the thing being edited.
+ */
+export async function buildPreviewPersonal(
+  weddingId: string,
+  household: { id: string; display_name: string },
+): Promise<PersonalContext> {
+  const supabase = createAdminClient();
+  const [{ data: guests }, { data: events }] = await Promise.all([
+    supabase
+      .from("guests")
+      .select("id, first_name, preferred_name")
+      .eq("wedding_id", weddingId)
+      .eq("household_id", household.id)
+      .is("deleted_at", null)
+      .order("sort_order"),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("wedding_id", weddingId)
+      .eq("is_public", true)
+      .order("sort_order")
+      .order("starts_at"),
+  ]);
+
+  const members = (guests ?? []).map((guest) => ({
+    id: guest.id as string,
+    name: ((guest.preferred_name as string | null)?.trim() || (guest.first_name as string)) ?? "",
+  }));
+  const eventRows = (events ?? []) as EventRow[];
+  const everyone = new Set(members.map((member) => member.id));
+
+  return {
+    householdName: household.display_name,
+    householdId: household.id,
+    token: null,
+    members,
+    events: eventRows,
+    invitedByEvent: new Map(eventRows.map((event) => [event.id, new Set(everyone)])),
+    rsvp: null,
+    seats: {},
+    uploads: [],
+  };
+}

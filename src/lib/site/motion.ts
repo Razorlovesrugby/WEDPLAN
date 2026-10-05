@@ -32,6 +32,7 @@ export type MotionLevel = (typeof MOTION_LEVELS)[number];
  * before: a switch for something that does nothing is a lie in the editor.
  */
 export const MOTION_EFFECTS = [
+  "cover_handover",
   "section_arrivals",
   "reading_line",
   "nav_condense",
@@ -44,7 +45,14 @@ export type MotionEffect = (typeof MOTION_EFFECTS)[number];
 export const LEVEL_EFFECTS: Record<MotionLevel, readonly MotionEffect[]> = {
   still: [],
   gentle: ["section_arrivals", "reading_line", "nav_condense"],
-  cinematic: ["section_arrivals", "reading_line", "nav_condense", "photo_arrival", "stagger"],
+  cinematic: [
+    "cover_handover",
+    "section_arrivals",
+    "reading_line",
+    "nav_condense",
+    "photo_arrival",
+    "stagger",
+  ],
 };
 
 export type MotionSettings = {
@@ -73,6 +81,10 @@ export const MOTION_LEVEL_COPY: Record<MotionLevel, { label: string; description
 };
 
 export const MOTION_EFFECT_COPY: Record<MotionEffect, { label: string; help: string }> = {
+  cover_handover: {
+    label: "The cover drifts away",
+    help: "The first photograph eases back and darkens as they scroll, with the names moving slower than the page.",
+  },
   section_arrivals: { label: "Sections ease in", help: "Each section fades up as it scrolls into view." },
   reading_line: { label: "Reading line", help: "A thin line across the top that fills as they scroll." },
   nav_condense: { label: "Menu settles", help: "The menu is bare at the top and gains its bar once they scroll." },

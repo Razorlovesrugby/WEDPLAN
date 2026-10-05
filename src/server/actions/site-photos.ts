@@ -173,3 +173,51 @@ export async function deleteSitePhoto(assetId: string): Promise<ActionResult> {
   revalidatePath("/site");
   return ok(undefined);
 }
+
+const focalSchema = z.object({
+  asset_id: z.string().uuid(),
+  // Null clears it, and the crop returns to the browser's own centre.
+  point: z
+    .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
+    .nullable(),
+});
+
+/**
+ * Where the subject of a photograph is (spec 27 D4).
+ *
+ * Becomes `object-position` wherever the photograph is cropped, so a face stays
+ * in frame whether the same picture is a 390px portrait or a 1440px banner.
+ * Spec 23 deferred a crop UI because a crop is a large piece of work; one point
+ * is the 10% of it that matters.
+ *
+ * Both coordinates or neither — `0032`'s check enforces it — and rounded to
+ * three places, which is a tenth of a percent of the image and well below what
+ * anyone can aim at.
+ */
+export async function setSitePhotoFocalPoint(
+  assetId: string,
+  point: { x: number; y: number } | null,
+): Promise<ActionResult> {
+  const parsed = focalSchema.safeParse({ asset_id: assetId, point });
+  if (!parsed.success) return fail("That isn't a point on the photograph");
+
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+  const round = (value: number) => Math.round(value * 1000) / 1000;
+
+  const { error } = await supabase
+    .from("site_assets")
+    .update({
+      focal_x: parsed.data.point ? round(parsed.data.point.x) : null,
+      focal_y: parsed.data.point ? round(parsed.data.point.y) : null,
+    })
+    .eq("wedding_id", wedding.id)
+    .eq("id", parsed.data.asset_id);
+
+  if (error) return fail(error.message);
+
+  revalidatePath("/site");
+  revalidatePath("/site/preview");
+  revalidatePath("/w", "layout");
+  return ok(undefined);
+}
