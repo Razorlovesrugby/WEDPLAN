@@ -52,6 +52,12 @@ export type BlockStyle = {
    * credential.
    */
   embed?: boolean;
+  /**
+   * Let guests enlarge this block's photographs. **On unless this is `false`**,
+   * so every existing block keeps what it had the day the viewer shipped, and a
+   * block with no `lightbox` key means "yes" (spec 27 E9).
+   */
+  lightbox?: boolean;
 };
 
 /**
@@ -70,6 +76,7 @@ export const BLOCK_STYLE_KEYS = [
   "shape",
   "bgImage",
   "embed",
+  "lightbox",
 ] as const satisfies readonly (keyof BlockStyle)[];
 
 // Fails to compile if `BlockStyle` gains a key this list does not name.
@@ -258,7 +265,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     family: "photos",
     blurb: "A grid of photographs.",
     eyebrow: "Photographs",
-    styles: ["width", "shape"],
+    styles: ["width", "shape", "lightbox"],
     heading: "Photos",
   },
   /**
@@ -275,21 +282,21 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Page break",
     family: "photos",
     blurb: "A full-width photograph with nothing on it, to separate two sections.",
-    styles: ["shape"],
+    styles: ["shape", "lightbox"],
   },
   photo_band: {
     type: "photo_band",
     label: "Photo band",
     family: "photos",
     blurb: "One photograph, full width, between two sections.",
-    styles: ["width", "shape"],
+    styles: ["width", "shape", "lightbox"],
   },
   photo_text: {
     type: "photo_text",
     label: "Photo and words",
     family: "photos",
     blurb: "A photograph beside a paragraph.",
-    styles: ["width", "background", "shape"],
+    styles: ["width", "background", "shape", "lightbox"],
   },
   map: {
     type: "map",

@@ -4,6 +4,9 @@ import { text } from "@/lib/site/sections";
 import { formatDate, daysUntil, timeLeft } from "@/lib/format";
 import { SiteHero } from "../hero";
 import { ReadingLine } from "../reading-line";
+import { PhotoViewer } from "../photo-viewer";
+import { SiteImage } from "../site-image";
+import type { SiteImageData } from "@/lib/site/site-image";
 import { SiteSection } from "../section";
 import { Countdown } from "../countdown";
 import { Monogram } from "../monogram";
@@ -79,29 +82,25 @@ const BACKGROUND_CLASS: Record<NonNullable<BlockStyle["background"]>, string> = 
  */
 function Background({
   style,
-  url,
+  image,
   children,
 }: {
   style: BlockStyle;
-  url: string | null;
+  image: SiteImageData | null;
   children: React.ReactNode;
 }) {
   const treatment = style.background ?? "paper";
 
-  if (treatment !== "photograph" || !url) {
+  if (treatment !== "photograph" || !image) {
     return <div className={BACKGROUND_CLASS[treatment === "photograph" ? "paper" : treatment]}>{children}</div>;
   }
 
   return (
     <div className="relative isolate text-paper [&_*]:text-paper">
-      {/* eslint-disable-next-line @next/next/no-img-element -- a signed URL
-          from a private bucket, so next/image's optimiser has nothing to
-          cache and would re-fetch an expiring URL. Same as PhotoBand. */}
-      <img
-        src={url}
-        alt=""
-        aria-hidden="true"
-        loading="lazy"
+      <SiteImage
+        image={image}
+        alt={null}
+        sizes="100vw"
         className="absolute inset-0 -z-10 h-full w-full object-cover"
       />
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[rgba(18,22,19,0.62)]" />
@@ -116,7 +115,7 @@ function Shell({
   heading,
   intro,
   mark,
-  bgUrl = null,
+  bgImage = null,
   children,
 }: {
   block: SiteBlock;
@@ -125,7 +124,7 @@ function Shell({
   /** `04 · ATTIRE` (spec 25 §8). Absent on a block that is not a destination. */
   mark?: SectionMark;
   /** The signed asset behind a `photograph` background, when there is one. */
-  bgUrl?: string | null;
+  bgImage?: SiteImageData | null;
   children: React.ReactNode;
 }) {
   const style = block.style ?? {};
@@ -133,7 +132,7 @@ function Shell({
 
   if (style.width === "full") {
     return (
-      <Background style={style} url={bgUrl}>
+      <Background style={style} image={bgImage}>
         <div className="site-reveal">{children}</div>
       </Background>
     );
@@ -144,7 +143,7 @@ function Shell({
   // the vertical space of a heading with nothing in them.
   if (label === "") {
     return (
-      <Background style={style} url={bgUrl}>
+      <Background style={style} image={bgImage}>
         <section id={block.type} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
           <div className={`mx-auto ${WIDTH_CLASS[style.width ?? "contained"]}`}>{children}</div>
         </section>
@@ -153,7 +152,7 @@ function Shell({
   }
 
   return (
-    <Background style={style} url={bgUrl}>
+    <Background style={style} image={bgImage}>
       <SiteSection
         id={block.type}
         heading={label}
@@ -187,7 +186,10 @@ export function SiteBlockView({
   // The asset behind a `photograph` background, signed. Read once here rather
   // than in `Shell`, so the shell stays a layout component and never touches
   // the render context.
-  const bgUrl = ctx.imageUrls.get(block.style?.bgImage ?? "") ?? null;
+  const bgImage = ctx.images.get(block.style?.bgImage ?? "") ?? null;
+  // Block-level switch: guests may enlarge this block's photographs unless the
+  // planner turned that off (spec 27 E9).
+  const zoom = block.style?.lightbox !== false;
 
   switch (block.type) {
     // -- essentials ---------------------------------------------------------
@@ -206,7 +208,7 @@ export function SiteBlockView({
             headline={headline}
             dateLabel={dateLabel}
             location={text(payload, "location")}
-            imageUrl={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
+            image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             imagePath={text(payload, "image_path")}
             imageAlt={text(payload, "image_alt")}
             monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
@@ -263,7 +265,7 @@ export function SiteBlockView({
 
     case "story":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <Story payload={payload} />
         </Shell>
       );
@@ -272,7 +274,7 @@ export function SiteBlockView({
       const body = text(payload, "body");
       if (!body) return null;
       return (
-        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? ""}>
           <Prose body={body} />
         </Shell>
       );
@@ -326,7 +328,7 @@ export function SiteBlockView({
       // public, for a reader we do not know.
       return personal ? (
         personal.events.length === 0 ? null : (
-          <Shell block={block} bgUrl={bgUrl} heading="You're invited to" intro={intro} mark={mark}>
+          <Shell block={block} bgImage={bgImage} heading="You're invited to" intro={intro} mark={mark}>
             <InvitedEvents
               events={personal.events}
               members={personal.members}
@@ -339,7 +341,7 @@ export function SiteBlockView({
           </Shell>
         )
       ) : (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <Schedule
             events={ctx.events}
             payload={payload}
@@ -357,7 +359,7 @@ export function SiteBlockView({
       const hasNotes = personal.events.some((event) => event.guest_note?.trim());
       if (!hasNotes) return null;
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <OnTheDay events={personal.events} timeZone={ctx.wedding.timezone} />
         </Shell>
       );
@@ -366,7 +368,7 @@ export function SiteBlockView({
     case "rsvp":
       if (!personal) {
         return (
-          <Shell block={block} bgUrl={bgUrl} heading="RSVP" mark={mark}>
+          <Shell block={block} bgImage={bgImage} heading="RSVP" mark={mark}>
             <RsvpPointer payload={payload} />
           </Shell>
         );
@@ -402,7 +404,7 @@ export function SiteBlockView({
 
     case "faq":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <Faq payload={payload} />
         </Shell>
       );
@@ -420,7 +422,7 @@ export function SiteBlockView({
       );
 
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <DressCode payload={payload}>
             {codes.length > 0 ? <Attire codes={codes} boards={ctx.boards} /> : null}
             {board ? <PublicBoardView board={board} /> : null}
@@ -431,14 +433,14 @@ export function SiteBlockView({
 
     case "party":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <Party payload={payload} />
         </Shell>
       );
 
     case "things_to_do":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <ThingsToDo payload={payload} />
         </Shell>
       );
@@ -448,9 +450,9 @@ export function SiteBlockView({
       const images = ctx.gallery;
       if (images.length === 0 && !personal) return null;
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <div className="space-y-10">
-            <GalleryGrid images={images} />
+            <GalleryGrid images={images} zoom={zoom} />
             {/* Uploading is a thing only a household can do — the open
                 internet must not be able to post into the gallery. */}
             {personal && personal.token && ctx.uploadsOpen ? (
@@ -466,26 +468,34 @@ export function SiteBlockView({
     }
 
     case "page_break": {
-      const url = ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null;
+      const image = ctx.images.get(text(payload, "image_id") ?? "") ?? null;
       // Nothing to punctuate with. On a live page an empty band is a dark gap
       // nobody can see the cause of, so it renders as nothing at all; the
       // planner's preview says what is missing instead.
-      if (!url) return ctx.preview ? <PhotoPlaceholder fullBleed /> : null;
+      if (!image) return ctx.preview ? <PhotoPlaceholder fullBleed /> : null;
       return (
-        <PageBreak url={url} alt={text(payload, "image_alt")} shape={block.style?.shape} />
+        <PageBreak image={image} alt={text(payload, "image_alt")} shape={block.style?.shape} zoom={zoom} />
       );
     }
 
     case "photo_band": {
-      const url = ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null;
+      const image = ctx.images.get(text(payload, "image_id") ?? "") ?? null;
       return (
-        <Shell block={block} bgUrl={bgUrl}>
-          {url || !ctx.preview ? (
+        <Shell block={block} bgImage={bgImage}>
+          {image || !ctx.preview ? (
             <PhotoBand
-              url={url}
+              image={image}
               alt={text(payload, "image_alt")}
               caption={text(payload, "caption")}
               shape={block.style?.shape}
+              zoom={zoom}
+              sizes={
+                block.style?.width === "full"
+                  ? "100vw"
+                  : block.style?.width === "wide"
+                    ? "(min-width: 896px) 896px, 100vw"
+                    : "(min-width: 672px) 672px, 100vw"
+              }
             />
           ) : (
             <PhotoPlaceholder shape={block.style?.shape} />
@@ -496,10 +506,11 @@ export function SiteBlockView({
 
     case "photo_text":
       return (
-        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? ""}>
           <PhotoText
-            url={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
+            image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             showPlaceholder={ctx.preview}
+            zoom={zoom}
             alt={text(payload, "image_alt")}
             payload={payload}
             shape={block.style?.shape}
@@ -511,7 +522,7 @@ export function SiteBlockView({
     // -- travel -------------------------------------------------------------
     case "map":
       return (
-        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? "Where"} intro={intro}>
+        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? "Where"} intro={intro}>
           <MapBlock
             payload={payload}
             embed={block.style?.embed === true}
@@ -528,7 +539,7 @@ export function SiteBlockView({
       // one that has not gets exactly the list it had before (spec 25 §5).
       const hasArrivals = ctx.extras.arrivals.length > 0;
       return (
-        <Shell block={block} bgUrl={bgUrl} mark={mark}>
+        <Shell block={block} bgImage={bgImage} mark={mark}>
           <div className="space-y-10">
             {prose ? <Prose body={prose} /> : null}
             <CoachSection runs={ctx.travel.runs} timeZone={ctx.wedding.timezone} bookable={false} />
@@ -544,7 +555,7 @@ export function SiteBlockView({
 
     case "stays":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <div className="space-y-10">
             <StaysList stays={ctx.travel.stays} />
           </div>
@@ -554,7 +565,7 @@ export function SiteBlockView({
     case "coach": {
       if (ctx.travel.runs.length === 0) return null;
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           {personal && personal.token ? (
             <CoachBooking
               token={personal.token}
@@ -575,10 +586,10 @@ export function SiteBlockView({
       if (ctx.extras.giftFunds.length === 0) return null;
       const background = block.style?.background;
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <GiftFunds
             funds={ctx.extras.giftFunds}
-            dark={background === "ink" || (background === "photograph" && bgUrl !== null)}
+            dark={background === "ink" || (background === "photograph" && bgImage !== null)}
           />
         </Shell>
       );
@@ -587,7 +598,7 @@ export function SiteBlockView({
     // -- music --------------------------------------------------------------
     case "song_requests":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={null} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={null} mark={mark}>
           <SongRequestForm
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
@@ -605,7 +616,7 @@ export function SiteBlockView({
 
     case "guestbook":
       return (
-        <Shell block={block} bgUrl={bgUrl} intro={intro} mark={mark}>
+        <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <Guestbook
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
@@ -617,7 +628,7 @@ export function SiteBlockView({
 
     case "playlist":
       return (
-        <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
+        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
           <Playlist
             payload={payload}
             embed={block.style?.embed === true}
@@ -649,6 +660,7 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
           <SiteBlockView block={block} ctx={ctx} mark={numbered ? marks.get(block.id) : undefined} />
         </div>
       ))}
+      <PhotoViewer enabled={!ctx.preview} />
     </>
   );
 }

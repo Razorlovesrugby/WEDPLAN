@@ -1,6 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signPaths } from "@/lib/supabase/storage";
+import { SITE_SIGNED_URL_TTL_SECONDS } from "@/lib/site/assets";
+import { buildSiteImage, type SiteImageData } from "@/lib/site/site-image";
 import { listPublishedBoards } from "@/server/moodboards/resolve";
 import {
   getGallerySettings,
@@ -68,6 +70,14 @@ export type RenderContext = {
    */
   imageUrls: Map<string, string>;
   /**
+   * The same photographs, as everything the renderer needs to draw one well
+   * (spec 27 step 2): a stable `/api/photo/<id>` address that never expires,
+   * a `srcset` when narrower copies exist, its dimensions, a placeholder
+   * colour and a focal point. Prefer this to `imageUrls`, which is a direct
+   * signed URL and survives 24 hours.
+   */
+  images: Map<string, SiteImageData>;
+  /**
    * Dress codes, arrival points, the public song list and the guestbook
    * (spec 25). Every list here is already filtered to what this reader may
    * see — approved rows only, and codes narrowed to their own events — so a
@@ -97,38 +107,55 @@ async function loadTheme(weddingId: string): Promise<SiteTheme> {
   return resolveTheme(data?.payload ?? null);
 }
 
-/** Every image this wedding could render, signed in one round trip. */
-async function loadImageUrls(weddingId: string): Promise<Map<string, string>> {
+/**
+ * Every image this wedding could render: a direct signed URL for each, and the
+ * richer `SiteImageData` the renderer prefers. One query, one signing round trip.
+ */
+async function loadImages(
+  weddingId: string,
+): Promise<{ urls: Map<string, string>; images: Map<string, SiteImageData> }> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("site_assets")
-    .select("id, storage_path")
+    .select("id, storage_path, width, height, variants, colour, focal_x, focal_y")
     .eq("wedding_id", weddingId)
     .in("kind", ["hero", "story", "party", "stay", "gallery"]);
 
-  const rows = (data ?? []) as Pick<SiteAssetRow, "id" | "storage_path">[];
-  const signed = await signPaths(rows.map((row) => row.storage_path));
+  const rows = (data ?? []) as Pick<
+    SiteAssetRow,
+    "id" | "storage_path" | "width" | "height" | "variants" | "colour" | "focal_x" | "focal_y"
+  >[];
+  const signed = await signPaths(
+    rows.map((row) => row.storage_path),
+    SITE_SIGNED_URL_TTL_SECONDS,
+  );
 
   const urls = new Map<string, string>();
+  const images = new Map<string, SiteImageData>();
   for (const row of rows) {
     const url = signed.get(row.storage_path);
-    if (url) urls.set(row.id, url);
+    // A row whose object has gone missing is left out of both, so its block
+    // renders as it always has for a missing photograph — nothing — and one
+    // lost object cannot cost the page.
+    if (!url) continue;
+    urls.set(row.id, url);
+    images.set(row.id, buildSiteImage(row));
   }
-  return urls;
+  return { urls, images };
 }
 
 export async function buildRenderContext(
   wedding: RenderContext["wedding"],
   personal: PersonalContext | null,
 ): Promise<RenderContext> {
-  const [theme, events, travel, gallery, boards, galleryBlock, imageUrls] = await Promise.all([
+  const [theme, events, travel, gallery, boards, galleryBlock, loaded] = await Promise.all([
     loadTheme(wedding.id),
     publicEvents(wedding.id),
     getPublicTravel(wedding.id),
     getPublicGallery(wedding.id),
     listPublishedBoards(wedding.id, personal ? "rsvp" : "public_site"),
     getGallerySettings(wedding.id),
-    loadImageUrls(wedding.id),
+    loadImages(wedding.id),
   ]);
 
   // The events this reader may see, which is what the dress codes are resolved
@@ -162,7 +189,8 @@ export async function buildRenderContext(
     boards,
     uploadsOpen: flag(galleryBlock, "uploads_open"),
     uploadsModerated: text(galleryBlock, "moderation") !== "auto",
-    imageUrls,
+    imageUrls: loaded.urls,
+    images: loaded.images,
     extras,
     personal,
     preview: false,

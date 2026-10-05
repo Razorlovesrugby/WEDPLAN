@@ -5,7 +5,13 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { createUploadUrl, removePaths } from "@/lib/supabase/storage";
-import { MAX_UPLOAD_BYTES, isAcceptedUploadType, siteAssetPath } from "@/lib/site/assets";
+import {
+  MAX_UPLOAD_BYTES,
+  SITE_IMAGE_WIDTHS,
+  isAcceptedUploadType,
+  isSiteImageWidth,
+  siteAssetPath,
+} from "@/lib/site/assets";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -29,11 +35,24 @@ const requestSchema = z.object({
   kind: z.enum(["hero", "gallery", "story", "party", "stay"]).default("hero"),
   content_type: z.string().trim().max(100),
   byte_size: z.coerce.number().int().min(1),
+  // Which narrower copies the browser made (spec 27 D1). Only the widths the
+  // schema knows; anything else is dropped rather than failing the upload.
+  variants: z
+    .array(z.coerce.number().int())
+    .max(SITE_IMAGE_WIDTHS.length)
+    .default([])
+    .transform((widths) => [...new Set(widths)].filter(isSiteImageWidth)),
 });
 
 export async function requestSitePhotoUpload(
   fields: Record<string, unknown>,
-): Promise<ActionResult<{ assetId: string; uploadUrl: string }>> {
+): Promise<
+  ActionResult<{
+    assetId: string;
+    uploadUrl: string;
+    variantUploads: { edge: number; uploadUrl: string }[];
+  }>
+> {
   const parsed = requestSchema.safeParse(fields);
   if (!parsed.success) return fail("That file can't be uploaded");
 
@@ -56,6 +75,14 @@ export async function requestSitePhotoUpload(
     return fail("Storage isn't reachable. Has scripts/ensure-bucket.mjs been run here?");
   }
 
+  // One signed URL per narrower copy, built the same way: from ids the server
+  // holds plus a width from a closed list, never from anything the client named.
+  const variantUploads: { edge: number; uploadUrl: string }[] = [];
+  for (const edge of parsed.data.variants) {
+    const variantUpload = await createUploadUrl(siteAssetPath(wedding.id, assetId, edge));
+    if (variantUpload) variantUploads.push({ edge, uploadUrl: variantUpload.signedUrl });
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("site_assets").insert({
     id: assetId,
@@ -68,7 +95,7 @@ export async function requestSitePhotoUpload(
   });
   if (error) return fail(error.message);
 
-  return ok({ assetId, uploadUrl: upload.signedUrl });
+  return ok({ assetId, uploadUrl: upload.signedUrl, variantUploads });
 }
 
 const confirmSchema = z.object({
@@ -76,6 +103,20 @@ const confirmSchema = z.object({
   width: z.coerce.number().int().min(1).max(20000).optional(),
   height: z.coerce.number().int().min(1).max(20000).optional(),
   alt: z.string().trim().max(300).optional(),
+  // Which narrower copies actually arrived — a copy whose PUT failed is simply
+  // not listed, so a `srcset` can never name a file that is not there.
+  variants: z
+    .array(z.coerce.number().int())
+    .max(SITE_IMAGE_WIDTHS.length)
+    .default([])
+    .transform((widths) => [...new Set(widths)].filter(isSiteImageWidth)),
+  // Lower-case hex only: the database check says so, and it ends up in a style
+  // attribute, so it is validated here rather than trusted from a form.
+  colour: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/)
+    .optional()
+    .catch(undefined),
 });
 
 export async function confirmSitePhotoUpload(
@@ -93,6 +134,8 @@ export async function confirmSitePhotoUpload(
       width: parsed.data.width ?? null,
       height: parsed.data.height ?? null,
       alt: parsed.data.alt || null,
+      variants: parsed.data.variants,
+      colour: parsed.data.colour ?? null,
     })
     .eq("wedding_id", wedding.id)
     .eq("id", parsed.data.asset_id);

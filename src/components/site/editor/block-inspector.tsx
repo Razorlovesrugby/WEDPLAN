@@ -330,6 +330,29 @@ export function BlockInspector({
               );
             })}
 
+          {def.styles.includes("lightbox") ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending}
+                // Absent means yes (`BlockStyle.lightbox`), so the box is
+                // checked for every block that never chose.
+                checked={block.style.lightbox !== false}
+                onChange={(event) =>
+                  // Only the off state is stored; switching it back on removes
+                  // the key rather than writing `true`.
+                  style({ lightbox: event.target.checked ? undefined : false })
+                }
+              />
+              <span>
+                Let guests tap a photo to enlarge it
+                <span className="block text-xs text-muted">
+                  Swipe or use the arrow keys to move between photographs.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
           {def.styles.includes("embed") ? (
             <div>
               <label className="flex items-start gap-2 text-sm">

@@ -22,6 +22,13 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/api/clip/boards")).toBe(true);
   });
 
+  it("lets a guest's browser fetch a photograph on the public site", () => {
+    // Without this every photo on a guest's page would redirect to a login
+    // screen, which renders as a page of broken images.
+    expect(isPublicPath("/api/photo/22222222-2222-4222-8222-222222222222")).toBe(true);
+    expect(isPublicPath("/api/photographs")).toBe(false);
+  });
+
   it("lets the cron sender and the health check through", () => {
     expect(isPublicPath("/api/cron/reminders")).toBe(true);
     expect(isPublicPath("/api/health")).toBe(true);

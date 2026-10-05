@@ -9,7 +9,14 @@ import type { GalleryImage } from "@/server/queries/gallery";
  * CSS and the images are lazy — which is most of what the optimiser would have
  * bought here anyway.
  */
-export function GalleryGrid({ images }: { images: GalleryImage[] }) {
+export function GalleryGrid({
+  images,
+  zoom = true,
+}: {
+  images: GalleryImage[];
+  /** Tap to enlarge (`PhotoViewer`). A block-level switch; on unless the planner turned it off. */
+  zoom?: boolean;
+}) {
   if (images.length === 0) return null;
 
   return (
@@ -22,7 +29,12 @@ export function GalleryGrid({ images }: { images: GalleryImage[] }) {
             alt={image.alt ?? ""}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            data-zoom={zoom ? "" : undefined}
+            data-full={zoom ? image.url : undefined}
+            tabIndex={zoom ? 0 : undefined}
+            role={zoom ? "button" : undefined}
+            aria-label={zoom ? `Enlarge photo${image.alt ? `: ${image.alt}` : ""}` : undefined}
+            className={`h-full w-full object-cover${zoom ? " site-zoomable" : ""}`}
           />
         </li>
       ))}

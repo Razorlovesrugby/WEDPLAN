@@ -31,6 +31,8 @@ export const styleSchema = z
     // never carry a path into a bucket or a third party's image.
     bgImage: uuid.optional(),
     embed: z.coerce.boolean().optional(),
+    // Off is the only value worth storing: absent already means on.
+    lightbox: z.boolean().optional(),
   })
   .strict();
 

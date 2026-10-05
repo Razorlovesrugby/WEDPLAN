@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signPaths } from "@/lib/supabase/storage";
+import { SITE_SIGNED_URL_TTL_SECONDS } from "@/lib/site/assets";
 import type { SiteAssetRow } from "@/lib/types/database";
 
 /** A gallery image with a URL the browser can actually fetch (spec 14 §9). */
@@ -23,7 +24,10 @@ export type GalleryImage = {
  * than rendered broken — one bad row must not take the section down.
  */
 async function withUrls(rows: SiteAssetRow[]): Promise<GalleryImage[]> {
-  const signed = await signPaths(rows.map((row) => row.storage_path));
+  const signed = await signPaths(
+    rows.map((row) => row.storage_path),
+    SITE_SIGNED_URL_TTL_SECONDS,
+  );
   return rows.flatMap((row) => {
     const url = signed.get(row.storage_path);
     if (!url) return [];

@@ -25,7 +25,10 @@ export const MOODBOARD_BUCKET = "moodboards";
  * object deleted out from under a row) must leave the other thirty-nine
  * rendering, not take the page down.
  */
-export async function signPaths(paths: readonly string[]): Promise<Map<string, string>> {
+export async function signPaths(
+  paths: readonly string[],
+  ttlSeconds: number = SIGNED_URL_TTL_SECONDS,
+): Promise<Map<string, string>> {
   const signed = new Map<string, string>();
   const unique = [...new Set(paths.filter((path) => path.length > 0))];
   if (unique.length === 0) return signed;
@@ -33,7 +36,7 @@ export async function signPaths(paths: readonly string[]): Promise<Map<string, s
   const supabase = createAdminClient();
   const { data, error } = await supabase.storage
     .from(MOODBOARD_BUCKET)
-    .createSignedUrls(unique, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrls(unique, ttlSeconds);
 
   // A bucket that does not exist yet is the local-development case, and a
   // board page that 500s because nobody has run ensure-bucket.mjs is a worse
@@ -47,8 +50,11 @@ export async function signPaths(paths: readonly string[]): Promise<Map<string, s
 }
 
 /** One path, for the odd single-image case. */
-export async function signPath(path: string): Promise<string | null> {
-  const signed = await signPaths([path]);
+export async function signPath(
+  path: string,
+  ttlSeconds: number = SIGNED_URL_TTL_SECONDS,
+): Promise<string | null> {
+  const signed = await signPaths([path], ttlSeconds);
   return signed.get(path) ?? null;
 }
 

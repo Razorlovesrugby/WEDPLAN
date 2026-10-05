@@ -1,6 +1,7 @@
 import { SiteBuilder } from "@/components/site/editor/builder";
 import { createClient } from "@/lib/supabase/server";
 import { signPaths } from "@/lib/supabase/storage";
+import { SITE_SIGNED_URL_TTL_SECONDS } from "@/lib/site/assets";
 import { requireWedding } from "@/server/queries/wedding";
 import { getPublishState, listDraftBlocks } from "@/server/queries/site-blocks";
 import type { PhotoOption } from "@/components/site/editor/photo-picker";
@@ -39,7 +40,10 @@ export default async function SitePage() {
   ]);
 
   const rows = (assets ?? []) as Pick<SiteAssetRow, "id" | "storage_path" | "alt">[];
-  const signed = await signPaths(rows.map((row) => row.storage_path));
+  const signed = await signPaths(
+    rows.map((row) => row.storage_path),
+    SITE_SIGNED_URL_TTL_SECONDS,
+  );
   const photos: PhotoOption[] = rows.flatMap((row) => {
     const url = signed.get(row.storage_path);
     // A row whose object has gone missing is dropped rather than rendered as

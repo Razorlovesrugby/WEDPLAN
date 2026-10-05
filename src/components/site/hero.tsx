@@ -2,6 +2,7 @@ import { Monogram } from "./monogram";
 import { HeroCounter } from "./hero-counter";
 import { splitHeadline } from "@/lib/site/names";
 import type { TimeLeft } from "@/lib/format";
+import { objectPosition, type SiteImageData } from "@/lib/site/site-image";
 import type { HeroStyle, ThemePresetId } from "@/lib/theme/presets";
 
 /**
@@ -16,14 +17,15 @@ import type { HeroStyle, ThemePresetId } from "@/lib/theme/presets";
  * theme that is not a downgrade: a monogram and two names set in the script
  * face is what the front of an invitation looks like.
  *
- * **Two sources, only one of them typed by a person.** `imageUrl` is a signed
- * URL for a photo the planner uploaded (a private bucket, so absolute and
- * expiring) and comes from the server, never from a text field. `imagePath` is
- * the legacy typed path, and an arbitrary one would put a third party in front
- * of every guest (§11): a path beginning with a single "/" is this app,
- * anything else is dropped and the hero falls back to `type` rather than
- * rendering broken. Do not run `imageUrl` through `sameOriginPath` — that is
- * what made an uploaded hero photo vanish from the preview.
+ * **Two sources, only one of them typed by a person.** `image` is a photograph
+ * the planner uploaded, resolved by the server to the app's own stable
+ * `/api/photo/<id>` address (spec 27) — never a field somebody typed, so it
+ * needs no check. `imagePath` is the legacy typed path, and an arbitrary one
+ * would put a third party in front of every guest (§11): a path beginning with
+ * a single "/" is this app, anything else is dropped and the hero falls back
+ * to `type` rather than rendering broken. Do not run `image` through
+ * `sameOriginPath` — that is what made an uploaded hero photo vanish from the
+ * preview.
  */
 function sameOriginPath(value: string | null): string | null {
   if (!value) return null;
@@ -33,19 +35,31 @@ function sameOriginPath(value: string | null): string | null {
   return trimmed;
 }
 
+/** What the hero draws: either an uploaded photograph or the legacy path. */
+type HeroPicture = Pick<SiteImageData, "src" | "srcSet" | "colour" | "focal" | "width" | "height">;
+
 /**
- * A plain `<img>`, as in `PhotoBand`: the signed URL comes from a private
- * bucket, so next/image's optimiser has nothing to cache, would re-fetch an
- * expiring URL, and refuses a host not listed in `remotePatterns`.
+ * A plain `<img>`, as in `PhotoBand`: the address redirects to a signed URL
+ * from a private bucket, so next/image's optimiser has nothing stable to cache.
+ * Eager and high priority — it is the first thing the guest is waiting for —
+ * with the photograph's own average colour behind it until it decodes, and its
+ * focal point as the crop.
  */
-function HeroImage({ src, alt }: { src: string; alt: string | null }) {
+function HeroImage({ picture, alt }: { picture: HeroPicture; alt: string | null }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- see above
     <img
-      src={src}
+      src={picture.src}
+      srcSet={picture.srcSet ?? undefined}
+      sizes={picture.srcSet ? "100vw" : undefined}
       alt={alt ?? ""}
       fetchPriority="high"
+      decoding="async"
       className="absolute inset-0 h-full w-full object-cover"
+      style={{
+        backgroundColor: picture.colour ?? undefined,
+        objectPosition: objectPosition(picture.focal),
+      }}
     />
   );
 }
@@ -56,7 +70,7 @@ export function SiteHero({
   headline,
   dateLabel,
   location,
-  imageUrl = null,
+  image = null,
   imagePath,
   imageAlt,
   monogramName,
@@ -75,8 +89,8 @@ export function SiteHero({
   headline: string;
   dateLabel: string | null;
   location: string | null;
-  /** A signed URL for an uploaded photo. Trusted: it is minted server-side. */
-  imageUrl?: string | null;
+  /** An uploaded photograph, resolved by the server. Trusted. */
+  image?: SiteImageData | null;
   imagePath: string | null;
   imageAlt: string | null;
   monogramName: string | null;
@@ -84,8 +98,10 @@ export function SiteHero({
   weddingDate?: string | null;
   timeLeft?: TimeLeft | null;
 }) {
-  const image = imageUrl ?? sameOriginPath(imagePath);
-  const effective: HeroStyle = image ? style : "type";
+  const legacy = sameOriginPath(imagePath);
+  const picture: HeroPicture | null =
+    image ?? (legacy ? { src: legacy, srcSet: null, colour: null, focal: null, width: null, height: null } : null);
+  const effective: HeroStyle = picture ? style : "type";
 
   if (preset === "editorial") {
     return (
@@ -97,7 +113,7 @@ export function SiteHero({
         // `framed` and `full` are the same choice here. `type` is not: it is
         // somebody saying "no photo, just our names", and overriding that
         // would make the theme editor's third option do nothing.
-        image={style === "type" ? null : image}
+        picture={style === "type" ? null : picture}
         imageAlt={imageAlt}
         weddingDate={weddingDate ?? null}
         timeLeft={timeLeft ?? null}
@@ -118,7 +134,7 @@ export function SiteHero({
     </div>
   );
 
-  if (effective === "type" || !image) {
+  if (effective === "type" || !picture) {
     return (
       <header id="hero" className="scroll-mt-16 px-5 py-20 sm:py-28">
         <div className="mx-auto max-w-2xl">{words}</div>
@@ -130,7 +146,7 @@ export function SiteHero({
     return (
       <header id="hero" className="relative scroll-mt-16">
         <div className="relative h-[68vh] min-h-[420px] w-full">
-          <HeroImage src={image} alt={imageAlt} />
+          <HeroImage picture={picture} alt={imageAlt} />
           {/* The scrim is what makes the text legible over an unknown photo.
               Without it the hero passes contrast against whatever the
               photographer happened to shoot, which is not a guarantee. */}
@@ -148,7 +164,7 @@ export function SiteHero({
       <div className="mx-auto max-w-2xl">
         <div className="border border-line p-2.5">
           <div className="relative aspect-[4/3] w-full sm:aspect-[3/2]">
-            <HeroImage src={image} alt={imageAlt} />
+            <HeroImage picture={picture} alt={imageAlt} />
           </div>
         </div>
         <div className="mt-9">{words}</div>
@@ -180,7 +196,7 @@ function EditorialHero({
   headline,
   dateLabel,
   location,
-  image,
+  picture,
   imageAlt,
   weddingDate,
   timeLeft,
@@ -188,7 +204,7 @@ function EditorialHero({
   headline: string;
   dateLabel: string | null;
   location: string | null;
-  image: string | null;
+  picture: HeroPicture | null;
   imageAlt: string | null;
   weddingDate: string | null;
   timeLeft: TimeLeft | null;
@@ -222,7 +238,7 @@ function EditorialHero({
     </div>
   );
 
-  if (!image) {
+  if (!picture) {
     return (
       <header id="hero" className="relative scroll-mt-16 px-5 pb-16 pt-24 sm:px-10 sm:pt-32">
         {weddingDate ? (
@@ -243,7 +259,7 @@ function EditorialHero({
   return (
     <header id="hero" className="relative scroll-mt-16">
       <div className="relative min-h-[560px] w-full sm:min-h-[88vh]">
-        <HeroImage src={image} alt={imageAlt} />
+        <HeroImage picture={picture} alt={imageAlt} />
         <div className="absolute inset-0 bg-[rgba(18,22,19,0.62)]" />
 
         {weddingDate ? (

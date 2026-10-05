@@ -312,6 +312,118 @@
 }
 
 /* ---------------------------------------------------------------------------
+   The photograph viewer (spec 27 D5)
+   ---------------------------------------------------------------------------
+   One native <dialog> per page. `showModal()` makes everything behind it inert,
+   traps focus, closes on Escape and hands focus back to the photograph that
+   opened it, so none of that is written here. What is: it fills the screen,
+   uses `dvh` (the mobile address bar makes `vh` a lie), and respects the notch.
+--------------------------------------------------------------------------- */
+.site-zoomable {
+  cursor: zoom-in;
+}
+.site-zoomable:focus-visible {
+  outline: 2px solid rgb(var(--site-accent));
+  outline-offset: 3px;
+}
+
+.site-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  border: 0;
+  background: rgba(14, 16, 15, 0.97);
+  color: #fff;
+  overscroll-behavior: contain;
+  /* Taps and swipes on the picture are ours, not the browser's. */
+  touch-action: pan-y pinch-zoom;
+}
+.site-viewer:not([open]) {
+  display: none;
+}
+.site-viewer::backdrop {
+  background: transparent;
+}
+.site-viewer-figure {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+.site-viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.site-viewer-close,
+.site-viewer-prev,
+.site-viewer-next {
+  position: absolute;
+  display: flex;
+  height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.site-viewer-close:hover,
+.site-viewer-prev:hover:not(:disabled),
+.site-viewer-next:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+}
+.site-viewer-prev:disabled,
+.site-viewer-next:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.site-viewer-close {
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+.site-viewer-prev {
+  left: calc(env(safe-area-inset-left) + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.site-viewer-next {
+  right: calc(env(safe-area-inset-right) + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.site-viewer-count {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-viewer[open] {
+    animation: site-fade-in var(--dur-base) var(--ease-out) both;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Printing the public site (spec 14 §5)
    ---------------------------------------------------------------------------
    Somebody's parent will print the schedule. The planner shell's print rules
@@ -328,6 +440,7 @@
   .site-print nav[aria-label="Chapters"],
   .site-print .site-rail,
   .site-print .no-print-site,
+  .site-print .site-viewer,
   .site-print .site-progress {
     display: none !important;
   }
