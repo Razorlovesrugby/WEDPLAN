@@ -55,11 +55,6 @@ export default async function SitePage() {
       publishedAt={publishState.publishedAt}
       unpublished={publishState.unpublished}
       siteHref={`/w/${wedding.slug}`}
-      // Any change to the draft changes this, which remounts the preview
-      // frame — that is what makes an edit appear without a manual refresh.
-      previewKey={JSON.stringify(
-        blocks.map((block) => [block.id, block.payload, block.style, block.visible]),
-      )}
     />
   );
 }

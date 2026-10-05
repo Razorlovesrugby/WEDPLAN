@@ -96,8 +96,11 @@ export function PhotoText({
   payload,
   shape = "square",
   flip,
+  showPlaceholder = false,
 }: {
   url: string | null;
+  /** The builder's preview only — see `PhotoPlaceholder`. */
+  showPlaceholder?: boolean;
   alt: string | null;
   payload: unknown;
   shape?: BlockStyle["shape"];
@@ -118,6 +121,10 @@ export function PhotoText({
             className={`w-full ${SHAPE_CLASS[shape ?? "square"]}`}
             loading="lazy"
           />
+        </figure>
+      ) : showPlaceholder ? (
+        <figure>
+          <PhotoPlaceholder shape={shape} />
         </figure>
       ) : null}
       <div>
@@ -241,6 +248,34 @@ export function DressCode({ payload, children }: { payload: unknown; children?: 
     <div className="space-y-8">
       {body ? <Prose body={body} /> : null}
       {children}
+    </div>
+  );
+}
+
+/**
+ * The builder's stand-in for a photograph that has not been chosen.
+ *
+ * Drawn only when `ctx.preview` is set, so the planner who has just added a
+ * photo block sees *something* where it will go instead of a block that looks
+ * broken. A live page never renders this: a guest must not be shown a message
+ * addressed to the planner (spec 24 §5).
+ */
+export function PhotoPlaceholder({
+  shape = "wide",
+  fullBleed = false,
+}: {
+  shape?: BlockStyle["shape"];
+  fullBleed?: boolean;
+}) {
+  return (
+    <div
+      className={`flex w-full items-center justify-center border border-dashed border-line bg-[color-mix(in_srgb,var(--site-ink,#222)_5%,transparent)] text-center text-[0.8rem] uppercase tracking-[0.14em] text-muted ${
+        fullBleed ? "h-[clamp(240px,34vw,420px)]" : SHAPE_CLASS[shape ?? "wide"]
+      }`}
+      role="img"
+      aria-label="No photograph chosen yet"
+    >
+      Choose a photo
     </div>
   );
 }

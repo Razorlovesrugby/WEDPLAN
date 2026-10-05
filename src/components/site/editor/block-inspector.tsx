@@ -4,11 +4,8 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   BLOCKS,
-  BLOCK_ALIGNS,
   BLOCK_AUDIENCES,
   BLOCK_BACKGROUNDS,
-  BLOCK_WIDTHS,
-  IMAGE_SHAPES,
   type BlockStyle,
   type SiteBlock,
 } from "@/lib/site/blocks";
@@ -19,8 +16,16 @@ import {
   setBlockAudience,
   setBlockStyle,
 } from "@/server/actions/site-blocks";
+import {
+  BACKGROUND_LABEL,
+  SHAPE_LABEL,
+  STYLE_CHOICES,
+  STYLE_TITLE,
+  repeatHeading,
+} from "@/lib/site/style-labels";
 import { FieldInput } from "./field";
 import { PhotoPicker, type PhotoOption } from "./photo-picker";
+import { saveStatusLabel, useAutosave } from "./use-autosave";
 
 /**
  * One block's form (spec 23 §5).
@@ -41,24 +46,20 @@ const AUDIENCE_LABEL: Record<(typeof BLOCK_AUDIENCES)[number], string> = {
   public_only: "Only the shared site",
 };
 
-const STYLE_OPTIONS: Record<string, readonly string[]> = {
-  width: BLOCK_WIDTHS,
-  align: BLOCK_ALIGNS,
-  shape: IMAGE_SHAPES,
+/** Swatches for the choices that are questions about how something looks. */
+const BACKGROUND_SWATCH: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
+  paper: "#ffffff",
+  tinted: "#efe9df",
+  ink: "#2b2723",
+  photograph: "linear-gradient(135deg,#9db4c0 0%,#c9b99a 55%,#6f7d5c 100%)",
 };
 
-/**
- * The four grounds a block can take.
- *
- * Buttons rather than a `<select>`, unlike the other style controls: this is
- * the one choice that changes what the block looks like from across the room,
- * and it is the one somebody tries all four of.
- */
-const BACKGROUND_LABEL: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
-  paper: "Plain",
-  tinted: "Tinted",
-  ink: "Ink",
-  photograph: "Photograph",
+/** Width, height of a miniature of each photo shape, in px. */
+const SHAPE_BOX: Record<keyof typeof SHAPE_LABEL, [number, number]> = {
+  natural: [26, 20],
+  square: [22, 22],
+  portrait: [18, 24],
+  wide: [30, 17],
 };
 
 export function BlockInspector({
@@ -83,29 +84,31 @@ export function BlockInspector({
     ? (values[form.repeat!.key] as Record<string, unknown>[])
     : [];
 
+  // One rule about saving: everything autosaves (spec 24 §6). There is no Save
+  // button, and the status line below is how the planner knows that.
+  const { status, flush } = useAutosave(values, async (next) => {
+    const result = await saveBlock(block.id, next);
+    if (!result.ok) {
+      setErrors(result.fieldErrors ?? {});
+      return { ok: false as const, error: result.error };
+    }
+    setErrors({});
+    onDone();
+    return { ok: true as const };
+  });
+
   function set(name: string, value: unknown) {
     setValues((was) => ({ ...was, [name]: value }));
-  }
-
-  function save() {
-    startTransition(async () => {
-      const result = await saveBlock(block.id, values);
-      if (!result.ok) {
-        setErrors(result.fieldErrors ?? {});
-        setMessage(result.error);
-        return;
-      }
-      setErrors({});
-      setMessage("Saved to your draft");
-      onDone();
-    });
   }
 
   function style(next: Partial<BlockStyle>) {
     startTransition(async () => {
       const result = await setBlockStyle(block.id, { ...block.style, ...next });
       if (!result.ok) setMessage(result.error);
-      else onDone();
+      else {
+        setMessage(null);
+        onDone();
+      }
     });
   }
 
@@ -144,7 +147,9 @@ export function BlockInspector({
       ) : null}
 
       {form.fields.length > 0 ? (
-        <div className="space-y-3">
+        // `onBlur` bubbles from the inputs, so leaving any field writes now
+        // rather than waiting out the debounce.
+        <div className="space-y-3" onBlur={flush}>
           {form.fields.map((field) => (
             <FieldInput
               key={field.name}
@@ -159,8 +164,10 @@ export function BlockInspector({
       ) : null}
 
       {form.repeat ? (
-        <div className="space-y-3">
-          <h3 className="text-xs uppercase tracking-wide text-muted">{form.repeat.key}</h3>
+        <div className="space-y-3" onBlur={flush}>
+          <h3 className="text-xs uppercase tracking-wide text-muted">
+            {repeatHeading(form.repeat.noun)}
+          </h3>
           {repeatRows.map((row, index) => (
             <div key={index} className="space-y-2 border-l-2 border-line pl-3">
               {form.repeat!.fields.map((field) => (
@@ -230,26 +237,34 @@ export function BlockInspector({
           <h3 className="text-xs uppercase tracking-wide text-muted">How it looks</h3>
           {def.styles.includes("background") ? (
             <div className="space-y-2">
-              <div className="flex flex-wrap gap-1">
-                {BLOCK_BACKGROUNDS.map((option) => {
-                  const current = block.style.background ?? "paper";
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={pending}
-                      aria-pressed={current === option}
-                      onClick={() => style({ background: option })}
-                      className={`rounded border px-2.5 py-1 text-xs ${
-                        current === option
-                          ? "border-accent bg-[#f6f3ee] font-medium"
-                          : "border-line hover:border-ink"
-                      }`}
-                    >
-                      {BACKGROUND_LABEL[option]}
-                    </button>
-                  );
-                })}
+              <div>
+                <span className="mb-1 block text-xs text-muted">Background</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {BLOCK_BACKGROUNDS.map((option) => {
+                    const current = block.style.background ?? "paper";
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        disabled={pending}
+                        aria-pressed={current === option}
+                        onClick={() => style({ background: option })}
+                        className={`flex flex-col items-center gap-1 rounded border p-1.5 text-xs ${
+                          current === option
+                            ? "border-accent bg-[#f6f3ee] font-medium"
+                            : "border-line hover:border-ink"
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="block h-6 w-10 rounded-sm border border-line"
+                          style={{ background: BACKGROUND_SWATCH[option] }}
+                        />
+                        {BACKGROUND_LABEL[option]}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {block.style.background === "photograph" ? (
@@ -273,27 +288,47 @@ export function BlockInspector({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-3">
-            {def.styles
-              .filter((key) => key !== "embed" && key !== "background" && key !== "bgImage")
-              .map((key) => (
-                <label key={key} className="text-sm">
-                  <span className="mr-1 capitalize text-muted">{key}</span>
-                  <select
-                    className="field inline-block w-auto"
-                    value={String((block.style as Record<string, unknown>)[key] ?? "")}
-                    onChange={(event) => style({ [key]: event.target.value } as Partial<BlockStyle>)}
-                  >
-                    <option value="">Default</option>
-                    {(STYLE_OPTIONS[key] ?? []).map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-          </div>
+          {(["width", "align", "shape"] as const)
+            .filter((key) => def.styles.includes(key))
+            .map((key) => {
+              const current = (block.style as Record<string, unknown>)[key] as string | undefined;
+              return (
+                <div key={key}>
+                  <span className="mb-1 block text-xs text-muted">{STYLE_TITLE[key]}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STYLE_CHOICES[key].map((choice) => {
+                      const selected = current === choice.value;
+                      return (
+                        <button
+                          key={choice.value}
+                          type="button"
+                          disabled={pending}
+                          aria-pressed={selected}
+                          onClick={() => style({ [key]: choice.value } as Partial<BlockStyle>)}
+                          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs ${
+                            selected
+                              ? "border-accent bg-[#f6f3ee] font-medium"
+                              : "border-line hover:border-ink"
+                          }`}
+                        >
+                          {key === "shape" ? (
+                            <span
+                              aria-hidden="true"
+                              className="block rounded-[1px] border border-current opacity-70"
+                              style={{
+                                width: SHAPE_BOX[choice.value as keyof typeof SHAPE_BOX][0] / 2,
+                                height: SHAPE_BOX[choice.value as keyof typeof SHAPE_BOX][1] / 2,
+                              }}
+                            />
+                          ) : null}
+                          {choice.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
 
           {def.styles.includes("embed") ? (
             <div>
@@ -340,12 +375,17 @@ export function BlockInspector({
         </select>
       </div>
 
-      <div className="flex items-center gap-3 border-t border-line pt-3">
-        <button type="button" className="btn-primary" disabled={pending} onClick={save}>
-          Save
-        </button>
-        {message ? <span className="text-sm text-muted">{message}</span> : null}
-      </div>
+      {/* Where the Save button was. A calm line rather than a control: the only
+          way a planner can tell autosave is working is to be told. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={`border-t border-line pt-3 text-xs ${
+          status.state === "error" ? "text-[#a33a3a]" : "text-muted"
+        }`}
+      >
+        {message ?? saveStatusLabel(status) ?? "Changes save as you type"}
+      </p>
     </div>
   );
 }

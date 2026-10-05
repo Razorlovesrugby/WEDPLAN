@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -22,6 +22,8 @@ import {
   sectionNumbers,
   typesAtLimit,
   visibleBlocks,
+  type BlockFamily,
+  type PageNote,
   type SiteBlock,
 } from "@/lib/site/blocks";
 import { BLOCK_FORMS } from "@/lib/site/block-fields";
@@ -35,13 +37,15 @@ import {
   setBlockVisible,
 } from "@/server/actions/site-blocks";
 import { formatRelative } from "@/lib/format";
+import { blockSnippet, blockStatus, blocksNeedingWork, type BlockStatus } from "@/lib/site/starter";
+import { PREVIEW_CHANNEL, isFromPreview, type ToPreview } from "@/lib/site/preview-messages";
 import type { SiteTheme } from "@/lib/theme/presets";
 import { BlockInspector } from "./block-inspector";
 import { LookSections, Section } from "./rail";
 import type { PhotoOption } from "./photo-picker";
 
 /**
- * The builder (spec 23 §5, recomposed by spec 24).
+ * The builder (spec 23 §5, recomposed by spec 24, extended by spec 27).
  *
  *   ┌─ Your site · N unpublished changes ······ History · Publish ─┐
  *   │ rail (25rem)         │ preview                               │
@@ -63,12 +67,13 @@ import type { PhotoOption } from "./photo-picker";
  * `/site/preview`, which renders the draft through the same components a
  * guest gets. Not a mock-up and not a second implementation — a preview that
  * is its own renderer is a preview that lies as soon as anybody changes the
- * real one. The `previewKey` remount is what makes an edit appear without a
- * manual refresh.
+ * real one. An edit reaches it as a message asking it to refresh in place
+ * (`PreviewBridge`), never as a remount: remounting threw away the scroll
+ * position, any open accordion and the reader's place on every save.
  *
- * Drag-to-reorder stays desktop only (Q7). On a phone the list still edits,
- * hides and publishes; dragging a dozen blocks around a 390px screen is real
- * work for a task nobody does on a bus.
+ * Drag-to-reorder is the desktop gesture. Under `lg` each chapter has Move up
+ * and Move down instead (spec 24 Q3), and the rail and the preview become two
+ * panes you switch between, because neither fits beside the other on a phone.
  */
 
 /** Desktop is shown at a readable fraction of 1280px; a phone nearly full size. */
@@ -79,13 +84,26 @@ const DEVICE = {
 
 type Device = keyof typeof DEVICE;
 
+/** A glyph per family, for blocks with no photograph to show in the list. */
+const FAMILY_GLYPH: Record<BlockFamily, string> = {
+  essentials: "◆",
+  photos: "▣",
+  "the day": "◷",
+  music: "♪",
+  travel: "➚",
+};
+
+const STATUS_LABEL: Record<Exclude<BlockStatus, null>, string> = {
+  sample: "sample text",
+  blank: "empty",
+};
+
 export function SiteBuilder({
   blocks,
   photos,
   theme,
   publishedAt,
   unpublished,
-  previewKey,
   siteHref,
 }: {
   blocks: SiteBlock[];
@@ -93,16 +111,44 @@ export function SiteBuilder({
   theme: SiteTheme;
   publishedAt: string | null;
   unpublished: number;
-  /** Changes whenever the draft does, so the iframe reloads. */
-  previewKey: string;
   siteHref: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
   const [device, setDevice] = useState<Device>("desktop");
+  const [pane, setPane] = useState<"edit" | "preview">("edit");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // ---- the channel to the preview frame ----
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toPreview = useCallback((payload: ToPreview) => {
+    iframeRef.current?.contentWindow?.postMessage(payload, window.location.origin);
+  }, []);
+
+  /**
+   * Everything that writes to the draft ends here: refresh the builder's own
+   * numbers, then — after a short pause, so a burst of writes is one refresh —
+   * ask the preview to re-render in place.
+   */
+  const afterWrite = useCallback(() => {
+    router.refresh();
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(
+      () => toPreview({ channel: PREVIEW_CHANNEL, type: "refresh" }),
+      400,
+    );
+  }, [router, toPreview]);
+
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    [],
+  );
 
   // A block added or deleted on the server changes the list under us. Without
   // this the new block never joins `order` and simply does not appear.
@@ -122,6 +168,8 @@ export function SiteBuilder({
   );
   const atLimit = useMemo(() => typesAtLimit(blocks), [blocks]);
   const notes = useMemo(() => pageNotes(ordered), [ordered]);
+  const photoById = useMemo(() => new Map(photos.map((photo) => [photo.id, photo])), [photos]);
+  const unfinished = useMemo(() => blocksNeedingWork(ordered), [ordered]);
 
   /**
    * The number each chapter will actually wear on the page.
@@ -141,7 +189,40 @@ export function SiteBuilder({
   const hero = useMemo(() => ordered.find((block) => block.type === "hero") ?? null, [ordered]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  function run(action: () => Promise<{ ok: boolean; error?: string }>, note?: string) {
+  // Selecting a block takes the preview to it, so the list and the page always
+  // agree about where the planner is.
+  useEffect(() => {
+    if (selected) toPreview({ channel: PREVIEW_CHANNEL, type: "scroll-to", blockId: selected });
+  }, [selected, toPreview]);
+
+  // …and clicking a block in the preview selects it here.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (!isFromPreview(event.data)) return;
+      if (!byId.has(event.data.blockId)) return;
+
+      setSelected(event.data.blockId);
+      setPane("edit");
+      // After the rail has re-rendered with the inspector in it.
+      setTimeout(
+        () =>
+          document
+            .getElementById("selected-chapter")
+            ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+        50,
+      );
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [byId]);
+
+  function run(
+    action: () => Promise<{ ok: boolean; error?: string }>,
+    note?: string,
+    then?: () => void,
+  ) {
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
@@ -149,7 +230,8 @@ export function SiteBuilder({
         return;
       }
       setMessage(note ?? null);
-      router.refresh();
+      then?.();
+      afterWrite();
     });
   }
 
@@ -161,6 +243,16 @@ export function SiteBuilder({
     const to = order.indexOf(String(over.id));
     if (from < 0 || to < 0) return;
 
+    const next = [...order];
+    next.splice(to, 0, ...next.splice(from, 1));
+    setOrder(next);
+    run(() => reorderBlocks(next));
+  }
+
+  function move(id: string, delta: -1 | 1) {
+    const from = order.indexOf(id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= order.length) return;
     const next = [...order];
     next.splice(to, 0, ...next.splice(from, 1));
     setOrder(next);
@@ -200,13 +292,14 @@ export function SiteBuilder({
   }
 
   const selectedBlock = selected ? byId.get(selected) : undefined;
+  const sampleCount = unfinished.filter((entry) => entry.status === "sample").length;
 
   return (
     <div className="-m-4 sm:-m-6">
       {/* ---- the publish bar ----
           A draft system whose state is invisible is a bug generator: somebody
           edits for an hour and cannot work out why nothing changed. */}
-      <header className="flex h-[62px] flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5">
+      <header className="flex min-h-[62px] flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-5 py-2">
         <div className="flex items-baseline gap-3">
           <span className="font-serif text-lg">Your site</span>
           <span className="text-sm">
@@ -233,6 +326,11 @@ export function SiteBuilder({
             type="button"
             className="btn-primary"
             disabled={pending}
+            title={
+              sampleCount > 0
+                ? `${sampleCount} ${sampleCount === 1 ? "chapter still has" : "chapters still have"} sample text`
+                : undefined
+            }
             onClick={() => run(() => publishSite(), "Published — guests see this now")}
           >
             Publish
@@ -240,14 +338,56 @@ export function SiteBuilder({
         </div>
       </header>
 
-      <div className="grid lg:grid-cols-[minmax(300px,25rem)_minmax(0,1fr)]">
+      {/* What the last action said — a refused publish most of all. It lives
+          under the bar rather than inside a rail section because the Publish
+          button is up here and the answer should be too. */}
+      {message ? (
+        <div
+          role="status"
+          className="flex items-start justify-between gap-3 border-b border-line bg-[#faf6ee] px-5 py-2.5 text-sm"
+        >
+          <span>{message}</span>
+          <button
+            type="button"
+            className="shrink-0 text-xs text-muted hover:underline"
+            onClick={() => setMessage(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {/* Two panes under `lg`: the rail and the preview do not fit side by
+          side on a phone, and the preview is the thing the rail exists for. */}
+      <div className="flex gap-1 border-b border-line bg-white px-5 py-2 lg:hidden" role="tablist">
+        {(["edit", "preview"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="tab"
+            aria-selected={pane === option}
+            className={`btn px-3 py-1 text-xs capitalize ${
+              pane === option ? "border-accent bg-[#f6f3ee]" : ""
+            }`}
+            onClick={() => setPane(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(300px,25rem)_minmax(0,1fr)]">
         {/* ---- the rail ---- */}
-        <div className="divide-y divide-[#f0ece5] border-r border-line bg-white lg:max-h-[calc(100vh-62px)] lg:overflow-y-auto">
+        <div
+          className={`divide-y divide-[#f0ece5] border-r border-line bg-white lg:max-h-[calc(100vh-62px)] lg:overflow-y-auto ${
+            pane === "preview" ? "hidden lg:block" : ""
+          }`}
+        >
           <NamesAndDate
             key={hero?.id ?? "no-hero"}
             hero={hero}
             pending={pending}
-            onSaved={() => router.refresh()}
+            onSaved={afterWrite}
           />
 
           <Section title="Cover photo">
@@ -258,13 +398,21 @@ export function SiteBuilder({
             </p>
           </Section>
 
-          <LookSections theme={theme} />
+          <LookSections theme={theme} onSaved={afterWrite} />
 
           <Section
             title="Chapters"
             blurb="Drag to reorder. The numbers are worked out from what is showing, so the page always reads 01 to the end."
           >
+            {unfinished.length > 0 ? (
+              <UnfinishedNotice entries={unfinished} onSelect={(id) => setSelected(id)} />
+            ) : null}
+
             <DndContext
+              // A fixed id: dnd-kit numbers its accessibility nodes from a
+              // module counter, which differs between the server render and
+              // the browser and logs a hydration mismatch on every load.
+              id="site-chapters"
               sensors={sensors}
               collisionDetection={closestCenter}
               modifiers={[restrictToVerticalAxis]}
@@ -272,13 +420,17 @@ export function SiteBuilder({
             >
               <SortableContext items={order} strategy={verticalListSortingStrategy}>
                 <ul className="divide-y divide-[#f0ece5] rounded-md border border-line">
-                  {ordered.map((block) => (
+                  {ordered.map((block, index) => (
                     <ChapterRow
                       key={block.id}
                       block={block}
                       number={marks.get(block.id)?.number ?? null}
                       selected={block.id === selected}
                       pending={pending}
+                      thumb={photoFor(block, photoById)}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < ordered.length - 1}
+                      onMove={(delta) => move(block.id, delta)}
                       onSelect={() => setSelected(block.id === selected ? null : block.id)}
                       onToggle={() => run(() => setBlockVisible(block.id, !block.visible))}
                       onDelete={() => {
@@ -303,7 +455,19 @@ export function SiteBuilder({
                     type="button"
                     disabled={pending}
                     title={def.blurb}
-                    onClick={() => run(() => addBlock(def.type, selected ?? undefined))}
+                    onClick={() =>
+                      startTransition(async () => {
+                        const result = await addBlock(def.type, selected ?? undefined);
+                        if (!result.ok) {
+                          setMessage(result.error);
+                          return;
+                        }
+                        setMessage(null);
+                        // Straight into the new block, and the preview follows.
+                        setSelected(result.data.id);
+                        afterWrite();
+                      })
+                    }
                     className="rounded border border-dashed border-line px-2 py-1 text-xs text-muted hover:border-ink hover:text-ink"
                   >
                     + {def.label}
@@ -311,29 +475,21 @@ export function SiteBuilder({
                 ))}
             </div>
 
-            {notes.length > 0 ? (
-              <ul className="mt-3 space-y-1">
-                {notes.map((note, index) => (
-                  <li key={index} className="text-xs text-[#8b8378]">
-                    {note.text}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            {message ? <p className="mt-3 text-xs text-muted">{message}</p> : null}
+            <PageNotes notes={notes} />
           </Section>
 
           {selectedBlock ? (
-            <Section title="Selected chapter">
-              <BlockInspector
-                key={selectedBlock.id}
-                block={selectedBlock}
-                form={BLOCK_FORMS[selectedBlock.type]}
-                photos={photos}
-                onDone={() => router.refresh()}
-              />
-            </Section>
+            <div id="selected-chapter">
+              <Section title="Selected chapter">
+                <BlockInspector
+                  key={selectedBlock.id}
+                  block={selectedBlock}
+                  form={BLOCK_FORMS[selectedBlock.type]}
+                  photos={photos}
+                  onDone={afterWrite}
+                />
+              </Section>
+            </div>
           ) : null}
 
           {/* The screens a block's content lives on. The inspector links to
@@ -364,7 +520,7 @@ export function SiteBuilder({
         </div>
 
         {/* ---- the preview ---- */}
-        <div className="hidden bg-paper lg:block">
+        <div className={`bg-paper ${pane === "edit" ? "hidden lg:block" : ""}`}>
           <div className="flex items-center gap-2 px-5 py-3">
             {(["phone", "desktop"] as const).map((option) => (
               <button
@@ -384,11 +540,18 @@ export function SiteBuilder({
             </Link>
           </div>
 
-          <PreviewFrame device={device} previewKey={previewKey} />
+          <PreviewFrame device={device} iframeRef={iframeRef} />
         </div>
       </div>
     </div>
   );
+}
+
+/** The photograph a block points at, for its thumbnail in the list. */
+function photoFor(block: SiteBlock, photos: Map<string, PhotoOption>): PhotoOption | null {
+  const payload = (block.payload ?? {}) as Record<string, unknown>;
+  const id = typeof payload["image_id"] === "string" ? payload["image_id"] : block.style.bgImage;
+  return id ? (photos.get(id) ?? null) : null;
 }
 
 /**
@@ -400,12 +563,36 @@ export function SiteBuilder({
  * queries resolving at 666px, which is a preview of a page nobody will ever
  * see. The outer box takes the scaled size so the surrounding layout is not
  * pushed around by the untransformed element.
+ *
+ * The zoom is the device's preferred one, shrunk to fit when the column is
+ * narrower than that — which on a phone it always is.
  */
-function PreviewFrame({ device, previewKey }: { device: Device; previewKey: string }) {
-  const { width, zoom } = DEVICE[device];
+function PreviewFrame({
+  device,
+  iframeRef,
+}: {
+  device: Device;
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
+}) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [available, setAvailable] = useState<number | null>(null);
+
+  useEffect(() => {
+    const element = wrap.current;
+    if (!element) return;
+    const measure = () => setAvailable(element.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const { width, zoom: preferred } = DEVICE[device];
+  // 40px is the wrapper's `px-5` gutters.
+  const zoom = available && available > 40 ? Math.min(preferred, (available - 40) / width) : preferred;
 
   return (
-    <div className="flex justify-center px-5 pb-5">
+    <div ref={wrap} className="flex justify-center px-5 pb-5">
       <div
         className="overflow-hidden border border-line bg-white"
         // The visible box is the scaled size. Heights are viewport units and
@@ -414,9 +601,9 @@ function PreviewFrame({ device, previewKey }: { device: Device; previewKey: stri
         style={{ width: width * zoom, height: "78vh" }}
       >
         <iframe
-          // The key remounts the frame whenever the draft changes, which is
-          // what makes an edit show up without a manual refresh.
-          key={previewKey}
+          ref={iframeRef}
+          // No `key`: the frame is never remounted. An edit is a message
+          // asking it to re-render where it stands (`PreviewBridge`).
           src="/site/preview"
           title="Preview"
           style={{
@@ -428,6 +615,93 @@ function PreviewFrame({ device, previewKey }: { device: Device; previewKey: stri
           }}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Chapters that still need the planner, said once and with a way in.
+ *
+ * `sample` blocks are the ones publish will refuse; `blank` ones are only
+ * noted, because an empty photo band has always rendered as nothing and
+ * refusing it would turn every existing site's next publish into a chore.
+ */
+function UnfinishedNotice({
+  entries,
+  onSelect,
+}: {
+  entries: ReturnType<typeof blocksNeedingWork>;
+  onSelect: (id: string) => void;
+}) {
+  const sample = entries.filter((entry) => entry.status === "sample");
+  const blank = entries.filter((entry) => entry.status === "blank");
+
+  const links = (list: typeof entries) =>
+    list.map((entry, index) => (
+      <span key={entry.id}>
+        {index > 0 ? ", " : ""}
+        <button type="button" className="underline" onClick={() => onSelect(entry.id)}>
+          {entry.label}
+        </button>
+      </span>
+    ));
+
+  return (
+    <div className="mb-3 rounded-md border border-[#e7d9b6] bg-[#fbf6e6] p-3 text-xs leading-relaxed">
+      {sample.length > 0 ? (
+        <p>
+          <strong>
+            Sample text left in {sample.length === 1 ? "one chapter" : `${sample.length} chapters`}.
+          </strong>{" "}
+          Publishing waits until you have written your own or hidden{" "}
+          {sample.length === 1 ? "it" : "them"}: {links(sample)}.
+        </p>
+      ) : null}
+      {blank.length > 0 ? (
+        <p className={sample.length > 0 ? "mt-1.5" : ""}>Nothing in yet: {links(blank)}.</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * `pageNotes`' advice, rendered as something a planner reads once.
+ *
+ * Same words as before — the function is untouched — but grouped under a
+ * heading, tone-coloured, and dismissible for the session. A plain grey list
+ * of `text-xs` is where advice goes to be ignored.
+ */
+function PageNotes({ notes }: { notes: PageNote[] }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (notes.length === 0 || dismissed) return null;
+
+  return (
+    <div className="mt-3 rounded-md border border-line bg-[#fafaf7] p-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+          A few thoughts
+        </h3>
+        <button
+          type="button"
+          className="text-xs text-muted hover:underline"
+          onClick={() => setDismissed(true)}
+        >
+          Dismiss
+        </button>
+      </div>
+      <ul className="space-y-1.5">
+        {notes.map((note, index) => (
+          <li
+            key={index}
+            className={`flex gap-2 text-xs leading-snug ${
+              note.tone === "bloated" ? "text-[#8a5a2b]" : "text-muted"
+            }`}
+          >
+            <span aria-hidden="true">{note.tone === "bloated" ? "▲" : "○"}</span>
+            <span>{note.text}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -499,8 +773,8 @@ function NamesAndDate({
                 setSaved(false);
               }}
               // Saved when the field is left rather than on every keystroke:
-              // a write per character would be a write per character, and the
-              // preview remounts on each one.
+              // these three are the names on the front of the invitation, and
+              // a write per character is a preview refresh per character.
               onBlur={commit}
             />
           </label>
@@ -516,6 +790,10 @@ function ChapterRow({
   number,
   selected,
   pending,
+  thumb,
+  canMoveUp,
+  canMoveDown,
+  onMove,
   onSelect,
   onToggle,
   onDelete,
@@ -525,6 +803,11 @@ function ChapterRow({
   number: string | null;
   selected: boolean;
   pending: boolean;
+  /** The photograph this block points at, when it has one. */
+  thumb: PhotoOption | null;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (delta: -1 | 1) => void;
   onSelect: () => void;
   onToggle: () => void;
   onDelete: () => void;
@@ -533,6 +816,8 @@ function ChapterRow({
     id: block.id,
   });
   const def = BLOCKS[block.type];
+  const snippet = blockSnippet(block);
+  const status = block.visible ? blockStatus(block) : null;
 
   return (
     <li
@@ -552,17 +837,63 @@ function ChapterRow({
         ⠿
       </button>
 
+      {/* The touch fallback for the drag handle (spec 24 Q3). */}
+      <span className="flex flex-col lg:hidden">
+        <button
+          type="button"
+          className="px-1 text-[10px] leading-none text-muted disabled:opacity-25"
+          disabled={!canMoveUp || pending}
+          aria-label={`Move ${def.label} up`}
+          onClick={() => onMove(-1)}
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          className="px-1 text-[10px] leading-none text-muted disabled:opacity-25"
+          disabled={!canMoveDown || pending}
+          aria-label={`Move ${def.label} down`}
+          onClick={() => onMove(1)}
+        >
+          ▼
+        </button>
+      </span>
+
       <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-[#a9a298]">
         {number ?? "—"}
       </span>
 
-      <button type="button" onClick={onSelect} className="flex-1 truncate text-left">
-        <span className={`text-sm ${block.visible ? "" : "text-[#a9a298] line-through"}`}>
-          {def.label}
+      {thumb ? (
+        // eslint-disable-next-line @next/next/no-img-element -- signed URL from a private bucket
+        <img src={thumb.url} alt="" className="h-7 w-9 shrink-0 rounded-sm object-cover" />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex h-7 w-9 shrink-0 items-center justify-center rounded-sm bg-[#f3f0ea] text-xs text-[#a9a298]"
+        >
+          {FAMILY_GLYPH[def.family]}
         </span>
-        {block.audience !== "everyone" ? (
-          <span className="ml-2 text-xs text-[#8b8378]">
-            {block.audience === "invited" ? "invited only" : "shared site only"}
+      )}
+
+      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <span
+          className={`block truncate text-sm ${block.visible ? "" : "text-[#a9a298] line-through"}`}
+        >
+          {def.label}
+          {block.audience !== "everyone" ? (
+            <span className="ml-2 text-xs text-[#8b8378]">
+              {block.audience === "invited" ? "invited only" : "shared site only"}
+            </span>
+          ) : null}
+        </span>
+        {snippet || status ? (
+          <span className="block truncate text-xs text-muted">
+            {status ? (
+              <span className="mr-1.5 rounded-sm bg-[#fbf0d3] px-1 py-px text-[10px] uppercase tracking-wide text-[#8a6a1f]">
+                {STATUS_LABEL[status]}
+              </span>
+            ) : null}
+            {snippet}
           </span>
         ) : null}
       </button>

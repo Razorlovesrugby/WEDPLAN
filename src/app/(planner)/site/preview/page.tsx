@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { visibleBlocks } from "@/lib/site/blocks";
 import { themeCssVars } from "@/lib/theme/presets";
 import { SiteBlocks } from "@/components/site/blocks/render";
+import { PreviewBridge } from "@/components/site/preview-bridge";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Preview", robots: { index: false, follow: false } };
@@ -51,7 +52,7 @@ export default async function SitePreviewPage({
     }
   }
 
-  const ctx = await buildRenderContext(
+  const built = await buildRenderContext(
     {
       id: wedding.id,
       name: wedding.name,
@@ -61,6 +62,9 @@ export default async function SitePreviewPage({
     },
     personal,
   );
+  // The one place `preview` is true: an empty photo block says so here and
+  // draws nothing on a guest's page.
+  const ctx = { ...built, preview: true };
 
   const shown = visibleBlocks(blocks, personal !== null);
 
@@ -75,6 +79,7 @@ export default async function SitePreviewPage({
       data-site-preview="true"
       className={`${siteFontClasses(ctx.theme.preset)} -m-4 min-h-screen bg-paper font-body text-ink antialiased sm:-m-6`}
     >
+      <PreviewBridge />
       {shown.length === 0 ? (
         <p className="p-10 text-center text-sm text-muted">
           Nothing on the page yet. Add a block and it appears here.

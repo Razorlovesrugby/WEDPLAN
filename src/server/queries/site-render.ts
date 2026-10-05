@@ -76,6 +76,13 @@ export type RenderContext = {
   extras: SiteExtras;
   /** Null when a stranger is reading; the household when we know who it is. */
   personal: PersonalContext | null;
+  /**
+   * True only on the builder's preview. A block with nothing in it draws a
+   * "Choose a photo" tile there, and nothing at all on a live page: the tile
+   * is a message to the planner, and a guest must never be shown it. Publish
+   * refusing sample text is the other half of that promise.
+   */
+  preview: boolean;
 };
 
 /** The theme is configuration and still lives in `site_content`. */
@@ -158,6 +165,7 @@ export async function buildRenderContext(
     imageUrls,
     extras,
     personal,
+    preview: false,
   };
 }
 

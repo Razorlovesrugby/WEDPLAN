@@ -54,6 +54,29 @@ export type BlockStyle = {
   embed?: boolean;
 };
 
+/**
+ * Every key a block's `style` may carry, as data.
+ *
+ * `BlockStyle` is a type and cannot be enumerated at runtime, but two other
+ * things have to agree with it — the server's `styleSchema` (which is
+ * `.strict()` and refuses a key it does not list, so a save of a styled block
+ * fails outright) and the revision snapshot. A test compares this list to the
+ * schema; the line below makes forgetting to extend it a compile error.
+ */
+export const BLOCK_STYLE_KEYS = [
+  "width",
+  "background",
+  "align",
+  "shape",
+  "bgImage",
+  "embed",
+] as const satisfies readonly (keyof BlockStyle)[];
+
+// Fails to compile if `BlockStyle` gains a key this list does not name.
+type StyleKeysAreExhaustive =
+  Exclude<keyof BlockStyle, (typeof BLOCK_STYLE_KEYS)[number]> extends never ? true : never;
+export const STYLE_KEYS_ARE_EXHAUSTIVE: StyleKeysAreExhaustive = true;
+
 export type BlockDef = {
   type: BlockType;
   label: string;

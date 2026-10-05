@@ -24,7 +24,15 @@ import { Attire } from "../attire";
 import { Arrivals } from "../arrivals";
 import { runsByEvent } from "../event-inline";
 import { visibleDressCodes } from "@/lib/site/dress-codes";
-import { DressCode, MapBlock, PageBreak, PhotoBand, PhotoText, Playlist } from "./media";
+import {
+  DressCode,
+  MapBlock,
+  PageBreak,
+  PhotoBand,
+  PhotoPlaceholder,
+  PhotoText,
+  Playlist,
+} from "./media";
 import type { RenderContext } from "@/server/queries/site-render";
 
 /**
@@ -458,31 +466,39 @@ export function SiteBlockView({
 
     case "page_break": {
       const url = ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null;
-      // Nothing to punctuate with. An empty band is a dark gap the planner
-      // cannot see the cause of, so it renders as nothing at all.
-      if (!url) return null;
+      // Nothing to punctuate with. On a live page an empty band is a dark gap
+      // nobody can see the cause of, so it renders as nothing at all; the
+      // planner's preview says what is missing instead.
+      if (!url) return ctx.preview ? <PhotoPlaceholder fullBleed /> : null;
       return (
         <PageBreak url={url} alt={text(payload, "image_alt")} shape={block.style?.shape} />
       );
     }
 
-    case "photo_band":
+    case "photo_band": {
+      const url = ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null;
       return (
         <Shell block={block} bgUrl={bgUrl}>
-          <PhotoBand
-            url={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
-            alt={text(payload, "image_alt")}
-            caption={text(payload, "caption")}
-            shape={block.style?.shape}
-          />
+          {url || !ctx.preview ? (
+            <PhotoBand
+              url={url}
+              alt={text(payload, "image_alt")}
+              caption={text(payload, "caption")}
+              shape={block.style?.shape}
+            />
+          ) : (
+            <PhotoPlaceholder shape={block.style?.shape} />
+          )}
         </Shell>
       );
+    }
 
     case "photo_text":
       return (
         <Shell block={block} bgUrl={bgUrl} heading={text(payload, "heading") ?? ""}>
           <PhotoText
             url={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
+            showPlaceholder={ctx.preview}
             alt={text(payload, "image_alt")}
             payload={payload}
             shape={block.style?.shape}
@@ -621,7 +637,12 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
   return (
     <>
       {blocks.map((block) => (
-        <SiteBlockView key={block.id} block={block} ctx={ctx} mark={marks.get(block.id)} />
+        // The id is what the builder's preview uses to scroll to a block and to
+        // tell the builder which one was clicked. It carries no content, and a
+        // wrapper with no styling changes nothing about the layout.
+        <div key={block.id} data-block-id={block.id} data-block-type={block.type}>
+          <SiteBlockView block={block} ctx={ctx} mark={marks.get(block.id)} />
+        </div>
       ))}
     </>
   );

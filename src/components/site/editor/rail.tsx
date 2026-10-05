@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { saveTheme } from "@/server/actions/site";
 import {
   PALETTES,
@@ -34,8 +33,7 @@ import {
  * Every control saves on change. There is no Save button in a rail whose
  * whole job is to show you the result next to it.
  */
-export function LookSections({ theme }: { theme: SiteTheme }) {
-  const router = useRouter();
+export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: () => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +57,7 @@ export function LookSections({ theme }: { theme: SiteTheme }) {
         typography: merged.typography,
       });
       setError(result.ok ? null : result.error);
-      if (result.ok) router.refresh();
+      if (result.ok) onSaved();
     });
   }
 
