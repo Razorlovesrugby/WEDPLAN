@@ -88,6 +88,25 @@ describe("replyBarCopy", () => {
   });
 });
 
+describe("replyBarCopy with a custom title (spec 28 §7.2)", () => {
+  const none = summariseReply([person("Chidi", "pending")]);
+
+  it("opens with the planner's title for the reply section", () => {
+    expect(replyBarCopy(none, null, "Will you join us?").text).toBe("Will you join us?");
+    expect(replyBarCopy(none, "1 May", "Will you join us?").text).toBe("Will you join us? · by 1 May");
+  });
+
+  it("keeps today's words when there is no custom title", () => {
+    expect(replyBarCopy(none, "1 May").text).toBe("Your reply · by 1 May");
+    expect(replyBarCopy(none, null, null).text).toBe("Your reply");
+  });
+
+  it("leaves the states that say what they answered alone", () => {
+    const yes = summariseReply([person("Chidi", "yes")]);
+    expect(replyBarCopy(yes, null, "Will you join us?").text).toBe("You're coming — Chidi");
+  });
+});
+
 describe("replyConfirmation", () => {
   it("names each group once", () => {
     const { heading, lines } = replyConfirmation(

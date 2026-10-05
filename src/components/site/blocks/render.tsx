@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlock } from "@/lib/site/blocks";
+import {
+  blockAnchor,
+  blockHeading,
+  customHeading,
+  sectionNumbers,
+  type BlockStyle,
+  type SectionMark,
+  type SiteBlock,
+} from "@/lib/site/blocks";
 import { flag, text } from "@/lib/site/sections";
 import { DEFAULT_COVER_LINE } from "@/lib/site/cover";
 import { resolveEntrance, resolveLook } from "@/lib/site/looks";
@@ -124,14 +132,12 @@ function Background({
 /** A full-bleed block gets no section shell at all — that is what full means. */
 function Shell({
   block,
-  heading,
   intro,
   mark,
   bgImage = null,
   children,
 }: {
   block: SiteBlock;
-  heading?: string | null;
   intro?: string | null;
   /** `04 · ATTIRE` (spec 25 §8). Absent on a block that is not a destination. */
   mark?: SectionMark;
@@ -140,7 +146,12 @@ function Shell({
   children: React.ReactNode;
 }) {
   const style = block.style ?? {};
-  const label = heading ?? BLOCKS[block.type].heading ?? BLOCKS[block.type].label;
+  // The planner's title, else the block's own default, else nothing — and never
+  // the block's *name*: a photo band has no heading, and falling back to its
+  // label printed the words "Photo band" above the photograph. "No title" is
+  // the same empty answer (spec 28 §7.2).
+  const label = blockHeading(block);
+  const anchor = blockAnchor(block);
 
   if (style.width === "full") {
     return (
@@ -156,7 +167,7 @@ function Shell({
   if (label === "") {
     return (
       <Background style={style} image={bgImage}>
-        <section id={block.type} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
+        <section id={anchor} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
           <div className={`mx-auto ${WIDTH_CLASS[style.width ?? "contained"]}`}>{children}</div>
         </section>
       </Background>
@@ -166,7 +177,7 @@ function Shell({
   return (
     <Background style={style} image={bgImage}>
       <SiteSection
-        id={block.type}
+        id={anchor}
         heading={label}
         intro={intro ?? undefined}
         eyebrow={mark ? `${mark.number} · ${mark.label}` : undefined}
@@ -315,7 +326,7 @@ export function SiteBlockView({
       const body = text(payload, "body");
       if (!body) return null;
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgImage={bgImage}>
           <Prose body={body} />
         </Shell>
       );
@@ -369,7 +380,7 @@ export function SiteBlockView({
       // public, for a reader we do not know.
       return personal ? (
         personal.events.length === 0 ? null : (
-          <Shell block={block} bgImage={bgImage} heading="You're invited to" intro={intro} mark={mark}>
+          <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
             <InvitedEvents
               events={personal.events}
               members={personal.members}
@@ -427,6 +438,11 @@ export function SiteBlockView({
       return (
         <Shell
           block={block}
+          bgImage={bgImage}
+          // The reply section is numbered like every other chapter. It is
+          // counted by `sectionNumbers`, and leaving it out of the markup left
+          // a hole in the sequence — 05, then 07 (spec 28 §9).
+          mark={mark}
           intro={
             personal.rsvp && !personal.rsvp.locked && personal.rsvp.wedding.rsvp_lock_at
               ? `Please reply by ${formatDate(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)}. You can change your answers until then.`
@@ -572,7 +588,7 @@ export function SiteBlockView({
 
     case "photo_text":
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgImage={bgImage}>
           <PhotoText
             image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             showPlaceholder={ctx.preview}
@@ -588,7 +604,7 @@ export function SiteBlockView({
     // -- travel -------------------------------------------------------------
     case "map":
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? "Where"} intro={intro}>
+        <Shell block={block} bgImage={bgImage} intro={intro}>
           <MapBlock
             payload={payload}
             embed={block.style?.embed === true}
@@ -697,7 +713,7 @@ export function SiteBlockView({
 
     case "playlist":
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
+        <Shell block={block} bgImage={bgImage} mark={mark}>
           <Playlist
             payload={payload}
             embed={block.style?.embed === true}
@@ -734,6 +750,8 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
           ctx.theme.layout.replyByDate
             ? replyByLabel(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)
             : null,
+          // The reply section's own title, if the planner gave it one.
+          customHeading(blocks.find((block) => block.type === "rsvp")!),
         );
       }
     } else if (ctx.preview) {

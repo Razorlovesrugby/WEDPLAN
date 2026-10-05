@@ -85,11 +85,18 @@ export function summariseReply(members: ReplyMember[]): ReplySummary {
 export function replyBarCopy(
   summary: ReplySummary,
   replyBy: string | null,
+  /**
+   * What the planner titled the reply section, when they did (spec 28 §7.2). The
+   * bar's opening line is that section's name, so a couple who wrote "Will you
+   * join us?" is not answered by a bar that says "Your reply". Null keeps the
+   * wording the bar has always had.
+   */
+  title: string | null = null,
 ): { text: string; action: string } {
   const by = replyBy ? ` · by ${replyBy}` : "";
   switch (summary.state) {
     case "none":
-      return { text: `Your reply${by}`, action: "Reply" };
+      return { text: `${title ?? "Your reply"}${by}`, action: "Reply" };
     case "partial":
       return { text: `Finish your reply${by}`, action: "Continue" };
     case "yes":

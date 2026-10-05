@@ -198,6 +198,9 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     family: "essentials",
     blurb: "A heading and some paragraphs. For anything with no block of its own.",
     styles: ["width", "background", "align"],
+    // Untitled until the planner titles it (spec 28 §7.2): "" is a default of
+    // *no* heading, which is not the same as having none to offer.
+    heading: "",
   },
   schedule: {
     type: "schedule",
@@ -208,7 +211,8 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     max: 1,
     styles: ["width", "background"],
     personal: true,
-    heading: "The weekend",
+    // What every reader sees now that there is no shared page (spec 28 §7a.4).
+    heading: "You're invited to",
   },
   on_the_day: {
     type: "on_the_day",
@@ -313,6 +317,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     family: "photos",
     blurb: "A photograph beside a paragraph.",
     styles: ["width", "background", "shape", "lightbox"],
+    heading: "",
   },
   map: {
     type: "map",
@@ -321,6 +326,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     blurb: "One venue, how to get there, and a link that opens Maps.",
     eyebrow: "The venue",
     styles: ["width", "background", "embed"],
+    heading: "Where",
   },
   travel: {
     type: "travel",
@@ -379,6 +385,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     family: "music",
     blurb: "A link to your playlist, or the player itself.",
     styles: ["width", "background", "embed"],
+    heading: "The playlist",
   },
   guestbook: {
     type: "guestbook",
@@ -573,9 +580,9 @@ export const STARTER_LAYOUTS: StarterLayout[] = [
  * — a guest counting "01, 02, 04" wonders what they missed, and the answer
  * "nothing, the couple hid a block" is not one the page can give them.
  *
- * Only blocks with an eyebrow are numbered, which is the same judgement
- * `blockNavItems` makes about what is a destination: a photo band is
- * punctuation, and numbering it would make the page look longer than it reads.
+ * Only blocks with an eyebrow are numbered — the ones that are a destination:
+ * a photo band is punctuation, and numbering it would make the page look longer
+ * than it reads.
  * Hidden blocks are expected to be filtered out by `visibleBlocks` before this
  * is called — it numbers what it is given.
  */
@@ -586,14 +593,98 @@ export function sectionNumbers(blocks: SiteBlock[]): Map<string, SectionMark> {
   let n = 0;
 
   for (const block of blocks) {
-    const eyebrow = BLOCKS[block.type]?.eyebrow;
-    if (!eyebrow) continue;
+    // The planner's own label when they wrote one (spec 28 §7.2), else the
+    // block's category. Whether a block is numbered at all is still the
+    // catalogue's call — a label cannot turn a photo band into a chapter — and
+    // the number is still computed, so renaming never leaves a gap.
+    const label = blockLabel(block);
+    if (!label) continue;
+    // "No title" means a section that speaks for itself: there is no heading
+    // for a number to sit above, so it is not a chapter — and not numbering it
+    // is what keeps the page reading 01 to N rather than skipping its place.
+    if (blockHeading(block) === "" && defaultHeading(block.type) !== "") continue;
     n += 1;
     // Two digits up to 99, which is well past the point pageNotes starts
     // telling the planner the page is too long.
-    marks.set(block.id, { number: String(n).padStart(2, "0"), label: eyebrow });
+    marks.set(block.id, { number: String(n).padStart(2, "0"), label });
   }
   return marks;
+}
+
+// ---------------------------------------------------------------------------
+// Titles, labels and anchors (spec 28 §7.2, §9.6)
+// ---------------------------------------------------------------------------
+
+function payloadText(payload: unknown, key: string): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+/**
+ * Blocks that draw no heading of their own, and so have no title to edit: the
+ * cover, the countdown, and the three that are punctuation or a sign-off.
+ */
+const UNTITLED = new Set<BlockType>(["hero", "countdown", "page_break", "photo_band", "footer"]);
+
+export function isTitled(type: BlockType): boolean {
+  return !UNTITLED.has(type);
+}
+
+/**
+ * The heading a block draws until the planner changes it — what the editor
+ * shows as the Title field's placeholder. "" means it has none by default
+ * (Words, Photo and words), which is a different thing from not being titled.
+ */
+export function defaultHeading(type: BlockType): string {
+  return BLOCKS[type].heading ?? "";
+}
+
+/** The title the planner typed, or null. Clearing the field is "use the default". */
+export function customHeading(block: SiteBlock): string | null {
+  return isTitled(block.type) ? payloadText(block.payload, "heading") : null;
+}
+
+/**
+ * The heading this block draws: the planner's, else the default — unless they
+ * turned the title off, which draws nothing and closes the space up.
+ */
+export function blockHeading(block: SiteBlock): string {
+  if (!isTitled(block.type)) return "";
+  if ((block.payload as Record<string, unknown> | null)?.["hide_heading"] === true) return "";
+  return customHeading(block) ?? defaultHeading(block.type);
+}
+
+/**
+ * The small line above the heading, without its number: the planner's label,
+ * else the block's category. Null for a block that is not a destination.
+ */
+export function blockLabel(block: SiteBlock): string | null {
+  const category = BLOCKS[block.type]?.eyebrow;
+  if (!category) return null;
+  return payloadText(block.payload, "eyebrow") ?? category;
+}
+
+/**
+ * What the chapter list down the side calls a block: the planner's title when
+ * they wrote one, else the label above it. Both follow what the planner typed,
+ * so the list and the page cannot disagree about what a section is called.
+ */
+export function chapterName(block: SiteBlock): string {
+  return customHeading(block) ?? blockLabel(block) ?? BLOCKS[block.type].label;
+}
+
+/**
+ * The anchor a section answers to.
+ *
+ * A once-only block keeps its type — `#rsvp`, `#faq` — so every link already
+ * sent and every place that says `#rsvp` still lands. A repeatable one gets its
+ * own, because two "What to wear" sections sharing an id means the second is
+ * unreachable and the chapter list silently skips it (spec 28 §9.6). Derived
+ * from the block's id, so reordering never moves it.
+ */
+export function blockAnchor(block: SiteBlock): string {
+  return BLOCKS[block.type].max === 1 ? block.type : `${block.type}-${block.id}`;
 }
 
 /**
@@ -605,36 +696,4 @@ export function sectionNumbers(blocks: SiteBlock[]): Map<string, SectionMark> {
  */
 export function palletableBlocks(): BlockDef[] {
   return Object.values(BLOCKS).filter((def) => !def.deprecated);
-}
-
-/**
- * The jump nav.
- *
- * Only blocks that are a destination: a photo band is not somewhere you
- * navigate to, and a nav with "Photo band · Photo band · Photo band" in it is
- * worse than no nav. Duplicate types appear once — the first one wins, which
- * is where an anchor of that id actually lands.
- */
-const NOT_IN_NAV = new Set<BlockType>([
-  "hero",
-  "countdown",
-  "footer",
-  "photo_band",
-  "photo_text",
-  "page_break",
-  "prose",
-  "playlist",
-]);
-
-export function blockNavItems(blocks: SiteBlock[]): { href: string; label: string }[] {
-  const seen = new Set<BlockType>();
-  const items: { href: string; label: string }[] = [];
-
-  for (const block of blocks) {
-    if (NOT_IN_NAV.has(block.type) || seen.has(block.type)) continue;
-    seen.add(block.type);
-    const def = BLOCKS[block.type];
-    items.push({ href: `#${block.type}`, label: def.heading ?? def.label });
-  }
-  return items;
 }

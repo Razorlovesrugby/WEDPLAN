@@ -158,8 +158,11 @@ export function PreviewBridge() {
       const block = event.target.closest("[data-block-id]");
       const blockId = block?.getAttribute("data-block-id");
       if (!blockId) return;
+      // A click on the title goes one step further than a click on the block:
+      // the planner is pointing at the words they want to change.
+      const onTitle = event.target.closest("[data-block-title]") !== null;
       window.parent.postMessage(
-        { channel: PREVIEW_CHANNEL, type: "select", blockId },
+        { channel: PREVIEW_CHANNEL, type: "select", blockId, ...(onTitle ? { field: "heading" } : {}) },
         window.location.origin,
       );
     };

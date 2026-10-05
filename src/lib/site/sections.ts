@@ -15,9 +15,6 @@
 /** The theme is configuration rather than a block, and still lives in `site_content`. */
 export const THEME_BLOCK_KEY = "theme";
 
-/** One entry of the jump nav. Built from blocks now — see `blocks.ts`. */
-export type NavItem = { href: string; label: string };
-
 // ---------------------------------------------------------------------------
 // Payload readers
 // ---------------------------------------------------------------------------

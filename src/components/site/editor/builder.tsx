@@ -161,6 +161,9 @@ export function SiteBuilder({
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
+  // Bumped when the planner clicks a block's *title* in the preview, which asks
+  // the inspector to put the cursor in that block's Title field (spec 28 §7.2).
+  const [titleFocus, setTitleFocus] = useState(0);
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
   const [device, setDevice] = useState<Device>("desktop");
   const [pane, setPane] = useState<"edit" | "preview">("edit");
@@ -284,6 +287,7 @@ export function SiteBuilder({
 
       setSelected(event.data.blockId);
       setPane("edit");
+      if (event.data.field === "heading") setTitleFocus((count) => count + 1);
       // After the rail has re-rendered with the inspector in it.
       setTimeout(
         () =>
@@ -802,6 +806,7 @@ export function SiteBuilder({
                   photos={photos}
                   onDone={afterWrite}
                   heroDefault={theme.heroStyle}
+                  focusTitle={titleFocus}
                 />
               </Section>
             </div>

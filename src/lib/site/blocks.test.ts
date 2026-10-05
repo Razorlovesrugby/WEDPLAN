@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   BLOCKS,
-  blockNavItems,
   BLOCK_TYPES,
   STARTER_LAYOUTS,
+  blockAnchor,
+  blockHeading,
+  blockLabel,
+  chapterName,
+  customHeading,
+  defaultHeading,
   isBlockType,
+  isTitled,
   isFoldedIntoSchedule,
   pageNotes,
   palletableBlocks,
@@ -220,27 +226,6 @@ describe("pageNotes", () => {
   });
 });
 
-describe("blockNavItems", () => {
-  it("lists the destinations and skips the decoration", () => {
-    const blocks = [
-      block({ type: "hero" }),
-      block({ type: "photo_band" }),
-      block({ type: "schedule" }),
-      block({ type: "faq" }),
-      block({ type: "footer" }),
-    ];
-    expect(blockNavItems(blocks)).toEqual([
-      { href: "#schedule", label: "The weekend" },
-      { href: "#faq", label: "Questions" },
-    ]);
-  });
-
-  it("lists a repeated type once — that is where the anchor lands", () => {
-    const blocks = [block({ type: "gallery" }), block({ type: "gallery" })];
-    expect(blockNavItems(blocks)).toHaveLength(1);
-  });
-});
-
 describe("sectionNumbers — the eyebrow above each section", () => {
   it("numbers the destinations and skips the punctuation", () => {
     const marks = sectionNumbers([
@@ -302,7 +287,7 @@ describe("palletableBlocks", () => {
 });
 
 describe("the page break band", () => {
-  it("is punctuation, so it is never numbered and never in the nav", () => {
+  it("is punctuation, so it is never numbered", () => {
     // Two bands and two destinations: the page still reads 01, 02.
     const marks = sectionNumbers([
       block({ id: "a", type: "schedule" }),
@@ -312,10 +297,6 @@ describe("the page break band", () => {
     ]);
     expect([...marks.keys()]).toEqual(["a", "c"]);
     expect(marks.get("c")?.number).toBe("02");
-
-    expect(
-      blockNavItems([block({ type: "page_break" }), block({ type: "rsvp" })]).map((i) => i.label),
-    ).toEqual(["Will you be there?"]);
   });
 
   it("is repeatable — a long page wants more than one", () => {
@@ -326,5 +307,104 @@ describe("the page break band", () => {
 
   it("is offered in the palette", () => {
     expect(palletableBlocks().map((def) => def.type)).toContain("page_break");
+  });
+});
+
+describe("titles and labels the planner can change (spec 28 §7.2)", () => {
+  it("draws the block's own default until a title is written", () => {
+    expect(blockHeading(block({ type: "faq" }))).toBe("Questions");
+    expect(blockHeading(block({ type: "schedule" }))).toBe("You're invited to");
+    expect(blockHeading(block({ type: "rsvp" }))).toBe("Will you be there?");
+  });
+
+  it("draws the planner's title in its place, and clearing it goes back", () => {
+    expect(blockHeading(block({ type: "faq", payload: { heading: "Good to know" } }))).toBe("Good to know");
+    expect(blockHeading(block({ type: "faq", payload: { heading: "   " } }))).toBe("Questions");
+    expect(customHeading(block({ type: "faq", payload: { heading: "   " } }))).toBeNull();
+  });
+
+  it("draws nothing at all when the title is switched off", () => {
+    const off = block({ type: "faq", payload: { heading: "Good to know", hide_heading: true } });
+    expect(blockHeading(off)).toBe("");
+  });
+
+  it("has no heading by default on a block that was always untitled", () => {
+    // Words and Photo and words are headed only when somebody writes one.
+    expect(defaultHeading("prose")).toBe("");
+    expect(blockHeading(block({ type: "prose" }))).toBe("");
+    expect(blockHeading(block({ type: "prose", payload: { heading: "A note about the kids" } }))).toBe(
+      "A note about the kids",
+    );
+  });
+
+  it("never falls back to a block's NAME as its heading", () => {
+    // A photo band used to print the words "Photo band" above the photograph.
+    expect(isTitled("photo_band")).toBe(false);
+    expect(blockHeading(block({ type: "photo_band", payload: { heading: "Ignored" } }))).toBe("");
+    for (const type of BLOCK_TYPES) {
+      if (!isTitled(type)) expect(blockHeading(block({ type })), type).toBe("");
+    }
+  });
+
+  it("keeps the map and the playlist headings they always had", () => {
+    expect(blockHeading(block({ type: "map" }))).toBe("Where");
+    expect(blockHeading(block({ type: "playlist" }))).toBe("The playlist");
+  });
+
+  it("labels a section with the planner's words, else its category", () => {
+    expect(blockLabel(block({ type: "faq" }))).toBe("Questions");
+    expect(blockLabel(block({ type: "faq", payload: { eyebrow: "Good to know" } }))).toBe("Good to know");
+    // Not a destination: a label cannot make punctuation a chapter.
+    expect(blockLabel(block({ type: "photo_band", payload: { eyebrow: "Nope" } }))).toBeNull();
+  });
+
+  it("numbers by position whatever the labels say, so a rename leaves no gap", () => {
+    const a = block({ id: "a", type: "story", payload: { eyebrow: "How it began" } });
+    const b = block({ id: "b", type: "faq" });
+    const marks = sectionNumbers([a, b]);
+    expect(marks.get("a")).toEqual({ number: "01", label: "How it began" });
+    expect(marks.get("b")).toEqual({ number: "02", label: "Questions" });
+  });
+
+  it("does not number a section whose title is switched off, so there is no gap", () => {
+    const a = block({ id: "a", type: "story" });
+    const quiet = block({ id: "b", type: "dress_code", payload: { hide_heading: true } });
+    const c = block({ id: "c", type: "faq" });
+    const marks = sectionNumbers([a, quiet, c]);
+    expect([...marks.keys()]).toEqual(["a", "c"]);
+    expect(marks.get("c")?.number).toBe("02");
+  });
+
+  it("names a chapter by its title, then its label, then its category", () => {
+    expect(chapterName(block({ type: "faq" }))).toBe("Questions");
+    expect(chapterName(block({ type: "faq", payload: { eyebrow: "FAQ" } }))).toBe("FAQ");
+    expect(chapterName(block({ type: "faq", payload: { eyebrow: "FAQ", heading: "Good to know" } }))).toBe(
+      "Good to know",
+    );
+  });
+
+  it("does not take a title off a block that cannot have one", () => {
+    expect(customHeading(block({ type: "hero", payload: { heading: "x" } }))).toBeNull();
+  });
+});
+
+describe("anchors (spec 28 §9.6)", () => {
+  it("keeps a once-only block's anchor as its type, so #rsvp still lands", () => {
+    expect(blockAnchor(block({ type: "rsvp" }))).toBe("rsvp");
+    expect(blockAnchor(block({ type: "faq" }))).toBe("faq");
+  });
+
+  it("gives each repeatable block an anchor of its own", () => {
+    const first = block({ id: "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa", type: "dress_code" });
+    const second = block({ id: "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb", type: "dress_code" });
+    expect(blockAnchor(first)).not.toBe(blockAnchor(second));
+    expect(blockAnchor(first)).toBe("dress_code-11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  });
+
+  it("is a function of the block alone, so reordering never moves it", () => {
+    const one = block({ id: "11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa", type: "gallery" });
+    const two = block({ id: "22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb", type: "gallery" });
+    expect(blockAnchor(two)).toBe(blockAnchor({ ...two }));
+    expect([one, two].map(blockAnchor)).toEqual([two, one].map(blockAnchor).reverse());
   });
 });

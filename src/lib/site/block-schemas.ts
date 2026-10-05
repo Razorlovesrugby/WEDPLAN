@@ -5,7 +5,9 @@ import {
   BLOCK_ALIGNS,
   BLOCK_BACKGROUNDS,
   BLOCK_WIDTHS,
+  BLOCK_TYPES,
   IMAGE_SHAPES,
+  isTitled,
   type BlockType,
 } from "./blocks";
 
@@ -61,7 +63,7 @@ const listItemSchema = z.object({
  * Where a reader is lenient, the schema is strict: the reader's job is to
  * survive old data, this one's job is to stop new bad data being written.
  */
-export const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
+const PAYLOAD_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   hero: z.object({
     headline: optionalText,
     date_label: optionalText,
@@ -186,3 +188,24 @@ export const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
     hashtag: optionalText,
   }),
 };
+
+/**
+ * Every block that draws a heading may carry the planner's own (spec 28 §7.2):
+ * a **title**, a **label** (the small line above it, without its number), and a
+ * switch that draws no title at all. Added here, to every titled type at once,
+ * rather than typed into twenty schemas — a type that forgot would accept the
+ * key and silently strip it, which is a Title field that saves "successfully"
+ * and does nothing.
+ */
+const TITLE_FIELDS = {
+  heading: optionalText,
+  eyebrow: optionalText,
+  hide_heading: z.boolean().optional(),
+};
+
+export const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = Object.fromEntries(
+  BLOCK_TYPES.map((type) => {
+    const schema = PAYLOAD_SCHEMAS[type];
+    return [type, isTitled(type) && schema instanceof z.ZodObject ? schema.extend(TITLE_FIELDS) : schema];
+  }),
+) as Record<BlockType, z.ZodTypeAny>;

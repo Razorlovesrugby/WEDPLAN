@@ -153,7 +153,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   prose: {
     blurb: "A heading and some paragraphs, for anything with no block of its own.",
     fields: [
-      { name: "heading", label: "Heading", kind: "text", placeholder: "A note about the kids" },
       { name: "body", label: "Words", kind: "textarea", rows: 8 },
     ],
   },
@@ -258,7 +257,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     blurb: "A photograph beside a paragraph.",
     image: "side",
     fields: [
-      { name: "heading", label: "Heading", kind: "text" },
       { name: "body", label: "Words", kind: "textarea", rows: 6 },
       ALT,
       {
@@ -275,7 +273,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   map: {
     blurb: "One venue, how to get there, and a button that opens the reader's own maps app.",
     fields: [
-      { name: "heading", label: "Heading", kind: "text", placeholder: "The church" },
       { name: "name", label: "Place", kind: "text", placeholder: "St Mary's Church" },
       { name: "address", label: "Address", kind: "text", placeholder: "Church Lane, Bath" },
       { name: "note", label: "Note", kind: "textarea", rows: 3, help: "Parking, the gate that sticks, where to wait." },
@@ -325,7 +322,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   playlist: {
     blurb: "A link to your playlist — or the player itself, if you switch the embed on.",
     fields: [
-      { name: "heading", label: "Heading", kind: "text", placeholder: "The playlist" },
       { name: "url", label: "Link", kind: "text", placeholder: "https://open.spotify.com/playlist/…" },
       { name: "label", label: "Button", kind: "text", placeholder: "Have a listen" },
       { name: "note", label: "Note", kind: "textarea", rows: 2 },

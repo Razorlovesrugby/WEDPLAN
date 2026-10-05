@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BLOCKS,
   BLOCK_BACKGROUNDS,
+  defaultHeading,
+  isTitled,
   type BlockStyle,
   type SiteBlock,
 } from "@/lib/site/blocks";
@@ -61,6 +63,7 @@ export function BlockInspector({
   photos,
   onDone,
   heroDefault,
+  focusTitle = 0,
 }: {
   block: SiteBlock;
   form: BlockForm;
@@ -68,6 +71,8 @@ export function BlockInspector({
   onDone: () => void;
   /** The theme's own hero style, which a hero with no Look of its own follows. */
   heroDefault: string;
+  /** Changes when the planner clicks this block's title in the preview. */
+  focusTitle?: number;
 }) {
   const def = BLOCKS[block.type];
   const payload = (block.payload ?? {}) as Record<string, unknown>;
@@ -75,6 +80,16 @@ export function BlockInspector({
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Clicking a block's title in the preview puts the cursor in its Title field.
+  // Skipped at zero so merely opening a block does not steal focus.
+  const titleInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusTitle > 0) {
+      titleInput.current?.focus();
+      titleInput.current?.select();
+    }
+  }, [focusTitle]);
 
   const repeatRows = Array.isArray(values[form.repeat?.key ?? ""])
     ? (values[form.repeat!.key] as Record<string, unknown>[])
@@ -123,6 +138,69 @@ export function BlockInspector({
           </p>
         ) : null}
       </div>
+
+      {isTitled(block.type) ? (
+        // Spec 28 §7.2. The planner's own words for the section, with today's
+        // default as the placeholder so an untouched block is unchanged and they
+        // can see what they are replacing. Saved in the block's payload, like
+        // everything else on this form.
+        <div className="space-y-3" onBlur={flush}>
+          <div>
+            <label htmlFor={`block-${block.id}-heading`} className="block text-sm font-medium">
+              Title
+            </label>
+            <input
+              ref={titleInput}
+              id={`block-${block.id}-heading`}
+              className="field mt-1"
+              value={typeof values["heading"] === "string" ? (values["heading"] as string) : ""}
+              disabled={values["hide_heading"] === true}
+              placeholder={defaultHeading(block.type) || "A heading (optional)"}
+              maxLength={200}
+              onChange={(event) => set("heading", event.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted">
+              {defaultHeading(block.type)
+                ? "Leave it empty to keep the original."
+                : "Leave it empty for no heading."}
+            </p>
+          </div>
+          {defaultHeading(block.type) ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={values["hide_heading"] === true}
+                onChange={(event) => set("hide_heading", event.target.checked)}
+              />
+              <span>
+                No title
+                <span className="block text-xs text-muted">
+                  For a section that speaks for itself. The space closes up, and it isn&rsquo;t numbered.
+                </span>
+              </span>
+            </label>
+          ) : null}
+          {def.eyebrow ? (
+            <div>
+              <label htmlFor={`block-${block.id}-eyebrow`} className="block text-sm font-medium">
+                Label
+              </label>
+              <input
+                id={`block-${block.id}-eyebrow`}
+                className="field mt-1"
+                value={typeof values["eyebrow"] === "string" ? (values["eyebrow"] as string) : ""}
+                placeholder={def.eyebrow}
+                maxLength={60}
+                onChange={(event) => set("eyebrow", event.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted">
+                The small line above the title. The number in front is worked out for you, so
+                moving sections about never leaves them out of order.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {form.image ? (
         <PhotoPicker
