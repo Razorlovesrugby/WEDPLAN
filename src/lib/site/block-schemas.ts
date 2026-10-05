@@ -167,7 +167,12 @@ const PAYLOAD_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   coach: z.object({ intro: optionalText }),
   // The funds live in `gift_funds`; the block holds only the line above them.
   gift_funds: z.object({ intro: optionalText }),
-  song_requests: z.object({ intro: optionalText }),
+  // The grey hints in the song box (spec 28 §6.3). Blank means the default.
+  song_requests: z.object({
+    intro: optionalText,
+    placeholder_song: optionalText,
+    placeholder_artist: optionalText,
+  }),
   guestbook: z.object({ intro: optionalText, prompt: optionalText }),
   playlist: z.object({
     heading: optionalText,

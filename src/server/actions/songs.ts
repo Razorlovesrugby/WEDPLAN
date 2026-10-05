@@ -73,18 +73,34 @@ export async function requestSong(payload: unknown): Promise<ActionResult> {
     householdId = invitation?.household_id ?? null;
   }
 
-  const { error } = await supabase.from("song_requests").insert({
-    wedding_id: wedding.id,
-    household_id: householdId,
-    title: parsed.data.title,
-    artist: parsed.data.artist || null,
-    asked_by: parsed.data.askedBy || null,
-    // Published straight away when they came from their own link; queued when
-    // they came from the shared address (spec 25 §10).
-    status: arrivalStatus(householdId),
-  });
+  const { data: created, error } = await supabase
+    .from("song_requests")
+    .insert({
+      wedding_id: wedding.id,
+      household_id: householdId,
+      title: parsed.data.title,
+      artist: parsed.data.artist || null,
+      asked_by: parsed.data.askedBy || null,
+      // Published straight away when they came from their own link; queued when
+      // they came from the shared address (spec 25 §10).
+      status: arrivalStatus(householdId),
+    })
+    .select("id")
+    .single();
 
-  if (error) return fail("We couldn't add that one. Try again in a moment.");
+  if (error || !created) return fail("We couldn't add that one. Try again in a moment.");
+
+  // Asking for a song is asking for it: their vote is on it already (spec 28
+  // §6.2), so it does not arrive at zero and a household is not left to find
+  // the button on its own suggestion. Not worth failing the request over — the
+  // song is on the list either way and they can vote for it themselves.
+  if (householdId && canVote(householdId)) {
+    await supabase.from("song_votes").insert({
+      wedding_id: wedding.id,
+      song_request_id: created.id,
+      household_id: householdId,
+    });
+  }
 
   await recordAttempt(ipHash, true);
   revalidatePath("/site/songs");

@@ -304,7 +304,22 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   song_requests: {
     blurb: "Guests suggest songs; you get a list to hand the DJ.",
     managedElsewhere: "/site/songs",
-    fields: [INTRO],
+    fields: [
+      INTRO,
+      {
+        name: "placeholder_song",
+        label: "Placeholder song",
+        kind: "text",
+        placeholder: "Anything but Wonderwall",
+        help: "The grey hint in an empty song box. Leave it empty and guests see the one above.",
+      },
+      {
+        name: "placeholder_artist",
+        label: "Placeholder artist",
+        kind: "text",
+        help: "Optional. The hint in the artist box; empty by default.",
+      },
+    ],
   },
   guestbook: {
     blurb:

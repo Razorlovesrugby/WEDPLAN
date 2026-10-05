@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { requestSong } from "@/server/actions/songs";
 import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
@@ -21,15 +22,19 @@ export function SongRequestForm({
   weddingSlug,
   token,
   intro,
+  placeholders = { song: "Anything but Wonderwall", artist: undefined },
   preview = false,
 }: {
   weddingSlug: string;
   /** The household's credential. Absent before an invitation has been issued. */
   token: string | null;
   intro: string | null;
+  /** The grey hints in the two boxes — the planner's own, or the default joke (spec 28 §6.3). */
+  placeholders?: { song: string; artist: string | undefined };
   /** The editor's preview: the form works and nothing is sent (spec 28 §4.3). */
   preview?: boolean;
 }) {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [askedBy, setAskedBy] = useState("");
@@ -62,6 +67,11 @@ export function SongRequestForm({
       setSent((was) => [...was, [title.trim(), artist.trim()].filter(Boolean).join(" · ")]);
       setTitle("");
       setArtist("");
+      // From their own link it is on the list already, with their vote on it:
+      // re-read the page so they see it there (spec 28 §6.2). Harmless from a
+      // link with no invitation behind it — that one is queued and the list
+      // simply does not change.
+      if (token) router.refresh();
     });
   }
 
@@ -77,7 +87,7 @@ export function SongRequestForm({
             onChange={(event) => setTitle(event.target.value)}
             required
             maxLength={200}
-            placeholder="Dancing Queen"
+            placeholder={placeholders.song}
             className="w-full border border-line bg-white p-2 text-[1rem]"
           />
         </label>
@@ -87,7 +97,7 @@ export function SongRequestForm({
             value={artist}
             onChange={(event) => setArtist(event.target.value)}
             maxLength={200}
-            placeholder="ABBA"
+            placeholder={placeholders.artist}
             className="w-full border border-line bg-white p-2 text-[1rem]"
           />
         </label>

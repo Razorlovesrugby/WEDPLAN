@@ -48,6 +48,7 @@ import { Arrivals } from "../arrivals";
 import { runsByEvent } from "../event-inline";
 import { visibleDressCodes } from "@/lib/site/dress-codes";
 import { previewWeekendPath } from "@/lib/site/weekend";
+import { songPlaceholders } from "@/lib/site/song-placeholder";
 import {
   DressCode,
   MapBlock,
@@ -685,6 +686,7 @@ export function SiteBlockView({
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             intro={intro ?? "Tell us what will get you dancing."}
+            placeholders={songPlaceholders(payload)}
             preview={ctx.preview}
           />
           {/* Spec 25 §11 — approved requests, rendered back, because a form

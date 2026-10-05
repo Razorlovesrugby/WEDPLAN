@@ -1,4 +1,5 @@
 import "server-only";
+import { rankSongs } from "@/lib/site/song-rank";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -36,6 +37,8 @@ export type PublicSong = {
   votes: number;
   /** True when the household reading the page has already voted for it. */
   votedByViewer: boolean;
+  /** True when the household reading the page is the one that asked for it. */
+  askedByViewer: boolean;
 };
 
 export type PublicNote = {
@@ -126,18 +129,18 @@ export async function getPublicSiteExtras(
     if (viewerHouseholdId && vote.household_id === viewerHouseholdId) mine.add(vote.song_request_id);
   }
 
-  const songs: PublicSong[] = ((songRows.data ?? []) as SongRequestRow[])
-    .map((row) => ({
+  const songs: PublicSong[] = rankSongs(
+    ((songRows.data ?? []) as SongRequestRow[]).map((row) => ({
       id: row.id,
       title: row.title,
       artist: row.artist,
       askedBy: row.asked_by,
       votes: counts.get(row.id) ?? 0,
       votedByViewer: mine.has(row.id),
-    }))
-    // Most-wanted first, and alphabetical within a tie so the order is stable
-    // between renders rather than following whatever the database felt like.
-    .sort((a, b) => b.votes - a.votes || a.title.localeCompare(b.title));
+      askedByViewer: viewerHouseholdId !== null && row.household_id === viewerHouseholdId,
+      createdAt: row.created_at,
+    })),
+  ).map(({ createdAt: _createdAt, ...song }) => song);
 
   const notes: PublicNote[] = (
     (noteRows.data ?? []) as Pick<GuestNoteRow, "id" | "body" | "author_name" | "created_at">[]
