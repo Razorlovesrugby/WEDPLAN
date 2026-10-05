@@ -1,13 +1,16 @@
 import { text } from "@/lib/site/sections";
 import type { BlockStyle } from "@/lib/site/blocks";
 import { Prose } from "../content";
+import { SiteImage } from "../site-image";
+import type { SiteImageData } from "@/lib/site/site-image";
 
 /**
  * The photo blocks (spec 23 §8).
  *
- * Every image here has already been signed and sized by the caller — these
- * components take a URL and never a storage path, so a page cannot leak a
- * bucket path and a missing object costs its own block rather than the page.
+ * Every image here has already been resolved by the caller — these components
+ * take a `SiteImageData` (a stable address, never a storage path), so a page
+ * cannot leak a bucket path and a missing object costs its own block rather
+ * than the page.
  *
  * Aspect is a *style*, not something the photograph decides, because a
  * gallery of five phone photos in three orientations is the single most
@@ -22,28 +25,32 @@ export const SHAPE_CLASS: Record<NonNullable<BlockStyle["shape"]>, string> = {
 };
 
 export function PhotoBand({
-  url,
+  image,
   alt,
   caption,
   shape = "wide",
+  zoom = true,
+  sizes = "(min-width: 896px) 896px, 100vw",
 }: {
-  url: string | null;
+  image: SiteImageData | null;
   alt: string | null;
   caption: string | null;
   shape?: BlockStyle["shape"];
+  zoom?: boolean;
+  sizes?: string;
 }) {
-  if (!url) return null;
+  if (!image) return null;
   return (
     <figure>
-      {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs from
-          a private bucket, so next/image's optimiser has nothing to cache and
-          would re-fetch an expiring URL. */}
-      <img
-        src={url}
-        alt={alt ?? ""}
-        className={`w-full ${SHAPE_CLASS[shape ?? "wide"]}`}
-        loading="lazy"
-      />
+      <div className="overflow-hidden">
+        <SiteImage
+          image={image}
+          alt={alt}
+          sizes={sizes}
+          zoom={zoom}
+          className={`site-photo w-full ${SHAPE_CLASS[shape ?? "wide"]}`}
+        />
+      </div>
       {caption ? (
         <figcaption className="mt-2 px-5 text-center text-[0.9rem] text-muted">{caption}</figcaption>
       ) : null}
@@ -74,54 +81,70 @@ const BAND_HEIGHT: Record<NonNullable<BlockStyle["shape"]>, string> = {
 };
 
 export function PageBreak({
-  url,
+  image,
   alt,
   shape = "natural",
+  zoom = true,
 }: {
-  url: string;
+  image: SiteImageData;
   alt: string | null;
   shape?: BlockStyle["shape"];
+  zoom?: boolean;
 }) {
   return (
     <div className={`site-reveal relative w-full overflow-hidden ${BAND_HEIGHT[shape ?? "natural"]}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- see PhotoBand */}
-      <img src={url} alt={alt ?? ""} className="h-full w-full object-cover" loading="lazy" />
+      <SiteImage
+        image={image}
+        alt={alt}
+        sizes="100vw"
+        zoom={zoom}
+        className="site-photo h-full w-full object-cover"
+      />
     </div>
   );
 }
 
 export function PhotoText({
-  url,
+  image,
   alt,
   payload,
   shape = "square",
   flip,
+  showPlaceholder = false,
+  zoom = true,
 }: {
-  url: string | null;
+  image: SiteImageData | null;
+  /** The builder's preview only — see `PhotoPlaceholder`. */
+  showPlaceholder?: boolean;
   alt: string | null;
   payload: unknown;
   shape?: BlockStyle["shape"];
   /** Alternate sides down the page so two of these in a row do not stack identically. */
   flip?: boolean;
+  zoom?: boolean;
 }) {
   const body = text(payload, "body");
-  const heading = text(payload, "heading");
 
   return (
     <div className={`grid items-center gap-8 sm:grid-cols-2 ${flip ? "sm:[&>figure]:order-2" : ""}`}>
-      {url ? (
-        <figure>
-          {/* eslint-disable-next-line @next/next/no-img-element -- see PhotoBand */}
-          <img
-            src={url}
-            alt={alt ?? ""}
-            className={`w-full ${SHAPE_CLASS[shape ?? "square"]}`}
-            loading="lazy"
+      {image ? (
+        <figure className="overflow-hidden">
+          <SiteImage
+            image={image}
+            alt={alt}
+            sizes="(min-width: 672px) 336px, 100vw"
+            zoom={zoom}
+            className={`site-photo w-full ${SHAPE_CLASS[shape ?? "square"]}`}
           />
+        </figure>
+      ) : showPlaceholder ? (
+        <figure>
+          <PhotoPlaceholder shape={shape} />
         </figure>
       ) : null}
       <div>
-        {heading ? <h3 className="mb-3 font-script text-3xl text-ink">{heading}</h3> : null}
+        {/* The heading is the section's own (`Shell` draws it above), so it is
+            not drawn a second time beside the photograph. */}
         {body ? <Prose body={body} /> : null}
       </div>
     </div>
@@ -241,6 +264,35 @@ export function DressCode({ payload, children }: { payload: unknown; children?: 
     <div className="space-y-8">
       {body ? <Prose body={body} /> : null}
       {children}
+    </div>
+  );
+}
+
+
+/**
+ * The builder's stand-in for a photograph that has not been chosen.
+ *
+ * Drawn only when `ctx.preview` is set, so the planner who has just added a
+ * photo block sees *something* where it will go instead of a block that looks
+ * broken. A live page never renders this: a guest must not be shown a message
+ * addressed to the planner (spec 24 §5).
+ */
+export function PhotoPlaceholder({
+  shape = "wide",
+  fullBleed = false,
+}: {
+  shape?: BlockStyle["shape"];
+  fullBleed?: boolean;
+}) {
+  return (
+    <div
+      className={`flex w-full items-center justify-center border border-dashed border-line bg-[color-mix(in_srgb,var(--site-ink,#222)_5%,transparent)] text-center text-[0.8rem] uppercase tracking-[0.14em] text-muted ${
+        fullBleed ? "h-[clamp(240px,34vw,420px)]" : SHAPE_CLASS[shape ?? "wide"]
+      }`}
+      role="img"
+      aria-label="No photograph chosen yet"
+    >
+      Choose a photo
     </div>
   );
 }

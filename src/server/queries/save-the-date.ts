@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { signPaths } from "@/lib/supabase/storage";
+import { SITE_SIGNED_URL_TTL_SECONDS } from "@/lib/site/assets";
 import {
   SAVE_THE_DATE_BLOCK_KEY,
   orderByIds,
@@ -60,7 +61,10 @@ function chosenAssets(content: SaveTheDateContent, assets: AssetRow[]): AssetRow
 }
 
 async function sign(rows: AssetRow[]): Promise<SaveTheDatePhoto[]> {
-  const signed = await signPaths(rows.map((row) => row.storage_path));
+  const signed = await signPaths(
+    rows.map((row) => row.storage_path),
+    SITE_SIGNED_URL_TTL_SECONDS,
+  );
   // A row whose object has gone missing is dropped rather than rendered as a
   // broken tile.
   return rows.flatMap((row) => {

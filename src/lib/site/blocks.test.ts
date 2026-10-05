@@ -30,7 +30,7 @@ describe("the catalogue", () => {
   });
 
   it("only offers style controls that exist", () => {
-    const known = new Set(["width", "background", "align", "shape", "embed"]);
+    const known = new Set(["width", "background", "align", "shape", "embed", "lightbox", "variant", "enter"]);
     for (const def of Object.values(BLOCKS)) {
       for (const style of def.styles) expect(known.has(style), `${def.type}: ${style}`).toBe(true);
     }

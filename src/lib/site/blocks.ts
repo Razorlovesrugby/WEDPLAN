@@ -52,7 +52,50 @@ export type BlockStyle = {
    * credential.
    */
   embed?: boolean;
+  /**
+   * Let guests enlarge this block's photographs. **On unless this is `false`**,
+   * so every existing block keeps what it had the day the viewer shipped, and a
+   * block with no `lightbox` key means "yes" (spec 27 E9).
+   */
+  lightbox?: boolean;
+  /**
+   * The block's Look (spec 27 E1): a curated alternate layout, from the closed
+   * set in `looks.ts`. Absent means the block's default, so every existing block
+   * renders as it did; an unknown value falls back to that default.
+   */
+  variant?: string;
+  /**
+   * How this one block arrives as the page scrolls (spec 27 E4): `rise`, `fade`,
+   * `reveal` or `none`. Absent means "match the page".
+   */
+  enter?: "rise" | "fade" | "reveal" | "none";
 };
+
+/**
+ * Every key a block's `style` may carry, as data.
+ *
+ * `BlockStyle` is a type and cannot be enumerated at runtime, but two other
+ * things have to agree with it — the server's `styleSchema` (which is
+ * `.strict()` and refuses a key it does not list, so a save of a styled block
+ * fails outright) and the revision snapshot. A test compares this list to the
+ * schema; the line below makes forgetting to extend it a compile error.
+ */
+export const BLOCK_STYLE_KEYS = [
+  "width",
+  "background",
+  "align",
+  "shape",
+  "bgImage",
+  "embed",
+  "lightbox",
+  "variant",
+  "enter",
+] as const satisfies readonly (keyof BlockStyle)[];
+
+// Fails to compile if `BlockStyle` gains a key this list does not name.
+type StyleKeysAreExhaustive =
+  Exclude<keyof BlockStyle, (typeof BLOCK_STYLE_KEYS)[number]> extends never ? true : never;
+export const STYLE_KEYS_ARE_EXHAUSTIVE: StyleKeysAreExhaustive = true;
 
 export type BlockDef = {
   type: BlockType;
@@ -235,7 +278,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     family: "photos",
     blurb: "A grid of photographs.",
     eyebrow: "Photographs",
-    styles: ["width", "shape"],
+    styles: ["width", "shape", "lightbox"],
     heading: "Photos",
   },
   /**
@@ -252,21 +295,21 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     label: "Page break",
     family: "photos",
     blurb: "A full-width photograph with nothing on it, to separate two sections.",
-    styles: ["shape"],
+    styles: ["shape", "lightbox"],
   },
   photo_band: {
     type: "photo_band",
     label: "Photo band",
     family: "photos",
     blurb: "One photograph, full width, between two sections.",
-    styles: ["width", "shape"],
+    styles: ["width", "shape", "lightbox"],
   },
   photo_text: {
     type: "photo_text",
     label: "Photo and words",
     family: "photos",
     blurb: "A photograph beside a paragraph.",
-    styles: ["width", "background", "shape"],
+    styles: ["width", "background", "shape", "lightbox"],
   },
   map: {
     type: "map",

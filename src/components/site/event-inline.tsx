@@ -1,3 +1,4 @@
+import { stagger } from "./stagger";
 import { Label } from "./section";
 import { formatTime } from "@/lib/format";
 import { eventDressCode, type DressCode } from "@/lib/site/dress-codes";
@@ -120,7 +121,10 @@ export function EditorialEventRow({
   name,
   children,
   aside,
+  index = 0,
 }: {
+  /** Position in its list, for the stagger effect. */
+  index?: number;
   time: React.ReactNode;
   name: string;
   /** Column two, under the name: venue, address, shuttle, whatever the caller has. */
@@ -129,7 +133,7 @@ export function EditorialEventRow({
   aside?: React.ReactNode;
 }) {
   return (
-    <li className="site-event">
+    <li className="site-event" style={stagger(index)}>
       <div className="site-event-time">{time}</div>
       <div className="site-event-body">
         <p className="site-event-name site-heading text-xl text-ink">{name}</p>

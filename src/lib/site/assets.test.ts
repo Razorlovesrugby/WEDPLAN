@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MAX_UPLOAD_BYTES, isAcceptedUploadType, siteAssetPath } from "./assets";
+import {
+  MAX_UPLOAD_BYTES,
+  SITE_IMAGE_WIDTHS,
+  isAcceptedUploadType,
+  isSiteImageWidth,
+  siteAssetPath,
+} from "./assets";
 
 const WEDDING = "11111111-1111-4111-8111-111111111111";
 const ASSET = "22222222-2222-4222-8222-222222222222";
@@ -9,8 +15,17 @@ describe("siteAssetPath", () => {
     expect(siteAssetPath(WEDDING, ASSET)).toBe(`site/${WEDDING}/${ASSET}.webp`);
   });
 
-  it("names the thumbnail distinctly", () => {
-    expect(siteAssetPath(WEDDING, ASSET, "thumb")).toBe(`site/${WEDDING}/${ASSET}_thumb.webp`);
+  it("names each narrower copy distinctly", () => {
+    expect(siteAssetPath(WEDDING, ASSET, 480)).toBe(`site/${WEDDING}/${ASSET}_480.webp`);
+    expect(siteAssetPath(WEDDING, ASSET, 960)).toBe(`site/${WEDDING}/${ASSET}_960.webp`);
+  });
+
+  it("never lets a variant collide with the original", () => {
+    const paths = new Set([
+      siteAssetPath(WEDDING, ASSET),
+      ...SITE_IMAGE_WIDTHS.map((width) => siteAssetPath(WEDDING, ASSET, width)),
+    ]);
+    expect(paths.size).toBe(1 + SITE_IMAGE_WIDTHS.length);
   });
 
   it("keeps site images out of the moodboard namespace", () => {
@@ -58,5 +73,13 @@ describe("MAX_UPLOAD_BYTES", () => {
   it("is large enough for a phone photo and small enough to not be a DoS", () => {
     expect(MAX_UPLOAD_BYTES).toBeGreaterThan(4 * 1024 * 1024);
     expect(MAX_UPLOAD_BYTES).toBeLessThanOrEqual(25 * 1024 * 1024);
+  });
+});
+
+describe("isSiteImageWidth", () => {
+  it("knows exactly the widths that are generated", () => {
+    expect(isSiteImageWidth(480)).toBe(true);
+    expect(isSiteImageWidth(960)).toBe(true);
+    for (const bad of [0, 1200, 2000, "480", null, undefined]) expect(isSiteImageWidth(bad), String(bad)).toBe(false);
   });
 });

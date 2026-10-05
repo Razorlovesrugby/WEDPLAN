@@ -3,6 +3,61 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 33 (spec 27):** the invitation experience, built end to end on
+branch `claude/spec-27-invitation-experience` (not merged, **no PR opened**).
+Asked for as a spec ("elegant, smooth, personal, technology-forward"), the eleven
+questions answered one by one, then "Let's build it" — so all eight steps of the
+spec's §15 were built, each step committed separately. Read the spec's **Build status**
+before touching any of it; this is the short version.
+
+- **What a guest gets:** a cover addressed to their household (a greeting the
+  planner words, `{names}` / `{household}`, each cover line its own switch), a
+  CSS-only scroll motion layer (Still / Gentle / Cinematic + per-effect
+  overrides, all behind `@supports` and reduced motion — **no scroll JS**),
+  their whole weekend as one `.ics`, a sticky reply bar and a reply that
+  answers back, three image sizes with a placeholder and a lightbox, and a dark
+  **Evening** theme.
+- **What the planner gets:** Looks (hero, weekend, story, gallery, RSVP),
+  click-the-preview-to-select, drag a block onto the preview, undo for deletes
+  and for a Vibe, four Vibes, three templates on an empty site, and a switch
+  for everything (`src/lib/site/switches.ts` is the registry; its test ties it
+  to the form defaults and the zod schema, so adding an effect without
+  registering it fails the build).
+- **One migration: `0032_site_asset_images.sql`** (photo `variants`, `colour`,
+  `focal_x/focal_y`; the both-or-neither rule is written
+  `(focal_x is null) = (focal_y is null)` because a range check on each column
+  alone passes when the other is NULL — a half-set pair got through until the
+  SQL test caught it). **Not applied to
+  the live project.** It is additive and existing rows keep working at one size.
+- **New things to know before changing anything:** zod schemas for blocks now
+  live in `src/lib/site/block-schemas.ts` (a `"use server"` file cannot export
+  them); `styleSchema` is `.strict()` and gained `variant` and `enter` — a style
+  key added to `BlockStyle` without it fails every save of that block (there is
+  a compile-time exhaustiveness check). Photos reach guests through
+  `/api/photo/<id>` (planner session or published/approved only), not a signed
+  URL stored in a page. A dark palette has `ink` = light, `paper` = dark; text
+  on a photograph uses the fixed `onphoto`/`scrim` colours, **never**
+  `text-paper`/`bg-ink`. `data-site-tone` comes from the palette, not the preset.
+  Editorial and Evening are one family — ask `isEditorialFamily(preset)`, never
+  `preset === "editorial"`.
+- **Verified:** typecheck clean, 852 unit tests, 455 SQL assertions, `next build`
+  passes; guest-page first-load JS +7 kB gz and CSS +3.4 kB gz against
+  `origin/main`. **Looked at** only in this sandbox's Chromium on a throwaway
+  harness (`src/app/w/harness/**`, git-excluded, with server actions mocked).
+  **Never looked at:** anything against live Supabase (signed URLs, uploads,
+  `/api/photo`, the `.ics` route, publishing, applying or restoring a Vibe — the
+  SQL paths in `src/server/site/vibes.ts` have never run), a real phone, LCP or
+  layout shift, the full 0–100% × 390/1440px × each-level screenshot matrix.
+- **Open:** three of spec 24's answers are still "to confirm" with the planner
+  (spec 27, Answered → Q10 table); a Vibe's undo snapshot lives in the browser
+  for 12s and doesn't survive a reload; the household note was cut (Q3) and is
+  one nullable column away if wanted; Look picker thumbnails are schematic, not
+  renderings of the planner's content.
+- **Pick up here:** apply `0032`, open `/site` on a laptop and a household link
+  on a phone. The likeliest faults are where nobody has looked: signed URLs behind
+  `/api/photo`, a half-set focal point on a saved block, the `.ics` in a real
+  calendar app, the reply bar with the keyboard open.
+
 **Session 32 (spec 26):** `/lists?view=today` now shows an **Overdue · N**
 group (oldest first, each row tagged "N days overdue") above "Due today".
 Overdue = dated, not done, due before today, not snoozed past today

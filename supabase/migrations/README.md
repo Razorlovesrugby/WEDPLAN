@@ -36,6 +36,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 29 | `0029_vendors.sql` | `vendor_stage`, `vendor_categories`, `vendors`, `vendor_contacts`, `vendor_notes`, the one-primary partial unique index, `budget_items.vendor_id`, `run_sheet_items.vendor_id`, `v_vendors`, and `v_budget_items` + `v_reminders_due` redefined to prefer the linked vendor's live name | 9, 10, 17, 20, 21 |
 | 30 | `0030_gift_funds.sql` | `gift_funds` — a wedding list as two or three things worth saving towards. Money as integer minor units, `contribute_url` constrained to http(s) because it ends up in an `href` in front of every guest, and deliberately **no contributions ledger**: nothing here takes a payment, and the file's header says why an empty one would be worse than none | 14, 18 |
 | 31 | `0031_save_the_date_views.sql` | `invitation_views.source` gains `save_the_date`; `v_household_rsvp` keeps invitation opens and save-the-date opens apart, appending `std_last_viewed_at` / `std_view_count` | 23 |
+| 32 | `0032_site_asset_images.sql` | `site_assets` gains `variants` (the extra widths uploaded beside the original), `colour` (a placeholder tint) and `focal_x`/`focal_y` (where the subject is) — how to draw a photograph, never who may see it. Existing rows are untouched and keep rendering at one size | 27 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

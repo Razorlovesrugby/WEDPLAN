@@ -1,9 +1,11 @@
+import { stagger } from "./stagger";
 import { Label } from "./section";
 import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
 import { FindInvitation } from "./find-invitation";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
 import type { ThemePresetId } from "@/lib/theme/presets";
+import { isEditorialFamily } from "@/lib/theme/presets";
 import { faqItems, groupByTag, rows, splitFaq, text } from "@/lib/site/sections";
 import { formatDate, formatTime } from "@/lib/format";
 
@@ -57,6 +59,7 @@ export function Schedule({
   dressCodes = [],
   coachByEvent,
   preset = "script",
+  look = "list",
 }: {
   events: PublicEvent[];
   payload: unknown;
@@ -68,8 +71,10 @@ export function Schedule({
   coachByEvent?: Map<string, CoachRun[]>;
   /** Editorial lays a row out as three columns; Script stacks them. */
   preset?: ThemePresetId;
+  /** `list`, `timeline` or `cards` — the block's Look (spec 27 E1). */
+  look?: string;
 }) {
-  const editorial = preset === "editorial";
+  const editorial = isEditorialFamily(preset);
 
   const days = new Map<string, PublicEvent[]>();
   for (const event of events) {
@@ -80,14 +85,17 @@ export function Schedule({
   }
 
   return (
-    <div className="space-y-10">
+    // `data-look` is all the stylesheet needs: a Look is a rule set under it,
+    // not a second component, so the three can never disagree about what a row
+    // contains.
+    <div className="space-y-10" data-look={look}>
       {[...days.entries()].map(([day, dayEvents]) => (
         <div key={day}>
           <h3 className="site-h3 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
             {day}
           </h3>
-          <ul className={editorial ? "mt-5" : "mt-5 space-y-6"}>
-            {dayEvents.map((event) => {
+          <ul className={editorial ? "site-stagger mt-5" : "site-stagger mt-5 space-y-6"}>
+            {dayEvents.map((event, index) => {
               const extras = eventExtras(payload, event.id);
               // Events the household is not invited to stay listed and are
               // marked, rather than hidden. Hiding them produces the worse
@@ -151,14 +159,24 @@ export function Schedule({
 
               if (editorial) {
                 return (
-                  <EditorialEventRow key={event.id} time={time} name={event.name} aside={dressCode}>
+                  <EditorialEventRow
+                    key={event.id}
+                    index={index}
+                    time={time}
+                    name={event.name}
+                    aside={dressCode}
+                  >
                     {body}
                   </EditorialEventRow>
                 );
               }
 
               return (
-                <li key={event.id} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+                <li
+                  key={event.id}
+                  style={stagger(index)}
+                  className="border-t border-line pt-5 first:border-t-0 first:pt-0"
+                >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-xl text-ink">{event.name}</p>
                     {time}
@@ -223,12 +241,12 @@ export function Faq({ payload }: { payload: unknown }) {
 export function Party({ payload }: { payload: unknown }) {
   const members = rows(payload, "members");
   return (
-    <ul className="grid gap-6 sm:grid-cols-2">
+    <ul className="site-stagger grid gap-6 sm:grid-cols-2">
       {members.map((member, index) => {
         const name = text(member, "name");
         if (!name) return null;
         return (
-          <li key={index}>
+          <li key={index} style={stagger(index)}>
             <p className="text-lg text-ink">{name}</p>
             {text(member, "role") ? <Label>{text(member, "role")}</Label> : null}
             {text(member, "blurb") ? (
@@ -244,13 +262,17 @@ export function Party({ payload }: { payload: unknown }) {
 export function ThingsToDo({ payload }: { payload: unknown }) {
   const items = rows(payload, "items");
   return (
-    <ul className="space-y-6">
+    <ul className="site-stagger space-y-6">
       {items.map((item, index) => {
         const title = text(item, "title");
         if (!title) return null;
         const link = text(item, "link");
         return (
-          <li key={index} className="border-t border-line pt-5 first:border-t-0 first:pt-0">
+          <li
+            key={index}
+            style={stagger(index)}
+            className="border-t border-line pt-5 first:border-t-0 first:pt-0"
+          >
             <p className="text-lg text-ink">{title}</p>
             {text(item, "body") ? (
               <p className="mt-1.5 text-[0.95rem] leading-relaxed text-muted">{text(item, "body")}</p>
@@ -272,31 +294,98 @@ export function ThingsToDo({ payload }: { payload: unknown }) {
   );
 }
 
-export function Story({ payload }: { payload: unknown }) {
+/** Milestones as a list — shared by every Look that shows them. */
+function MilestoneRows({ milestones, large = false }: { milestones: Record<string, unknown>[]; large?: boolean }) {
+  return (
+    <ol className="site-stagger space-y-6">
+      {milestones.map((milestone, index) => {
+        const title = text(milestone, "title");
+        if (!title) return null;
+        const date = text(milestone, "date");
+        const body = text(milestone, "body");
+
+        if (large) {
+          // The dates lead: a numeral in the display face, the story beside it.
+          return (
+            <li
+              key={index}
+              style={stagger(index)}
+              className="grid items-baseline gap-x-8 gap-y-1 border-t border-line pt-6 first:border-t-0 first:pt-0 sm:grid-cols-[9rem_minmax(0,1fr)]"
+            >
+              <span className="site-heading text-[2.2rem] leading-none text-accent">{date ?? "·"}</span>
+              <div>
+                <p className="text-xl text-ink">{title}</p>
+                {body ? <p className="mt-1 text-[0.95rem] leading-relaxed text-muted">{body}</p> : null}
+              </div>
+            </li>
+          );
+        }
+
+        return (
+          <li key={index} style={stagger(index)} className="border-l border-line pl-5">
+            {date ? <Label>{date}</Label> : null}
+            <p className="text-lg text-ink">{title}</p>
+            {body ? <p className="mt-1 text-[0.95rem] leading-relaxed text-muted">{body}</p> : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * Our story, in one of three Looks (spec 27 E1).
+ *
+ *   prose       the story, then the milestones beneath (as it always was)
+ *   milestones  the dates lead, in large numerals; the story follows
+ *   magazine    the first paragraph set large as a lead, the rest in columns
+ *
+ * A Look that needs something the couple has not written falls back rather than
+ * drawing an empty frame: `milestones` with no milestones is just the prose, and
+ * `magazine` with one paragraph is just the lead.
+ */
+export function Story({ payload, look = "prose" }: { payload: unknown; look?: string }) {
   const body = text(payload, "body");
   const milestones = rows(payload, "milestones");
+  const paragraphs = body ? body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean) : [];
+
+  if (look === "milestones" && milestones.length > 0) {
+    return (
+      <div className="space-y-10">
+        <MilestoneRows milestones={milestones} large />
+        {body ? <Prose body={body} /> : null}
+      </div>
+    );
+  }
+
+  if (look === "magazine" && paragraphs.length > 0) {
+    const [lead, ...rest] = paragraphs;
+    return (
+      <div className="space-y-8">
+        <p className="site-heading site-story-lead text-[clamp(1.45rem,3.6vw,2.15rem)] italic leading-snug text-ink">
+          {lead}
+        </p>
+        {rest.length > 0 ? (
+          // Two columns from `sm`, with the first letter dropped. Columns, not a
+          // grid: the story should flow from the foot of one into the head of
+          // the next, as it does in a magazine.
+          <div className="site-body site-story-columns text-[1.0625rem] leading-relaxed text-ink sm:columns-2 sm:gap-10">
+            {rest.map((paragraph, index) => (
+              <p key={index} className="mb-4 break-inside-avoid-column whitespace-pre-line">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        ) : null}
+        {milestones.length > 0 ? <MilestoneRows milestones={milestones} /> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {body ? <Prose body={body} /> : null}
-      {milestones.length > 0 ? (
-        <ol className="space-y-6">
-          {milestones.map((milestone, index) => {
-            const title = text(milestone, "title");
-            if (!title) return null;
-            return (
-              <li key={index} className="border-l border-line pl-5">
-                {text(milestone, "date") ? <Label>{text(milestone, "date")}</Label> : null}
-                <p className="text-lg text-ink">{title}</p>
-                {text(milestone, "body") ? (
-                  <p className="mt-1 text-[0.95rem] leading-relaxed text-muted">
-                    {text(milestone, "body")}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-      ) : null}
+      {milestones.length > 0 ? <MilestoneRows milestones={milestones} /> : null}
     </div>
   );
 }

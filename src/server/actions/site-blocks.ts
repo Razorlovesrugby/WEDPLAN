@@ -7,16 +7,15 @@ import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
 import {
   BLOCKS,
-  BLOCK_ALIGNS,
   BLOCK_AUDIENCES,
-  BLOCK_BACKGROUNDS,
-  BLOCK_WIDTHS,
-  IMAGE_SHAPES,
   STARTER_LAYOUTS,
   isBlockType,
   typesAtLimit,
-  type BlockType,
 } from "@/lib/site/blocks";
+import { isLook } from "@/lib/site/looks";
+import { getVibe } from "@/lib/site/vibes";
+import { applyVibeToDraft } from "@/server/site/vibes";
+import { blocksNeedingWork, starterPayload } from "@/lib/site/starter";
 import { FAQ_LIBRARY } from "@/lib/site/faq-library";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -37,137 +36,8 @@ import { fail, ok, type ActionResult } from "./result";
  * past this file fails silently, months later, on somebody's wedding site.
  */
 
-const trimmed = z.string().trim();
-const optionalText = trimmed.max(4000).optional().transform((v) => (v ? v : undefined));
-const uuid = z.string().uuid();
+import { BLOCK_SCHEMAS, styleSchema, uuid } from "@/lib/site/block-schemas";
 
-const styleSchema = z
-  .object({
-    width: z.enum(BLOCK_WIDTHS).optional(),
-    background: z.enum(BLOCK_BACKGROUNDS).optional(),
-    align: z.enum(BLOCK_ALIGNS).optional(),
-    shape: z.enum(IMAGE_SHAPES).optional(),
-    // A site_assets id, not a URL: the renderer signs it, so a block can
-    // never carry a path into a bucket or a third party's image.
-    bgImage: uuid.optional(),
-    embed: z.coerce.boolean().optional(),
-  })
-  .strict();
-
-const faqItemSchema = z.object({
-  q: trimmed.min(1, "A question needs asking").max(300),
-  a: trimmed.max(4000).default(""),
-  featured: z.coerce.boolean().default(false),
-  tags: z.array(trimmed.min(1).max(60)).max(5).default([]),
-});
-
-const listItemSchema = z.object({
-  title: trimmed.min(1).max(200),
-  body: optionalText,
-  url: optionalText,
-});
-
-/**
- * One schema per block type, mirroring the readers in `sections.ts`.
- *
- * Where a reader is lenient, the schema is strict: the reader's job is to
- * survive old data, this one's job is to stop new bad data being written.
- */
-const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
-  hero: z.object({
-    headline: optionalText,
-    date_label: optionalText,
-    location: optionalText,
-    // The countdown lives here now (spec 25 §7) rather than being a separate
-    // block the planner stacks underneath and hopes sits well.
-    show_countdown: z.coerce.boolean().optional(),
-    countdown_label: optionalText,
-    intro: optionalText,
-    image_id: uuid.optional(),
-    image_alt: optionalText,
-  }),
-  countdown: z.object({ label: optionalText }),
-  story: z.object({
-    intro: optionalText,
-    body: optionalText,
-    milestones: z
-      .array(z.object({ date: optionalText, title: trimmed.min(1).max(200), body: optionalText }))
-      .max(20)
-      .optional(),
-  }),
-  prose: z.object({ heading: optionalText, body: optionalText }),
-  schedule: z.object({
-    intro: optionalText,
-    events: z
-      .array(
-        z.object({
-          id: uuid,
-          dress_code: optionalText,
-          detail: optionalText,
-          map_url: optionalText,
-          hide_time: z.coerce.boolean().optional(),
-        }),
-      )
-      .max(30)
-      .optional(),
-  }),
-  on_the_day: z.object({ intro: optionalText }),
-  rsvp: z.object({ intro: optionalText, closes_label: optionalText }),
-  faq: z.object({ intro: optionalText, items: z.array(faqItemSchema).max(60).optional() }),
-  dress_code: z.object({ intro: optionalText, body: optionalText, board_id: uuid.optional() }),
-  party: z.object({
-    intro: optionalText,
-    members: z
-      .array(z.object({ name: trimmed.min(1).max(120), role: optionalText, body: optionalText }))
-      .max(30)
-      .optional(),
-  }),
-  things_to_do: z.object({ intro: optionalText, items: z.array(listItemSchema).max(30).optional() }),
-  gallery: z.object({ intro: optionalText }),
-  photo_band: z.object({ image_id: uuid.optional(), image_alt: optionalText, caption: optionalText }),
-  // An asset and its alt text, and nothing else. A band that could carry a
-  // caption would be a photo_band with extra steps.
-  page_break: z.object({ image_id: uuid.optional(), image_alt: optionalText }),
-  photo_text: z.object({
-    heading: optionalText,
-    body: optionalText,
-    image_id: uuid.optional(),
-    image_alt: optionalText,
-    side: z.enum(["left", "right"]).optional(),
-  }),
-  map: z.object({
-    heading: optionalText,
-    name: optionalText,
-    address: optionalText,
-    note: optionalText,
-    intro: optionalText,
-  }),
-  travel: z.object({ intro: optionalText, body: optionalText }),
-  stays: z.object({ intro: optionalText }),
-  coach: z.object({ intro: optionalText }),
-  // The funds live in `gift_funds`; the block holds only the line above them.
-  gift_funds: z.object({ intro: optionalText }),
-  song_requests: z.object({ intro: optionalText }),
-  guestbook: z.object({ intro: optionalText, prompt: optionalText }),
-  playlist: z.object({
-    heading: optionalText,
-    label: optionalText,
-    note: optionalText,
-    // Only https, and only somewhere a playlist could live. A javascript: URL
-    // in a link the whole guest list clicks is the reason this is not free
-    // text.
-    url: trimmed
-      .max(500)
-      .optional()
-      .refine((v) => !v || /^https:\/\/[\w.-]+\//.test(v), { message: "Use a full https:// link" })
-      .transform((v) => (v ? v : undefined)),
-  }),
-  footer: z.object({
-    note: optionalText,
-    contact_email: trimmed.max(200).email("That isn't an email address").optional().or(z.literal("")),
-    hashtag: optionalText,
-  }),
-};
 
 /** Drop the keys a form left empty, so a payload is what was actually said. */
 function compact(value: Record<string, unknown>): Record<string, unknown> {
@@ -184,9 +54,16 @@ function revalidateSite(): void {
 // Blocks
 // ---------------------------------------------------------------------------
 
+/**
+ * Add a block.
+ *
+ *   `afterId` a block id   — directly after it
+ *   `afterId` undefined    — at the end of the page
+ *   `afterId` null         — at the very top (a drop above the first block)
+ */
 export async function addBlock(
   type: string,
-  afterId?: string,
+  afterId?: string | null,
 ): Promise<ActionResult<{ id: string }>> {
   if (!isBlockType(type)) return fail("That isn't a kind of block");
 
@@ -202,7 +79,9 @@ export async function addBlock(
   // Gaps of 10, so an insert between two blocks has somewhere to land without
   // renumbering the page.
   const index = afterId ? blocks.findIndex((block) => block.id === afterId) : blocks.length - 1;
-  const sortOrder = (index + 1) * 10 + 5;
+  // Above the first block is a negative order, which sorts before the page's own
+  // 0, 10, 20…; the next reorder renumbers everything from 0 as it always does.
+  const sortOrder = afterId === null ? -5 : (index + 1) * 10 + 5;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -210,7 +89,10 @@ export async function addBlock(
     .insert({
       wedding_id: wedding.id,
       type,
-      payload: {},
+      // Starter content, so the first thing the planner sees is what the block
+      // looks like when it is full (spec 24 §5). Publish refuses a block still
+      // carrying it untouched — see `publishSite`.
+      payload: starterPayload(type) as never,
       style: {},
       sort_order: sortOrder,
       audience: BLOCKS[type].defaultAudience ?? "everyone",
@@ -270,6 +152,21 @@ export async function setBlockStyle(
   if (!parsed.success) return fail("That isn't a style this block offers");
 
   const supabase = await createClient();
+
+  // A Look is only valid for the kind of block it belongs to: a gallery cannot
+  // be a timeline. The schema cannot see the block's type, so it is checked here.
+  if (parsed.data.variant !== undefined) {
+    const { data: existing } = await supabase
+      .from("site_blocks")
+      .select("type")
+      .eq("wedding_id", wedding.id)
+      .eq("id", id)
+      .maybeSingle();
+    if (!existing || !isBlockType(existing.type) || !isLook(existing.type, parsed.data.variant)) {
+      return fail("That isn't a layout this block offers");
+    }
+  }
+
   const { error } = await supabase
     .from("site_blocks")
     .update({ style: compact(parsed.data) as never })
@@ -410,10 +307,15 @@ export async function reorderBlocks(orderedIds: string[]): Promise<ActionResult>
  * there is anything to lose — "apply a layout" must never be a synonym for
  * "delete my site".
  */
-export async function applyStarterLayout(layoutId: string): Promise<ActionResult<{ added: number }>> {
+export async function applyStarterLayout(
+  layoutId: string,
+  vibeId?: string,
+): Promise<ActionResult<{ added: number }>> {
   const wedding = await requireWedding();
   const layout = STARTER_LAYOUTS.find((entry) => entry.id === layoutId);
   if (!layout) return fail("That isn't one of the layouts");
+  const vibe = vibeId ? getVibe(vibeId) : undefined;
+  if (vibeId && !vibe) return fail("That isn't one of the vibes");
 
   const existing = await listDraftBlocks(wedding.id);
   if (existing.length > 0) {
@@ -421,18 +323,38 @@ export async function applyStarterLayout(layoutId: string): Promise<ActionResult
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("site_blocks").insert(
-    layout.types.map((type, index) => ({
-      wedding_id: wedding.id,
-      type,
-      payload: {},
-      style: {},
-      sort_order: index * 10,
-      audience: BLOCKS[type].defaultAudience ?? "everyone",
-    })),
-  );
+  const { data: inserted, error } = await supabase
+    .from("site_blocks")
+    .insert(
+      layout.types.map((type, index) => ({
+        wedding_id: wedding.id,
+        type,
+        payload: starterPayload(type) as never,
+        style: {},
+        sort_order: index * 10,
+        audience: BLOCKS[type].defaultAudience ?? "everyone",
+      })),
+    )
+    .select("id, type, style");
 
   if (error) return fail(error.message);
+
+  // A template is a layout *and* a Vibe: the theme and the Looks, on the blocks
+  // that have just been added (spec 27 E3).
+  if (vibe) {
+    const applied = await applyVibeToDraft(
+      supabase,
+      wedding.id,
+      vibe,
+      (inserted ?? []).flatMap((row) =>
+        isBlockType(row.type)
+          ? [{ id: row.id, type: row.type, style: (row.style ?? {}) as never }]
+          : [],
+      ),
+    );
+    if (!applied.ok) return fail(applied.error);
+  }
+
   revalidateSite();
   return ok({ added: layout.types.length });
 }
@@ -493,6 +415,20 @@ export async function addStarterFaq(blockId: string): Promise<ActionResult<{ add
 export async function publishSite(note?: string): Promise<ActionResult<{ blocks: number }>> {
   const wedding = await requireWedding();
   const blocks = await listDraftBlocks(wedding.id);
+
+  // A block still carrying the starter's sample text is refused, rather than
+  // relying on anybody noticing "We met in a queue for coffee" on a live site
+  // (spec 24 §5, answered in spec 27). Only `sample` blocks block publishing:
+  // a `blank` one — a photo band with no photo — renders as nothing, which is
+  // what it has always done, and refusing it would turn every existing site's
+  // next publish into a chore. Hiding a block is the way out.
+  const unfinished = blocksNeedingWork(blocks).filter((entry) => entry.status === "sample");
+  if (unfinished.length > 0) {
+    const names = [...new Set(unfinished.map((entry) => entry.label))].join(", ");
+    return fail(
+      `Not yet — ${unfinished.length === 1 ? "one block still has" : `${unfinished.length} blocks still have`} sample text: ${names}. Write your own, or hide ${unfinished.length === 1 ? "it" : "them"}, then publish.`,
+    );
+  }
 
   const supabase = await createClient();
   const {

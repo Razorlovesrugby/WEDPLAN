@@ -33,6 +33,10 @@ export const PUBLIC_PREFIXES = [
   "/api/cron",
   "/api/clip",
   "/api/health",
+  // The couple's photographs, by asset id (spec 27 D3). The route decides for
+  // itself whether a photograph may be shown — published, or the planner's own
+  // session — and answers 404 to everything else.
+  "/api/photo",
   // Everything under /api/public is deliberately reachable without a session
   // and scopes itself. A dedicated prefix rather than listing each route:
   // "/api/events" would have made every future route under it public too,

@@ -1,6 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signPaths } from "@/lib/supabase/storage";
+import { SITE_SIGNED_URL_TTL_SECONDS } from "@/lib/site/assets";
+import { buildSiteImage, type SiteImageData } from "@/lib/site/site-image";
 import { listPublishedBoards } from "@/server/moodboards/resolve";
 import {
   getGallerySettings,
@@ -42,6 +44,11 @@ export type PersonalContext = {
    * publish a guestbook note without review, and vote for a song.
    */
   householdId: string;
+  /**
+   * `okonkwo-4f7ak` — the household's own address, which is the credential for
+   * anything keyed by it (the weekend calendar file). Null when it is not known.
+   */
+  addressSegment: string | null;
 };
 
 export type RenderContext = {
@@ -68,6 +75,14 @@ export type RenderContext = {
    */
   imageUrls: Map<string, string>;
   /**
+   * The same photographs, as everything the renderer needs to draw one well
+   * (spec 27 step 2): a stable `/api/photo/<id>` address that never expires,
+   * a `srcset` when narrower copies exist, its dimensions, a placeholder
+   * colour and a focal point. Prefer this to `imageUrls`, which is a direct
+   * signed URL and survives 24 hours.
+   */
+  images: Map<string, SiteImageData>;
+  /**
    * Dress codes, arrival points, the public song list and the guestbook
    * (spec 25). Every list here is already filtered to what this reader may
    * see — approved rows only, and codes narrowed to their own events — so a
@@ -76,6 +91,13 @@ export type RenderContext = {
   extras: SiteExtras;
   /** Null when a stranger is reading; the household when we know who it is. */
   personal: PersonalContext | null;
+  /**
+   * True only on the builder's preview. A block with nothing in it draws a
+   * "Choose a photo" tile there, and nothing at all on a live page: the tile
+   * is a message to the planner, and a guest must never be shown it. Publish
+   * refusing sample text is the other half of that promise.
+   */
+  preview: boolean;
 };
 
 /** The theme is configuration and still lives in `site_content`. */
@@ -90,38 +112,55 @@ async function loadTheme(weddingId: string): Promise<SiteTheme> {
   return resolveTheme(data?.payload ?? null);
 }
 
-/** Every image this wedding could render, signed in one round trip. */
-async function loadImageUrls(weddingId: string): Promise<Map<string, string>> {
+/**
+ * Every image this wedding could render: a direct signed URL for each, and the
+ * richer `SiteImageData` the renderer prefers. One query, one signing round trip.
+ */
+async function loadImages(
+  weddingId: string,
+): Promise<{ urls: Map<string, string>; images: Map<string, SiteImageData> }> {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("site_assets")
-    .select("id, storage_path")
+    .select("id, storage_path, width, height, variants, colour, focal_x, focal_y")
     .eq("wedding_id", weddingId)
     .in("kind", ["hero", "story", "party", "stay", "gallery"]);
 
-  const rows = (data ?? []) as Pick<SiteAssetRow, "id" | "storage_path">[];
-  const signed = await signPaths(rows.map((row) => row.storage_path));
+  const rows = (data ?? []) as Pick<
+    SiteAssetRow,
+    "id" | "storage_path" | "width" | "height" | "variants" | "colour" | "focal_x" | "focal_y"
+  >[];
+  const signed = await signPaths(
+    rows.map((row) => row.storage_path),
+    SITE_SIGNED_URL_TTL_SECONDS,
+  );
 
   const urls = new Map<string, string>();
+  const images = new Map<string, SiteImageData>();
   for (const row of rows) {
     const url = signed.get(row.storage_path);
-    if (url) urls.set(row.id, url);
+    // A row whose object has gone missing is left out of both, so its block
+    // renders as it always has for a missing photograph — nothing — and one
+    // lost object cannot cost the page.
+    if (!url) continue;
+    urls.set(row.id, url);
+    images.set(row.id, buildSiteImage(row));
   }
-  return urls;
+  return { urls, images };
 }
 
 export async function buildRenderContext(
   wedding: RenderContext["wedding"],
   personal: PersonalContext | null,
 ): Promise<RenderContext> {
-  const [theme, events, travel, gallery, boards, galleryBlock, imageUrls] = await Promise.all([
+  const [theme, events, travel, gallery, boards, galleryBlock, loaded] = await Promise.all([
     loadTheme(wedding.id),
     publicEvents(wedding.id),
     getPublicTravel(wedding.id),
     getPublicGallery(wedding.id),
     listPublishedBoards(wedding.id, personal ? "rsvp" : "public_site"),
     getGallerySettings(wedding.id),
-    loadImageUrls(wedding.id),
+    loadImages(wedding.id),
   ]);
 
   // The events this reader may see, which is what the dress codes are resolved
@@ -155,9 +194,11 @@ export async function buildRenderContext(
     boards,
     uploadsOpen: flag(galleryBlock, "uploads_open"),
     uploadsModerated: text(galleryBlock, "moderation") !== "auto",
-    imageUrls,
+    imageUrls: loaded.urls,
+    images: loaded.images,
     extras,
     personal,
+    preview: false,
   };
 }
 
@@ -179,6 +220,7 @@ export async function buildPersonalContext(
   household: { id: string; display_name: string },
   token: string | null,
   rsvp: RsvpContext | null,
+  addressSegment: string | null = null,
 ): Promise<PersonalContext> {
   const [seats, uploads] = await Promise.all([
     getHouseholdSeats(weddingId, household.id),
@@ -204,6 +246,7 @@ export async function buildPersonalContext(
   return {
     householdName: household.display_name,
     householdId: household.id,
+    addressSegment,
     token,
     members,
     events: rsvp?.events ?? [],
@@ -216,5 +259,64 @@ export async function buildPersonalContext(
       ]),
     ),
     uploads,
+  };
+}
+
+
+/**
+ * A household's page as the *planner* previews it (spec 27 E7).
+ *
+ * `buildPersonalContext` needs a resolved invitation, which carries a token —
+ * a credential this screen deliberately does not hold. So the preview builds
+ * the same shape from the household's guests and the wedding's public events,
+ * with everyone invited to everything, no RSVP form and no token. It shows the
+ * *shape* of their page: their names on the cover, the weekend, the personal
+ * blocks.
+ *
+ * Without this, previewing as a household showed a page whose schedule had
+ * vanished (no invited events) and whose greeting fell back to the household
+ * name (no guests), which is a preview that lies about the thing being edited.
+ */
+export async function buildPreviewPersonal(
+  weddingId: string,
+  household: { id: string; display_name: string; slug?: string; slug_suffix?: string },
+): Promise<PersonalContext> {
+  const supabase = createAdminClient();
+  const [{ data: guests }, { data: events }] = await Promise.all([
+    supabase
+      .from("guests")
+      .select("id, first_name, preferred_name")
+      .eq("wedding_id", weddingId)
+      .eq("household_id", household.id)
+      .is("deleted_at", null)
+      .order("sort_order"),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("wedding_id", weddingId)
+      .eq("is_public", true)
+      .order("sort_order")
+      .order("starts_at"),
+  ]);
+
+  const members = (guests ?? []).map((guest) => ({
+    id: guest.id as string,
+    name: ((guest.preferred_name as string | null)?.trim() || (guest.first_name as string)) ?? "",
+  }));
+  const eventRows = (events ?? []) as EventRow[];
+  const everyone = new Set(members.map((member) => member.id));
+
+  return {
+    householdName: household.display_name,
+    householdId: household.id,
+    addressSegment:
+      household.slug && household.slug_suffix ? `${household.slug}-${household.slug_suffix}` : null,
+    token: null,
+    members,
+    events: eventRows,
+    invitedByEvent: new Map(eventRows.map((event) => [event.id, new Set(everyone)])),
+    rsvp: null,
+    seats: {},
+    uploads: [],
   };
 }

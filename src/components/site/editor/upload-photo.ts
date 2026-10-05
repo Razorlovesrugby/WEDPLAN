@@ -1,7 +1,7 @@
 "use client";
 
-import { toWebp } from "@/lib/site/encode-image";
-import { MAX_UPLOAD_BYTES } from "@/lib/site/assets";
+import { toWebpSet } from "@/lib/site/encode-image";
+import { MAX_UPLOAD_BYTES, SITE_IMAGE_WIDTHS } from "@/lib/site/assets";
 import { confirmSitePhotoUpload, requestSitePhotoUpload } from "@/server/actions/site-photos";
 
 /**
@@ -21,7 +21,7 @@ export async function uploadSitePhoto(
     return { ok: false, error: "That's far too big to be a photo." };
   }
 
-  const encoded = await toWebp(file);
+  const encoded = await toWebpSet(file, SITE_IMAGE_WIDTHS);
   if (!encoded)
     return {
       ok: false,
@@ -31,21 +31,41 @@ export async function uploadSitePhoto(
   const slot = await requestSitePhotoUpload({
     kind,
     content_type: "image/webp",
-    byte_size: encoded.blob.size,
+    byte_size: encoded.original.blob.size,
+    variants: encoded.variants.map((variant) => variant.edge),
   });
   if (!slot.ok) return { ok: false, error: slot.error };
 
   const put = await fetch(slot.data.uploadUrl, {
     method: "PUT",
-    body: encoded.blob,
+    body: encoded.original.blob,
     headers: { "content-type": "image/webp" },
   }).catch(() => null);
   if (!put?.ok) return { ok: false, error: "That upload didn't finish. Try again?" };
 
+  // The narrower copies are an optimisation, not the photograph. One that does
+  // not arrive is left off the list rather than failing the whole upload, and
+  // the page then simply serves the original for it.
+  const arrived: number[] = [];
+  await Promise.all(
+    slot.data.variantUploads.map(async ({ edge, uploadUrl }) => {
+      const variant = encoded.variants.find((entry) => entry.edge === edge);
+      if (!variant) return;
+      const sent = await fetch(uploadUrl, {
+        method: "PUT",
+        body: variant.image.blob,
+        headers: { "content-type": "image/webp" },
+      }).catch(() => null);
+      if (sent?.ok) arrived.push(edge);
+    }),
+  );
+
   await confirmSitePhotoUpload({
     asset_id: slot.data.assetId,
-    width: encoded.width,
-    height: encoded.height,
+    width: encoded.original.width,
+    height: encoded.original.height,
+    variants: arrived,
+    colour: encoded.colour ?? undefined,
   });
 
   return { ok: true, assetId: slot.data.assetId };

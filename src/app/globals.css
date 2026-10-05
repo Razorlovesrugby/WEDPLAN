@@ -81,25 +81,68 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The public site's motion (spec 14 §5)
+   The public site's motion (spec 14 §5, rebuilt by spec 27 §6)
    ---------------------------------------------------------------------------
-   Sections fade and rise 12px on first scroll into view, 300ms, once. The
-   countdown ticks. Nothing else moves.
+   The page root carries two attributes, written from the theme and never read
+   by React:
 
-   CSS-only, via `animation-timeline: view()`, so there is no IntersectionObserver
-   and no JavaScript on the critical path of a guest site. Browsers without
-   scroll-driven animation support simply show the content — the @supports
-   guard means the starting state (opacity 0) is never applied unless the
-   animation that undoes it can actually run. Getting that backwards is how a
-   page renders permanently blank on an older phone.
+     data-motion   still | gentle | cinematic
+     data-fx       the effects that level (plus the planner's overrides) runs,
+                   space-separated: "section_arrivals reading_line nav_condense"
+
+   Every rule below is switched by `[data-fx~="…"]`, so an effect is one word in
+   one list and nothing else about the page knows it exists. Adding an effect is
+   a keyframe, a rule here, and a row in `src/lib/site/motion.ts`.
+
+   **CSS-only, no JavaScript.** Scroll-driven animation (`animation-timeline:
+   view()` / `scroll()`) means no IntersectionObserver and nothing on the
+   critical path of a guest's phone. Two guards, both load-bearing:
+
+     @supports (animation-timeline: …)  A browser without the feature simply
+        shows the content. The *starting state* (opacity 0, a scale, a clip) is
+        applied only inside this guard, so it can never be applied by something
+        that cannot also undo it — which is how a page renders permanently blank
+        on an older phone.
+
+     prefers-reduced-motion  Keeps the fade and drops the movement. The request
+        is about motion, not contrast. This follows the guest's own system
+        setting and the planner cannot override it either way.
+
+   **Only `transform` and `opacity` animate on scroll** (plus `clip-path` on the
+   one wipe, which composites). Nothing here animates width, top, a shadow or a
+   filter: those repaint on every scroll frame.
+
+   No scroll-jacking, ever: nothing here snaps, pins or intercepts a wheel.
 --------------------------------------------------------------------------- */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .site-reveal {
-      animation: site-reveal-in linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 40%;
-    }
+:root {
+  /* One set of easings, shared with the save-the-date (`std-rise`). A soft
+     ease-out for things arriving; a spring for the few things that should have
+     weight (the reply confirmation). `linear()` is plain CSS — no library. */
+  --ease-out: cubic-bezier(0.22, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: linear(
+    0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017 19.5%,
+    1.077 22.2%, 1.1 24.5%, 1.11 26.8%, 1.101 30.1%, 1.033 38.2%, 1.005 43%,
+    0.996 50%, 1
+  );
+  --dur-fast: 160ms;
+  --dur-base: 300ms;
+  --dur-slow: 700ms;
+}
+
+/* Hover and press, on the guest site only (spec 27 §6). A button answers a
+   finger: the colour change eases rather than snapping and a press sinks a
+   hair. `[data-site-theme]` keeps this off the planner's own app, whose
+   buttons share these classes. Reduced motion gets the instant state change it
+   always had. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-site-theme] :is(.btn, .btn-primary) {
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+  [data-site-theme] :is(.btn, .btn-primary):active:not(:disabled) {
+    transform: scale(0.98);
   }
 }
 
@@ -114,24 +157,686 @@
   }
 }
 
-/* Reduced motion keeps the fade and drops the movement, rather than removing
-   the transition entirely: the request is about motion, not contrast. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: reduce) {
-    .site-reveal {
-      animation: site-fade-in linear both;
-      animation-timeline: view();
-      animation-range: entry 0% entry 40%;
-    }
-  }
-}
-
 @keyframes site-fade-in {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+/* The wipe: a section arrives with an inch of lift and its lower edge
+   un-clipped. A little more than the rise, which is why it is Cinematic's
+   default and not Gentle's. */
+@keyframes site-reveal-wipe {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+    clip-path: inset(0 0 14% 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes site-photo-in {
+  from {
+    opacity: 0.35;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes site-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes site-nav-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* -- Section arrivals ------------------------------------------------------ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="section_arrivals"] .site-reveal {
+      animation: site-reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    [data-motion="cinematic"][data-fx~="section_arrivals"] .site-reveal {
+      animation-name: site-reveal-wipe;
+    }
+    /* One block can ask for something other than the page's default. These
+       come after the rules above so that, at equal specificity, they win. */
+    [data-fx~="section_arrivals"] [data-enter="rise"] .site-reveal {
+      animation-name: site-reveal-in;
+    }
+    [data-fx~="section_arrivals"] [data-enter="fade"] .site-reveal {
+      animation-name: site-fade-in;
+    }
+    [data-fx~="section_arrivals"] [data-enter="reveal"] .site-reveal {
+      animation-name: site-reveal-wipe;
+    }
+    [data-fx~="section_arrivals"] [data-enter="none"] .site-reveal {
+      animation: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-fx~="section_arrivals"] .site-reveal {
+      animation: site-fade-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    [data-fx~="section_arrivals"] [data-enter="none"] .site-reveal {
+      animation: none;
+    }
+  }
+}
+
+/* -- Photographs arrive ---------------------------------------------------- */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="photo_arrival"] .site-photo {
+      animation: site-photo-in linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+    [data-fx~="photo_arrival"] [data-enter="none"] .site-photo {
+      animation: none;
+    }
+  }
+}
+
+/* -- Lists stagger in ------------------------------------------------------
+   Each child carries `--i`, its position in the list. With a scroll timeline
+   `animation-delay` means nothing, so the stagger is the *range* shifting
+   later by a few percent per row. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="stagger"] .site-stagger > * {
+      animation: site-reveal-in linear both;
+      animation-timeline: view();
+      animation-range: entry calc(0% + var(--i, 0) * 7%) entry calc(36% + var(--i, 0) * 7%);
+    }
+  }
+}
+
+/* -- The cover (spec 27 §5, §6) ---------------------------------------------
+   The household's first screen: a greeting, the names, a line of invitation,
+   and a small arrow. The greeting and cover line are written by the planner;
+   everything below is only how they sit. */
+.site-greeting {
+  text-wrap: balance;
+}
+.site-cover-line {
+  text-wrap: balance;
+}
+
+/* The arrow. The outer span fades it away once they scroll (where scroll
+   timelines exist); the inner one bobs, and only when the page moves at all. */
+.site-cue {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.site-cue-arrow {
+  display: block;
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-motion="gentle"] .site-cue,
+    [data-motion="cinematic"] .site-cue {
+      animation: site-cue-away linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 140px;
+    }
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-motion="gentle"] .site-cue-arrow,
+  [data-motion="cinematic"] .site-cue-arrow {
+    animation: site-cue-bob 2.4s var(--ease-in-out) infinite;
+  }
+}
+@keyframes site-cue-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(7px);
+  }
+}
+@keyframes site-cue-away {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The extra dimming layer exists in the markup and does nothing until the
+   hand-over effect gives it somewhere to go. Opacity 0 here is the whole point:
+   a permanent second scrim would darken every cover. */
+.site-cover-dim {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The hand-over: as they scroll, the photograph eases back and the dimming
+   layer fades in, and the words travel at a fifth of the page's speed. `0 100vh`
+   is one screen of scroll from the top. Only transform and opacity animate. */
+@keyframes site-cover-photo {
+  to {
+    transform: scale(1.08) translateY(4vh);
+  }
+}
+@keyframes site-cover-words {
+  to {
+    transform: translateY(14vh);
+    opacity: 0.12;
+  }
+}
+@keyframes site-cover-dim {
+  to {
+    opacity: 1;
+  }
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="cover_handover"] .site-cover-photo > img {
+      animation: site-cover-photo linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 100vh;
+    }
+    [data-fx~="cover_handover"] .site-cover-words {
+      animation: site-cover-words linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 70vh;
+    }
+    [data-fx~="cover_handover"] .site-cover-dim {
+      animation: site-cover-dim linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 90vh;
+    }
+  }
+}
+
+/* -- The reading line ------------------------------------------------------ */
+.site-progress {
+  display: none;
+}
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="reading_line"] .site-progress {
+      display: block;
+      position: fixed;
+      inset: 0 0 auto 0;
+      z-index: 40;
+      height: 2px;
+      background: rgb(var(--site-accent));
+      transform: scaleX(0);
+      transform-origin: 0 50%;
+      animation: site-progress linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+
+/* -- The menu settles -------------------------------------------------------
+   Bare at the top of the page, so the cover is clean, and gaining its bar over
+   the first 160px of scroll. The bar is a pseudo-element whose *opacity* is
+   what animates — fading a background colour would repaint. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="nav_condense"] .site-nav {
+      background: transparent;
+      border-color: transparent;
+      backdrop-filter: none;
+    }
+    [data-fx~="nav_condense"] .site-nav::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: rgb(var(--site-paper) / 0.92);
+      border-bottom: 1px solid rgb(var(--site-line));
+      backdrop-filter: blur(8px);
+      opacity: 0;
+      animation: site-nav-in linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 160px;
+    }
+  }
+}
+
+/* Editorial's section eyebrow does the floral rule's job, and its theme never
+   drew the rule. With numbers switched off the eyebrow is gone, so the rule
+   would otherwise appear in a theme that has never had one. */
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-rule {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Looks (spec 27 E1)
+   ---------------------------------------------------------------------------
+   A Look is a rule set under `[data-look="…"]`, not a second component, so the
+   Looks of one block can never disagree about what a row contains. Every rule
+   here uses the theme's own tokens, so a Look is checked against every palette
+   by construction: nothing here names a colour.
+
+   Specificity note: Tailwind's utilities (`border-t`, `space-y-6`, `pt-5`) and
+   Editorial's `li.site-event` are single-class or two-class rules, so each Look
+   selector is written one step more specific than what it overrides, rather
+   than reaching for `!important`.
+--------------------------------------------------------------------------- */
+
+/* -- The weekend: timeline ------------------------------------------------ */
+[data-look="timeline"] ul.site-stagger {
+  position: relative;
+  padding-left: 1.9rem;
+}
+[data-look="timeline"] ul.site-stagger::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  width: 1px;
+  background: rgb(var(--site-line));
+  transform-origin: top;
+}
+[data-look="timeline"] ul.site-stagger > li {
+  position: relative;
+  margin-top: 0;
+  border: 0;
+  padding-block: 6px;
+}
+[data-look="timeline"] ul.site-stagger > li + li {
+  margin-top: 1.75rem;
+}
+[data-look="timeline"] ul.site-stagger > li::before {
+  content: "";
+  position: absolute;
+  left: -1.9rem;
+  top: 0.8rem;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: rgb(var(--site-paper));
+  border: 1.5px solid rgb(var(--site-accent));
+}
+
+@keyframes site-line-draw {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-fx~="itinerary_draw"] [data-look="timeline"] ul.site-stagger::before {
+      transform: scaleY(0);
+      animation: site-line-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 15% cover 60%;
+    }
+  }
+}
+
+/* -- The weekend: cards --------------------------------------------------- */
+[data-look="cards"] ul.site-stagger {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 14px;
+}
+[data-look="cards"] ul.site-stagger > li {
+  margin-top: 0;
+  border: 1px solid rgb(var(--site-line));
+  padding: 22px 22px 20px;
+  background: rgb(var(--site-paper));
+}
+/* Editorial's three-column row is a list's shape; a card is one column. */
+[data-look="cards"] ul.site-stagger > li.site-event {
+  display: block;
+}
+[data-look="cards"] ul.site-stagger > li.site-event .site-event-aside {
+  margin-top: 0.75rem;
+  text-align: left;
+}
+
+/* -- Our story: magazine --------------------------------------------------- */
+.site-story-lead {
+  text-wrap: balance;
+}
+@media (min-width: 640px) {
+  .site-story-columns > p:first-child::first-letter {
+    float: left;
+    margin: 0.06em 0.12em 0 0;
+    font-family: var(--font-display, var(--font-body));
+    font-size: 3.6em;
+    line-height: 0.82;
+    color: rgb(var(--site-accent));
+  }
+}
+
+/* -- The gallery: filmstrip ----------------------------------------------- */
+.site-filmstrip {
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 1.25rem;
+  /* Quiet, not hidden: a hidden scrollbar is a row nobody knows scrolls. */
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--site-line)) transparent;
+}
+.site-filmstrip:focus-visible {
+  outline: 2px solid rgb(var(--site-accent));
+  outline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   The reply bar (spec 27 §7)
+   ---------------------------------------------------------------------------
+   A strip along the bottom of a phone. Phones only: the sticky nav already pins
+   an RSVP button beyond that. `env(safe-area-inset-bottom)` keeps it clear of
+   the home indicator. It slides in rather than appearing, and not at all for
+   somebody who has asked for less motion.
+--------------------------------------------------------------------------- */
+.site-replybar,
+.site-replybar-spacer {
+  display: none;
+}
+@media (max-width: 639px) {
+  .site-replybar-spacer {
+    display: block;
+    height: calc(64px + env(safe-area-inset-bottom));
+  }
+  .site-replybar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgb(var(--site-ink));
+    color: rgb(var(--site-paper));
+    transform: translateY(110%);
+  }
+  .site-replybar[data-shown="true"] {
+    transform: none;
+  }
+  .site-replybar-text {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  .site-replybar-action {
+    flex-shrink: 0;
+    border: 1px solid rgb(var(--site-paper) / 0.55);
+    border-radius: 999px;
+    padding: 0.5em 1.1em;
+    font-family: var(--font-label, var(--font-body));
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: inherit;
+  }
+}
+@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
+  .site-replybar {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The reply confirmation (spec 27 §7)
+   ---------------------------------------------------------------------------
+   The form and the card that replaces it share a view-transition name, so a
+   browser that has them morphs one into the other; one that does not just swaps
+   them. The tick draws itself with the spring easing.
+--------------------------------------------------------------------------- */
+.site-rsvp-panel {
+  view-transition-name: site-rsvp-panel;
+}
+::view-transition-group(site-rsvp-panel) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+.site-check path {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-check path {
+    stroke-dashoffset: 40;
+    animation: site-check-draw var(--dur-slow) var(--ease-spring) 150ms forwards;
+  }
+  .site-check circle {
+    transform-origin: center;
+    animation: site-check-pop var(--dur-slow) var(--ease-spring) both;
+  }
+}
+@keyframes site-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes site-check-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The photograph viewer (spec 27 D5)
+   ---------------------------------------------------------------------------
+   One native <dialog> per page. `showModal()` makes everything behind it inert,
+   traps focus, closes on Escape and hands focus back to the photograph that
+   opened it, so none of that is written here. What is: it fills the screen,
+   uses `dvh` (the mobile address bar makes `vh` a lie), and respects the notch.
+--------------------------------------------------------------------------- */
+.site-zoomable {
+  cursor: zoom-in;
+}
+.site-zoomable:focus-visible {
+  outline: 2px solid rgb(var(--site-accent));
+  outline-offset: 3px;
+}
+
+.site-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  border: 0;
+  background: rgba(14, 16, 15, 0.97);
+  color: #fff;
+  overscroll-behavior: contain;
+  /* Taps and swipes on the picture are ours, not the browser's. */
+  touch-action: pan-y pinch-zoom;
+}
+.site-viewer:not([open]) {
+  display: none;
+}
+.site-viewer::backdrop {
+  background: transparent;
+}
+.site-viewer-figure {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+.site-viewer-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.site-viewer-close,
+.site-viewer-prev,
+.site-viewer-next {
+  position: absolute;
+  display: flex;
+  height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.site-viewer-close:hover,
+.site-viewer-prev:hover:not(:disabled),
+.site-viewer-next:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+}
+.site-viewer-prev:disabled,
+.site-viewer-next:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.site-viewer-close {
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+.site-viewer-prev {
+  left: calc(env(safe-area-inset-left) + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.site-viewer-next {
+  right: calc(env(safe-area-inset-right) + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.site-viewer-count {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-viewer[open] {
+    animation: site-fade-in var(--dur-base) var(--ease-out) both;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Evening, and dark grounds in general (spec 27 E3)
+   ---------------------------------------------------------------------------
+   Two separate ideas, kept separate on purpose:
+
+   `data-site-theme="evening"` is a PRESET: Editorial's composition (every rule
+   above that names Editorial now names both) in italic display type. It adds
+   only what makes it Evening.
+
+   `data-site-tone="dark"` is a property of the PALETTE, set on the root from the
+   palette's own ground, so it is true for Midnight under Script too. It is what
+   has to adapt: the form controls that were written white for a light page, the
+   `color-scheme` (so a select's popup and a scrollbar are not light on dark), and
+   what a printer is handed. Written against tokens, never a colour.
+--------------------------------------------------------------------------- */
+[data-site-theme="evening"] .site-h2,
+[data-site-theme="evening"] .site-h1 {
+  font-style: italic;
+}
+/* The ampersand is already italic; set upright against italic names it reads as
+   the one still thing on the line. */
+[data-site-theme="evening"] .site-h1-amp {
+  font-style: normal;
+  color: rgb(var(--site-accent));
+}
+[data-site-theme="evening"] .site-eyebrow {
+  letter-spacing: 0.2em;
+}
+[data-site-theme="evening"] .site-eyebrow::before {
+  /* The small square before an eyebrow takes a faint glow: a candle, not a bullet. */
+  box-shadow: 0 0 10px rgb(var(--site-accent) / 0.6);
+}
+
+[data-site-tone="dark"] {
+  color-scheme: dark;
+}
+/* Controls written for a white page (the RSVP form, a song request, a guestbook
+   note) take the page's own ground, lifted a few percent so they still read as
+   fields. */
+[data-site-tone="dark"] .bg-white,
+[data-site-tone="dark"] .card,
+[data-site-tone="dark"] .field,
+[data-site-tone="dark"] .btn {
+  background-color: color-mix(in srgb, rgb(var(--site-ink)) 7%, rgb(var(--site-paper)));
+  color: rgb(var(--site-ink));
+}
+[data-site-tone="dark"] .btn-primary {
+  background-color: rgb(var(--site-ink));
+  border-color: transparent;
+  color: rgb(var(--site-paper));
+}
+/* "Selected" in the reply buttons is `bg-ink text-white`; with a light ink, white
+   text on it would vanish. */
+[data-site-tone="dark"] .text-white {
+  color: rgb(var(--site-paper));
+}
+
+@media print {
+  /* A dark page printed is a page of white-on-white. The tokens are inline on
+     the root, so only an important rule in the stylesheet can beat them. */
+  [data-site-tone="dark"] {
+    --site-ink: 20 20 20 !important;
+    --site-paper: 255 255 255 !important;
+    --site-muted: 90 90 90 !important;
+    --site-line: 200 200 200 !important;
+    --site-accent: 90 70 40 !important;
+    color-scheme: light;
   }
 }
 
@@ -151,8 +856,19 @@
   .site-print nav[aria-label="Sections"],
   .site-print nav[aria-label="Chapters"],
   .site-print .site-rail,
-  .site-print .no-print-site {
+  .site-print .no-print-site,
+  .site-print .site-viewer,
+  .site-print .site-replybar,
+  .site-print .site-replybar-spacer,
+  .site-print .site-progress {
     display: none !important;
+  }
+
+  /* A view() timeline has no scroll position on paper; an element that never
+     "entered" must not print at opacity 0. */
+  .site-print *,
+  .site-print *::before {
+    animation: none !important;
   }
 
   .site-print section {
@@ -244,7 +960,7 @@
    both explicitly and `theme.test.ts` asserts their contrast; deriving them
    would move five checked values to a formula and quietly drop the gate.
 --------------------------------------------------------------------------- */
-[data-site-theme="editorial"] {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) {
   /* The one place the scale is written down. Every rule below reads it. */
   --ed-h1: clamp(56px, 11vw, 150px);
   --ed-h2: clamp(38px, 6vw, 82px);
@@ -252,7 +968,7 @@
   --ed-event: clamp(24px, 2.4vw, 32px);
 }
 
-[data-site-theme="editorial"] .site-h1 {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h1 {
   font-size: var(--ed-h1);
   font-weight: 300;
   line-height: 0.88;
@@ -263,7 +979,7 @@
 /* The ampersand is its own line at 0.42em, which is what stops two long names
    setting as one unreadable 150px run. It is rendered as a separate element so
    a screen reader still hears "Ray and Olivia" in one breath. */
-[data-site-theme="editorial"] .site-h1-amp {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h1-amp {
   display: block;
   font-size: 0.42em;
   font-style: italic;
@@ -271,7 +987,7 @@
   letter-spacing: 0;
 }
 
-[data-site-theme="editorial"] .site-h2 {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h2 {
   font-size: var(--ed-h2);
   font-weight: 300;
   line-height: 1;
@@ -281,7 +997,7 @@
   text-align: left;
 }
 
-[data-site-theme="editorial"] .site-h3 {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h3 {
   font-size: var(--ed-h3);
   font-style: italic;
   font-weight: 300;
@@ -289,7 +1005,7 @@
   text-align: left;
 }
 
-[data-site-theme="editorial"] .site-intro {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-intro {
   font-size: 21px;
   font-style: italic;
   line-height: 1.5;
@@ -298,7 +1014,7 @@
   margin-right: 0;
 }
 
-[data-site-theme="editorial"] .site-body {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-body {
   font-size: 19px;
   line-height: 1.62;
   /* Avoids a one-word last line under a 19px measure. Ignored where
@@ -306,7 +1022,7 @@
   text-wrap: pretty;
 }
 
-[data-site-theme="editorial"] .site-eyebrow {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-eyebrow {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.22em;
@@ -317,7 +1033,7 @@
    the grid's breakpoint it stacks, because 84px of time column beside a
    32px event name on a 390px screen is not a compromise worth shipping.
 -------------------------------------------------------------------------- */
-[data-site-theme="editorial"] li.site-event {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) li.site-event {
   display: grid;
   grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) minmax(0, auto);
   gap: 8px 28px;
@@ -327,25 +1043,25 @@
 }
 
 @media (max-width: 640px) {
-  [data-site-theme="editorial"] li.site-event {
+  :is([data-site-theme="editorial"], [data-site-theme="evening"]) li.site-event {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
     padding: 22px 0;
   }
 }
 
-[data-site-theme="editorial"] .site-event-time {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-time {
   font-size: 12px;
   letter-spacing: 0.14em;
 }
 
-[data-site-theme="editorial"] .site-event-name {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-name {
   font-size: var(--ed-event);
   font-weight: 300;
   line-height: 1.15;
 }
 
-[data-site-theme="editorial"] .site-event-detail {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-detail {
   font-size: 18px;
   font-style: italic;
   line-height: 1.55;
@@ -354,18 +1070,18 @@
 /* `↳ 6.30PM  Bourne End station — coach to the Bell`. Accent-coloured and
    smaller than the detail above it, so it reads as an aside to the event
    rather than another line of it. */
-[data-site-theme="editorial"] .site-shuttle,
-[data-site-theme="editorial"] .site-shuttle .site-label {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-shuttle,
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-shuttle .site-label {
   font-size: 11.5px;
   color: rgb(var(--site-accent));
 }
 
-[data-site-theme="editorial"] .site-event-aside {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-aside {
   text-align: right;
 }
 
 @media (max-width: 640px) {
-  [data-site-theme="editorial"] .site-event-aside {
+  :is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-aside {
     text-align: left;
   }
 }
@@ -385,7 +1101,7 @@
 }
 
 @media (min-width: 1180px) {
-  [data-site-theme="editorial"]:not([data-site-preview="true"]) .site-rail {
+  :is([data-site-theme="editorial"], [data-site-theme="evening"]):not([data-site-preview="true"]) .site-rail {
     display: block;
   }
 }
@@ -552,7 +1268,7 @@
   }
 }
 .std[data-animate="true"] .std-rise {
-  animation: std-rise 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: std-rise 1s var(--ease-out) both;
   animation-delay: var(--std-delay, 0ms);
 }
 @media (prefers-reduced-motion: reduce) {

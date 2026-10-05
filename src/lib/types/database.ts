@@ -535,6 +535,13 @@ export type SiteAssetRow = {
   /** Null = waiting for approval. Default moderation is 'review'. */
   approved_at: string | null;
   sort_order: number;
+  /** Long-edge widths uploaded beside the original (0032). Empty = original only. */
+  variants: number[];
+  /** `#rrggbb` painted behind the image until it decodes (0032). */
+  colour: string | null;
+  /** Where the subject is, 0–1 from the top-left (0032). Both or neither. */
+  focal_x: number | null;
+  focal_y: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -1630,7 +1637,11 @@ export type Database = {
       coach_stops: Table<CoachStopRow, "id" | Timestamps | "sort_order", CoachStopRelationships>;
       coach_seats: Table<CoachSeatRow, "id" | Timestamps, CoachSeatRelationships>;
       accommodations: Table<AccommodationRow, "id" | Timestamps | "sort_order", AccommodationRelationships>;
-      site_assets: Table<SiteAssetRow, "id" | Timestamps | "kind" | "sort_order", SiteAssetRelationships>;
+      site_assets: Table<
+        SiteAssetRow,
+        "id" | Timestamps | "kind" | "sort_order" | "variants" | "colour" | "focal_x" | "focal_y",
+        SiteAssetRelationships
+      >;
       site_visits: Table<SiteVisitRow, "count">;
       site_content: Table<SiteContentRow, "id" | "updated_at" | "payload" | "sort_order" | "visible">;
       saved_views: Table<SavedViewRow, "id" | "created_at" | "filters">;

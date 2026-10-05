@@ -1,11 +1,13 @@
 import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
-import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-render";
+import { buildPreviewPersonal, buildRenderContext } from "@/server/queries/site-render";
 import { createClient } from "@/lib/supabase/server";
 import { visibleBlocks } from "@/lib/site/blocks";
-import { themeCssVars } from "@/lib/theme/presets";
+import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
+import { motionAttributes } from "@/lib/site/motion";
 import { SiteBlocks } from "@/components/site/blocks/render";
+import { PreviewBridge } from "@/components/site/preview-bridge";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Preview", robots: { index: false, follow: false } };
@@ -34,24 +36,26 @@ export default async function SitePreviewPage({
   const wedding = await requireWedding();
   const blocks = await listDraftBlocks(wedding.id);
 
+  // Who the planner is previewing as. No `?as=` means the first household on
+  // the list, because the greeting, the weekend and the reply bar exist only on
+  // a household's own page and a default preview of the shared site would show
+  // none of them. `?as=shared` is the shared site, for when that is the
+  // question.
+  const supabase = await createClient();
   let personal = null;
-  if (as) {
-    const supabase = await createClient();
-    const { data: household } = await supabase
+  if (as !== "shared") {
+    let query = supabase
       .from("households")
-      .select("id, display_name")
+      .select("id, display_name, slug, slug_suffix")
       .eq("wedding_id", wedding.id)
-      .eq("id", as)
-      .maybeSingle();
+      .is("deleted_at", null);
+    query = as ? query.eq("id", as) : query.order("display_name").limit(1);
+    const { data: household } = await query.maybeSingle();
 
-    if (household) {
-      // No token: the preview shows the shape of their page, and the RSVP
-      // form needs a credential this screen deliberately does not hold.
-      personal = await buildPersonalContext(wedding.id, household, null, null);
-    }
+    if (household) personal = await buildPreviewPersonal(wedding.id, household);
   }
 
-  const ctx = await buildRenderContext(
+  const built = await buildRenderContext(
     {
       id: wedding.id,
       name: wedding.name,
@@ -61,13 +65,17 @@ export default async function SitePreviewPage({
     },
     personal,
   );
+  // The one place `preview` is true: an empty photo block says so here and
+  // draws nothing on a guest's page.
+  const ctx = { ...built, preview: true };
 
   const shown = visibleBlocks(blocks, personal !== null);
 
   return (
     <div
       style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
-      data-site-theme={ctx.theme.preset}
+      {...themeAttributes(ctx.theme)}
+      {...motionAttributes(ctx.theme.motion)}
       // The section rail is `position: fixed`, which inside this frame would
       // pin it to the editor window rather than to the page it belongs to.
       // The builder's iframe is the only place that is true, so the flag is
@@ -75,6 +83,7 @@ export default async function SitePreviewPage({
       data-site-preview="true"
       className={`${siteFontClasses(ctx.theme.preset)} -m-4 min-h-screen bg-paper font-body text-ink antialiased sm:-m-6`}
     >
+      <PreviewBridge />
       {shown.length === 0 ? (
         <p className="p-10 text-center text-sm text-muted">
           Nothing on the page yet. Add a block and it appears here.

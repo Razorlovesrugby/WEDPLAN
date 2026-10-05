@@ -16,7 +16,23 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 export const SITE_ASSET_PREFIX = "site";
 
-export type SiteImageVariant = "display" | "thumb";
+/**
+ * The widths, on the long edge, uploaded beside the original (spec 27 D1).
+ *
+ * Fixed rather than free, and matched by a check constraint in `0032`, so a
+ * `srcset` can only ever name a file somebody deliberately made. 480 serves a
+ * phone's half-width tile, 960 a full-width band on a phone at 2x; the original
+ * (2000) serves a laptop.
+ */
+export const SITE_IMAGE_WIDTHS = [480, 960] as const;
+export type SiteImageWidth = (typeof SITE_IMAGE_WIDTHS)[number];
+
+export function isSiteImageWidth(value: unknown): value is SiteImageWidth {
+  return (SITE_IMAGE_WIDTHS as readonly unknown[]).includes(value);
+}
+
+/** `"display"` is the original upload; a number is a narrower copy of it. */
+export type SiteImageVariant = "display" | SiteImageWidth;
 
 export function siteAssetPath(
   weddingId: string,
@@ -30,7 +46,7 @@ export function siteAssetPath(
       throw new Error("siteAssetPath needs uuids, and was given something else");
     }
   }
-  const suffix = variant === "thumb" ? "_thumb" : "";
+  const suffix = variant === "display" ? "" : `_${variant}`;
   // Always WebP: everything is re-encoded on the way in, so the extension is
   // a fact rather than a guess about what was uploaded.
   return `${SITE_ASSET_PREFIX}/${weddingId}/${assetId}${suffix}.webp`;
@@ -45,3 +61,14 @@ export const ACCEPTED_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "
 export function isAcceptedUploadType(value: string): boolean {
   return (ACCEPTED_UPLOAD_TYPES as readonly string[]).includes(value.toLowerCase());
 }
+
+/**
+ * How long a signed URL for a site photograph lives (spec 27 D3).
+ *
+ * Twenty-four hours, where moodboards keep their hour. The page no longer
+ * carries these directly — it carries `/api/photo/<id>`, which signs on demand
+ * — so this is how long the *redirect target* is good for, and it is what a
+ * direct use (the builder's picker, the stays list) still depends on. A guest
+ * who reopens a tab after dinner now gets their photographs.
+ */
+export const SITE_SIGNED_URL_TTL_SECONDS = 24 * 60 * 60;

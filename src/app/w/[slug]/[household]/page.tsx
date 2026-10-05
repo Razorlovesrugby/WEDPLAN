@@ -8,15 +8,16 @@ import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-
 import { resolveHouseholdAddress } from "@/server/rsvp/address";
 import { resolveCardByAddress } from "@/server/rsvp/card";
 import { resolveInvitation } from "@/server/rsvp/resolve";
-import { householdPath } from "@/lib/site/household-slug";
+import { formatAddress, householdPath } from "@/lib/site/household-slug";
 import { blockNavItems, visibleBlocks } from "@/lib/site/blocks";
 import { listNames } from "@/lib/invites";
-import { themeCssVars } from "@/lib/theme/presets";
+import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
 import { formatDate } from "@/lib/format";
 import { SiteNav } from "@/components/site/site-nav";
 import { Monogram } from "@/components/site/monogram";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { SectionRail } from "@/components/site/section-rail";
+import { motionAttributes } from "@/lib/site/motion";
 import { ReplyBanner } from "@/components/site/reply-banner";
 import { ViewLogger } from "@/components/site/view-logger";
 
@@ -122,7 +123,13 @@ export default async function HouseholdSitePage({
   const invitation = token ? await resolveInvitation(token) : null;
   const rsvp = invitation?.ok ? invitation.context : null;
 
-  const personal = await buildPersonalContext(wedding.id, household, token, rsvp);
+  const personal = await buildPersonalContext(
+    wedding.id,
+    household,
+    token,
+    rsvp,
+    formatAddress(resolved.address),
+  );
   const [blocks, ctx] = await Promise.all([
     loadPublishedBlocks(wedding.id),
     buildRenderContext(wedding, personal),
@@ -138,7 +145,10 @@ export default async function HouseholdSitePage({
       // separates one theme from another — type scale, alignment, the
       // itinerary grid — without a `preset === "editorial"` branch in a dozen
       // render functions. Adding a fourth preset stays a stylesheet.
-      data-site-theme={ctx.theme.preset}
+      {...themeAttributes(ctx.theme)}
+      // How much it moves (spec 27): the level and the effects it switches on,
+      // which `globals.css` reads. Nothing in React looks at them.
+      {...motionAttributes(ctx.theme.motion)}
       className={`site-print ${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       {/* Counted from the browser, and never when the planner is previewing
@@ -165,7 +175,7 @@ export default async function HouseholdSitePage({
         />
       ) : null}
 
-      <SectionRail blocks={shown} />
+      {ctx.theme.layout.chapterRail ? <SectionRail blocks={shown} /> : null}
 
       <SiteBlocks blocks={shown} ctx={ctx} />
 

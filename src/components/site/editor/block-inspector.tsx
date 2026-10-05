@@ -4,11 +4,8 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   BLOCKS,
-  BLOCK_ALIGNS,
   BLOCK_AUDIENCES,
   BLOCK_BACKGROUNDS,
-  BLOCK_WIDTHS,
-  IMAGE_SHAPES,
   type BlockStyle,
   type SiteBlock,
 } from "@/lib/site/blocks";
@@ -19,8 +16,18 @@ import {
   setBlockAudience,
   setBlockStyle,
 } from "@/server/actions/site-blocks";
+import {
+  BACKGROUND_LABEL,
+  SHAPE_LABEL,
+  STYLE_CHOICES,
+  STYLE_TITLE,
+  repeatHeading,
+} from "@/lib/site/style-labels";
 import { FieldInput } from "./field";
 import { PhotoPicker, type PhotoOption } from "./photo-picker";
+import { saveStatusLabel, useAutosave } from "./use-autosave";
+import { LookGlyph } from "./look-glyph";
+import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/looks";
 
 /**
  * One block's form (spec 23 §5).
@@ -41,24 +48,20 @@ const AUDIENCE_LABEL: Record<(typeof BLOCK_AUDIENCES)[number], string> = {
   public_only: "Only the shared site",
 };
 
-const STYLE_OPTIONS: Record<string, readonly string[]> = {
-  width: BLOCK_WIDTHS,
-  align: BLOCK_ALIGNS,
-  shape: IMAGE_SHAPES,
+/** Swatches for the choices that are questions about how something looks. */
+const BACKGROUND_SWATCH: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
+  paper: "#ffffff",
+  tinted: "#efe9df",
+  ink: "#2b2723",
+  photograph: "linear-gradient(135deg,#9db4c0 0%,#c9b99a 55%,#6f7d5c 100%)",
 };
 
-/**
- * The four grounds a block can take.
- *
- * Buttons rather than a `<select>`, unlike the other style controls: this is
- * the one choice that changes what the block looks like from across the room,
- * and it is the one somebody tries all four of.
- */
-const BACKGROUND_LABEL: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
-  paper: "Plain",
-  tinted: "Tinted",
-  ink: "Ink",
-  photograph: "Photograph",
+/** Width, height of a miniature of each photo shape, in px. */
+const SHAPE_BOX: Record<keyof typeof SHAPE_LABEL, [number, number]> = {
+  natural: [26, 20],
+  square: [22, 22],
+  portrait: [18, 24],
+  wide: [30, 17],
 };
 
 export function BlockInspector({
@@ -66,11 +69,14 @@ export function BlockInspector({
   form,
   photos,
   onDone,
+  heroDefault,
 }: {
   block: SiteBlock;
   form: BlockForm;
   photos: PhotoOption[];
   onDone: () => void;
+  /** The theme's own hero style, which a hero with no Look of its own follows. */
+  heroDefault: string;
 }) {
   const def = BLOCKS[block.type];
   const payload = (block.payload ?? {}) as Record<string, unknown>;
@@ -83,29 +89,31 @@ export function BlockInspector({
     ? (values[form.repeat!.key] as Record<string, unknown>[])
     : [];
 
+  // One rule about saving: everything autosaves (spec 24 §6). There is no Save
+  // button, and the status line below is how the planner knows that.
+  const { status, flush } = useAutosave(values, async (next) => {
+    const result = await saveBlock(block.id, next);
+    if (!result.ok) {
+      setErrors(result.fieldErrors ?? {});
+      return { ok: false as const, error: result.error };
+    }
+    setErrors({});
+    onDone();
+    return { ok: true as const };
+  });
+
   function set(name: string, value: unknown) {
     setValues((was) => ({ ...was, [name]: value }));
-  }
-
-  function save() {
-    startTransition(async () => {
-      const result = await saveBlock(block.id, values);
-      if (!result.ok) {
-        setErrors(result.fieldErrors ?? {});
-        setMessage(result.error);
-        return;
-      }
-      setErrors({});
-      setMessage("Saved to your draft");
-      onDone();
-    });
   }
 
   function style(next: Partial<BlockStyle>) {
     startTransition(async () => {
       const result = await setBlockStyle(block.id, { ...block.style, ...next });
       if (!result.ok) setMessage(result.error);
-      else onDone();
+      else {
+        setMessage(null);
+        onDone();
+      }
     });
   }
 
@@ -130,6 +138,7 @@ export function BlockInspector({
           value={typeof values["image_id"] === "string" ? (values["image_id"] as string) : null}
           photos={photos}
           kind={block.type === "hero" ? "hero" : "gallery"}
+          onFocalSaved={onDone}
           onChange={(assetId) => {
             const next = { ...values, image_id: assetId ?? undefined };
             setValues(next);
@@ -144,7 +153,9 @@ export function BlockInspector({
       ) : null}
 
       {form.fields.length > 0 ? (
-        <div className="space-y-3">
+        // `onBlur` bubbles from the inputs, so leaving any field writes now
+        // rather than waiting out the debounce.
+        <div className="space-y-3" onBlur={flush}>
           {form.fields.map((field) => (
             <FieldInput
               key={field.name}
@@ -159,8 +170,10 @@ export function BlockInspector({
       ) : null}
 
       {form.repeat ? (
-        <div className="space-y-3">
-          <h3 className="text-xs uppercase tracking-wide text-muted">{form.repeat.key}</h3>
+        <div className="space-y-3" onBlur={flush}>
+          <h3 className="text-xs uppercase tracking-wide text-muted">
+            {repeatHeading(form.repeat.noun)}
+          </h3>
           {repeatRows.map((row, index) => (
             <div key={index} className="space-y-2 border-l-2 border-line pl-3">
               {form.repeat!.fields.map((field) => (
@@ -224,32 +237,90 @@ export function BlockInspector({
         </div>
       ) : null}
 
+      {/* ---- layout (spec 27 E1) ----
+          A Look is a curated alternate layout, chosen from a small set; none of
+          them can produce an unreadable page, which is the whole point of
+          offering a choice rather than a stylesheet. */}
+      {looksFor(block.type).length > 0 ? (
+        <div className="space-y-2 border-t border-line pt-3">
+          <h3 className="text-xs uppercase tracking-wide text-muted">Layout</h3>
+          <div className="grid grid-cols-2 gap-1.5">
+            {looksFor(block.type).map((look) => {
+              const current = resolveLook(block.type, block.style.variant, heroDefault);
+              const selected = current === look.id;
+              return (
+                <button
+                  key={look.id}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={selected}
+                  title={look.description}
+                  onClick={() => style({ variant: look.id })}
+                  className={`flex flex-col items-start gap-1 rounded border p-2 text-left ${
+                    selected ? "border-accent bg-[#f6f3ee]" : "border-line hover:border-ink"
+                  }`}
+                >
+                  <LookGlyph type={block.type} look={look.id} />
+                  <span className="text-xs font-medium">{look.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted">
+            {looksFor(block.type).find(
+              (look) => look.id === resolveLook(block.type, block.style.variant, heroDefault),
+            )?.description}
+            {block.type === "hero" && block.style.variant === undefined
+              ? " Following your theme."
+              : null}
+          </p>
+          {block.type === "hero" && block.style.variant !== undefined ? (
+            <button
+              type="button"
+              className="text-xs underline"
+              disabled={pending}
+              onClick={() => style({ variant: undefined })}
+            >
+              Follow the theme instead
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* ---- style ---- */}
       {def.styles.length > 0 ? (
         <div className="space-y-2 border-t border-line pt-3">
           <h3 className="text-xs uppercase tracking-wide text-muted">How it looks</h3>
           {def.styles.includes("background") ? (
             <div className="space-y-2">
-              <div className="flex flex-wrap gap-1">
-                {BLOCK_BACKGROUNDS.map((option) => {
-                  const current = block.style.background ?? "paper";
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={pending}
-                      aria-pressed={current === option}
-                      onClick={() => style({ background: option })}
-                      className={`rounded border px-2.5 py-1 text-xs ${
-                        current === option
-                          ? "border-accent bg-[#f6f3ee] font-medium"
-                          : "border-line hover:border-ink"
-                      }`}
-                    >
-                      {BACKGROUND_LABEL[option]}
-                    </button>
-                  );
-                })}
+              <div>
+                <span className="mb-1 block text-xs text-muted">Background</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {BLOCK_BACKGROUNDS.map((option) => {
+                    const current = block.style.background ?? "paper";
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        disabled={pending}
+                        aria-pressed={current === option}
+                        onClick={() => style({ background: option })}
+                        className={`flex flex-col items-center gap-1 rounded border p-1.5 text-xs ${
+                          current === option
+                            ? "border-accent bg-[#f6f3ee] font-medium"
+                            : "border-line hover:border-ink"
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="block h-6 w-10 rounded-sm border border-line"
+                          style={{ background: BACKGROUND_SWATCH[option] }}
+                        />
+                        {BACKGROUND_LABEL[option]}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {block.style.background === "photograph" ? (
@@ -273,27 +344,70 @@ export function BlockInspector({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-3">
-            {def.styles
-              .filter((key) => key !== "embed" && key !== "background" && key !== "bgImage")
-              .map((key) => (
-                <label key={key} className="text-sm">
-                  <span className="mr-1 capitalize text-muted">{key}</span>
-                  <select
-                    className="field inline-block w-auto"
-                    value={String((block.style as Record<string, unknown>)[key] ?? "")}
-                    onChange={(event) => style({ [key]: event.target.value } as Partial<BlockStyle>)}
-                  >
-                    <option value="">Default</option>
-                    {(STYLE_OPTIONS[key] ?? []).map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-          </div>
+          {(["width", "align", "shape"] as const)
+            .filter((key) => def.styles.includes(key))
+            .map((key) => {
+              const current = (block.style as Record<string, unknown>)[key] as string | undefined;
+              return (
+                <div key={key}>
+                  <span className="mb-1 block text-xs text-muted">{STYLE_TITLE[key]}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STYLE_CHOICES[key].map((choice) => {
+                      const selected = current === choice.value;
+                      return (
+                        <button
+                          key={choice.value}
+                          type="button"
+                          disabled={pending}
+                          aria-pressed={selected}
+                          onClick={() => style({ [key]: choice.value } as Partial<BlockStyle>)}
+                          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs ${
+                            selected
+                              ? "border-accent bg-[#f6f3ee] font-medium"
+                              : "border-line hover:border-ink"
+                          }`}
+                        >
+                          {key === "shape" ? (
+                            <span
+                              aria-hidden="true"
+                              className="block rounded-[1px] border border-current opacity-70"
+                              style={{
+                                width: SHAPE_BOX[choice.value as keyof typeof SHAPE_BOX][0] / 2,
+                                height: SHAPE_BOX[choice.value as keyof typeof SHAPE_BOX][1] / 2,
+                              }}
+                            />
+                          ) : null}
+                          {choice.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+          {def.styles.includes("lightbox") ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending}
+                // Absent means yes (`BlockStyle.lightbox`), so the box is
+                // checked for every block that never chose.
+                checked={block.style.lightbox !== false}
+                onChange={(event) =>
+                  // Only the off state is stored; switching it back on removes
+                  // the key rather than writing `true`.
+                  style({ lightbox: event.target.checked ? undefined : false })
+                }
+              />
+              <span>
+                Let guests tap a photo to enlarge it
+                <span className="block text-xs text-muted">
+                  Swipe or use the arrow keys to move between photographs.
+                </span>
+              </span>
+            </label>
+          ) : null}
 
           {def.styles.includes("embed") ? (
             <div>
@@ -315,6 +429,35 @@ export function BlockInspector({
               </p>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* ---- how it arrives (spec 27 E4) ----
+          Not a motion editor: no timing, no easing, no keyframes. "This photo
+          should be still" and "this one should make an entrance" are the two
+          things anybody actually wants, and one choice covers both. */}
+      {block.type !== "footer" ? (
+        <div className="space-y-1 border-t border-line pt-3">
+          <h3 className="text-xs uppercase tracking-wide text-muted">How it arrives</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {([undefined, ...ENTRANCES] as const).map((entrance) => {
+              const selected = block.style.enter === entrance;
+              return (
+                <button
+                  key={entrance ?? "page"}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={selected}
+                  onClick={() => style({ enter: entrance })}
+                  className={`rounded border px-2.5 py-1 text-xs ${
+                    selected ? "border-accent bg-[#f6f3ee] font-medium" : "border-line hover:border-ink"
+                  }`}
+                >
+                  {entrance ? ENTRANCE_LABEL[entrance] : "Match the page"}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
@@ -340,12 +483,17 @@ export function BlockInspector({
         </select>
       </div>
 
-      <div className="flex items-center gap-3 border-t border-line pt-3">
-        <button type="button" className="btn-primary" disabled={pending} onClick={save}>
-          Save
-        </button>
-        {message ? <span className="text-sm text-muted">{message}</span> : null}
-      </div>
+      {/* Where the Save button was. A calm line rather than a control: the only
+          way a planner can tell autosave is working is to be told. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className={`border-t border-line pt-3 text-xs ${
+          status.state === "error" ? "text-[#a33a3a]" : "text-muted"
+        }`}
+      >
+        {message ?? saveStatusLabel(status) ?? "Changes save as you type"}
+      </p>
     </div>
   );
 }

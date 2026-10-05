@@ -12,7 +12,10 @@ import {
   PALETTES,
   PALETTE_IDS,
   THEME_PRESETS,
+  isDarkTokens,
+  isEditorialFamily,
   resolveTheme,
+  themeAttributes,
   themeCssVars,
   themeTokens,
 } from "./presets";
@@ -160,7 +163,29 @@ describe("resolveTheme", () => {
       heroStyle: "type",
       monogram: false,
       typography: "garamond_inter",
+      // A theme saved before spec 27 has neither, and reads as Gentle with the
+      // rail and section numbers on — what the page already did.
+      motion: { level: "gentle", off: [], on: [] },
+      layout: { chapterRail: true, sectionNumbers: true, replyBar: true, replyByDate: true },
     });
+  });
+
+  it("reads the motion level, its overrides and the layout switches", () => {
+    const theme = resolveTheme({
+      motion: { level: "cinematic", off: ["reading_line"], on: [] },
+      layout: { chapter_rail: false },
+    });
+    expect(theme.motion).toEqual({ level: "cinematic", off: ["reading_line"], on: [] });
+    expect(theme.layout).toEqual({
+      chapterRail: false,
+      sectionNumbers: true,
+      replyBar: true,
+      replyByDate: true,
+    });
+  });
+
+  it("survives a motion value it does not understand", () => {
+    expect(resolveTheme({ motion: "loud", layout: 4 }).motion.level).toBe("gentle");
   });
 
   it("falls back to the default pairing for a typography it does not know", () => {
@@ -254,5 +279,61 @@ describe("themeCssVars", () => {
     });
     expect(vars["--site-accent"]).toBeUndefined();
     expect(vars["--site-ink"]).toBeDefined();
+  });
+});
+
+describe("isDarkTokens", () => {
+  it("is true for exactly the two dark palettes", () => {
+    const dark = PALETTE_IDS.filter((id) => isDarkTokens(PALETTES[id].tokens));
+    expect(dark.sort()).toEqual(["ember", "midnight"]);
+  });
+
+  it("reads the ground, not the text — a light-on-dark custom palette is dark", () => {
+    expect(
+      isDarkTokens({ ink: "#ffffff", paper: "#000000", muted: "#cccccc", line: "#333333", accent: "#ffcc00" }),
+    ).toBe(true);
+    expect(
+      isDarkTokens({ ink: "#000000", paper: "#ffffff", muted: "#333333", line: "#cccccc", accent: "#aa5500" }),
+    ).toBe(false);
+  });
+
+  it("treats an unparseable paper as light rather than throwing", () => {
+    expect(
+      isDarkTokens({ ...PALETTES.ivory.tokens, paper: "not-a-colour" }),
+    ).toBe(false);
+  });
+});
+
+describe("isEditorialFamily", () => {
+  it("is Editorial and Evening, and nothing else", () => {
+    expect(isEditorialFamily("editorial")).toBe(true);
+    expect(isEditorialFamily("evening")).toBe(true);
+    expect(isEditorialFamily("script")).toBe(false);
+    expect(isEditorialFamily("")).toBe(false);
+  });
+});
+
+describe("themeAttributes", () => {
+  it("carries the preset and a light tone for a light palette", () => {
+    expect(themeAttributes({ ...DEFAULT_THEME, preset: "editorial", palette: "sage" })).toEqual({
+      "data-site-theme": "editorial",
+      "data-site-tone": "light",
+    });
+  });
+
+  it("derives the tone from the palette, not the preset", () => {
+    // Midnight on Script is a legitimate choice, and its forms still have to
+    // flip — which is why the tone is its own attribute.
+    expect(themeAttributes({ ...DEFAULT_THEME, preset: "script", palette: "midnight" })).toEqual({
+      "data-site-theme": "script",
+      "data-site-tone": "dark",
+    });
+  });
+
+  it("follows a custom palette's ground", () => {
+    const customTokens = { ink: "#f0f0f0", paper: "#101010", muted: "#bbbbbb", line: "#2a2a2a", accent: "#ff9900" };
+    expect(
+      themeAttributes({ ...DEFAULT_THEME, preset: "evening", palette: "custom", customTokens })["data-site-tone"],
+    ).toBe("dark");
   });
 });

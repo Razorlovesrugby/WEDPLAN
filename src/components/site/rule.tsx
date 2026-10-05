@@ -8,7 +8,7 @@
 export function FloralRule({ className }: { className?: string }) {
   return (
     <svg
-      className={`mx-auto h-3 w-40 text-line ${className ?? ""}`}
+      className={`site-rule mx-auto h-3 w-40 text-line ${className ?? ""}`}
       viewBox="0 0 160 12"
       fill="none"
       stroke="currentColor"

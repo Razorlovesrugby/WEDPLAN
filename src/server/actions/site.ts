@@ -14,6 +14,7 @@ import {
   type ThemePresetId,
 } from "@/lib/theme/presets";
 import { THEME_BLOCK_KEY } from "@/lib/site/sections";
+import { MOTION_EFFECTS, MOTION_LEVELS, resolveMotion, serialiseMotion } from "@/lib/site/motion";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -169,6 +170,25 @@ const themeSchema = z.object({
   // the pairing picker — an old form post, a test — still saves a valid theme
   // instead of failing validation on a field it has never heard of.
   typography: z.enum(TYPOGRAPHY_IDS).default("fraunces_garamond"),
+  // Spec 27. Optional, and an absent value means "leave what is stored":
+  // `saveTheme` writes the whole payload in one go, so a caller that predates
+  // these (the old /site/theme form, a test) must not be able to reset a
+  // planner's motion level just by saving a palette.
+  motion: z
+    .object({
+      level: z.enum(MOTION_LEVELS),
+      off: z.array(z.enum(MOTION_EFFECTS)).max(20).default([]),
+      on: z.array(z.enum(MOTION_EFFECTS)).max(20).default([]),
+    })
+    .optional(),
+  layout: z
+    .object({
+      chapter_rail: z.boolean().optional(),
+      section_numbers: z.boolean().optional(),
+      reply_bar: z.boolean().optional(),
+      reply_by_date: z.boolean().optional(),
+    })
+    .optional(),
   custom_ink: z.string().trim().optional(),
   custom_paper: z.string().trim().optional(),
   custom_muted: z.string().trim().optional(),
@@ -223,6 +243,18 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
   }
 
   const supabase = await createClient();
+
+  // Carry forward what this caller did not mention (see `themeSchema`).
+  const { data: stored } = await supabase
+    .from("site_content")
+    .select("payload")
+    .eq("wedding_id", wedding.id)
+    .eq("block_key", THEME_BLOCK_KEY)
+    .maybeSingle();
+  const previous = (stored?.payload ?? {}) as Record<string, unknown>;
+  const motion = data.motion ? serialiseMotion(resolveMotion(data.motion)) : previous["motion"];
+  const layout = data.layout ?? previous["layout"];
+
   const { error } = await supabase.from("site_content").upsert(
     {
       wedding_id: wedding.id,
@@ -234,6 +266,8 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
         monogram: data.monogram,
         typography: data.typography,
         custom_tokens: customTokens,
+        motion,
+        layout,
       }) as never,
       sort_order: -1, // Config, not a section. Never rendered in the list.
     },

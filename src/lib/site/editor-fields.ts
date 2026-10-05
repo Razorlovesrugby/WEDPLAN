@@ -16,7 +16,7 @@
  * the payload array; its `fields` are the columns of one row.
  */
 
-export type FieldKind = "text" | "textarea" | "checkbox" | "select" | "email";
+export type FieldKind = "text" | "textarea" | "checkbox" | "select" | "email" | "heading";
 
 export type Field = {
   name: string;
@@ -26,6 +26,12 @@ export type Field = {
   placeholder?: string;
   options?: Array<{ value: string; label: string }>;
   rows?: number;
+  /**
+   * For a checkbox: what an absent value means. A switch that is ON by default
+   * (every cover line — spec 27 E9) must render checked for a block saved before
+   * it existed, or the form would claim the line is off while the page shows it.
+   */
+  defaultChecked?: boolean;
 };
 
 export type Repeat = {

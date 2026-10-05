@@ -1,4 +1,12 @@
-import { toRgbChannels, type PaletteTokens } from "./contrast";
+import { contrastRatio, toRgbChannels, type PaletteTokens } from "./contrast";
+import {
+  DEFAULT_LAYOUT,
+  DEFAULT_MOTION,
+  resolveLayout,
+  resolveMotion,
+  type MotionSettings,
+  type SiteLayout,
+} from "@/lib/site/motion";
 
 /**
  * The theme system for the public site (spec 14 §5, extended by spec 25 Part C).
@@ -17,7 +25,7 @@ import { toRgbChannels, type PaletteTokens } from "./contrast";
  * component themes for free when the CSS variables change under it.
  */
 
-export const THEME_PRESET_IDS = ["script", "editorial", "deckle", "sans"] as const;
+export const THEME_PRESET_IDS = ["script", "editorial", "evening", "deckle", "sans"] as const;
 export type ThemePresetId = (typeof THEME_PRESET_IDS)[number];
 
 export const HERO_STYLES = ["type", "framed", "full"] as const;
@@ -53,6 +61,18 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
     available: true,
     defaultHero: "full",
   },
+  evening: {
+    id: "evening",
+    label: "Evening",
+    // Built on Editorial's composition, not beside it: the same left-aligned
+    // names, numbered chapters and three-column itinerary, in italic display
+    // type with a gold accent. Its dark ground comes from the palette (Midnight
+    // or Ember), which choosing the theme in the builder sets for you.
+    description:
+      "Candlelit. Editorial's composition on a dark ground, in italic display type with a warm gold accent — for a wedding that happens after dark.",
+    available: true,
+    defaultHero: "full",
+  },
   deckle: {
     id: "deckle",
     label: "Deckle",
@@ -69,7 +89,7 @@ export const THEME_PRESETS: Record<ThemePresetId, ThemePreset> = {
   },
 };
 
-export const PALETTE_IDS = ["ivory", "sage", "dusk", "claret", "slate", "ink"] as const;
+export const PALETTE_IDS = ["ivory", "sage", "dusk", "claret", "slate", "ink", "midnight", "ember"] as const;
 export type PaletteId = (typeof PALETTE_IDS)[number];
 
 export type Palette = { id: PaletteId; label: string; tokens: PaletteTokens };
@@ -112,7 +132,37 @@ export const PALETTES: Record<PaletteId, Palette> = {
     label: "Ink",
     tokens: { ink: "#1a1a1a", paper: "#fbfaf8", muted: "#5f5a55", line: "#e6e2dc", accent: "#6f5233" },
   },
+  // The two dark palettes (spec 27 E3, Evening). `ink` is the *light* colour here
+  // and `paper` the dark one — the roles are text-on-ground, not light-on-dark —
+  // so every component that reads the tokens inverts for free, and
+  // `validatePalette` checks the same four pairs it checks for the light ones.
+  midnight: {
+    id: "midnight",
+    label: "Midnight",
+    tokens: { ink: "#efe8da", paper: "#12141a", muted: "#a9a396", line: "#2c303c", accent: "#cfae6e" },
+  },
+  ember: {
+    id: "ember",
+    label: "Ember",
+    tokens: { ink: "#f2e6dc", paper: "#1a1412", muted: "#b09f92", line: "#362a26", accent: "#d9915a" },
+  },
 };
+
+/** Whether a palette sits on a dark ground — paper nearer to black than to white. */
+export function isDarkTokens(tokens: PaletteTokens): boolean {
+  const toBlack = contrastRatio(tokens.paper, "#000000");
+  const toWhite = contrastRatio(tokens.paper, "#ffffff");
+  return toBlack !== null && toWhite !== null && toBlack < toWhite;
+}
+
+/**
+ * Editorial and Evening share one composition — left-aligned names, numbered
+ * chapters, the three-column itinerary — and differ in type treatment and ground.
+ * Every place that used to ask "is this Editorial?" asks this.
+ */
+export function isEditorialFamily(preset: string): boolean {
+  return preset === "editorial" || preset === "evening";
+}
 
 /**
  * The type pairings a planner can choose (spec 25 Part C, extended).
@@ -162,6 +212,13 @@ export type SiteTheme = {
   monogram: boolean;
   /** Editorial only — Script's two faces are the theme. */
   typography: TypographyId;
+  /**
+   * How much the guest page moves (spec 27). A level and a short list of
+   * overrides; absent in a theme saved before it existed, which reads as Gentle.
+   */
+  motion: MotionSettings;
+  /** The chapter rail and section numbers — switches, not theme (spec 27 E9). */
+  layout: SiteLayout;
 };
 
 /**
@@ -182,6 +239,8 @@ export const DEFAULT_THEME: SiteTheme = {
   heroStyle: "full",
   monogram: false,
   typography: "fraunces_garamond",
+  motion: DEFAULT_MOTION,
+  layout: DEFAULT_LAYOUT,
 };
 
 /** What Script looked like when it was the default — used by its own tests. */
@@ -192,6 +251,8 @@ export const SCRIPT_THEME: SiteTheme = {
   heroStyle: "framed",
   monogram: true,
   typography: "fraunces_garamond",
+  motion: DEFAULT_MOTION,
+  layout: DEFAULT_LAYOUT,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -243,6 +304,8 @@ export function resolveTheme(payload: unknown): SiteTheme {
     heroStyle: pick(payload["hero_style"], HERO_STYLES, THEME_PRESETS[preset].defaultHero),
     monogram: typeof payload["monogram"] === "boolean" ? payload["monogram"] : DEFAULT_THEME.monogram,
     typography: pick(payload["typography"], TYPOGRAPHY_IDS, DEFAULT_THEME.typography),
+    motion: resolveMotion(payload["motion"]),
+    layout: resolveLayout(payload["layout"]),
   };
 }
 
@@ -251,6 +314,25 @@ export function themeTokens(theme: SiteTheme): PaletteTokens {
   if (theme.palette === "custom" && theme.customTokens) return theme.customTokens;
   const palette = theme.palette === "custom" ? null : PALETTES[theme.palette];
   return (palette ?? PALETTES[DEFAULT_THEME.palette as PaletteId]).tokens;
+}
+
+/**
+ * The two attributes the page root carries about the theme itself.
+ *
+ * `data-site-theme` is the preset (a rule set per preset in `globals.css`).
+ * `data-site-tone` is `dark` or `light`, **from the palette and not the preset**:
+ * Midnight is a palette a Script wedding can choose, and what has to adapt —
+ * forms that were written white, a print stylesheet, `color-scheme` — depends on
+ * the ground, not on which layout is on it.
+ */
+export function themeAttributes(theme: SiteTheme): {
+  "data-site-theme": ThemePresetId;
+  "data-site-tone": "dark" | "light";
+} {
+  return {
+    "data-site-theme": theme.preset,
+    "data-site-tone": isDarkTokens(themeTokens(theme)) ? "dark" : "light",
+  };
 }
 
 /**
