@@ -22,7 +22,8 @@ describe("the switch registry", () => {
 
   it("registers no switch for a motion effect that does not exist", () => {
     const known = new Set<string>(MOTION_EFFECTS);
-    for (const entry of SWITCHES.filter((candidate) => candidate.group === "motion")) {
+    // Page-level effects only: `block.enter` is a per-block choice, not an effect.
+    for (const entry of SWITCHES.filter((candidate) => candidate.id.startsWith("motion."))) {
       expect(known.has(entry.id.replace("motion.", "")), entry.id).toBe(true);
     }
   });
