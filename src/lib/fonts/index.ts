@@ -1,3 +1,4 @@
+import { isEditorialFamily } from "@/lib/theme/presets";
 import localFont from "next/font/local";
 
 /**
@@ -101,7 +102,7 @@ export const label = localFont({
  */
 export function siteFontClasses(preset: string): string {
   const base = `${script.variable} ${body.variable}`;
-  return preset === "editorial" ? `${base} ${display.variable} ${label.variable}` : base;
+  return isEditorialFamily(preset) ? `${base} ${display.variable} ${label.variable}` : base;
 }
 
 /**
@@ -126,7 +127,7 @@ export function typographyCssVars(
   preset: string,
   pairing: string,
 ): Record<string, string> {
-  if (preset !== "editorial") return {};
+  if (!isEditorialFamily(preset)) return {};
 
   if (pairing === "garamond_inter") {
     return {

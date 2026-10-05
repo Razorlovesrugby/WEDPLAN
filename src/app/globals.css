@@ -411,7 +411,7 @@
 /* Editorial's section eyebrow does the floral rule's job, and its theme never
    drew the rule. With numbers switched off the eyebrow is gone, so the rule
    would otherwise appear in a theme that has never had one. */
-[data-site-theme="editorial"] .site-rule {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-rule {
   display: none;
 }
 
@@ -755,6 +755,76 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Evening, and dark grounds in general (spec 27 E3)
+   ---------------------------------------------------------------------------
+   Two separate ideas, kept separate on purpose:
+
+   `data-site-theme="evening"` is a PRESET: Editorial's composition (every rule
+   above that names Editorial now names both) in italic display type. It adds
+   only what makes it Evening.
+
+   `data-site-tone="dark"` is a property of the PALETTE, set on the root from the
+   palette's own ground, so it is true for Midnight under Script too. It is what
+   has to adapt: the form controls that were written white for a light page, the
+   `color-scheme` (so a select's popup and a scrollbar are not light on dark), and
+   what a printer is handed. Written against tokens, never a colour.
+--------------------------------------------------------------------------- */
+[data-site-theme="evening"] .site-h2,
+[data-site-theme="evening"] .site-h1 {
+  font-style: italic;
+}
+/* The ampersand is already italic; set upright against italic names it reads as
+   the one still thing on the line. */
+[data-site-theme="evening"] .site-h1-amp {
+  font-style: normal;
+  color: rgb(var(--site-accent));
+}
+[data-site-theme="evening"] .site-eyebrow {
+  letter-spacing: 0.2em;
+}
+[data-site-theme="evening"] .site-eyebrow::before {
+  /* The small square before an eyebrow takes a faint glow: a candle, not a bullet. */
+  box-shadow: 0 0 10px rgb(var(--site-accent) / 0.6);
+}
+
+[data-site-tone="dark"] {
+  color-scheme: dark;
+}
+/* Controls written for a white page (the RSVP form, a song request, a guestbook
+   note) take the page's own ground, lifted a few percent so they still read as
+   fields. */
+[data-site-tone="dark"] .bg-white,
+[data-site-tone="dark"] .card,
+[data-site-tone="dark"] .field,
+[data-site-tone="dark"] .btn {
+  background-color: color-mix(in srgb, rgb(var(--site-ink)) 7%, rgb(var(--site-paper)));
+  color: rgb(var(--site-ink));
+}
+[data-site-tone="dark"] .btn-primary {
+  background-color: rgb(var(--site-ink));
+  border-color: transparent;
+  color: rgb(var(--site-paper));
+}
+/* "Selected" in the reply buttons is `bg-ink text-white`; with a light ink, white
+   text on it would vanish. */
+[data-site-tone="dark"] .text-white {
+  color: rgb(var(--site-paper));
+}
+
+@media print {
+  /* A dark page printed is a page of white-on-white. The tokens are inline on
+     the root, so only an important rule in the stylesheet can beat them. */
+  [data-site-tone="dark"] {
+    --site-ink: 20 20 20 !important;
+    --site-paper: 255 255 255 !important;
+    --site-muted: 90 90 90 !important;
+    --site-line: 200 200 200 !important;
+    --site-accent: 90 70 40 !important;
+    color-scheme: light;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Printing the public site (spec 14 §5)
    ---------------------------------------------------------------------------
    Somebody's parent will print the schedule. The planner shell's print rules
@@ -874,7 +944,7 @@
    both explicitly and `theme.test.ts` asserts their contrast; deriving them
    would move five checked values to a formula and quietly drop the gate.
 --------------------------------------------------------------------------- */
-[data-site-theme="editorial"] {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) {
   /* The one place the scale is written down. Every rule below reads it. */
   --ed-h1: clamp(56px, 11vw, 150px);
   --ed-h2: clamp(38px, 6vw, 82px);
@@ -882,7 +952,7 @@
   --ed-event: clamp(24px, 2.4vw, 32px);
 }
 
-[data-site-theme="editorial"] .site-h1 {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h1 {
   font-size: var(--ed-h1);
   font-weight: 300;
   line-height: 0.88;
@@ -893,7 +963,7 @@
 /* The ampersand is its own line at 0.42em, which is what stops two long names
    setting as one unreadable 150px run. It is rendered as a separate element so
    a screen reader still hears "Ray and Olivia" in one breath. */
-[data-site-theme="editorial"] .site-h1-amp {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h1-amp {
   display: block;
   font-size: 0.42em;
   font-style: italic;
@@ -901,7 +971,7 @@
   letter-spacing: 0;
 }
 
-[data-site-theme="editorial"] .site-h2 {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h2 {
   font-size: var(--ed-h2);
   font-weight: 300;
   line-height: 1;
@@ -911,7 +981,7 @@
   text-align: left;
 }
 
-[data-site-theme="editorial"] .site-h3 {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-h3 {
   font-size: var(--ed-h3);
   font-style: italic;
   font-weight: 300;
@@ -919,7 +989,7 @@
   text-align: left;
 }
 
-[data-site-theme="editorial"] .site-intro {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-intro {
   font-size: 21px;
   font-style: italic;
   line-height: 1.5;
@@ -928,7 +998,7 @@
   margin-right: 0;
 }
 
-[data-site-theme="editorial"] .site-body {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-body {
   font-size: 19px;
   line-height: 1.62;
   /* Avoids a one-word last line under a 19px measure. Ignored where
@@ -936,7 +1006,7 @@
   text-wrap: pretty;
 }
 
-[data-site-theme="editorial"] .site-eyebrow {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-eyebrow {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.22em;
@@ -947,7 +1017,7 @@
    the grid's breakpoint it stacks, because 84px of time column beside a
    32px event name on a 390px screen is not a compromise worth shipping.
 -------------------------------------------------------------------------- */
-[data-site-theme="editorial"] li.site-event {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) li.site-event {
   display: grid;
   grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) minmax(0, auto);
   gap: 8px 28px;
@@ -957,25 +1027,25 @@
 }
 
 @media (max-width: 640px) {
-  [data-site-theme="editorial"] li.site-event {
+  :is([data-site-theme="editorial"], [data-site-theme="evening"]) li.site-event {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
     padding: 22px 0;
   }
 }
 
-[data-site-theme="editorial"] .site-event-time {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-time {
   font-size: 12px;
   letter-spacing: 0.14em;
 }
 
-[data-site-theme="editorial"] .site-event-name {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-name {
   font-size: var(--ed-event);
   font-weight: 300;
   line-height: 1.15;
 }
 
-[data-site-theme="editorial"] .site-event-detail {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-detail {
   font-size: 18px;
   font-style: italic;
   line-height: 1.55;
@@ -984,18 +1054,18 @@
 /* `↳ 6.30PM  Bourne End station — coach to the Bell`. Accent-coloured and
    smaller than the detail above it, so it reads as an aside to the event
    rather than another line of it. */
-[data-site-theme="editorial"] .site-shuttle,
-[data-site-theme="editorial"] .site-shuttle .site-label {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-shuttle,
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-shuttle .site-label {
   font-size: 11.5px;
   color: rgb(var(--site-accent));
 }
 
-[data-site-theme="editorial"] .site-event-aside {
+:is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-aside {
   text-align: right;
 }
 
 @media (max-width: 640px) {
-  [data-site-theme="editorial"] .site-event-aside {
+  :is([data-site-theme="editorial"], [data-site-theme="evening"]) .site-event-aside {
     text-align: left;
   }
 }
@@ -1015,7 +1085,7 @@
 }
 
 @media (min-width: 1180px) {
-  [data-site-theme="editorial"]:not([data-site-preview="true"]) .site-rail {
+  :is([data-site-theme="editorial"], [data-site-theme="evening"]):not([data-site-preview="true"]) .site-rail {
     display: block;
   }
 }

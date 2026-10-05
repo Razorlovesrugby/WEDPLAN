@@ -5,7 +5,7 @@ import { findWeddingBySlug } from "@/server/queries/site";
 import { loadPublishedBlocks } from "@/server/queries/site-blocks";
 import { buildRenderContext } from "@/server/queries/site-render";
 import { blockNavItems, visibleBlocks } from "@/lib/site/blocks";
-import { themeCssVars } from "@/lib/theme/presets";
+import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
 import { SiteNav } from "@/components/site/site-nav";
 import { Monogram } from "@/components/site/monogram";
 import { SiteBlocks } from "@/components/site/blocks/render";
@@ -64,7 +64,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
       // separates one theme from another — type scale, alignment, the
       // itinerary grid — without a `preset === "editorial"` branch in a dozen
       // render functions. Adding a fourth preset stays a stylesheet.
-      data-site-theme={ctx.theme.preset}
+      {...themeAttributes(ctx.theme)}
       // How much it moves (spec 27): the level and the effects it switches on,
       // which `globals.css` reads. Nothing in React looks at them.
       {...motionAttributes(ctx.theme.motion)}

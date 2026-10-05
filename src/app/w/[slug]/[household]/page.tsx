@@ -11,7 +11,7 @@ import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatAddress, householdPath } from "@/lib/site/household-slug";
 import { blockNavItems, visibleBlocks } from "@/lib/site/blocks";
 import { listNames } from "@/lib/invites";
-import { themeCssVars } from "@/lib/theme/presets";
+import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
 import { formatDate } from "@/lib/format";
 import { SiteNav } from "@/components/site/site-nav";
 import { Monogram } from "@/components/site/monogram";
@@ -145,7 +145,7 @@ export default async function HouseholdSitePage({
       // separates one theme from another — type scale, alignment, the
       // itinerary grid — without a `preset === "editorial"` branch in a dozen
       // render functions. Adding a fourth preset stays a stylesheet.
-      data-site-theme={ctx.theme.preset}
+      {...themeAttributes(ctx.theme)}
       // How much it moves (spec 27): the level and the effects it switches on,
       // which `globals.css` reads. Nothing in React looks at them.
       {...motionAttributes(ctx.theme.motion)}

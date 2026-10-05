@@ -107,7 +107,7 @@ function Background({
   }
 
   return (
-    <div className="relative isolate text-paper [&_*]:text-paper">
+    <div className="relative isolate text-onphoto [&_*]:text-onphoto">
       <SiteImage
         image={image}
         alt={null}

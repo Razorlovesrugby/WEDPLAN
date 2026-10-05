@@ -15,6 +15,13 @@ export default {
         line: "rgb(var(--site-line) / <alpha-value>)",
         muted: "rgb(var(--site-muted) / <alpha-value>)",
         accent: "rgb(var(--site-accent) / <alpha-value>)",
+        // NOT themeable, on purpose. Text laid over a photograph and the scrim
+        // that makes it legible have to hold over *whatever the photograph is*,
+        // whichever way the palette runs: in a dark palette `paper` is the dark
+        // colour, so white-ish type over a photo written as `text-paper` goes
+        // dark on dark. These two are the fixed answer (spec 27, Evening).
+        onphoto: "rgb(251 248 243 / <alpha-value>)",
+        scrim: "rgb(18 22 19 / <alpha-value>)",
         tierA: "#2f6f4f",
         tierB: "#b07d2b",
         tierC: "#8a8580",

@@ -6,6 +6,7 @@ import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
 import type { ThemePresetId } from "@/lib/theme/presets";
+import { isEditorialFamily } from "@/lib/theme/presets";
 
 /**
  * The events this household is invited to, with who each one is for
@@ -59,7 +60,7 @@ export function InvitedEvents({
   /** `list`, `timeline` or `cards` — the block's Look (spec 27 E1). */
   look?: string;
 }) {
-  const editorial = preset === "editorial";
+  const editorial = isEditorialFamily(preset);
 
   const byDay = new Map<string, typeof events>();
   for (const event of events) {

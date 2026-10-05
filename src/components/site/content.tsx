@@ -5,6 +5,7 @@ import { FindInvitation } from "./find-invitation";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
 import type { ThemePresetId } from "@/lib/theme/presets";
+import { isEditorialFamily } from "@/lib/theme/presets";
 import { faqItems, groupByTag, rows, splitFaq, text } from "@/lib/site/sections";
 import { formatDate, formatTime } from "@/lib/format";
 
@@ -73,7 +74,7 @@ export function Schedule({
   /** `list`, `timeline` or `cards` — the block's Look (spec 27 E1). */
   look?: string;
 }) {
-  const editorial = preset === "editorial";
+  const editorial = isEditorialFamily(preset);
 
   const days = new Map<string, PublicEvent[]>();
   for (const event of events) {

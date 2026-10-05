@@ -4,6 +4,7 @@ import { splitHeadline } from "@/lib/site/names";
 import type { TimeLeft } from "@/lib/format";
 import { objectPosition, type SiteImageData } from "@/lib/site/site-image";
 import type { HeroStyle, ThemePresetId } from "@/lib/theme/presets";
+import { isEditorialFamily } from "@/lib/theme/presets";
 
 /**
  * The hero (spec 14 §5).
@@ -143,7 +144,7 @@ export function SiteHero({
     image ?? (legacy ? { src: legacy, srcSet: null, colour: null, focal: null, width: null, height: null } : null);
   const effective: HeroLook = picture ? style : "type";
 
-  if (preset === "editorial") {
+  if (isEditorialFamily(preset)) {
     return (
       <EditorialHero
         headline={headline}
@@ -205,12 +206,12 @@ export function SiteHero({
           {/* The scrim is what makes the text legible over an unknown photo.
               Without it the hero passes contrast against whatever the
               photographer happened to shoot, which is not a guarantee. */}
-          <div className="absolute inset-0 bg-ink/45" />
-          <div className="site-cover-dim absolute inset-0 bg-ink/30" />
+          <div className="absolute inset-0 bg-scrim/45" />
+          <div className="site-cover-dim absolute inset-0 bg-scrim/30" />
           <div className="absolute inset-0 flex items-center justify-center px-5">
-            <div className="text-paper [&_*]:text-paper">{words}</div>
+            <div className="text-onphoto [&_*]:text-onphoto">{words}</div>
           </div>
-          {cover?.scrollCue ? <ScrollCue className="text-paper" /> : null}
+          {cover?.scrollCue ? <ScrollCue className="text-onphoto" /> : null}
         </div>
       </header>
     );
@@ -417,21 +418,21 @@ function EditorialHero({
           <HeroCounter
             startsAt={weddingDate}
             initial={timeLeft}
-            className="absolute right-5 top-8 text-paper/80 sm:right-10"
+            className="absolute right-5 top-8 text-onphoto/80 sm:right-10"
           />
         ) : null}
 
         {/* Bottom-aligned. Names this size centred in the frame leave the
             photograph with no room to be a photograph. */}
         <div className="absolute inset-x-0 bottom-0 px-5 pb-14 sm:px-10 sm:pb-20">
-          <div className="site-cover-words mx-auto w-full max-w-5xl text-paper [&_*]:text-paper">
+          <div className="site-cover-words mx-auto w-full max-w-5xl text-onphoto [&_*]:text-onphoto">
             {greeting}
             {names}
             {coverLine}
             {meta}
           </div>
         </div>
-        {cover?.scrollCue ? <ScrollCue className="text-paper" /> : null}
+        {cover?.scrollCue ? <ScrollCue className="text-onphoto" /> : null}
       </div>
     </header>
   );

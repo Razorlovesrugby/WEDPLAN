@@ -4,7 +4,7 @@ import { listDraftBlocks } from "@/server/queries/site-blocks";
 import { buildPreviewPersonal, buildRenderContext } from "@/server/queries/site-render";
 import { createClient } from "@/lib/supabase/server";
 import { visibleBlocks } from "@/lib/site/blocks";
-import { themeCssVars } from "@/lib/theme/presets";
+import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
 import { motionAttributes } from "@/lib/site/motion";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { PreviewBridge } from "@/components/site/preview-bridge";
@@ -74,7 +74,7 @@ export default async function SitePreviewPage({
   return (
     <div
       style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
-      data-site-theme={ctx.theme.preset}
+      {...themeAttributes(ctx.theme)}
       {...motionAttributes(ctx.theme.motion)}
       // The section rail is `position: fixed`, which inside this frame would
       // pin it to the editor window rather than to the page it belongs to.

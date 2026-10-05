@@ -19,6 +19,7 @@ import {
 import {
   PALETTES,
   PALETTE_IDS,
+  isDarkTokens,
   THEME_PRESETS,
   THEME_PRESET_IDS,
   TYPOGRAPHY,
@@ -26,8 +27,7 @@ import {
   type PaletteId,
   type SiteTheme,
   type ThemePresetId,
-  type TypographyId,
-} from "@/lib/theme/presets";
+  type TypographyId, isEditorialFamily } from "@/lib/theme/presets";
 
 /**
  * The look half of the builder's rail (spec 24): theme, palette, typography.
@@ -109,7 +109,17 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
                 // reasoning about the palette too: "why can't I pick that" is
                 // answerable, "where did it go" is not.
                 disabled={!def.available || pending}
-                onClick={() => save({ preset: id })}
+                onClick={() =>
+                  // Evening is a dark theme: choosing it from a light palette
+                  // would be choosing a theme that does not look like itself.
+                  // Midnight is its home ground; the palette can be changed
+                  // straight after, and choosing it never overrides a dark one.
+                  save(
+                    id === "evening" && palette !== "custom" && !isDarkTokens(PALETTES[palette].tokens)
+                      ? { preset: id, palette: "midnight" }
+                      : { preset: id },
+                  )
+                }
                 className={`block w-full rounded-md border p-3 text-left ${
                   selected ? "border-accent bg-[#f6f3ee]" : "border-line hover:border-ink"
                 } ${def.available ? "" : "cursor-not-allowed opacity-45"}`}
@@ -185,7 +195,7 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
               </button>
             );
           })}
-          {preset !== "editorial" ? (
+          {!isEditorialFamily(preset) ? (
             <p className="text-xs text-muted">
               The Script theme sets its own two faces — this choice applies to Editorial.
             </p>

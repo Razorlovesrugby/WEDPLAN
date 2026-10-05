@@ -59,6 +59,10 @@ import {
 import type { SiteTheme } from "@/lib/theme/presets";
 import { BlockInspector } from "./block-inspector";
 import { LookSections, Section } from "./rail";
+import { applyVibe, restoreVibe } from "@/server/actions/site-vibes";
+import type { StyleSnapshot } from "@/server/site/vibes";
+import { PALETTES } from "@/lib/theme/presets";
+import { TEMPLATES, VIBES, getVibe, type Vibe } from "@/lib/site/vibes";
 import type { PhotoOption } from "./photo-picker";
 
 /**
@@ -103,6 +107,8 @@ type Device = keyof typeof DEVICE;
 
 /** How long a delete can be taken back. */
 const UNDO_MS = 8000;
+/** A restyle touches the whole page, so it gets longer to be reconsidered. */
+const VIBE_UNDO_MS = 12000;
 
 /** The id of the droppable laid over the preview while a new block is dragged. */
 const PREVIEW_DROP = "preview-drop";
@@ -172,6 +178,10 @@ export function SiteBuilder({
   const [removals, setRemovals] = useState<Removal[]>([]);
   const removalTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const removingIds = useMemo(() => new Set(removals.map((removal) => removal.id)), [removals]);
+
+  // ---- one-click restyles, and taking them back (spec 27 E3, E6) ----
+  const [vibeToast, setVibeToast] = useState<{ label: string; snapshot: StyleSnapshot } | null>(null);
+  const vibeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---- dragging a new block onto the page (spec 27 E5) ----
   const [dragType, setDragType] = useState<BlockType | null>(null);
@@ -406,6 +416,39 @@ export function SiteBuilder({
     run(() => reorderBlocks(next));
   }
 
+  /**
+   * Restyle the page as a Vibe. It rewrites nobody's words — only the theme and
+   * each block's Look — and what it overwrote comes back in a snapshot, which is
+   * held for the length of the toast so a click that changes the whole page can
+   * be undone with one.
+   */
+  function applyVibeNow(vibe: Vibe) {
+    startTransition(async () => {
+      const result = await applyVibe(vibe.id);
+      if (!result.ok) {
+        setMessage(result.error);
+        return;
+      }
+      setMessage(null);
+      if (vibeTimer.current) clearTimeout(vibeTimer.current);
+      setVibeToast({ label: vibe.label, snapshot: result.data.snapshot });
+      vibeTimer.current = setTimeout(() => setVibeToast(null), VIBE_UNDO_MS);
+      afterWrite();
+    });
+  }
+
+  function undoVibe() {
+    const toast = vibeToast;
+    if (!toast) return;
+    if (vibeTimer.current) clearTimeout(vibeTimer.current);
+    setVibeToast(null);
+    startTransition(async () => {
+      const result = await restoreVibe(toast.snapshot);
+      if (!result.ok) setMessage(result.error);
+      afterWrite();
+    });
+  }
+
   /** Hide it now, delete it for real once the undo window has passed. */
   function removeBlock(block: SiteBlock) {
     if (selected === block.id) setSelected(null);
@@ -470,28 +513,48 @@ export function SiteBuilder({
   // somebody with no design training to invent a page from nothing.
   if (blocks.length === 0) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 p-6">
+      <div className="mx-auto max-w-4xl space-y-4 p-6">
         <h1 className="font-serif text-2xl">Your site</h1>
         <p className="text-sm text-muted">
-          Start from one of these and change anything you like — deleting a block you do not want is
-          a much easier job than inventing a page.
+          Start from one of these and change anything you like — a page that already looks like
+          something is a much easier thing to edit than a blank one. Your names and date go in
+          for you; the words that are only here to show you how it looks are yours to replace.
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
-          {STARTER_LAYOUTS.map((layout) => (
-            <button
-              key={layout.id}
-              type="button"
-              disabled={pending}
-              onClick={() => run(() => applyStarterLayout(layout.id), `Added ${layout.label}`)}
-              className="card p-4 text-left hover:border-accent"
-            >
-              <span className="block font-medium">{layout.label}</span>
-              <span className="mt-1 block text-sm text-muted">{layout.blurb}</span>
-              <span className="mt-2 block text-xs text-muted">
-                {layout.types.length} blocks to start with
-              </span>
-            </button>
-          ))}
+          {TEMPLATES.map((template) => {
+            const vibe = getVibe(template.vibe)!;
+            const tokens = PALETTES[vibe.theme.palette].tokens;
+            return (
+              <button
+                key={template.id}
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  run(
+                    () => applyStarterLayout(template.layout, template.vibe),
+                    `Started from ${template.label}`,
+                  )
+                }
+                className="card overflow-hidden text-left hover:border-accent"
+              >
+                {/* The ground and the two colours that carry it: the first thing
+                    you see of a look is its colour, before its type. */}
+                <span
+                  className="flex h-24 items-end gap-1.5 p-3"
+                  style={{ background: tokens.paper }}
+                  aria-hidden="true"
+                >
+                  <span className="block h-1.5 w-10 rounded-full" style={{ background: tokens.accent }} />
+                  <span className="block h-1.5 w-6 rounded-full" style={{ background: tokens.ink, opacity: 0.8 }} />
+                </span>
+                <span className="block p-4">
+                  <span className="block font-medium">{template.label}</span>
+                  <span className="mt-1 block text-sm text-muted">{template.blurb}</span>
+                  <span className="mt-2 block text-xs text-muted">{vibe.label} look</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
         {message ? <p className="text-sm text-muted">{message}</p> : null}
       </div>
@@ -622,7 +685,45 @@ export function SiteBuilder({
             </p>
           </Section>
 
-          <LookSections theme={theme} onSaved={afterWrite} />
+          <Section
+            title="Vibes"
+            blurb="One click restyles the whole page — the theme, colours, type, movement and each block's layout. None of your words change, and you can undo it."
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {VIBES.map((vibe) => {
+                const tokens = PALETTES[vibe.theme.palette].tokens;
+                const current =
+                  theme.preset === vibe.theme.preset && theme.palette === vibe.theme.palette;
+                return (
+                  <button
+                    key={vibe.id}
+                    type="button"
+                    disabled={pending}
+                    aria-pressed={current}
+                    title={vibe.blurb}
+                    onClick={() => applyVibeNow(vibe)}
+                    className={`overflow-hidden rounded-md border text-left ${
+                      current ? "border-accent" : "border-line hover:border-ink"
+                    }`}
+                  >
+                    <span
+                      className="flex h-10 items-end gap-1 p-1.5"
+                      style={{ background: tokens.paper }}
+                      aria-hidden="true"
+                    >
+                      <span className="block h-1 w-5 rounded-full" style={{ background: tokens.accent }} />
+                      <span className="block h-1 w-3 rounded-full" style={{ background: tokens.ink, opacity: 0.8 }} />
+                    </span>
+                    <span className="block px-2 py-1.5 text-xs font-medium">{vibe.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
+          {/* Remounted when the theme changes on the server, so a Vibe's choices
+              are what the controls below show rather than a stale local echo. */}
+          <LookSections key={JSON.stringify(theme)} theme={theme} onSaved={afterWrite} />
 
           <Section
             title="Chapters"
@@ -801,6 +902,19 @@ export function SiteBuilder({
         ) : null}
       </DragOverlay>
       </DndContext>
+
+      {vibeToast ? (
+        <div
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-4 rounded bg-[#2b2724] px-4 py-2.5 text-sm text-white shadow-lg"
+          role="status"
+          aria-live="polite"
+        >
+          <span>Restyled as {vibeToast.label}</span>
+          <button type="button" className="font-medium underline underline-offset-2" onClick={undoVibe}>
+            Undo
+          </button>
+        </div>
+      ) : null}
 
       {/* A delete is only a hide until this goes away (spec 24 §8). */}
       {removals.length > 0 ? (

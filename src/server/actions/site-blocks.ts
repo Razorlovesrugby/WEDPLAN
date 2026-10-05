@@ -13,6 +13,8 @@ import {
   typesAtLimit,
 } from "@/lib/site/blocks";
 import { isLook } from "@/lib/site/looks";
+import { getVibe } from "@/lib/site/vibes";
+import { applyVibeToDraft } from "@/server/site/vibes";
 import { blocksNeedingWork, starterPayload } from "@/lib/site/starter";
 import { FAQ_LIBRARY } from "@/lib/site/faq-library";
 import { fail, ok, type ActionResult } from "./result";
@@ -305,10 +307,15 @@ export async function reorderBlocks(orderedIds: string[]): Promise<ActionResult>
  * there is anything to lose — "apply a layout" must never be a synonym for
  * "delete my site".
  */
-export async function applyStarterLayout(layoutId: string): Promise<ActionResult<{ added: number }>> {
+export async function applyStarterLayout(
+  layoutId: string,
+  vibeId?: string,
+): Promise<ActionResult<{ added: number }>> {
   const wedding = await requireWedding();
   const layout = STARTER_LAYOUTS.find((entry) => entry.id === layoutId);
   if (!layout) return fail("That isn't one of the layouts");
+  const vibe = vibeId ? getVibe(vibeId) : undefined;
+  if (vibeId && !vibe) return fail("That isn't one of the vibes");
 
   const existing = await listDraftBlocks(wedding.id);
   if (existing.length > 0) {
@@ -316,18 +323,38 @@ export async function applyStarterLayout(layoutId: string): Promise<ActionResult
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("site_blocks").insert(
-    layout.types.map((type, index) => ({
-      wedding_id: wedding.id,
-      type,
-      payload: starterPayload(type) as never,
-      style: {},
-      sort_order: index * 10,
-      audience: BLOCKS[type].defaultAudience ?? "everyone",
-    })),
-  );
+  const { data: inserted, error } = await supabase
+    .from("site_blocks")
+    .insert(
+      layout.types.map((type, index) => ({
+        wedding_id: wedding.id,
+        type,
+        payload: starterPayload(type) as never,
+        style: {},
+        sort_order: index * 10,
+        audience: BLOCKS[type].defaultAudience ?? "everyone",
+      })),
+    )
+    .select("id, type, style");
 
   if (error) return fail(error.message);
+
+  // A template is a layout *and* a Vibe: the theme and the Looks, on the blocks
+  // that have just been added (spec 27 E3).
+  if (vibe) {
+    const applied = await applyVibeToDraft(
+      supabase,
+      wedding.id,
+      vibe,
+      (inserted ?? []).flatMap((row) =>
+        isBlockType(row.type)
+          ? [{ id: row.id, type: row.type, style: (row.style ?? {}) as never }]
+          : [],
+      ),
+    );
+    if (!applied.ok) return fail(applied.error);
+  }
+
   revalidateSite();
   return ok({ added: layout.types.length });
 }
