@@ -1,9 +1,9 @@
 # Spec 27 — The invitation as an experience, and an editor you can play with
 
-**Status: proposed, not built.** Nothing in this document is authorization to
-write code. Per [`docs/specs/README.md`](README.md) and `CLAUDE.md`, nothing
-beyond this file is built until the §12 open questions have answers **and**
-you say to build it, in words that mean "write code".
+**Status: proposed and answered (2026-10-05), not built.** All eleven §12
+questions have answers (below). Answers are not authorization to write code:
+per [`docs/specs/README.md`](README.md) and `CLAUDE.md`, nothing beyond this
+file is built until you say to build it, in words that mean "write code".
 
 **Depends on:** spec 23 (blocks, `site_revisions`, the one renderer), spec 24
 (the builder's editing feel — partly built, five questions still open; §11
@@ -16,6 +16,53 @@ repo has to the standard this spec is aiming at.
 scrolling through their invitation, and what the planner can *do* to shape it
 without writing CSS. Not in scope: how invitations are sent and chased
 (`/invitations`, WhatsApp, email) — see §13.
+
+---
+
+## Answered — 2026-10-05
+
+Eleven questions, answered in one round. Seven took the recommendation; **one
+(Q3) overruled it, and it changes the document.** §7, §11, §12, §14 and §15
+below are updated to match; where an older sentence in them contradicts this
+section, this section wins.
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Opening | **The cover.** A section of the page addressed to the household, not an overlay and not an envelope |
+| 2 | Motion default | **Gentle**, with three levels: Still / Gentle / Cinematic |
+| 3 | The couple's note to each household | **Out — against the recommendation.** No `couple_note` column and no note field in Guests. **`0032` is therefore not the household note**; see "What Q3 changes" |
+| 4 | Looks | **Five blocks × three Looks:** Hero, The weekend, Our story, Gallery, RSVP |
+| 5 | A third theme preset | **Yes, one:** a dark "Evening" |
+| 6 | Click-to-edit in the preview | **In**, as the centrepiece of the editor work |
+| 7 | Photos already uploaded | **New uploads only.** Existing photos keep working at one size |
+| 8 | Expiring photo URLs | **The `/api/photo/<id>` redirect route, with the TTL raised to 24h as a stopgap** |
+| 9 | The writing helper | **Out** of this spec |
+| 10 | Spec 24 | **Folded in as step 0** — see below for exactly what that means |
+| 11 | Save-the-date | **Share tokens only** (easing, motion level). It keeps its own `std-*` layout system |
+
+**What Q3 changes.** "Personal" (§1, §7) now rests on three things instead of
+four: the household's **names, large, on the cover**; **their weekend** as a
+card with one calendar file; and **a reply that remembers what they said**.
+The one item cut was the only one a *person* writes, so the personal layer is
+now entirely derived from data already in the app — which is cheaper and has
+no privacy surface, and also means two households' pages differ only by names
+and events. That is a real loss against the word "personal" and the decision
+is cheap to reverse: it is one nullable column and one field, and §7 keeps the
+privacy reasoning (above all, **never reuse `households.notes`**, the
+planner's private text) so it can be added later without re-deriving it.
+
+**What Q10 means, precisely.** Spec 24's §4–§7 become step 0 of the build
+here. Its own questions were answered as follows. Where spec 24 stated a
+proposal I took it; **where it did not, the answer below is my reading and is
+marked "to confirm"** — you did not answer these individually.
+
+| Spec 24 question | Taken as | |
+| --- | --- | --- |
+| 1 Preview: channel, anchors or both | Both (its stated proposal). The channel is also what click-to-edit (E2) needs, so it is not extra work | |
+| 2 Starter content | Sample prose, **with publish refusing any block still carrying untouched starter text** (the third option it describes) | **To confirm** — spec 24 listed options without a recommendation |
+| 3 Reordering on a phone | Yes, move up / move down buttons beside the drag handle | **To confirm** — reopens spec 23 Q7 |
+| 4 "Preview as a household" picker | Yes (it is E7 here) | |
+| 5 The style labels | As proposed ("Plain / Tinted / Dark", "As taken / Square / Tall / Wide") | **To confirm** — they are copy |
 
 ---
 
@@ -244,13 +291,11 @@ scroll. Nothing runs when the tab is hidden. Total added CSS is budgeted in §11
 
 1. **Their names, large, first** (§5). `listNames` already exists and spec 22
    already guarantees an event is shown only to the people it is *for*.
-2. **A note from the couple, to them.** "Nana — we've saved you the seat by
-   the window." One short text per household, written on the household's page
-   in Guests, rendered in the cover or just beneath it, in the couple's voice
-   (the display face, italic). **This needs a migration** (`0032`, one nullable
-   column) and is therefore the one schema change in the spec — see below and
-   §12 question 3. It is the single most *personal* thing on this list and the
-   cheapest to build.
+2. ~~**A note from the couple, to them.**~~ **Cut by Q3 (2026-10-05).** The
+   idea — "Nana — we've saved you the seat by the window", one short text per
+   household, rendered under the cover in the couple's voice — is kept below
+   as a worked-out design so it can be added without starting over, but it is
+   **not part of this build.**
 3. **Your weekend, in one card.** Their events, with times, as a card they can
    screenshot — and **one `.ics` with all of their events**, not just the date.
    `buildAllDayIcs` and the `/api/public/save-the-date/<slug>` route are the
@@ -270,7 +315,8 @@ scroll. Nothing runs when the tab is hidden. Total added CSS is budgeted in §11
      calendar file. This is the moment of delight the page is for, and it is
      an ordinary DOM change plus one transition, not a confetti cannon.
 
-**What must not happen.** The household note and the greeting render only when
+**What must not happen.** The greeting (and, if it is ever added, a household
+note) render only when
 `ctx.personal` is set. They never render in the shared site, in Open Graph
 metadata, in the print stylesheet's *shared* output, or in `generateMetadata`'s
 description — the household link's preview already names only the couple and
@@ -278,7 +324,8 @@ the date (`page.tsx:44-51`), and that discipline is the privacy model. The note
 is guest-facing text the planner writes, so it needs a length limit and the
 same plain-text rendering every other free text on this site gets (no HTML).
 
-**The migration, so it is reviewable now.** One column on `households`:
+**The migration, kept for later — not to be built under this spec.** One
+column on `households`:
 `couple_note text` with a length check. **`households.notes` already exists and
 is the planner's private scratch text; the guest-facing note must be a separate
 column, and must never be derived from `notes`**, because a private note
@@ -459,12 +506,12 @@ and not an omission; recommended **out** of this spec (§12 question 9).
 ## 11. What it costs, and the budgets it is held to
 
 **Data model**
-- `households.couple_note` — one nullable text column, `0032`. The only
-  migration. Everything else lives where it already lives.
-- `site_assets`: `focal_x`, `focal_y` (numeric, nullable), `colour` (text,
-  nullable), and the variant widths convention. **A second small migration
-  (`0033`)** if D2/D4 are in. Both are on a table that already carries
-  `wedding_id` and RLS.
+- **One migration, `0032`:** `site_assets` gains `focal_x`, `focal_y`
+  (numeric, nullable), `colour` (text, nullable), and the variant-widths
+  convention (D1, D2, D4). The table already carries `wedding_id` and RLS.
+  The household note that would have been `0032` is cut (Q3); the numbering
+  here assumes nothing else lands first.
+- No other schema. Everything else lives where it already lives.
 - `site_blocks.style` gains `variant` and `enter`. **`styleSchema` is
   `.strict()`** (`actions/site-blocks.ts:44-55`): a key it does not list is
   rejected, so *the build must add the keys to the schema and to `BlockStyle`
@@ -509,21 +556,9 @@ once, and so a later session reading this file meets them before editing):
 
 ## 12. Open questions
 
-Nothing is built until these have answers.
-
-| # | Question | Proposal | Why it is yours |
-| --- | --- | --- | --- |
-| 1 | **Opening: cover (§5), `<dialog>` envelope, or neither?** | Cover. Revisit the envelope after you have scrolled the cover | It is the single most visible taste call, and the lock-in-no-JS cost of the envelope is real but not obvious |
-| 2 | **Default motion level, and are three levels right?** | Gentle by default; Still / Gentle / Cinematic | It is *your* guests' device mix and your sense of "fun" vs "calm" |
-| 3 | **The household note: yes, and authored where?** | Yes. A field on the household page in Guests (beside the address panel) | A new column and a new thing a planner must write 80 times — or leave blank, and the page should look finished either way |
-| 4 | **Which blocks get Looks first, and how many?** | Hero, The weekend, Our story, Gallery, RSVP — three each | Fifteen designs is a lot; you may want five Looks on two blocks instead |
-| 5 | **A third theme preset (a dark "Evening")?** | Yes, one | It is a new face on every guest's phone |
-| 6 | **Click-to-edit in the preview (E2): in?** | Yes — it is the centrepiece | It needs the return channel spec 24 deferred as "several times the work of everything else"; I think it is the item that most changes how the builder feels, but it is the riskiest to ship |
-| 7 | **Photos: new uploads only, or backfill existing ones?** | New uploads get variants; existing photos re-encode only on re-upload | A backfill needs a server-side image library this repo does not have |
-| 8 | **Expiring photo URLs: 24h TTL, or the redirect route?** | The route, with the TTL raised as a stopgap | The route is more work; the TTL alone is an afternoon |
-| 9 | **The writing helper (E8): in or out?** | Out of this spec | Third party, API key, cost, and a privacy line to hold |
-| 10 | **Spec 24 (the builder's editing feel): fold it in?** | Yes — treat its §4–§7 as step 0 here and answer its five questions in the same reply | It overlaps heavily (autosave, preview scroll, starter content, labels, phone), and building two specs' worth of editor separately would mean touching `builder.tsx` twice |
-| 11 | **Does the save-the-date adopt the same motion and arrival?** | Share the *tokens* (easing, motion level) only; keep its own `std-*` layout system | It already has its own animation and a deliberate container-query design; unifying the layout would be a rewrite of something that works |
+**All eleven answered 2026-10-05 — see "Answered" at the top of this file.**
+The three spec 24 answers marked "to confirm" there are the only things still
+open, and none of them blocks steps 1–3.
 
 ## 13. Related, and not in this spec
 
@@ -562,9 +597,9 @@ The pure parts are most of what this adds, and all are unit-testable:
 - **`srcset` and `sizes` builders; the focal-point clamp** (0–1, NaN, absent).
 - **The motion level resolver:** `still` emits no animation class at all;
   unknown values fall back to `gentle`.
-- **SQL** (`supabase/tests/`): the `couple_note` column is unreadable and
-  unwritable from the second account; a household with no note renders no note;
-  `site_assets` focal/colour constraints.
+- **SQL** (`supabase/tests/`): `site_assets` focal/colour constraints
+  (0–1 range, nullable), and that the second account can neither read nor
+  write the first's values.
 
 **Then, for the first time in this feature's life, look at it.** `npm run
 typecheck`, `npm test`, `./scripts/verify-migrations.sh`, `npm run build` — and
@@ -588,22 +623,24 @@ are the version of this spec that delivers most of the feeling for the least
 risk. If the whole thing is too much, **stop after step 4**.
 
 0. **Prerequisites.** Merge the hero fix. Spec 24 §4–§7 (preview keeps its
-   place, starter content, autosave, labels) per question 10.
+   place, starter content, autosave, labels), per Q10 and the table above.
 1. **Foundations.** Easing tokens, `data-motion`, the motion level on the
    theme, the `@supports` pattern for every animation, reduced forms. Chapter
    arrivals (three kinds), the reading hairline, hover/press. No schema.
 2. **Photographs.** D1 (variants, new uploads), D2 (placeholder, reserved
-   ratio), D3 (the URL fix), D5 (lightbox). `0033` if D2 is in. *This is the
+   ratio), D3 (the URL route, with the 24h stopgap first), D5 (lightbox).
+   `0032`. *This is the
    step a guest on a phone notices most and it is the least glamorous.*
 3. **The arrival.** The cover (§5), the cover hand-over, the nav condensing,
    focal point (D4).
-4. **Personal.** Greeting, household note (`0032`), the weekend card and its
-   `.ics`, the sticky reply bar and the confirmation.
+4. **Personal.** Greeting, the weekend card and its `.ics`, the sticky reply
+   bar and the confirmation. (The household note is cut — Q3.)
    — *the cut line —*
 5. **Looks** (E1) for the first blocks, and the itinerary draw (§6).
 6. **The editor:** click-to-edit and the return channel (E2), drop-to-add (E5),
    undo (E6), preview-as-household and the phone toggle (E7).
-7. **Templates and Vibes** (E3), per-block entrance (E4), a third preset.
+7. **Templates and Vibes** (E3), per-block entrance (E4), the dark "Evening"
+   preset (Q5).
 
 ## 16. Done when
 
