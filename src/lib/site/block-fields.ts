@@ -50,6 +50,13 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     fields: [
       { name: "headline", label: "Headline", kind: "text", help: "Defaults to the wedding's name." },
       { name: "date_label", label: "Date", kind: "text", placeholder: "Saturday 12 June 2027" },
+      {
+        name: "show_initials",
+        label: "Show your initials above the names",
+        kind: "checkbox",
+        defaultChecked: false,
+        help: "The small monogram. Off by default; the bar at the top has its own.",
+      },
       { name: "show_date", label: "Show the date", kind: "checkbox", defaultChecked: true },
       { name: "location", label: "Place", kind: "text", placeholder: "The Swan, Wells" },
       { name: "show_location", label: "Show the place", kind: "checkbox", defaultChecked: true },
@@ -83,7 +90,7 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
         name: "cover_heading",
         label: "On a guest's own page",
         kind: "heading",
-        help: "Only people with their own link see these. The shared site is never addressed to anyone.",
+        help: "These address the household by name.",
       },
       {
         name: "show_greeting",
@@ -121,7 +128,7 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
         label: "Make the first screen a full-height cover",
         kind: "checkbox",
         defaultChecked: true,
-        help: "Off keeps the hero at the height the shared site has.",
+        help: "Off keeps the hero at its ordinary height.",
       },
       ALT,
     ],
@@ -136,6 +143,8 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     repeat: {
       key: "milestones",
       noun: "milestone",
+      // "2019 · We met" — the date alone says nothing about which moment it is.
+      summary: ["date", "title"],
       fields: [
         { name: "date", label: "When", kind: "text", placeholder: "August 2019" },
         { name: "title", label: "What", kind: "text", placeholder: "We met" },
@@ -146,7 +155,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   prose: {
     blurb: "A heading and some paragraphs, for anything with no block of its own.",
     fields: [
-      { name: "heading", label: "Heading", kind: "text", placeholder: "A note about the kids" },
       { name: "body", label: "Words", kind: "textarea", rows: 8 },
     ],
   },
@@ -172,15 +180,12 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   },
   rsvp: {
     blurb:
-      "The form, on a guest's own page. On the shared site it becomes 'find my invitation' instead.",
-    fields: [
-      INTRO,
-      { name: "closes_label", label: "Closing line", kind: "text", placeholder: "Please reply by 30 April" },
-    ],
+      "The reply form. Each household sees its own people, events and questions.",
+    fields: [INTRO],
   },
   faq: {
     blurb:
-      "The most-read part of any wedding site. Six show open, the rest are grouped and collapsed.",
+      "The most-read part of any wedding site. Every question shows, open, in the order you set.",
     fields: [INTRO],
     repeat: {
       key: "items",
@@ -188,7 +193,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
       fields: [
         { name: "q", label: "Question", kind: "text", placeholder: "Can I bring a plus one?" },
         { name: "a", label: "Answer", kind: "textarea", rows: 3 },
-        { name: "featured", label: "Show open", kind: "checkbox" },
       ],
     },
   },
@@ -255,7 +259,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     blurb: "A photograph beside a paragraph.",
     image: "side",
     fields: [
-      { name: "heading", label: "Heading", kind: "text" },
       { name: "body", label: "Words", kind: "textarea", rows: 6 },
       ALT,
       {
@@ -272,7 +275,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   map: {
     blurb: "One venue, how to get there, and a button that opens the reader's own maps app.",
     fields: [
-      { name: "heading", label: "Heading", kind: "text", placeholder: "The church" },
       { name: "name", label: "Place", kind: "text", placeholder: "St Mary's Church" },
       { name: "address", label: "Address", kind: "text", placeholder: "Church Lane, Bath" },
       { name: "note", label: "Note", kind: "textarea", rows: 3, help: "Parking, the gate that sticks, where to wait." },
@@ -302,11 +304,26 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   song_requests: {
     blurb: "Guests suggest songs; you get a list to hand the DJ.",
     managedElsewhere: "/site/songs",
-    fields: [INTRO],
+    fields: [
+      INTRO,
+      {
+        name: "placeholder_song",
+        label: "Placeholder song",
+        kind: "text",
+        placeholder: "Anything but Wonderwall",
+        help: "The grey hint in an empty song box. Leave it empty and guests see the one above.",
+      },
+      {
+        name: "placeholder_artist",
+        label: "Placeholder artist",
+        kind: "text",
+        help: "Optional. The hint in the artist box; empty by default.",
+      },
+    ],
   },
   guestbook: {
     blurb:
-      "A line from everyone. A note left from a guest's own link appears straight away; one from the shared address waits for you.",
+      "A line from everyone. Notes appear on the page straight away; you can hide one from Guestbook.",
     managedElsewhere: "/site/guestbook",
     fields: [
       INTRO,
@@ -322,7 +339,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   playlist: {
     blurb: "A link to your playlist — or the player itself, if you switch the embed on.",
     fields: [
-      { name: "heading", label: "Heading", kind: "text", placeholder: "The playlist" },
       { name: "url", label: "Link", kind: "text", placeholder: "https://open.spotify.com/playlist/…" },
       { name: "label", label: "Button", kind: "text", placeholder: "Have a listen" },
       { name: "note", label: "Note", kind: "textarea", rows: 2 },

@@ -1,21 +1,12 @@
-import { redirect, notFound } from "next/navigation";
-import { firstWeddingSlug } from "@/server/queries/site";
+import { notFound } from "next/navigation";
 
 /**
- * The bare `/w`, kept alive as a redirect (spec 14 §11).
- *
- * V1 served the site here and resolved "the first wedding by created_at",
- * which this spec replaced with a slug. The path itself cannot simply go: it
- * is linked from `/privacy`, it is what `revalidatePath("/w")` targets, and it
- * is whatever guests have already bookmarked or been sent.
- *
- * So it resolves the same wedding V1 would have and redirects to its address.
- * New links carry the slug.
+ * The bare `/w` used to redirect to the first wedding's shared page. That page
+ * is gone (spec 28 §7a.4), and a redirect would only lead to its 404 while
+ * confirming which wedding is first.
  */
 export const dynamic = "force-dynamic";
 
-export default async function PublicSiteRedirect() {
-  const slug = await firstWeddingSlug();
-  if (!slug) notFound();
-  redirect(`/w/${slug}`);
+export default function NoSiteIndex() {
+  notFound();
 }

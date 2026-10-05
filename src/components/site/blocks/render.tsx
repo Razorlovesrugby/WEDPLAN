@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlock } from "@/lib/site/blocks";
+import {
+  blockAnchor,
+  blockHeading,
+  customHeading,
+  sectionNumbers,
+  type BlockStyle,
+  type SectionMark,
+  type SiteBlock,
+} from "@/lib/site/blocks";
 import { flag, text } from "@/lib/site/sections";
 import { DEFAULT_COVER_LINE } from "@/lib/site/cover";
 import { resolveEntrance, resolveLook } from "@/lib/site/looks";
@@ -21,7 +29,7 @@ import { SiteSection } from "../section";
 import { Countdown } from "../countdown";
 import { Monogram } from "../monogram";
 import { FloralRule } from "../rule";
-import { Faq, Party, Prose, RsvpPointer, Schedule, Story, ThingsToDo } from "../content";
+import { Faq, Party, Prose, Schedule, Story, ThingsToDo } from "../content";
 import { InvitedEvents } from "../invited-events";
 import { WeekendCalendar } from "../weekend-calendar";
 import { OnTheDay } from "../on-the-day";
@@ -39,6 +47,8 @@ import { Attire } from "../attire";
 import { Arrivals } from "../arrivals";
 import { runsByEvent } from "../event-inline";
 import { visibleDressCodes } from "@/lib/site/dress-codes";
+import { previewWeekendPath } from "@/lib/site/weekend";
+import { songPlaceholders } from "@/lib/site/song-placeholder";
 import {
   DressCode,
   MapBlock,
@@ -123,14 +133,12 @@ function Background({
 /** A full-bleed block gets no section shell at all — that is what full means. */
 function Shell({
   block,
-  heading,
   intro,
   mark,
   bgImage = null,
   children,
 }: {
   block: SiteBlock;
-  heading?: string | null;
   intro?: string | null;
   /** `04 · ATTIRE` (spec 25 §8). Absent on a block that is not a destination. */
   mark?: SectionMark;
@@ -139,7 +147,12 @@ function Shell({
   children: React.ReactNode;
 }) {
   const style = block.style ?? {};
-  const label = heading ?? BLOCKS[block.type].heading ?? BLOCKS[block.type].label;
+  // The planner's title, else the block's own default, else nothing — and never
+  // the block's *name*: a photo band has no heading, and falling back to its
+  // label printed the words "Photo band" above the photograph. "No title" is
+  // the same empty answer (spec 28 §7.2).
+  const label = blockHeading(block);
+  const anchor = blockAnchor(block);
 
   if (style.width === "full") {
     return (
@@ -155,7 +168,7 @@ function Shell({
   if (label === "") {
     return (
       <Background style={style} image={bgImage}>
-        <section id={block.type} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
+        <section id={anchor} className="site-reveal scroll-mt-16 px-5 py-12 sm:py-16">
           <div className={`mx-auto ${WIDTH_CLASS[style.width ?? "contained"]}`}>{children}</div>
         </section>
       </Background>
@@ -165,7 +178,7 @@ function Shell({
   return (
     <Background style={style} image={bgImage}>
       <SiteSection
-        id={block.type}
+        id={anchor}
         heading={label}
         intro={intro ?? undefined}
         eyebrow={mark ? `${mark.number} · ${mark.label}` : undefined}
@@ -252,7 +265,10 @@ export function SiteBlockView({
             image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             imagePath={text(payload, "image_path")}
             imageAlt={text(payload, "image_alt")}
-            monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
+            // Its own switch on the cover, off unless chosen (spec 28 §5.1) —
+            // no longer the theme's flag, which lives on a screen the rail does
+            // not link to. The footer's initials still follow the theme.
+            monogramName={flag(payload, "show_initials") ? ctx.wedding.name : null}
             // The days-to-go in the corner is its own switch, apart from the
             // large countdown below: one is a detail, the other a feature.
             weddingDate={on("show_counter") ? ctx.wedding.wedding_date : null}
@@ -311,7 +327,7 @@ export function SiteBlockView({
       const body = text(payload, "body");
       if (!body) return null;
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgImage={bgImage}>
           <Prose body={body} />
         </Shell>
       );
@@ -365,7 +381,7 @@ export function SiteBlockView({
       // public, for a reader we do not know.
       return personal ? (
         personal.events.length === 0 ? null : (
-          <Shell block={block} bgImage={bgImage} heading="You're invited to" intro={intro} mark={mark}>
+          <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
             <InvitedEvents
               events={personal.events}
               members={personal.members}
@@ -385,6 +401,7 @@ export function SiteBlockView({
                 weddingName={ctx.wedding.name}
                 weddingSlug={ctx.wedding.slug}
                 addressSegment={personal.addressSegment}
+                icsHref={ctx.preview ? previewWeekendPath(personal.householdId) : undefined}
               />
             ) : null}
           </Shell>
@@ -416,24 +433,27 @@ export function SiteBlockView({
     }
 
     case "rsvp":
-      if (!personal) {
-        return (
-          <Shell block={block} bgImage={bgImage} heading="RSVP" mark={mark}>
-            <RsvpPointer payload={payload} />
-          </Shell>
-        );
-      }
+      // Nobody replies without their own link, and every page is somebody's
+      // (spec 28 §7a.4) — so a reader with no household has nothing to reply to.
+      if (!personal) return null;
       return (
         <Shell
           block={block}
+          bgImage={bgImage}
+          // The reply section is numbered like every other chapter. It is
+          // counted by `sectionNumbers`, and leaving it out of the markup left
+          // a hole in the sequence — 05, then 07 (spec 28 §9).
+          mark={mark}
           intro={
             personal.rsvp && !personal.rsvp.locked && personal.rsvp.wedding.rsvp_lock_at
               ? `Please reply by ${formatDate(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)}. You can change your answers until then.`
               : intro
           }
         >
-          {personal.rsvp && personal.token ? (
+          {personal.rsvp ? (
             <RsvpForm
+              // Null only in the editor's preview, where the form works and
+              // sends nothing (spec 28 §4.3).
               token={personal.token}
               guests={personal.rsvp.guests}
               events={personal.rsvp.events}
@@ -447,6 +467,7 @@ export function SiteBlockView({
                 weddingName: ctx.wedding.name,
                 weddingSlug: ctx.wedding.slug,
                 addressSegment: personal.addressSegment,
+                icsHref: ctx.preview ? previewWeekendPath(personal.householdId) : undefined,
               }}
               look={resolveLook("rsvp", block.style?.variant)}
               replyBy={
@@ -517,7 +538,7 @@ export function SiteBlockView({
             <GalleryGrid images={images} zoom={zoom} look={resolveLook("gallery", block.style?.variant)} />
             {/* Uploading is a thing only a household can do — the open
                 internet must not be able to post into the gallery. */}
-            {personal && personal.token && ctx.uploadsOpen ? (
+            {personal && (personal.token || ctx.preview) && ctx.uploadsOpen ? (
               <GuestUploader
                 token={personal.token}
                 mine={personal.uploads}
@@ -568,7 +589,7 @@ export function SiteBlockView({
 
     case "photo_text":
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? ""}>
+        <Shell block={block} bgImage={bgImage}>
           <PhotoText
             image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             showPlaceholder={ctx.preview}
@@ -584,7 +605,7 @@ export function SiteBlockView({
     // -- travel -------------------------------------------------------------
     case "map":
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? "Where"} intro={intro}>
+        <Shell block={block} bgImage={bgImage} intro={intro}>
           <MapBlock
             payload={payload}
             embed={block.style?.embed === true}
@@ -628,7 +649,7 @@ export function SiteBlockView({
       if (ctx.travel.runs.length === 0) return null;
       return (
         <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
-          {personal && personal.token ? (
+          {personal && (personal.token || ctx.preview) ? (
             <CoachBooking
               token={personal.token}
               runs={ctx.travel.runs}
@@ -643,14 +664,19 @@ export function SiteBlockView({
     }
 
     case "gift_funds": {
-      // No funds means nothing to say. The heading over an empty list reads
-      // as "we wanted presents and could not think of any".
-      if (ctx.extras.giftFunds.length === 0) return null;
+      // Neither funds nor details means nothing to say. A heading over an empty
+      // list reads as "we wanted presents and could not think of any".
+      if (ctx.extras.giftFunds.length === 0 && !ctx.extras.giftBank) return null;
       const background = block.style?.background;
       return (
         <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <GiftFunds
             funds={ctx.extras.giftFunds}
+            bank={ctx.extras.giftBank}
+            // Whose reference to print on the transfer. Every page is
+            // somebody's now (spec 28 §7a.4); the fallback is only for a
+            // context built with no household at all.
+            householdName={personal?.householdName ?? ""}
             dark={background === "ink" || (background === "photograph" && bgImage !== null)}
           />
         </Shell>
@@ -665,6 +691,8 @@ export function SiteBlockView({
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             intro={intro ?? "Tell us what will get you dancing."}
+            placeholders={songPlaceholders(payload)}
+            preview={ctx.preview}
           />
           {/* Spec 25 §11 — approved requests, rendered back, because a form
               nobody sees the result of is a suggestion box. */}
@@ -672,6 +700,7 @@ export function SiteBlockView({
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             songs={ctx.extras.songs}
+            preview={ctx.preview}
           />
         </Shell>
       );
@@ -684,13 +713,14 @@ export function SiteBlockView({
             token={personal?.token ?? null}
             prompt={text(payload, "prompt")}
             notes={ctx.extras.notes}
+            preview={ctx.preview}
           />
         </Shell>
       );
 
     case "playlist":
       return (
-        <Shell block={block} bgImage={bgImage} heading={text(payload, "heading") ?? "The playlist"} mark={mark}>
+        <Shell block={block} bgImage={bgImage} mark={mark}>
           <Playlist
             payload={payload}
             embed={block.style?.embed === true}
@@ -720,13 +750,15 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
   const hasReplySection = blocks.some((block) => block.type === "rsvp");
   let bar: { text: string; action: string } | null = null;
   if (personal && ctx.theme.layout.replyBar && hasReplySection) {
-    if (personal.rsvp && personal.token) {
+    if (personal.rsvp && (personal.token || ctx.preview)) {
       if (!personal.rsvp.locked) {
         bar = replyBarCopy(
           summariseReply(replyMembersFromContext(personal.rsvp)),
           ctx.theme.layout.replyByDate
             ? replyByLabel(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)
             : null,
+          // The reply section's own title, if the planner gave it one.
+          customHeading(blocks.find((block) => block.type === "rsvp")!),
         );
       }
     } else if (ctx.preview) {

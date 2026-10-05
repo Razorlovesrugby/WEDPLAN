@@ -1,14 +1,16 @@
 import "server-only";
+import { rankSongs } from "@/lib/site/song-rank";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveDressCodes, type ResolvedDressCode } from "@/lib/site/dress-codes";
-import { toPublicFund, type PublicFund } from "@/lib/site/gift-funds";
+import { toPublicBank, toPublicFund, type PublicBank, type PublicFund } from "@/lib/site/gift-funds";
 import type { ArrivalPoint } from "@/lib/site/travel";
 import type {
   ArrivalPointRow,
   DressCodeNoteRow,
   DressCodeRow,
+  GiftBankDetailsRow,
   GiftFundRow,
   GuestNoteRow,
   SongRequestRow,
@@ -36,6 +38,8 @@ export type PublicSong = {
   votes: number;
   /** True when the household reading the page has already voted for it. */
   votedByViewer: boolean;
+  /** True when the household reading the page is the one that asked for it. */
+  askedByViewer: boolean;
 };
 
 export type PublicNote = {
@@ -51,6 +55,8 @@ export type SiteExtras = {
   songs: PublicSong[];
   notes: PublicNote[];
   giftFunds: PublicFund[];
+  /** Where to send a gift. Null until the couple have written it down. */
+  giftBank: PublicBank | null;
 };
 
 type EventLike = { id: string; name: string; dress_code_id?: string | null };
@@ -88,7 +94,7 @@ export async function getPublicSiteExtras(
 ): Promise<SiteExtras> {
   const supabase = createAdminClient();
 
-  const [dressCodes, arrivals, songRows, voteRows, noteRows, fundRows] = await Promise.all([
+  const [dressCodes, arrivals, songRows, voteRows, noteRows, fundRows, bankRow] = await Promise.all([
     readDressCodes(supabase, weddingId, events),
     supabase.from("arrival_points").select("*").eq("wedding_id", weddingId).order("sort_order"),
     supabase
@@ -116,6 +122,10 @@ export async function getPublicSiteExtras(
       .eq("wedding_id", weddingId)
       .order("sort_order")
       .order("created_at"),
+    // Where to send a gift (0033). An error here — the migration not applied
+    // yet, say — reads as "no details", which hides the Contribute button
+    // rather than costing a guest their whole page.
+    supabase.from("gift_bank_details").select("*").eq("wedding_id", weddingId).maybeSingle(),
   ]);
 
   const votes = (voteRows.data ?? []) as { song_request_id: string; household_id: string }[];
@@ -126,18 +136,18 @@ export async function getPublicSiteExtras(
     if (viewerHouseholdId && vote.household_id === viewerHouseholdId) mine.add(vote.song_request_id);
   }
 
-  const songs: PublicSong[] = ((songRows.data ?? []) as SongRequestRow[])
-    .map((row) => ({
+  const songs: PublicSong[] = rankSongs(
+    ((songRows.data ?? []) as SongRequestRow[]).map((row) => ({
       id: row.id,
       title: row.title,
       artist: row.artist,
       askedBy: row.asked_by,
       votes: counts.get(row.id) ?? 0,
       votedByViewer: mine.has(row.id),
-    }))
-    // Most-wanted first, and alphabetical within a tie so the order is stable
-    // between renders rather than following whatever the database felt like.
-    .sort((a, b) => b.votes - a.votes || a.title.localeCompare(b.title));
+      askedByViewer: viewerHouseholdId !== null && row.household_id === viewerHouseholdId,
+      createdAt: row.created_at,
+    })),
+  ).map(({ createdAt: _createdAt, ...song }) => song);
 
   const notes: PublicNote[] = (
     (noteRows.data ?? []) as Pick<GuestNoteRow, "id" | "body" | "author_name" | "created_at">[]
@@ -154,6 +164,7 @@ export async function getPublicSiteExtras(
     songs,
     notes,
     giftFunds: ((fundRows.data ?? []) as GiftFundRow[]).map(toPublicFund),
+    giftBank: toPublicBank(bankRow.data as GiftBankDetailsRow | null),
   };
 }
 
@@ -204,6 +215,17 @@ export const getGuestNotes = cache(async (weddingId: string): Promise<PlannerNot
   return ((data ?? []) as (GuestNoteRow & { households: { display_name: string } | null })[]).map(
     (row) => ({ ...row, householdName: row.households?.display_name ?? null }),
   );
+});
+
+/** The couple's account details, for the planner's own screen. Null before they have any. */
+export const getGiftBankDetails = cache(async (weddingId: string): Promise<GiftBankDetailsRow | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("gift_bank_details")
+    .select("*")
+    .eq("wedding_id", weddingId)
+    .maybeSingle();
+  return (data ?? null) as GiftBankDetailsRow | null;
 });
 
 /** The funds, for the planner's own screen. Every one, in their own order. */

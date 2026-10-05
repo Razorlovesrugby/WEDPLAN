@@ -76,6 +76,16 @@ export function ReplyBar({
 
   const shown = !coverVisible && !targetVisible && !typing;
 
+  // Tell the top bar whether this one is up, so a phone never shows two RSVP
+  // buttons at once (spec 28 §5.2). A flag on the document rather than a prop:
+  // the two live in different parts of the page and neither owns the other.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (shown) root.setAttribute("data-reply-bar", "");
+    else root.removeAttribute("data-reply-bar");
+    return () => root.removeAttribute("data-reply-bar");
+  }, [shown]);
+
   return (
     <div
       role="region"

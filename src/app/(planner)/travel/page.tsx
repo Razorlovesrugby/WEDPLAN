@@ -26,11 +26,12 @@ export default async function TravelPage() {
       <div>
         <h1 className="font-serif text-2xl">Getting there</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          The coach, parking, and somewhere to stay. All of it shows on{" "}
-          <Link href={`/w/${wedding.slug}`} className="underline" target="_blank" rel="noreferrer">
-            the site
+          The coach, parking, and somewhere to stay. All of it shows on every household&rsquo;s
+          page (
+          <Link href="/site/preview" className="underline" target="_blank" rel="noreferrer">
+            preview it
           </Link>
-          ; seats are reserved by each household from their own invitation link.
+          ); seats are reserved by each household from their own invitation link.
         </p>
       </div>
 

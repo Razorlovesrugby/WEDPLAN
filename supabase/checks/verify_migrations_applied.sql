@@ -31,7 +31,8 @@ with checks(migration, kind, obj, col) as (values
   ('0027_guest_participation',    'rel', 'song_votes',                null),
   ('0029_vendors',                'rel', 'vendors',                   null),
   ('0030_gift_funds',             'rel', 'gift_funds',                null),
-  ('0032_site_asset_images',      'col', null,                        'focal_x')
+  ('0032_site_asset_images',      'col', null,                        'focal_x'),
+  ('0033_gift_bank_details',      'rel', 'gift_bank_details',         null)
 )
 select c.migration,
        case c.kind

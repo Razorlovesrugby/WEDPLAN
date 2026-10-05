@@ -46,7 +46,12 @@ export function SiteSection({
             the Tailwind utilities beside them are what render. Editorial
             overrides them from globals.css, which is what keeps "a third
             preset is a stylesheet" true. */}
-        <h2 className="site-h2 site-heading text-center text-4xl leading-tight text-ink sm:text-5xl">
+        {/* `data-block-title` is what the editor's preview listens for: clicking
+            the title takes the planner to that block's Title field (spec 28 §7.2). */}
+        <h2
+          data-block-title=""
+          className="site-h2 site-heading text-center text-4xl leading-tight text-ink sm:text-5xl"
+        >
           {heading}
         </h2>
         {intro ? (

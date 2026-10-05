@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FAQ_LIBRARY, libraryTags } from "./faq-library";
-import { FAQ_FEATURED_LIMIT, faqItems, splitFaq } from "./sections";
+import { faqItems } from "./sections";
 
 describe("FAQ_LIBRARY", () => {
   it("survives the reader it will be stored and read back through", () => {
@@ -8,14 +8,6 @@ describe("FAQ_LIBRARY", () => {
     // through faqItems(). If a shape mismatch crept in, this is where it shows.
     const roundTripped = faqItems({ items: FAQ_LIBRARY });
     expect(roundTripped).toHaveLength(FAQ_LIBRARY.length);
-  });
-
-  it("features exactly the number the FAQ shows open", () => {
-    // More would be silently truncated by splitFaq; fewer would leave the
-    // opening screen half empty.
-    const featured = FAQ_LIBRARY.filter((item) => item.featured);
-    expect(featured).toHaveLength(FAQ_FEATURED_LIMIT);
-    expect(splitFaq(FAQ_LIBRARY).featured.map((f) => f.q)).toEqual(featured.map((f) => f.q));
   });
 
   it("has no duplicate questions", () => {

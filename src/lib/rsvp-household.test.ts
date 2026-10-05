@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { householdReply, replyToAll } from "./rsvp-household";
+import { GUEST_REPLY_STATUSES, guestFacingStatus, householdReply, replyToAll } from "./rsvp-household";
 
 describe("householdReply", () => {
   it("lights a card only when every invited pair agrees", () => {
@@ -25,5 +25,18 @@ describe("replyToAll", () => {
     expect(replyToAll({ a: "pending", b: "no" }, "yes")).toEqual({ a: "yes", b: "yes" });
     // A guest invited to nothing stays invited to nothing.
     expect(replyToAll({}, "yes")).toEqual({});
+  });
+});
+
+describe("what a guest may answer (spec 28 §7a.1)", () => {
+  it("has no Maybe", () => {
+    expect([...GUEST_REPLY_STATUSES]).toEqual(["yes", "no", "pending"]);
+  });
+
+  it("opens a hand-recorded maybe as unanswered", () => {
+    expect(guestFacingStatus("yes")).toBe("yes");
+    expect(guestFacingStatus("no")).toBe("no");
+    expect(guestFacingStatus("pending")).toBe("pending");
+    expect(guestFacingStatus("maybe")).toBe("pending");
   });
 });

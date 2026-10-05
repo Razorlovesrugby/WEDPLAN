@@ -29,6 +29,15 @@ export function weekendIcsPath(weddingSlug: string, addressSegment: string): str
   return `/api/public/weekend/${weddingSlug}/${addressSegment}`;
 }
 
+/**
+ * The same file for the editor's preview (spec 28 §4.1): behind the planner's own
+ * sign-in, keyed by the household's id rather than its credential. The live
+ * route would 404 for a household that has never been sent an invitation.
+ */
+export function previewWeekendPath(householdId: string): string {
+  return `/site/preview/weekend.ics?as=${householdId}`;
+}
+
 /** Events with a start time, in the shape the calendar builders take. */
 export function weekendIcsEvents(events: WeekendEvent[], weddingName: string): IcsEvent[] {
   return events.flatMap((event) => {

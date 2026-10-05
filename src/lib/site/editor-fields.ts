@@ -39,6 +39,11 @@ export type Repeat = {
   /** Singular, for the "Add a …" button. */
   noun: string;
   fields: Field[];
+  /**
+   * Which fields stand for a row when it is folded to one line, joined with " · ".
+   * Defaults to the first text field — the question, the name, the suggestion.
+   */
+  summary?: string[];
 };
 
 export type SectionForm = {

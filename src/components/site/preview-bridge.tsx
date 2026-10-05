@@ -70,7 +70,18 @@ function scrollToBlock(blockId: string, attempt = 0) {
     return;
   }
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  target.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+  // **Not `scrollIntoView`** (spec 28 §4.2). Called from inside an iframe, it
+  // asks every scrollable ancestor — in the *embedding* page too — to make up
+  // whatever this document could not scroll itself, which it cannot when the
+  // block is near the foot of the page. The builder's clipping box is
+  // `overflow: hidden`, which is still programmatically scrollable, so it was
+  // dragged upward by the shortfall and the preview collapsed to a strip with
+  // the rest blank; the editor's own page scrolled too. `window.scrollTo`
+  // moves this window and nothing else.
+  window.scrollTo({
+    top: target.getBoundingClientRect().top + window.scrollY,
+    behavior: calm ? "auto" : "smooth",
+  });
 }
 
 export function PreviewBridge() {
@@ -147,8 +158,11 @@ export function PreviewBridge() {
       const block = event.target.closest("[data-block-id]");
       const blockId = block?.getAttribute("data-block-id");
       if (!blockId) return;
+      // A click on the title goes one step further than a click on the block:
+      // the planner is pointing at the words they want to change.
+      const onTitle = event.target.closest("[data-block-title]") !== null;
       window.parent.postMessage(
-        { channel: PREVIEW_CHANNEL, type: "select", blockId },
+        { channel: PREVIEW_CHANNEL, type: "select", blockId, ...(onTitle ? { field: "heading" } : {}) },
         window.location.origin,
       );
     };

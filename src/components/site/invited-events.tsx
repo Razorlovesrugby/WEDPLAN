@@ -3,6 +3,7 @@ import { formatDate, formatTime } from "@/lib/format";
 import { invitedForLine, listNames } from "@/lib/invites";
 import { Label } from "./section";
 import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
+import { EventNote } from "./event-note";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
 import type { ThemePresetId } from "@/lib/theme/presets";
@@ -39,6 +40,8 @@ export function InvitedEvents({
     venue: string | null;
     address: string | null;
     dress_code_id?: string | null;
+    /** The couple's note for guests invited to this event (spec 21 §5.4). */
+    guest_note?: string | null;
   }[];
   members: { id: string; name: string }[];
   /** Guest ids invited to each event id. */
@@ -92,6 +95,10 @@ export function InvitedEvents({
                   ) : null}
                 </>
               );
+              // The planner's note for this event: parking, timings, what happens
+              // when. It lives here, under its own venue, so a guest never has to
+              // match an event to a second list further down (spec 28 §5.3).
+              const note = event.guest_note?.trim() ? <EventNote text={event.guest_note.trim()} /> : null;
               const shuttle = (
                 <ShuttleLines runs={coachByEvent?.get(event.id) ?? []} timeZone={timeZone} />
               );
@@ -109,6 +116,7 @@ export function InvitedEvents({
                     aside={<DressCodeTag event={event} codes={dressCodes} />}
                   >
                     {where}
+                    {note}
                     {shuttle}
                     {who}
                   </EditorialEventRow>
@@ -126,6 +134,7 @@ export function InvitedEvents({
                     {time}
                   </div>
                   {where}
+                  {note}
                   {who}
                   {shuttle}
                   <DressCodeTag event={event} codes={dressCodes} />

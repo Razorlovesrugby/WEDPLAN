@@ -1,22 +1,66 @@
 import { describe, expect, it } from "vitest";
-import { fundProgress, safeContributeUrl } from "./gift-funds";
+import { safeContributeUrl, toPublicBank, toPublicFund } from "./gift-funds";
 
-describe("fundProgress", () => {
-  it("is the plain proportion in the ordinary case", () => {
-    expect(fundProgress(74_000, 120_000)).toBeCloseTo(0.6167, 4);
-    expect(fundProgress(0, 120_000)).toBe(0);
+describe("toPublicFund", () => {
+  const row = {
+    id: "f1",
+    wedding_id: "w1",
+    name: "The honeymoon",
+    blurb: "Two weeks with no phone signal",
+    target_minor: 120_000,
+    raised_minor: 74_000,
+    contribute_url: "https://wise.test/pay/abc",
+    sort_order: 0,
+    created_at: "",
+    updated_at: "",
+  };
+
+  it("carries a name and a line, and nothing about money", () => {
+    const fund = toPublicFund(row);
+    expect(fund).toEqual({
+      id: "f1",
+      name: "The honeymoon",
+      blurb: "Two weeks with no phone signal",
+      contributeUrl: "https://wise.test/pay/abc",
+    });
+    // The figures the couple typed stay in the database and never reach a guest.
+    expect(JSON.stringify(fund)).not.toMatch(/74000|120000|raised|target/i);
   });
 
-  it("clamps a fund that beat its target rather than overflowing the rule", () => {
-    // The figures underneath still read $1,400 / $1,200. The bar is just full.
-    expect(fundProgress(140_000, 120_000)).toBe(1);
+  it("drops a link that is not a web address", () => {
+    expect(toPublicFund({ ...row, contribute_url: "javascript:alert(1)" }).contributeUrl).toBeNull();
+  });
+});
+
+describe("toPublicBank", () => {
+  const bank = {
+    wedding_id: "w1",
+    account_name: " Ray & Olivia Smith ",
+    account_number: "123456789012300",
+    message: null,
+    note: " ",
+    created_at: "",
+    updated_at: "",
+  };
+
+  it("trims, and turns a blank into nothing", () => {
+    expect(toPublicBank(bank)).toEqual({
+      accountName: "Ray & Olivia Smith",
+      accountNumber: "123456789012300",
+      message: null,
+      note: null,
+    });
   });
 
-  it("draws no rule for a fund with no target", () => {
-    expect(fundProgress(50_000, null)).toBeNull();
-    // A zero target would divide by nothing and draw a full bar over an empty
-    // fund, which is the opposite of the truth.
-    expect(fundProgress(0, 0)).toBeNull();
+  it("is null when there is no row, or when the couple left it empty", () => {
+    expect(toPublicBank(null)).toBeNull();
+    expect(toPublicBank(undefined)).toBeNull();
+    expect(toPublicBank({ ...bank, account_name: "", account_number: null })).toBeNull();
+  });
+
+  it("is enough with just a name or just a number", () => {
+    expect(toPublicBank({ ...bank, account_number: null })).not.toBeNull();
+    expect(toPublicBank({ ...bank, account_name: null })).not.toBeNull();
   });
 });
 

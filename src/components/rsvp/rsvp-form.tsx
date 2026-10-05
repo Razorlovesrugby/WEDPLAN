@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
-import { householdReply, replyToAll } from "@/lib/rsvp-household";
+import { guestFacingStatus, householdReply, replyToAll } from "@/lib/rsvp-household";
 import { replyConfirmation, summariseReply } from "@/lib/site/reply-state";
 import { withViewTransition } from "@/lib/view-transition";
+import { PREVIEW_NOT_SENT } from "@/lib/site/preview-guard";
 import { WeekendCalendar } from "@/components/site/weekend-calendar";
 import { QuestionField, type AnswerValue } from "./question-field";
 import type {
@@ -30,7 +31,6 @@ type GuestState = {
 const CHOICES: { value: RsvpStatus; label: string }[] = [
   { value: "yes", label: "Yes" },
   { value: "no", label: "No" },
-  { value: "maybe", label: "Maybe" },
 ];
 
 export function RsvpForm({
@@ -46,7 +46,12 @@ export function RsvpForm({
   replyBy,
   look = "inline",
 }: {
-  token: string;
+  /**
+   * The household's credential. **Null only in the editor's preview** (spec 28
+   * §4.3): the form then works in every way except that "Confirm" says nothing
+   * was sent and calls no action.
+   */
+  token: string | null;
   guests: GuestRow[];
   events: EventRow[];
   questions: RsvpQuestionRow[];
@@ -65,6 +70,8 @@ export function RsvpForm({
     weddingName: string;
     weddingSlug: string;
     addressSegment: string | null;
+    /** The preview's own calendar file; absent on a live page. */
+    icsHref?: string;
   };
   /** "1 May", or null when there is no lock date or the planner switched it off. */
   replyBy?: string | null;
@@ -98,8 +105,10 @@ export function RsvpForm({
           .filter((event) => invites.some((i) => i.guest_id === guest.id && i.event_id === event.id))
           .map((event) => [
             event.id,
-            (rsvps.find((r) => r.guest_id === guest.id && r.event_id === event.id)?.status ??
-              "pending") as RsvpStatus,
+            guestFacingStatus(
+              (rsvps.find((r) => r.guest_id === guest.id && r.event_id === event.id)?.status ??
+                "pending") as RsvpStatus,
+            ),
           ]),
       ),
       answers: Object.fromEntries(
@@ -137,6 +146,18 @@ export function RsvpForm({
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // No token, nothing to send with (the preview). Show the confirmation a
+    // guest would get — it is part of what the planner is designing — and say
+    // plainly that it was not real.
+    if (token === null) {
+      withViewTransition(() => {
+        setStatus("saved");
+        setView("done");
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result = await submitRsvp({
         token,
@@ -280,7 +301,12 @@ export function RsvpForm({
             weddingName={weekend.weddingName}
             weddingSlug={weekend.weddingSlug}
             addressSegment={weekend.addressSegment}
+            icsHref={weekend.icsHref}
           />
+        ) : null}
+
+        {token === null ? (
+          <p className="mt-4 text-sm font-medium text-muted">{PREVIEW_NOT_SENT}</p>
         ) : null}
 
         <button

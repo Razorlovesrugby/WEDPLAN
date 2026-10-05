@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monogramFromName, splitHeadline } from "./names";
+import { firstNamesFromName, monogramFromName, splitHeadline } from "./names";
 
 describe("monogramFromName", () => {
   it("splits on the usual joiners", () => {
@@ -62,5 +62,22 @@ describe("splitHeadline", () => {
 
   it("does not split a name that merely contains a joiner's letters", () => {
     expect(splitHeadline("Alexander Andrews")).toBeNull();
+  });
+});
+
+describe("firstNamesFromName", () => {
+  it("gives the two first names with the couple's own joiner", () => {
+    expect(firstNamesFromName("Ray & Olivia")).toBe("Ray & Olivia");
+    expect(firstNamesFromName("Ray Okonkwo and Olivia Baptiste")).toBe("Ray and Olivia");
+  });
+
+  it("shows a name that will not split whole, rather than inventing a pair", () => {
+    expect(firstNamesFromName("The Okonkwo Wedding")).toBe("The Okonkwo Wedding");
+  });
+
+  it("is null for a blank name", () => {
+    expect(firstNamesFromName("")).toBeNull();
+    expect(firstNamesFromName("   ")).toBeNull();
+    expect(firstNamesFromName(null)).toBeNull();
   });
 });

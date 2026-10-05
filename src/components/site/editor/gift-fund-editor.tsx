@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteGiftFund, saveGiftFund } from "@/server/actions/gift-funds";
-import { fundProgress } from "@/lib/site/gift-funds";
-import { formatMoneyShort } from "@/lib/format";
-import type { GiftFundRow } from "@/lib/types/database";
+import { deleteGiftFund, saveGiftBankDetails, saveGiftFund } from "@/server/actions/gift-funds";
+import { DEFAULT_GIFT_MESSAGE } from "@/lib/site/gift-funds";
+import { accountDigits, formatNzAccount, giftReference, parseNzAccount } from "@/lib/site/bank-account";
+import type { GiftBankDetailsRow, GiftFundRow } from "@/lib/types/database";
 
 /**
  * The gift list editor (0030).
@@ -14,15 +14,15 @@ import type { GiftFundRow } from "@/lib/types/database";
  * at the bottom: a page of four funds saved together is a page where a typo
  * in the fourth loses the edits to the first three.
  *
- * Figures are in dollars here and stored as minor units, converted once in
- * `saveGiftFund`. The planner types what they would say out loud.
+ * Spec 28 §6.1: a fund is a name, a line and an optional link. The target and
+ * "raised so far" fields are gone — a gift is a transfer to the couple's
+ * account, which is written down once, at the top, and opened by the
+ * guest's Contribute button.
  */
 
 type Draft = {
   name: string;
   blurb: string;
-  target: string;
-  raised: string;
   contribute_url: string;
 };
 
@@ -30,22 +30,26 @@ function toDraft(row: GiftFundRow): Draft {
   return {
     name: row.name,
     blurb: row.blurb ?? "",
-    // Minor units back to the dollars the planner typed. An empty target
-    // stays empty rather than becoming "0", which would read as a fund with
-    // a target of nothing.
-    target: row.target_minor === null ? "" : String(row.target_minor / 100),
-    raised: String(row.raised_minor / 100),
     contribute_url: row.contribute_url ?? "",
   };
 }
 
-const EMPTY: Draft = { name: "", blurb: "", target: "", raised: "", contribute_url: "" };
+const EMPTY: Draft = { name: "", blurb: "", contribute_url: "" };
 
-export function GiftFundEditor({ funds }: { funds: GiftFundRow[] }) {
+export function GiftFundEditor({
+  funds,
+  bank,
+}: {
+  funds: GiftFundRow[];
+  bank: GiftBankDetailsRow | null;
+}) {
   const [adding, setAdding] = useState(false);
 
   return (
     <div className="space-y-3">
+      <BankDetailsCard bank={bank} />
+
+      <h2 className="pt-2 font-serif text-lg">What you&rsquo;re saving towards</h2>
       {funds.map((fund) => (
         <FundCard key={fund.id} id={fund.id} initial={toDraft(fund)} />
       ))}
@@ -65,6 +69,142 @@ export function GiftFundEditor({ funds }: { funds: GiftFundRow[] }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The wedding's account details, written once.
+ *
+ * The number is checked as it is typed — the same `parseNzAccount` the action
+ * uses, so the message here and the refusal there cannot disagree — and shown
+ * back in the grouping a guest will see, so a slipped digit is caught here
+ * rather than by a bank. Saving it empty is allowed: no details, no Contribute
+ * button.
+ */
+function BankDetailsCard({ bank }: { bank: GiftBankDetailsRow | null }) {
+  const router = useRouter();
+  const [accountName, setAccountName] = useState(bank?.account_name ?? "");
+  const [accountNumber, setAccountNumber] = useState(
+    bank?.account_number ? formatNzAccount(bank.account_number) : "",
+  );
+  const [message, setMessage] = useState(bank?.message ?? "");
+  const [note, setNote] = useState(bank?.note ?? "");
+  const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [status, setStatus] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const typed = accountNumber.trim() !== "";
+  const checked = typed ? parseNzAccount(accountNumber) : null;
+  // Nothing is said until there is something to say: an error under an empty
+  // field the planner has not reached yet is nagging.
+  const numberProblem = checked && !checked.ok && accountDigits(accountNumber).length >= 4 ? checked.error : null;
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    startTransition(async () => {
+      const result = await saveGiftBankDetails({
+        account_name: accountName,
+        account_number: accountNumber,
+        message,
+        note,
+      });
+      if (!result.ok) {
+        setErrors(result.fieldErrors ?? {});
+        setStatus(result.error);
+        return;
+      }
+      setErrors({});
+      // Tidy what is in the box into the grouping that was saved.
+      if (checked?.ok) setAccountNumber(checked.formatted);
+      setStatus("Saved");
+      router.refresh();
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="card space-y-3 p-4">
+      <div>
+        <h2 className="font-serif text-lg">Where guests send it</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          Written once for the whole wedding. Guests see it when they press Contribute — on their
+          own page only, never in a link preview.
+        </p>
+      </div>
+
+      <Field label="Account name" name="account_name" errors={errors["account_name"]}>
+        <input
+          className="field"
+          value={accountName}
+          onChange={(event) => {
+            setAccountName(event.target.value);
+            setStatus(null);
+          }}
+          placeholder="Ray & Olivia Smith"
+          maxLength={120}
+        />
+      </Field>
+
+      <Field label="Account number" name="account_number" errors={errors["account_number"]}>
+        <input
+          className="field tabular-nums"
+          inputMode="numeric"
+          value={accountNumber}
+          onChange={(event) => {
+            setAccountNumber(event.target.value);
+            setStatus(null);
+          }}
+          placeholder="12-3456-7890123-00"
+          aria-invalid={numberProblem ? true : undefined}
+        />
+        {numberProblem ? (
+          <span className="mt-1 block text-sm text-red-700">{numberProblem}</span>
+        ) : checked?.ok ? (
+          <span className="mt-1 block text-sm text-muted">
+            Guests will see {checked.formatted}.
+          </span>
+        ) : null}
+      </Field>
+
+      <Field label="A word of thanks (optional)" name="message" errors={errors["message"]}>
+        <input
+          className="field"
+          value={message}
+          onChange={(event) => {
+            setMessage(event.target.value);
+            setStatus(null);
+          }}
+          placeholder={DEFAULT_GIFT_MESSAGE}
+          maxLength={300}
+        />
+        <p className="mt-1 text-xs text-muted">At the top of the popup. Empty keeps the line above.</p>
+      </Field>
+
+      <Field label="Anything else (optional)" name="note" errors={errors["note"]}>
+        <input
+          className="field"
+          value={note}
+          onChange={(event) => {
+            setNote(event.target.value);
+            setStatus(null);
+          }}
+          placeholder="ASB, if that helps"
+          maxLength={400}
+        />
+      </Field>
+
+      <p className="text-xs text-muted">
+        Each household is asked to put its own name as the reference —{" "}
+        <span className="font-medium text-ink">{giftReference("The Okonkwo Family")}</span> for the
+        Okonkwos — so you can tell from your statement who sent what.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+        <button type="submit" className="btn-primary" disabled={pending || Boolean(numberProblem)}>
+          {pending ? "Saving…" : "Save details"}
+        </button>
+        {status ? <span className="text-sm text-muted">{status}</span> : null}
+      </div>
+    </form>
   );
 }
 
@@ -104,13 +244,6 @@ function FundCard({
     });
   }
 
-  // The same sum the guest site does, so the planner sees the bar they are
-  // about to publish rather than finding out on the live page.
-  const preview = fundProgress(
-    Math.round(Number(draft.raised || 0) * 100),
-    draft.target === "" ? null : Math.round(Number(draft.target) * 100),
-  );
-
   return (
     <form onSubmit={submit} className="card space-y-3 p-4">
       <Field label="What it is" name="name" errors={errors["name"]}>
@@ -134,28 +267,7 @@ function FundCard({
         />
       </Field>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Target (optional)" name="target" errors={errors["target"]}>
-          <input
-            className="field"
-            inputMode="decimal"
-            value={draft.target}
-            onChange={(event) => set("target", event.target.value)}
-            placeholder="1200"
-          />
-        </Field>
-        <Field label="Raised so far" name="raised" errors={errors["raised"]}>
-          <input
-            className="field"
-            inputMode="decimal"
-            value={draft.raised}
-            onChange={(event) => set("raised", event.target.value)}
-            placeholder="740"
-          />
-        </Field>
-      </div>
-
-      <Field label="Where Contribute sends them" name="contribute_url" errors={errors["contribute_url"]}>
+      <Field label="Or give online (optional)" name="contribute_url" errors={errors["contribute_url"]}>
         <input
           className="field"
           type="url"
@@ -165,17 +277,10 @@ function FundCard({
           maxLength={2000}
         />
         <p className="mt-1 text-xs text-muted">
-          Leave it empty and the fund still shows, with no button.
+          A payment page, if you have one. Guests see it as &ldquo;Or give online&rdquo; under
+          your bank details. Leave it empty for none.
         </p>
       </Field>
-
-      {preview === null ? null : (
-        <p className="text-xs text-muted">
-          On the site: {formatMoneyShort(Math.round(Number(draft.raised || 0) * 100))} of{" "}
-          {formatMoneyShort(Math.round(Number(draft.target) * 100))} — the rule is{" "}
-          {Math.round(preview * 100)}% filled.
-        </p>
-      )}
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
         <button type="submit" className="btn-primary" disabled={pending}>

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BLOCKS,
-  BLOCK_AUDIENCES,
   BLOCK_BACKGROUNDS,
+  defaultHeading,
+  isTitled,
   type BlockStyle,
   type SiteBlock,
 } from "@/lib/site/blocks";
@@ -13,7 +14,6 @@ import type { BlockForm } from "@/lib/site/block-fields";
 import {
   addStarterFaq,
   saveBlock,
-  setBlockAudience,
   setBlockStyle,
 } from "@/server/actions/site-blocks";
 import {
@@ -21,9 +21,9 @@ import {
   SHAPE_LABEL,
   STYLE_CHOICES,
   STYLE_TITLE,
-  repeatHeading,
 } from "@/lib/site/style-labels";
 import { FieldInput } from "./field";
+import { RepeatRows } from "./repeat-rows";
 import { PhotoPicker, type PhotoOption } from "./photo-picker";
 import { saveStatusLabel, useAutosave } from "./use-autosave";
 import { LookGlyph } from "./look-glyph";
@@ -32,9 +32,8 @@ import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/loo
 /**
  * One block's form (spec 23 §5).
  *
- * Content, then style, then who sees it — in that order because that is the
- * order somebody thinks in, and because the last two are the ones you set
- * once and forget.
+ * Content, then style — in that order because that is the order somebody
+ * thinks in, and because the second is the one you set once and forget.
  *
  * **Style is a fixed set of choices, not CSS.** Width, background, alignment,
  * image shape, and the embed switch where there is a third party to load.
@@ -42,11 +41,8 @@ import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/loo
  * decisions stay good.
  */
 
-const AUDIENCE_LABEL: Record<(typeof BLOCK_AUDIENCES)[number], string> = {
-  everyone: "Everyone",
-  invited: "Only people with their own link",
-  public_only: "Only the shared site",
-};
+/** From this many questions the editor says the list is getting long. */
+const FAQ_SOFT_LIMIT = 15;
 
 /** Swatches for the choices that are questions about how something looks. */
 const BACKGROUND_SWATCH: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
@@ -70,6 +66,7 @@ export function BlockInspector({
   photos,
   onDone,
   heroDefault,
+  focusTitle = 0,
 }: {
   block: SiteBlock;
   form: BlockForm;
@@ -77,6 +74,8 @@ export function BlockInspector({
   onDone: () => void;
   /** The theme's own hero style, which a hero with no Look of its own follows. */
   heroDefault: string;
+  /** Changes when the planner clicks this block's title in the preview. */
+  focusTitle?: number;
 }) {
   const def = BLOCKS[block.type];
   const payload = (block.payload ?? {}) as Record<string, unknown>;
@@ -84,6 +83,16 @@ export function BlockInspector({
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Clicking a block's title in the preview puts the cursor in its Title field.
+  // Skipped at zero so merely opening a block does not steal focus.
+  const titleInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusTitle > 0) {
+      titleInput.current?.focus();
+      titleInput.current?.select();
+    }
+  }, [focusTitle]);
 
   const repeatRows = Array.isArray(values[form.repeat?.key ?? ""])
     ? (values[form.repeat!.key] as Record<string, unknown>[])
@@ -133,6 +142,69 @@ export function BlockInspector({
         ) : null}
       </div>
 
+      {isTitled(block.type) ? (
+        // Spec 28 §7.2. The planner's own words for the section, with today's
+        // default as the placeholder so an untouched block is unchanged and they
+        // can see what they are replacing. Saved in the block's payload, like
+        // everything else on this form.
+        <div className="space-y-3" onBlur={flush}>
+          <div>
+            <label htmlFor={`block-${block.id}-heading`} className="block text-sm font-medium">
+              Title
+            </label>
+            <input
+              ref={titleInput}
+              id={`block-${block.id}-heading`}
+              className="field mt-1"
+              value={typeof values["heading"] === "string" ? (values["heading"] as string) : ""}
+              disabled={values["hide_heading"] === true}
+              placeholder={defaultHeading(block.type) || "A heading (optional)"}
+              maxLength={200}
+              onChange={(event) => set("heading", event.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted">
+              {defaultHeading(block.type)
+                ? "Leave it empty to keep the original."
+                : "Leave it empty for no heading."}
+            </p>
+          </div>
+          {defaultHeading(block.type) ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={values["hide_heading"] === true}
+                onChange={(event) => set("hide_heading", event.target.checked)}
+              />
+              <span>
+                No title
+                <span className="block text-xs text-muted">
+                  For a section that speaks for itself. The space closes up, and it isn&rsquo;t numbered.
+                </span>
+              </span>
+            </label>
+          ) : null}
+          {def.eyebrow ? (
+            <div>
+              <label htmlFor={`block-${block.id}-eyebrow`} className="block text-sm font-medium">
+                Label
+              </label>
+              <input
+                id={`block-${block.id}-eyebrow`}
+                className="field mt-1"
+                value={typeof values["eyebrow"] === "string" ? (values["eyebrow"] as string) : ""}
+                placeholder={def.eyebrow}
+                maxLength={60}
+                onChange={(event) => set("eyebrow", event.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted">
+                The small line above the title. The number in front is worked out for you, so
+                moving sections about never leaves them out of order.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {form.image ? (
         <PhotoPicker
           value={typeof values["image_id"] === "string" ? (values["image_id"] as string) : null}
@@ -170,70 +242,44 @@ export function BlockInspector({
       ) : null}
 
       {form.repeat ? (
-        <div className="space-y-3" onBlur={flush}>
-          <h3 className="text-xs uppercase tracking-wide text-muted">
-            {repeatHeading(form.repeat.noun)}
-          </h3>
-          {repeatRows.map((row, index) => (
-            <div key={index} className="space-y-2 border-l-2 border-line pl-3">
-              {form.repeat!.fields.map((field) => (
-                <FieldInput
-                  key={field.name}
-                  field={field}
-                  value={row[field.name]}
-                  idPrefix={`block-${block.id}-${index}`}
-                  onChange={(value) => {
-                    const next = [...repeatRows];
-                    next[index] = { ...row, [field.name]: value };
-                    set(form.repeat!.key, next);
-                  }}
-                />
-              ))}
-              <button
-                type="button"
-                className="text-xs text-red-700 hover:underline"
-                onClick={() =>
-                  set(
-                    form.repeat!.key,
-                    repeatRows.filter((_, position) => position !== index),
-                  )
-                }
-              >
-                Remove this {form.repeat!.noun}
-              </button>
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => set(form.repeat!.key, [...repeatRows, {}])}
-            >
-              Add a {form.repeat.noun}
-            </button>
-            {block.type === "faq" ? (
-              <button
-                type="button"
-                className="btn"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const result = await addStarterFaq(block.id);
-                    setMessage(
-                      result.ok
-                        ? result.data.added === 0
-                          ? "Everything in the starter list is already here"
-                          : `Added ${result.data.added} questions as drafts`
-                        : result.error,
-                    );
-                    onDone();
-                  })
-                }
-              >
-                Add the usual questions
-              </button>
-            ) : null}
-          </div>
+        <div onBlur={flush}>
+          <RepeatRows
+            repeat={form.repeat}
+            rows={repeatRows}
+            onChange={(next) => set(form.repeat!.key, next)}
+            idPrefix={`block-${block.id}`}
+            // Never blocks; the planner is the one who keeps it short (spec 28 §7a.2).
+            note={
+              block.type === "faq" && repeatRows.length >= FAQ_SOFT_LIMIT
+                ? `That's ${repeatRows.length} questions — a lot to read on a phone. Everything shows open, so the shortest list that answers what people ask is the kindest one.`
+                : null
+            }
+            actions={
+              block.type === "faq" ? (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await addStarterFaq(block.id);
+                      if (result.ok && result.data.added > 0) set(form.repeat!.key, result.data.items);
+                      setMessage(
+                        result.ok
+                          ? result.data.added === 0
+                            ? "Everything in the starter list is already here"
+                            : `Added ${result.data.added} questions as drafts`
+                          : result.error,
+                      );
+                      onDone();
+                    })
+                  }
+                >
+                  Add the usual questions
+                </button>
+              ) : null
+            }
+          />
         </div>
       ) : null}
 
@@ -460,28 +506,6 @@ export function BlockInspector({
           </div>
         </div>
       ) : null}
-
-      {/* ---- audience ---- */}
-      <div className="space-y-1 border-t border-line pt-3">
-        <h3 className="text-xs uppercase tracking-wide text-muted">Who sees it</h3>
-        <select
-          className="field"
-          value={block.audience}
-          onChange={(event) =>
-            startTransition(async () => {
-              const result = await setBlockAudience(block.id, event.target.value);
-              if (!result.ok) setMessage(result.error);
-              else onDone();
-            })
-          }
-        >
-          {BLOCK_AUDIENCES.map((audience) => (
-            <option key={audience} value={audience}>
-              {AUDIENCE_LABEL[audience]}
-            </option>
-          ))}
-        </select>
-      </div>
 
       {/* Where the Save button was. A calm line rather than a control: the only
           way a planner can tell autosave is working is to be told. */}

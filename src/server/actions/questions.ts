@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
+import { moveWithin } from "@/lib/reorder";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -174,11 +175,17 @@ export async function removeQuestion(
   return ok({ deactivated: false, answers: 0 });
 }
 
-/** Move a question up or down the form. Sort order is a plain integer here —
- *  there are a handful of questions, not a list anyone drags at scale. */
+/**
+ * Move a question on the form — one step with ↑ / ↓, or to any position with a
+ * drag (spec 28 §7.1). **One ordering path:** all three arrive here, and the
+ * form the guest sees reads `sort_order` and nothing else.
+ *
+ * `to` is the position the question should end up at. Sort order is a plain
+ * integer here — a handful of questions, not a list anyone drags at scale.
+ */
 export async function reorderQuestion(
   questionId: string,
-  direction: "up" | "down",
+  to: "up" | "down" | number,
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const supabase = await createClient();
@@ -196,15 +203,13 @@ export async function reorderQuestion(
   const index = ordered.findIndex((question) => question.id === questionId);
   if (index === -1) return fail("That question no longer exists");
 
-  const swapWith = direction === "up" ? index - 1 : index + 1;
-  if (swapWith < 0 || swapWith >= ordered.length) return ok(undefined);
+  const target = to === "up" ? index - 1 : to === "down" ? index + 1 : to;
+  if (typeof target !== "number" || !Number.isInteger(target)) return fail("That isn't a place in the list");
+  if (target < 0 || target >= ordered.length) return ok(undefined);
 
   // Rewrite the whole run rather than swapping two values: rows created in
   // SQL all share sort_order 0, and swapping zeroes changes nothing at all.
-  const reordered = [...ordered];
-  const moved = reordered[index]!;
-  reordered[index] = reordered[swapWith]!;
-  reordered[swapWith] = moved;
+  const reordered = moveWithin(ordered, index, target);
 
   for (const [position, question] of reordered.entries()) {
     if (question.sort_order === position) continue;

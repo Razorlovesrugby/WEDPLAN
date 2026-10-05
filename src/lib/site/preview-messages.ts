@@ -25,7 +25,11 @@ export type ToPreview =
 export type BlockRect = { id: string; top: number; bottom: number };
 
 export type FromPreview =
-  | { channel: typeof PREVIEW_CHANNEL; type: "select"; blockId: string }
+  /**
+   * `field: "heading"` when the click was on the block's title, which the
+   * builder answers by focusing that block's Title field (spec 28 §7.2).
+   */
+  | { channel: typeof PREVIEW_CHANNEL; type: "select"; blockId: string; field?: "heading" }
   | { channel: typeof PREVIEW_CHANNEL; type: "rects"; blocks: BlockRect[]; scrollY: number };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -61,7 +65,12 @@ function isRect(value: unknown): value is BlockRect {
 export function isFromPreview(value: unknown): value is FromPreview {
   const message = record(value);
   if (!message || message["channel"] !== PREVIEW_CHANNEL) return false;
-  if (message["type"] === "select") return typeof message["blockId"] === "string";
+  if (message["type"] === "select") {
+    return (
+      typeof message["blockId"] === "string" &&
+      (message["field"] === undefined || message["field"] === "heading")
+    );
+  }
   return (
     message["type"] === "rects" &&
     typeof message["scrollY"] === "number" &&

@@ -176,6 +176,11 @@ export function setLevel(settings: MotionSettings, level: MotionLevel): MotionSe
 // ---------------------------------------------------------------------------
 
 export type SiteLayout = {
+  /**
+   * The thin bar stuck to the top of the page: the couple's initials and an RSVP
+   * button (spec 28 §5.2). Off draws no bar at all; nothing else moves.
+   */
+  topNav: boolean;
   /** The chapter list down the right edge (Editorial, wide screens). */
   chapterRail: boolean;
   /** `04 · ATTIRE` above a heading. Off leaves the heading alone. */
@@ -187,6 +192,7 @@ export type SiteLayout = {
 };
 
 export const DEFAULT_LAYOUT: SiteLayout = {
+  topNav: true,
   chapterRail: true,
   sectionNumbers: true,
   replyBar: true,
@@ -200,6 +206,7 @@ export function resolveLayout(value: unknown): SiteLayout {
   const flag = (key: string, fallback: boolean) =>
     typeof value[key] === "boolean" ? (value[key] as boolean) : fallback;
   return {
+    topNav: flag("top_nav", DEFAULT_LAYOUT.topNav),
     chapterRail: flag("chapter_rail", DEFAULT_LAYOUT.chapterRail),
     sectionNumbers: flag("section_numbers", DEFAULT_LAYOUT.sectionNumbers),
     replyBar: flag("reply_bar", DEFAULT_LAYOUT.replyBar),

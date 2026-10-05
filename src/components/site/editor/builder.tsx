@@ -31,6 +31,7 @@ import {
   pageNotes,
   sectionNumbers,
   typesAtLimit,
+  isFoldedIntoSchedule,
   visibleBlocks,
   type BlockFamily,
   type PageNote,
@@ -64,6 +65,7 @@ import type { StyleSnapshot } from "@/server/site/vibes";
 import { PALETTES } from "@/lib/theme/presets";
 import { TEMPLATES, VIBES, getVibe, type Vibe } from "@/lib/site/vibes";
 import type { PhotoOption } from "./photo-picker";
+import type { PreviewHousehold } from "@/lib/site/preview-households";
 
 /**
  * The builder (spec 23 §5, recomposed by spec 24, extended by spec 27).
@@ -147,7 +149,6 @@ export function SiteBuilder({
   theme,
   publishedAt,
   unpublished,
-  siteHref,
   households,
 }: {
   blocks: SiteBlock[];
@@ -155,20 +156,28 @@ export function SiteBuilder({
   theme: SiteTheme;
   publishedAt: string | null;
   unpublished: number;
-  siteHref: string;
-  /** Who the preview can be shown as. */
-  households: { id: string; name: string }[];
+  /** Who the preview can be shown as, the household with the most events first. */
+  households: PreviewHousehold[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
+  // Bumped when the planner clicks a block's *title* in the preview, which asks
+  // the inspector to put the cursor in that block's Title field (spec 28 §7.2).
+  const [titleFocus, setTitleFocus] = useState(0);
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
   const [device, setDevice] = useState<Device>("desktop");
   const [pane, setPane] = useState<"edit" | "preview">("edit");
-  // Who the preview is of (spec 27 E7). A household by default: the greeting,
-  // the weekend and the reply bar exist only on a household's own page, and a
-  // preview of the shared site would show a planner none of what they are
-  // editing. "shared" is the shared site, for when that is the question.
-  const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "shared");
+  // Who the preview is of (spec 27 E7). Always a household: every page a guest
+  // can reach is somebody's own (spec 28 §7a.4), so there is no neutral version
+  // to preview. Empty only for a wedding with no households yet.
+  const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "");
+  // The reply form as a household that has not answered yet would see it
+  // (spec 28 §4.3, Q5): by default it shows their real answers.
+  const [blank, setBlank] = useState(false);
+  const previewSrc = `/site/preview?${[viewAs ? `as=${viewAs}` : "", blank ? "blank=1" : ""]
+    .filter(Boolean)
+    .join("&")}`;
+  const viewingAs = households.find((household) => household.id === viewAs) ?? null;
 
   // ---- deleting with an undo (spec 24 §8, spec 27 E6) ----
   // A delete is not performed when it is clicked. The block is hidden at once —
@@ -249,14 +258,8 @@ export function SiteBuilder({
    * renumbers in both places at once. A band has no eyebrow and so has no
    * number; the rail shows an em dash for it rather than a gap.
    *
-   * Computed for whoever the preview is *of*: a block set to "invited only"
-   * has a number when previewing a household and none on the shared site,
-   * because that is what the page beside this list is showing.
    */
-  const marks = useMemo(
-    () => sectionNumbers(visibleBlocks(ordered, viewAs !== "shared")),
-    [ordered, viewAs],
-  );
+  const marks = useMemo(() => sectionNumbers(visibleBlocks(ordered)), [ordered]);
 
   const hero = useMemo(() => ordered.find((block) => block.type === "hero") ?? null, [ordered]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -284,6 +287,7 @@ export function SiteBuilder({
 
       setSelected(event.data.blockId);
       setPane("edit");
+      if (event.data.field === "heading") setTitleFocus((count) => count + 1);
       // After the rail has re-rendered with the inspector in it.
       setTimeout(
         () =>
@@ -666,7 +670,7 @@ export function SiteBuilder({
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(300px,25rem)_minmax(0,1fr)]">
         {/* ---- the rail ---- */}
         <div
-          className={`divide-y divide-[#f0ece5] border-r border-line bg-white lg:max-h-[calc(100vh-62px)] lg:overflow-y-auto ${
+          className={`divide-y divide-[#f0ece5] border-r border-line bg-white lg:sticky lg:top-[62px] lg:max-h-[calc(100vh-62px)] lg:self-start lg:overflow-y-auto ${
             pane === "preview" ? "hidden lg:block" : ""
           }`}
         >
@@ -743,6 +747,7 @@ export function SiteBuilder({
                       key={block.id}
                       block={block}
                       number={marks.get(block.id)?.number ?? null}
+                      folded={isFoldedIntoSchedule(block, ordered)}
                       selected={block.id === selected}
                       pending={pending}
                       thumb={photoFor(block, photoById)}
@@ -801,6 +806,7 @@ export function SiteBuilder({
                   photos={photos}
                   onDone={afterWrite}
                   heroDefault={theme.heroStyle}
+                  focusTitle={titleFocus}
                 />
               </Section>
             </div>
@@ -817,12 +823,12 @@ export function SiteBuilder({
                 ["/site/gifts", "A gift"],
                 ["/site/songs", "Song requests"],
                 ["/site/guestbook", "Guestbook"],
-                [siteHref, "See it live"],
+                [previewSrc, "Open the preview"],
               ].map(([href, label]) => (
                 <li key={href}>
                   <Link
                     href={href!}
-                    target={href === siteHref ? "_blank" : undefined}
+                    target={label === "Open the preview" ? "_blank" : undefined}
                     className="text-accent underline underline-offset-2"
                   >
                     {label}
@@ -834,7 +840,14 @@ export function SiteBuilder({
         </div>
 
         {/* ---- the preview ---- */}
-        <div className={`bg-paper ${pane === "edit" ? "hidden lg:block" : ""}`}>
+        {/* Sticky, so the preview stays in view however long the rail gets
+            (spec 28 §4.2). Its size depends on the window and the Phone/Desktop
+            toggle and on nothing else. */}
+        <div
+          className={`bg-paper lg:sticky lg:top-[62px] lg:self-start ${
+            pane === "edit" ? "hidden lg:block" : ""
+          }`}
+        >
           <div className="flex items-center gap-2 px-5 py-3">
             {(["phone", "desktop"] as const).map((option) => (
               <button
@@ -850,7 +863,7 @@ export function SiteBuilder({
               </button>
             ))}
             <Link
-              href={`/site/preview?as=${viewAs}`}
+              href={previewSrc}
               target="_blank"
               className="ml-auto text-xs text-muted underline"
             >
@@ -858,8 +871,7 @@ export function SiteBuilder({
             </Link>
           </div>
 
-          {/* Who the page is shown to. The shared site is addressed to nobody;
-              a household's page is addressed to them. */}
+          {/* Who the page is shown to: a household's page is addressed to them. */}
           <div className="flex items-center gap-2 px-5 pb-3 text-xs">
             <label htmlFor="preview-as" className="text-muted">
               Previewing as
@@ -870,19 +882,34 @@ export function SiteBuilder({
               value={viewAs}
               onChange={(event) => setViewAs(event.target.value)}
             >
-              <option value="shared">The shared site</option>
               {households.map((household) => (
                 <option key={household.id} value={household.id}>
                   {household.name}
+                  {household.eventCount > 0 ? "" : " (no events yet)"}
                 </option>
               ))}
             </select>
+            <label className="ml-auto flex items-center gap-1.5 text-muted">
+              <input type="checkbox" checked={blank} onChange={(event) => setBlank(event.target.checked)} />
+              Show a blank reply
+            </label>
           </div>
+          {households.length === 0 ? (
+            <p className="px-5 pb-3 text-xs text-muted">
+              Add a household on Guests and the preview becomes their page — their name on the
+              cover, their events, their reply form.
+            </p>
+          ) : viewingAs && viewingAs.eventCount === 0 ? (
+            <p className="px-5 pb-3 text-xs text-muted">
+              {viewingAs.name} isn&rsquo;t invited to any events yet, so the weekend and the reply
+              form are empty here. Pick another household, or invite them from Guests.
+            </p>
+          ) : null}
 
           <PreviewFrame
             device={device}
             iframeRef={iframeRef}
-            src={`/site/preview?as=${viewAs}`}
+            src={previewSrc}
             // A reload (a different household) forgets which block is selected.
             onLoaded={() =>
               toPreview({ channel: PREVIEW_CHANNEL, type: "highlight", blockId: selected })
@@ -1084,7 +1111,11 @@ function PreviewFrame({
   return (
     <div ref={wrap} className="flex justify-center px-5 pb-5">
       <div
-        className="relative overflow-hidden border border-line bg-white"
+        // `overflow: clip`, not `hidden`: a hidden box is still a scroll
+        // container, and anything inside the iframe that asks its ancestors
+        // to scroll can move it — which is how the preview used to collapse to
+        // a strip (spec 28 §4.2). A clipped box cannot be scrolled at all.
+        className="relative overflow-clip border border-line bg-white"
         // The visible box is the scaled size. Heights are viewport units and
         // a `calc`, not a measurement, so nothing here touches `window` —
         // this component server-renders as part of the page.
@@ -1283,6 +1314,7 @@ function ChapterRow({
   selected,
   pending,
   thumb,
+  folded,
   canMoveUp,
   canMoveDown,
   onMove,
@@ -1293,6 +1325,8 @@ function ChapterRow({
   block: SiteBlock;
   /** Null for a block the page does not number — a band, or a hidden one. */
   number: string | null;
+  /** "On the day" on a page that has The weekend: its notes are drawn there now. */
+  folded: boolean;
   selected: boolean;
   pending: boolean;
   /** The photograph this block points at, when it has one. */
@@ -1309,7 +1343,7 @@ function ChapterRow({
   });
   const def = BLOCKS[block.type];
   const snippet = blockSnippet(block);
-  const status = block.visible ? blockStatus(block) : null;
+  const status = block.visible && !folded ? blockStatus(block) : null;
 
   return (
     <li
@@ -1317,7 +1351,7 @@ function ChapterRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`flex items-center gap-2 px-2.5 py-2 ${isDragging ? "opacity-60" : ""} ${
         selected ? "bg-[#f6f3ee]" : ""
-      }`}
+      } ${folded ? "bg-[#faf9f7]" : ""}`}
     >
       <button
         type="button"
@@ -1369,16 +1403,19 @@ function ChapterRow({
 
       <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
         <span
-          className={`block truncate text-sm ${block.visible ? "" : "text-[#a9a298] line-through"}`}
+          className={`block truncate text-sm ${
+            block.visible ? (folded ? "text-[#a9a298]" : "") : "text-[#a9a298] line-through"
+          }`}
         >
           {def.label}
-          {block.audience !== "everyone" ? (
-            <span className="ml-2 text-xs text-[#8b8378]">
-              {block.audience === "invited" ? "invited only" : "shared site only"}
-            </span>
-          ) : null}
         </span>
-        {snippet || status ? (
+        {folded ? (
+          // Spec 28 §5.3: a deprecated block the page no longer draws, said
+          // plainly, with the delete beside it.
+          <span className="block truncate text-xs text-muted">
+            Now part of The weekend — you can delete this
+          </span>
+        ) : snippet || status ? (
           <span className="block truncate text-xs text-muted">
             {status ? (
               <span className="mr-1.5 rounded-sm bg-[#fbf0d3] px-1 py-px text-[10px] uppercase tracking-wide text-[#8a6a1f]">

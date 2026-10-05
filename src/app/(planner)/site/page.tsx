@@ -6,6 +6,7 @@ import { requireWedding } from "@/server/queries/wedding";
 import { getPublishState, listDraftBlocks } from "@/server/queries/site-blocks";
 import type { PhotoOption } from "@/components/site/editor/photo-picker";
 import { getSiteTheme } from "@/server/queries/site";
+import { previewHouseholds } from "@/lib/site/preview-households";
 import type { SiteAssetRow } from "@/lib/types/database";
 
 export const metadata = { title: "The site" };
@@ -27,7 +28,8 @@ export default async function SitePage() {
   const wedding = await requireWedding();
   const supabase = await createClient();
 
-  const [blocks, publishState, theme, { data: assets }, { data: households }] = await Promise.all([
+  const [blocks, publishState, theme, { data: assets }, { data: households }, { data: invitations }] =
+    await Promise.all([
     listDraftBlocks(wedding.id),
     getPublishState(wedding.id),
     getSiteTheme(wedding.id),
@@ -44,6 +46,15 @@ export default async function SitePage() {
       .eq("wedding_id", wedding.id)
       .is("deleted_at", null)
       .order("display_name")
+      .limit(300),
+    // How many events each household's invitation covers, so the preview can
+    // open on the household with the most to show (spec 28 §9.4). One row per
+    // household, with its events nested, so it stays inside the row cap.
+    supabase
+      .from("invitations")
+      .select("household_id, invitation_events(event_id)")
+      .eq("wedding_id", wedding.id)
+      .is("deleted_at", null)
       .limit(300),
   ]);
 
@@ -70,8 +81,7 @@ export default async function SitePage() {
       theme={theme}
       publishedAt={publishState.publishedAt}
       unpublished={publishState.unpublished}
-      siteHref={`/w/${wedding.slug}`}
-      households={(households ?? []).map((household) => ({ id: household.id, name: household.display_name }))}
+      households={previewHouseholds(households ?? [], invitations ?? [])}
     />
   );
 }

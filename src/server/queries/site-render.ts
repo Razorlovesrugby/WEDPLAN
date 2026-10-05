@@ -14,7 +14,7 @@ import { getHouseholdSeats, getPublicTravel } from "@/server/queries/travel";
 import { getPublicSiteExtras, type SiteExtras } from "@/server/queries/site-extras";
 import { flag, text } from "@/lib/site/sections";
 import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
-import type { RsvpContext } from "@/server/rsvp/resolve";
+import { loadRsvpData, type RsvpData } from "@/server/rsvp/resolve";
 import type { CoachSeatRow, EventRow, SiteAssetRow } from "@/lib/types/database";
 import type { PublicEvent } from "@/components/site/content";
 
@@ -36,7 +36,7 @@ export type PersonalContext = {
   /** Only the events somebody in this household is invited to. */
   events: EventRow[];
   invitedByEvent: Map<string, Set<string>>;
-  rsvp: RsvpContext | null;
+  rsvp: RsvpData | null;
   seats: Record<string, Pick<CoachSeatRow, "coach_stop_id" | "seats">>;
   uploads: GalleryImage[];
   /**
@@ -219,7 +219,7 @@ export async function buildPersonalContext(
   weddingId: string,
   household: { id: string; display_name: string },
   token: string | null,
-  rsvp: RsvpContext | null,
+  rsvp: RsvpData | null,
   addressSegment: string | null = null,
 ): Promise<PersonalContext> {
   const [seats, uploads] = await Promise.all([
@@ -264,59 +264,35 @@ export async function buildPersonalContext(
 
 
 /**
- * A household's page as the *planner* previews it (spec 27 E7).
+ * A household's page as the *planner* previews it (spec 27 E7, spec 28 §4.3).
  *
- * `buildPersonalContext` needs a resolved invitation, which carries a token —
- * a credential this screen deliberately does not hold. So the preview builds
- * the same shape from the household's guests and the wedding's public events,
- * with everyone invited to everything, no RSVP form and no token. It shows the
- * *shape* of their page: their names on the cover, the weekend, the personal
- * blocks.
+ * The same data a guest's own link assembles — their people, the events they
+ * are really invited to, the questions, whatever they have already answered —
+ * through the same two functions (`loadRsvpData`, `buildPersonalContext`), but
+ * with **no token**. That absence is the guard: every guest-facing component
+ * that writes needs a token to do it, so in the preview they all draw and
+ * respond and none of them can save anything.
  *
- * Without this, previewing as a household showed a page whose schedule had
- * vanished (no invited events) and whose greeting fell back to the household
- * name (no guests), which is a preview that lies about the thing being edited.
+ * `blank` empties the household's existing answers, to see the form as a guest
+ * who has not replied yet would.
+ *
+ * It used to build a stand-in from every public event with everyone invited to
+ * all of it, which previewed a page no guest would ever get (an event not
+ * marked public was missing from the preview and present on the real page).
  */
 export async function buildPreviewPersonal(
   weddingId: string,
   household: { id: string; display_name: string; slug?: string; slug_suffix?: string },
+  options: { blank?: boolean } = {},
 ): Promise<PersonalContext> {
-  const supabase = createAdminClient();
-  const [{ data: guests }, { data: events }] = await Promise.all([
-    supabase
-      .from("guests")
-      .select("id, first_name, preferred_name")
-      .eq("wedding_id", weddingId)
-      .eq("household_id", household.id)
-      .is("deleted_at", null)
-      .order("sort_order"),
-    supabase
-      .from("events")
-      .select("*")
-      .eq("wedding_id", weddingId)
-      .eq("is_public", true)
-      .order("sort_order")
-      .order("starts_at"),
-  ]);
+  const loaded = await loadRsvpData(weddingId, household.id);
+  const rsvp = loaded && options.blank ? { ...loaded, rsvps: [], answers: [] } : loaded;
 
-  const members = (guests ?? []).map((guest) => ({
-    id: guest.id as string,
-    name: ((guest.preferred_name as string | null)?.trim() || (guest.first_name as string)) ?? "",
-  }));
-  const eventRows = (events ?? []) as EventRow[];
-  const everyone = new Set(members.map((member) => member.id));
-
-  return {
-    householdName: household.display_name,
-    householdId: household.id,
-    addressSegment:
-      household.slug && household.slug_suffix ? `${household.slug}-${household.slug_suffix}` : null,
-    token: null,
-    members,
-    events: eventRows,
-    invitedByEvent: new Map(eventRows.map((event) => [event.id, new Set(everyone)])),
-    rsvp: null,
-    seats: {},
-    uploads: [],
-  };
+  return buildPersonalContext(
+    weddingId,
+    household,
+    null,
+    rsvp,
+    household.slug && household.slug_suffix ? `${household.slug}-${household.slug_suffix}` : null,
+  );
 }

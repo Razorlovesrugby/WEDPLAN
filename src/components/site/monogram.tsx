@@ -1,4 +1,4 @@
-import { monogramFromName } from "@/lib/site/names";
+import { firstNamesFromName, monogramFromName } from "@/lib/site/names";
 
 /**
  * The monogram (spec 14 §5): two initials and an ampersand, drawn as type
@@ -24,4 +24,20 @@ export function Monogram({ name, className }: { name: string | null; className?:
       <span>{mono.right}</span>
     </span>
   );
+}
+
+/**
+ * The left edge of the top bar (spec 28 §5.1): the initials, or — when the
+ * wedding's name gives none — the two first names in small caps. Always
+ * something, because the bar's left edge is also the way back to the top.
+ */
+export function NavMark({ name }: { name: string | null }) {
+  if (monogramFromName(name)) return <Monogram name={name} className="text-xl" />;
+
+  const names = firstNamesFromName(name);
+  return names ? (
+    <span className="text-[0.78rem] uppercase tracking-[0.14em]" aria-hidden="true">
+      {names}
+    </span>
+  ) : null;
 }

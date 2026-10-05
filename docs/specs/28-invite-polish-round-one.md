@@ -1,12 +1,14 @@
 # Feature spec: Invite polish, round one — the planner's first findings
 
-**Status: questions answered, not built (2026-10-05).** The planner went through the
+**Status: built, steps 1–9 (2026-10-05) — see "Build status" at the foot of this
+file. Step 0 (applying `0026`–`0032`) is the planner's and has not been done
+here.** The planner went through the
 invitation and the `/site` editor and came back with fifteen findings, then three more (§7a). This
 spec groups them, says what is actually behind each one (read off the
 source, not guessed), proposes how each should feel to use, and lists what
-only the planner can decide. **Nothing here is authorized to build.** Per
-`docs/specs/README.md` and `CLAUDE.md`, answering the §11 questions updates
-this file; building waits for an explicit "build it".
+only the planner can decide. It was written and answered as a spec, and built
+only when the planner asked for it to be built (per `docs/specs/README.md` and
+`CLAUDE.md`).
 
 **Depends on:** spec 14 (public site), 21 (household pages), 22 (per-event
 invites), 23 (blocks), 24 (the rail), 25 (dress codes, coach-by-event, song
@@ -737,3 +739,141 @@ for the record.
 - `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh`,
   `npm run build` pass — and, separately stated, whether it was opened in
   a real browser against the live project.
+
+---
+
+## Build status — 2026-10-05
+
+**Steps 1 to 9 are built**, each committed on its own on
+`claude/spec-28-invite-polish-build` (not merged, no PR). `npm run typecheck`,
+`npm test` (914, up from 852), `./scripts/verify-migrations.sh` (471
+assertions, up from 455), `./scripts/verify-migrations-single-tx.sh`,
+`./scripts/verify-bootstrap.sh` and `npm run build` pass. **None of that is the
+claim "it works against a real project"**: nothing here has run against a live
+Supabase project, a real phone, or a real guest. What was looked at is listed
+under *Looked at*, and what was not under *Never looked at*.
+
+**Step 0 is not done and is not code.** `0026`–`0032` and now `0033` are
+unapplied to the live project (Q1: the planner applies them). Findings 1–3 are
+expected to disappear once they are, and this build cannot show that they have.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 3 *(done first — see below)* | `/w/<slug>` and `/w` are plain 404s; "find my invitation", the RSVP pointer, the "main site" line, the block-audience control and its action are deleted; planner links open the preview. The RSVP form offers Yes/No and the reply action refuses `maybe` from a guest (a hand-recorded one opens as unanswered). The FAQ shows every question open as plain Q&A | `app/w/**`, `content.tsx`, `rsvp-form.tsx`, `rsvp-household.ts`, `blocks.ts` (`visibleBlocks`) |
+| 1 | The preview is built from the household's real invitations and answers (`loadRsvpData`, factored out of `resolveInvitation` so a guest's link and the preview share it) with **no token**; the reply form, vote button, guestbook, coach booking and uploader all work in it and none can save. Confirming a reply shows the confirmation plus "This is a preview — nothing was sent." A planner-authenticated `/site/preview/weekend.ics` for the calendar button. The picker opens on the household with the most events, has a "Show a blank reply" toggle, and no longer offers "the shared site" | `site-render.ts`, `resolve.ts`, `preview-guard.ts`, `weekend.ts`, `(preview)/site/preview/**`, `preview-households.ts`, `builder.tsx` |
+| 2 | The shrinking preview, reproduced and fixed (see below) | `preview-bridge.tsx`, `builder.tsx` |
+| 4 | Hero initials are their own cover switch, **off** by default. The top bar is the initials (or the two first names when the name yields none) and an RSVP button that reads "Your reply" once answered; the section list and the phone Menu are gone. A "Bar at the top" switch; the bar is drawn in the preview; on a phone its RSVP steps aside while the reply bar is up | `site-nav.tsx`, `top-bar.tsx`, `monogram.tsx` (`NavMark`), `names.ts`, `motion.ts` (`topNav`), `reply-bar.tsx`, `globals.css` |
+| 5 | Each event's note is drawn under its venue in "You're invited to" (grouped by date for free), three lines with **More**. "On the day" is deprecated: not in the palette or starter layouts, dropped from any page that has the weekend block, greyed in the rail with a way to delete it | `invited-events.tsx`, `event-note.tsx`, `blocks.ts`, `builder.tsx` |
+| 6 | **Title** (placeholder = the current heading, empty = keep it, plus "No title") and **Label** on every block that draws a heading, in the payload — no migration. Clicking a title in the preview focuses its field. The chapter list and the reply bar's opening line follow what was typed; numbers stay automatic. A repeatable block's anchor is its own block id | `blocks.ts` (`blockHeading`, `blockLabel`, `chapterName`, `blockAnchor`), `block-schemas.ts`, `block-inspector.tsx`, `preview-bridge.tsx`, `section-rail.tsx` |
+| 7 | One `RepeatRows` for the FAQ, Who's who, While you're here and Our story's moments: drag handle, ↑/↓, rows folded to their first line, undo, a stable key per row, and a soft note at 15 questions. `/questions` gains the same drag, through the same `reorderQuestion` (now also taking a target position) | `repeat-rows.tsx`, `reorder.ts`, `questions-editor.tsx`, `questions.ts` |
+| 8 | A "▲ 14 Vote" pill that fills and reads "Voted", and a list that does not re-sort under a vote. A household's own suggestion appears at once as "Your suggestion" with their vote on it. Placeholder song / artist fields on the block, defaulting to "Anything but Wonderwall" and nothing | `song-list.tsx`, `song-requests.tsx`, `songs.ts`, `song-rank.ts`, `song-placeholder.ts` |
+| 9 | **`0033_gift_bank_details.sql`**: one row per wedding (account name, digits-only account number, a thank-you line, a note). The gift block shows funds as a name and a line — no money — and one **Contribute** opens a popup (dialog on a laptop, bottom sheet on a phone) with each value and its own Copy, Copy all, a per-household reference ("Okonkwo gift"), a "Select and copy" fallback, and "Or give online" for a fund's link. `/site/gifts` gains the bank details form with live validation; the target and raised fields are gone from the form and `saveGiftFund` no longer writes them | `0033`, `supabase/tests/16_gift_bank_details.sql`, `bank-account.ts`, `gift-funds.ts`, `contribute-dialog.tsx`, `gift-fund-editor.tsx`, `gift-funds.ts` (action) |
+
+### Where it departs from the text above
+
+1. **Step 3 went before step 1.** §10 had the preview first. Once every page is
+   a household's page, "no token" can only mean "preview", which is what made the
+   inert-preview design simple; so the shared page went first, as §10 step 3's
+   own last sentence argues.
+2. **The shrinking preview was not what §4.2 guessed.** It is not the scale (it
+   never changed). `scrollIntoView` called from inside the iframe makes the
+   browser ask *every* scrollable ancestor — in the embedding page too — to make
+   up whatever the frame's own document could not scroll, which it cannot for a
+   block near the foot of the page. The clipping box was `overflow: hidden`,
+   which is still programmatically scrollable, and moved up by 517px, leaving a
+   strip of page and a blank box; the editor's page scrolled too. Fixed three
+   ways: the bridge uses `window.scrollTo`, the box is `overflow: clip`, and the
+   preview and rail columns are sticky.
+3. **The preview route moved into its own `(preview)` route group.** Not in the
+   spec. `/site/preview` sat inside `(planner)`, whose layout draws the planner's
+   header and menu — which would have rendered inside the editor's frame above
+   the guest's cover. The URL is unchanged. **Read off the layout code, never
+   seen**: the sandbox harness has no planner layout.
+4. **Three bugs found by rendering the blocks, fixed because they sit in the code
+   step 6 rewrote:** a photo band printed the words "Photo band" as a heading
+   (`Shell` fell back to the block's *name*); the RSVP section was counted in the
+   numbering but never drew its number, so the sequence could skip; and section
+   ids were the block's type, so a second "What to wear" had the first one's id
+   (§9.6).
+5. **A section whose title is switched off is not numbered**, so the page still
+   reads 01 to N. The spec did not say.
+6. **The chapter list reads the title, then the label, then the category.** §5.2
+   says it uses "the section titles `blockNavItems` produces", but the rail never
+   used `blockNavItems`, it used the small label. `blockNavItems` is removed —
+   the slim bar orphaned it.
+7. **`audience` is stored and not read, so a block saved as "shared site only"
+   now appears on household pages.** §7a.4 says stored values are ignored, which
+   is this; it is worth knowing because those blocks were previously hidden from
+   every guest with a link.
+8. **Song ties sort newest first.** §6.2 says "ties by newest, as now"; the code
+   was alphabetical. Newest first is what makes a guest's own suggestion appear
+   at the top of its group, which is the thing §6.2 asks for.
+9. **A song's requester votes for it automatically** — §6.2's "their vote already
+   on it". Every suggested song therefore starts at one vote.
+10. **"Add the usual questions" now returns the merged list.** Before, the form
+    kept the rows it opened with, so the added questions were invisible and the
+    next edit autosaved the stale list over them.
+11. **The preview does not override RSVP locking.** After the lock date the
+    preview's reply form says RSVPs have closed, as a guest's does.
+12. **§12's "a guest's old Maybe shows as unanswered"** is built (a hand-recorded
+    maybe opens as unanswered) although Q16 says there are none.
+
+### Looked at, in this sandbox's Chromium, on a throwaway harness
+
+A git-excluded page tree (`src/app/w/harness/**`, **gone with this container**)
+with sample data, Supabase unreachable, and the iframe's `/site/preview` rewritten
+to a harness page by Playwright. Seen: the builder at 1100/1280/1440px wide and in
+phone view, selecting all sixteen chapters (the preview stays its size and in
+place); the slim bar on desktop and a phone, including the RSVP button hiding
+under the reply bar; event notes with a long one collapsing and expanding;
+clicking a title in the preview focusing its Title field; custom titles, labels,
+"No title", the reply bar's wording and unique anchors; the repeating rows
+(fold, remove, undo, ↑/↓, drag); the `/questions` drag sending exactly one
+`reorderQuestion(id, position)`; the vote pill, "Your suggestion", the default
+placeholder and the order not moving under a vote; and the Contribute popup on
+desktop and as a phone sheet — open, copy, copy all, Esc / backdrop / × closing,
+focus returning to the button, page scroll unlocking, and the clipboard-blocked
+path. Also against a dev server with no session: `/w` and `/w/<slug>` answer 404,
+and both preview routes redirect to sign-in.
+
+### Never looked at
+
+- **Anything against live Supabase.** The new and changed server paths
+  (`saveGiftBankDetails`, `reorderQuestion` with a position, `requestSong`'s
+  automatic vote, `addStarterFaq` returning the list, the `.ics` preview route,
+  `loadRsvpData` for a household with no invitation) are typechecked, built and
+  — where there is SQL — tested, but have not returned a row. `0033` is applied
+  to nothing but throwaway clusters.
+- **The real `/site` and `/site/preview` pages**: they need a session. The builder
+  was seen only through the harness, so the planner layout's absence from the
+  preview (departure 3) and the household picker's real data are unseen.
+- **A real phone, iOS Safari and the Instagram / Facebook in-app browsers** for
+  the popup (§9.8). The blocked-clipboard path was exercised by removing
+  `navigator.clipboard` in Chromium, where the old `execCommand` fallback still
+  succeeds; the browsers it exists for may not.
+- **The `.ics` in a real calendar app**, live or preview.
+- **Keyboard drag** of a repeating row or a question (the sensor is registered;
+  the ↑/↓ buttons are what was exercised).
+- **Page weight and layout shift** — not compared with `origin/main`. This
+  build's first-load JS: `/w/[slug]/[household]` 131 kB, `/site` 154 kB.
+
+### Left, in the order it would bite
+
+1. **Apply `0026`–`0033` in order**, then load `/api/health`, then re-check
+   findings 1–3 — they are expected to be this and nothing else.
+2. `/api/public/save-the-date/<wedding slug>` is still public and still keyed by
+   the wedding slug. It carries what the shared page used to show, and the shared
+   page is gone; §7a.4 did not mention it.
+3. `events.is_public` ("show on the site") now decides nothing a guest sees — the
+   shared page was its only reader. It is still on the events editor.
+4. `revalidatePath("/w/[slug]", "page")` calls in the site, gallery and travel
+   actions point at a page that 404s. Harmless; read as leftovers.
+5. A household with no invitation yet previews as invited to nothing, so the
+   weekend and the reply form are empty there (the picker says so, and opens on
+   the household with the most events).
+6. `target_minor` and `raised_minor` on `gift_funds` are unread and unwritten.
+   They can be dropped by a later migration if nobody wants them back.
+7. An old `closes_label` on an RSVP block is stored and drawn nowhere.
+

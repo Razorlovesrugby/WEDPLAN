@@ -7,7 +7,6 @@ import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
 import {
   BLOCKS,
-  BLOCK_AUDIENCES,
   STARTER_LAYOUTS,
   isBlockType,
   typesAtLimit,
@@ -192,23 +191,6 @@ export async function setBlockVisible(id: string, visible: boolean): Promise<Act
   return ok(undefined);
 }
 
-export async function setBlockAudience(id: string, audience: string): Promise<ActionResult> {
-  const wedding = await requireWedding();
-  const parsed = z.enum(BLOCK_AUDIENCES).safeParse(audience);
-  if (!parsed.success) return fail("That isn't an audience");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("site_blocks")
-    .update({ audience: parsed.data })
-    .eq("wedding_id", wedding.id)
-    .eq("id", id);
-
-  if (error) return fail(error.message);
-  revalidateSite();
-  return ok(undefined);
-}
-
 export async function duplicateBlock(id: string): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   const supabase = await createClient();
@@ -365,7 +347,9 @@ export async function applyStarterLayout(
  * Appends rather than replaces, and skips anything already asked, so pressing
  * it twice is not destructive.
  */
-export async function addStarterFaq(blockId: string): Promise<ActionResult<{ added: number }>> {
+export async function addStarterFaq(
+  blockId: string,
+): Promise<ActionResult<{ added: number; items: Record<string, unknown>[] }>> {
   const wedding = await requireWedding();
   const supabase = await createClient();
 
@@ -387,7 +371,7 @@ export async function addStarterFaq(blockId: string): Promise<ActionResult<{ add
   const additions = FAQ_LIBRARY.filter((item) => !asked.has(item.q.trim().toLowerCase())).map(
     (item) => ({ q: item.q, a: item.a, featured: false, tags: item.tags }),
   );
-  if (additions.length === 0) return ok({ added: 0 });
+  if (additions.length === 0) return ok({ added: 0, items: current });
 
   const { error } = await supabase
     .from("site_blocks")
@@ -397,7 +381,10 @@ export async function addStarterFaq(blockId: string): Promise<ActionResult<{ add
 
   if (error) return fail(error.message);
   revalidateSite();
-  return ok({ added: additions.length });
+  // The merged list comes back so the inspector can show it. Without it the
+  // form keeps the rows it opened with, the questions that were just added are
+  // invisible, and the next edit autosaves that stale list over them.
+  return ok({ added: additions.length, items: [...current, ...additions] });
 }
 
 // ---------------------------------------------------------------------------

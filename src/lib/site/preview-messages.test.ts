@@ -32,6 +32,9 @@ describe("isToPreview", () => {
 describe("isFromPreview", () => {
   it("accepts a selection and a measurement", () => {
     expect(isFromPreview(msg({ type: "select", blockId: "b1" }))).toBe(true);
+    // A click on the title says so, so the builder can focus the Title field.
+    expect(isFromPreview(msg({ type: "select", blockId: "b1", field: "heading" }))).toBe(true);
+    expect(isFromPreview(msg({ type: "select", blockId: "b1", field: "anything-else" }))).toBe(false);
     expect(
       isFromPreview(msg({ type: "rects", scrollY: 40, blocks: [{ id: "a", top: 0, bottom: 100 }] })),
     ).toBe(true);

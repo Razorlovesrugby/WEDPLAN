@@ -3,6 +3,58 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 34 (spec 28):** invite polish, round one, built end to end on branch
+`claude/spec-28-invite-polish-build` (not merged, **no PR opened**). Asked for as
+"can we build the most recent spec" after the spec had been written and every
+question answered, so all nine steps were built, each committed separately. Read the
+spec's **Build status** first; this is the short version.
+
+- **The shared page is gone.** `/w/<slug>` and `/w` are plain 404s, so every page a
+  guest can reach is a household's own and "no token" now means exactly one thing:
+  **the editor's preview.** "Find my invitation", the RSVP pointer, the "main site"
+  line and the per-block audience control are deleted. Guests answer Yes or No only.
+- **The preview is a household's real page with no credential.** `loadRsvpData`
+  (factored out of `resolveInvitation`) feeds both a guest's link and the preview;
+  the preview passes no token, and every write behind the reply form, vote button,
+  guestbook, coach booking and uploader needs one — so they all work and none can
+  save. That absence is the guard, not a flag. `/site/preview` also moved into its
+  own `(preview)` route group so it stops inheriting the planner's header (**read
+  off the layout, never seen**).
+- **The shrinking preview was `scrollIntoView` inside the iframe**, not the scale:
+  the browser spilled the shortfall into the editor's `overflow: hidden` clipping
+  box (scrolled 517px). The bridge now uses `window.scrollTo`; the box is
+  `overflow: clip`. Anything that scrolls "into view" from inside that frame will
+  do this again.
+- **One migration, `0033_gift_bank_details.sql`** — one row per wedding, digits-only
+  account number (a check insists on 15 or 16), its own table so an account number
+  never rides along in `weddings.*`. **Not applied to the live project; neither are
+  `0026`–`0032`** (the planner applies them, spec 28 Q1). `gift_funds.target_minor`
+  / `raised_minor` are kept and unread; `saveGiftFund` no longer writes them.
+- **New things to know before changing anything:** `blockHeading` / `blockLabel` /
+  `chapterName` / `blockAnchor` in `blocks.ts` are the one place titles, labels and
+  anchors are decided; a titled block's schema gains `heading`, `eyebrow`,
+  `hide_heading` from `block-schemas.ts` (a type that forgot would accept a Title
+  and strip it). `visibleBlocks(blocks)` no longer takes an audience and drops
+  "On the day" from any page that has the weekend block. Repeating rows are one
+  `RepeatRows`, with row keys kept beside the rows and never stored.
+- **Verified:** typecheck clean, 914 unit tests, 471 SQL assertions (the new suite
+  failed once, honestly, on a wrong assumption about RLS), the single-transaction
+  check, bootstrap and `next build` pass. **Looked at** only in this sandbox's
+  Chromium on a throwaway harness (`src/app/w/harness/**`, git-excluded, **gone with
+  the container**): rebuild by serving sample data from a page outside `(planner)`
+  and having Playwright rewrite the iframe's `/site/preview` to it. **Never looked
+  at:** anything against live Supabase, the real `/site` page, a real phone, iOS
+  Safari or an in-app browser for the Contribute popup, the `.ics` in a calendar app.
+- **Open:** `/api/public/save-the-date/<wedding slug>` is still public and keyed by
+  the slug; `events.is_public` now decides nothing a guest sees; a household with no
+  invitation previews as invited to nothing; the stale `revalidatePath("/w/[slug]")`
+  calls. Spec 28's "Left" list has the rest.
+- **Pick up here:** apply `0026`–`0033` in order, load `/api/health`, then open `/site`
+  on a laptop (the preview, the picker, the bar, a Title field), `/site/gifts` (fill in
+  the bank details) and a household link on a phone (Contribute, Copy, the vote pill).
+  The likeliest faults are where nobody has looked: the preview inside the real planner
+  shell, the Contribute popup in an in-app browser, and a household with no invitation.
+
 **Session 33 (spec 27):** the invitation experience, built end to end on
 branch `claude/spec-27-invitation-experience` (not merged, **no PR opened**).
 Asked for as a spec ("elegant, smooth, personal, technology-forward"), the eleven

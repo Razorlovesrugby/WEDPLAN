@@ -23,6 +23,7 @@ export function WeekendCalendar({
   weddingName,
   weddingSlug,
   addressSegment,
+  icsHref,
 }: {
   events: WeekendEvent[];
   timeZone: string;
@@ -30,12 +31,18 @@ export function WeekendCalendar({
   weddingSlug: string;
   /** The household's own address, which is the credential for the file. */
   addressSegment: string | null;
+  /**
+   * Where the file comes from when it is not the live route: the editor's
+   * preview passes its own, planner-authenticated one (spec 28 §4.1).
+   */
+  icsHref?: string;
 }) {
   const summary = weekendSummary(events, timeZone);
   const ics = weekendIcsEvents(events, weddingName);
-  // Nothing dated, or no address to build a link from (a preview of a household
-  // that has none): there is nothing honest to offer, so offer nothing.
-  if (!summary || ics.length === 0 || !addressSegment) return null;
+  const href = icsHref ?? (addressSegment ? weekendIcsPath(weddingSlug, addressSegment) : null);
+  // Nothing dated, or no address to build a link from (a household that has
+  // none): there is nothing honest to offer, so offer nothing.
+  if (!summary || ics.length === 0 || !href) return null;
 
   return (
     <div className="site-weekend mt-10 border border-line p-5 text-center">
@@ -45,7 +52,7 @@ export function WeekendCalendar({
       <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
         {/* No `download` attribute: on an iPhone that saves the file into Files
             instead of opening the "Add to Calendar" sheet. */}
-        <a href={weekendIcsPath(weddingSlug, addressSegment)} className="std-button">
+        <a href={href} className="std-button">
           Add all to calendar
         </a>
       </div>

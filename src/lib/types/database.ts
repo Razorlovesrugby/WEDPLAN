@@ -886,6 +886,20 @@ export type GiftFundRow = {
   updated_at: string;
 };
 
+/**
+ * Where a guest sends a gift (0033, spec 28 §6.1). One row per wedding.
+ * `account_number` is digits only — the grouping is presentation.
+ */
+export type GiftBankDetailsRow = {
+  wedding_id: string;
+  account_name: string | null;
+  account_number: string | null;
+  message: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type SavedViewRow = {
   id: string;
   wedding_id: string;
@@ -1632,6 +1646,10 @@ export type Database = {
       gift_funds: Table<
         GiftFundRow,
         "id" | Timestamps | "sort_order" | "raised_minor" | "blurb" | "target_minor" | "contribute_url"
+      >;
+      gift_bank_details: Table<
+        GiftBankDetailsRow,
+        Timestamps | "account_name" | "account_number" | "message" | "note"
       >;
       coach_runs: Table<CoachRunRow, "id" | Timestamps | "sort_order" | "event_id">;
       coach_stops: Table<CoachStopRow, "id" | Timestamps | "sort_order", CoachStopRelationships>;

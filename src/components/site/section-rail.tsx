@@ -1,4 +1,4 @@
-import { sectionNumbers, type SiteBlock } from "@/lib/site/blocks";
+import { blockAnchor, chapterName, sectionNumbers, type SiteBlock } from "@/lib/site/blocks";
 
 /**
  * The chapter rail down the right edge (Editorial).
@@ -9,10 +9,11 @@ import { sectionNumbers, type SiteBlock } from "@/lib/site/blocks";
  * own idea of the order is a rail that sends somebody to the wrong section
  * after a reorder.
  *
- * The anchors target `#<block type>`, which is what `Shell` puts on each
- * section and what `blockNavItems` already links to. Numbered chapters are
- * `max: 1` types in practice, so the id is unambiguous; a repeatable block has
- * no eyebrow and is therefore not on the rail at all.
+ * The anchors are `blockAnchor` — the same function `Shell` uses to put an id on
+ * each section — so a second "What to wear" has a chapter entry of its own
+ * rather than sharing the first one's (spec 28 §9.6). Each row reads
+ * `chapterName`: the planner's title if they wrote one, else the small label,
+ * so renaming a section renames it here too.
  *
  * Placement is entirely CSS (`.site-rail` in `globals.css`): fixed to the
  * right edge at 38vh, shown only on Editorial, only above 1180px — below that
@@ -29,13 +30,13 @@ export function SectionRail({ blocks }: { blocks: SiteBlock[] }) {
   return (
     <nav aria-label="Chapters" className="site-rail no-print-site">
       <ul className="space-y-2.5">
-        {marks.map(([id, mark]) => {
+        {marks.map(([id]) => {
           const block = byId.get(id);
           if (!block) return null;
           return (
             <li key={id}>
               <a
-                href={`#${block.type}`}
+                href={`#${blockAnchor(block)}`}
                 className="group flex items-center justify-end gap-2 text-muted hover:text-accent"
               >
                 <span
@@ -43,7 +44,7 @@ export function SectionRail({ blocks }: { blocks: SiteBlock[] }) {
                   className="h-px w-3 bg-current opacity-60 transition-opacity group-hover:opacity-100"
                 />
                 <span className="site-label text-[10px] tracking-[0.16em] text-current">
-                  {mark.label}
+                  {chapterName(block)}
                 </span>
               </a>
             </li>
