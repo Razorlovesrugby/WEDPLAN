@@ -33,6 +33,7 @@ export type MotionLevel = (typeof MOTION_LEVELS)[number];
  */
 export const MOTION_EFFECTS = [
   "cover_handover",
+  "itinerary_draw",
   "section_arrivals",
   "reading_line",
   "nav_condense",
@@ -47,6 +48,7 @@ export const LEVEL_EFFECTS: Record<MotionLevel, readonly MotionEffect[]> = {
   gentle: ["section_arrivals", "reading_line", "nav_condense"],
   cinematic: [
     "cover_handover",
+    "itinerary_draw",
     "section_arrivals",
     "reading_line",
     "nav_condense",
@@ -84,6 +86,10 @@ export const MOTION_EFFECT_COPY: Record<MotionEffect, { label: string; help: str
   cover_handover: {
     label: "The cover drifts away",
     help: "The first photograph eases back and darkens as they scroll, with the names moving slower than the page.",
+  },
+  itinerary_draw: {
+    label: "The timeline draws itself",
+    help: "In the Timeline layout, the line grows down the page as they scroll to each event.",
   },
   section_arrivals: { label: "Sections ease in", help: "Each section fades up as it scrolls into view." },
   reading_line: { label: "Reading line", help: "A thin line across the top that fills as they scroll." },

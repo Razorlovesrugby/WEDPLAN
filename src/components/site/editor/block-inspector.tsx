@@ -26,6 +26,8 @@ import {
 import { FieldInput } from "./field";
 import { PhotoPicker, type PhotoOption } from "./photo-picker";
 import { saveStatusLabel, useAutosave } from "./use-autosave";
+import { LookGlyph } from "./look-glyph";
+import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/looks";
 
 /**
  * One block's form (spec 23 §5).
@@ -67,11 +69,14 @@ export function BlockInspector({
   form,
   photos,
   onDone,
+  heroDefault,
 }: {
   block: SiteBlock;
   form: BlockForm;
   photos: PhotoOption[];
   onDone: () => void;
+  /** The theme's own hero style, which a hero with no Look of its own follows. */
+  heroDefault: string;
 }) {
   const def = BLOCKS[block.type];
   const payload = (block.payload ?? {}) as Record<string, unknown>;
@@ -232,6 +237,56 @@ export function BlockInspector({
         </div>
       ) : null}
 
+      {/* ---- layout (spec 27 E1) ----
+          A Look is a curated alternate layout, chosen from a small set; none of
+          them can produce an unreadable page, which is the whole point of
+          offering a choice rather than a stylesheet. */}
+      {looksFor(block.type).length > 0 ? (
+        <div className="space-y-2 border-t border-line pt-3">
+          <h3 className="text-xs uppercase tracking-wide text-muted">Layout</h3>
+          <div className="grid grid-cols-2 gap-1.5">
+            {looksFor(block.type).map((look) => {
+              const current = resolveLook(block.type, block.style.variant, heroDefault);
+              const selected = current === look.id;
+              return (
+                <button
+                  key={look.id}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={selected}
+                  title={look.description}
+                  onClick={() => style({ variant: look.id })}
+                  className={`flex flex-col items-start gap-1 rounded border p-2 text-left ${
+                    selected ? "border-accent bg-[#f6f3ee]" : "border-line hover:border-ink"
+                  }`}
+                >
+                  <LookGlyph type={block.type} look={look.id} />
+                  <span className="text-xs font-medium">{look.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted">
+            {looksFor(block.type).find(
+              (look) => look.id === resolveLook(block.type, block.style.variant, heroDefault),
+            )?.description}
+            {block.type === "hero" && block.style.variant === undefined
+              ? " Following your theme."
+              : null}
+          </p>
+          {block.type === "hero" && block.style.variant !== undefined ? (
+            <button
+              type="button"
+              className="text-xs underline"
+              disabled={pending}
+              onClick={() => style({ variant: undefined })}
+            >
+              Follow the theme instead
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* ---- style ---- */}
       {def.styles.length > 0 ? (
         <div className="space-y-2 border-t border-line pt-3">
@@ -374,6 +429,35 @@ export function BlockInspector({
               </p>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* ---- how it arrives (spec 27 E4) ----
+          Not a motion editor: no timing, no easing, no keyframes. "This photo
+          should be still" and "this one should make an entrance" are the two
+          things anybody actually wants, and one choice covers both. */}
+      {block.type !== "footer" ? (
+        <div className="space-y-1 border-t border-line pt-3">
+          <h3 className="text-xs uppercase tracking-wide text-muted">How it arrives</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {([undefined, ...ENTRANCES] as const).map((entrance) => {
+              const selected = block.style.enter === entrance;
+              return (
+                <button
+                  key={entrance ?? "page"}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={selected}
+                  onClick={() => style({ enter: entrance })}
+                  className={`rounded border px-2.5 py-1 text-xs ${
+                    selected ? "border-accent bg-[#f6f3ee] font-medium" : "border-line hover:border-ink"
+                  }`}
+                >
+                  {entrance ? ENTRANCE_LABEL[entrance] : "Match the page"}
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 

@@ -44,6 +44,9 @@ function sameOriginPath(value: string | null): string | null {
  * Every line is already decided by the caller (switched off, empty, or filled):
  * nothing here knows what a household is.
  */
+/** How the hero is composed: the theme's own (`full`, `framed`, `type`) or the block's `split`. */
+export type HeroLook = "full" | "framed" | "split" | "type";
+
 export type HeroCover = {
   /** "For Chidi, Ada and Zara". Null when the planner switched it off. */
   greeting: string | null;
@@ -112,7 +115,7 @@ export function SiteHero({
   timeLeft,
   cover = null,
 }: {
-  style: HeroStyle;
+  style: HeroLook;
   /**
    * Editorial's hero is a different composition, not a restyled one — the
    * names are left-aligned at up to 150px with the ampersand on its own line,
@@ -138,7 +141,7 @@ export function SiteHero({
   const legacy = sameOriginPath(imagePath);
   const picture: HeroPicture | null =
     image ?? (legacy ? { src: legacy, srcSet: null, colour: null, focal: null, width: null, height: null } : null);
-  const effective: HeroStyle = picture ? style : "type";
+  const effective: HeroLook = picture ? style : "type";
 
   if (preset === "editorial") {
     return (
@@ -146,10 +149,10 @@ export function SiteHero({
         headline={headline}
         dateLabel={dateLabel}
         location={location}
-        // Editorial's hero is full-bleed whenever there is a photograph, so
-        // `framed` and `full` are the same choice here. `type` is not: it is
-        // somebody saying "no photo, just our names", and overriding that
-        // would make the theme editor's third option do nothing.
+        // `type` is somebody saying "no photo, just our names", and overriding
+        // that would make the third Look do nothing — so it is honoured even
+        // when there is a photograph, exactly as before.
+        look={style}
         picture={style === "type" ? null : picture}
         imageAlt={imageAlt}
         weddingDate={weddingDate ?? null}
@@ -213,6 +216,19 @@ export function SiteHero({
     );
   }
 
+  if (effective === "split") {
+    return (
+      <header id="hero" className="scroll-mt-16 px-5 py-10 sm:py-14">
+        <div className="mx-auto grid max-w-5xl items-center gap-8 md:grid-cols-2 md:gap-12">
+          <div className="relative aspect-[4/5] w-full overflow-hidden">
+            <HeroImage picture={picture} alt={imageAlt} />
+          </div>
+          {words}
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header id="hero" className="scroll-mt-16 px-5 pb-14 pt-10 sm:pt-14">
       <div className="mx-auto max-w-2xl">
@@ -255,6 +271,7 @@ function EditorialHero({
   weddingDate,
   timeLeft,
   cover,
+  look,
 }: {
   headline: string;
   dateLabel: string | null;
@@ -264,6 +281,7 @@ function EditorialHero({
   weddingDate: string | null;
   timeLeft: TimeLeft | null;
   cover: HeroCover | null;
+  look: HeroLook;
 }) {
   const split = splitHeadline(headline);
 
@@ -304,7 +322,7 @@ function EditorialHero({
     </div>
   );
 
-  if (!picture) {
+  if (!picture || look === "type") {
     return (
       <header id="hero" className="relative scroll-mt-16 px-5 pb-16 pt-24 sm:px-10 sm:pt-32">
         {weddingDate ? (
@@ -320,6 +338,62 @@ function EditorialHero({
           <div className="text-muted">
             {coverLine}
             {meta}
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  const counter = weddingDate ? (
+    <HeroCounter
+      startsAt={weddingDate}
+      initial={timeLeft}
+      className="absolute right-5 top-8 text-muted sm:right-10"
+    />
+  ) : null;
+
+  // The photograph in a bordered frame, the names beneath, left-aligned.
+  if (look === "framed") {
+    return (
+      <header id="hero" className="relative scroll-mt-16 px-5 pb-14 pt-16 sm:px-10 sm:pt-20">
+        {counter}
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="border border-line p-2.5 sm:p-3">
+            <div className="relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/9]">
+              <HeroImage picture={picture} alt={imageAlt} />
+            </div>
+          </div>
+          <div className="site-cover-words mt-10 text-ink">
+            {greeting}
+            {names}
+            <div className="text-muted">
+              {coverLine}
+              {meta}
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  // The photograph beside the names. Stacks, photograph first, on a phone.
+  if (look === "split") {
+    return (
+      <header id="hero" className="relative scroll-mt-16 px-5 pb-14 pt-16 sm:px-10 sm:pt-20">
+        {counter}
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-8 md:grid-cols-2 md:gap-14">
+          <div className="relative aspect-[4/5] w-full overflow-hidden">
+            <HeroImage picture={picture} alt={imageAlt} />
+          </div>
+          {/* Half the width, so the names are set smaller than on the full-bleed
+              cover: "Olivia" at 150px would not fit the column. */}
+          <div className="site-cover-words text-ink md:[&_.site-h1]:text-[clamp(48px,6.4vw,100px)]">
+            {greeting}
+            {names}
+            <div className="text-muted">
+              {coverLine}
+              {meta}
+            </div>
           </div>
         </div>
       </header>

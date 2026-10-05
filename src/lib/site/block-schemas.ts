@@ -35,6 +35,10 @@ export const styleSchema = z
     embed: z.coerce.boolean().optional(),
     // Off is the only value worth storing: absent already means on.
     lightbox: z.boolean().optional(),
+    // A Look id. Which ones are valid depends on the block's type, which this
+    // schema cannot see; `setBlockStyle` checks it against `looksFor(type)`.
+    variant: z.string().max(24).optional(),
+    enter: z.enum(["rise", "fade", "reveal", "none"]).optional(),
   })
   .strict();
 

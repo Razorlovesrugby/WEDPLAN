@@ -58,6 +58,17 @@ export type BlockStyle = {
    * block with no `lightbox` key means "yes" (spec 27 E9).
    */
   lightbox?: boolean;
+  /**
+   * The block's Look (spec 27 E1): a curated alternate layout, from the closed
+   * set in `looks.ts`. Absent means the block's default, so every existing block
+   * renders as it did; an unknown value falls back to that default.
+   */
+  variant?: string;
+  /**
+   * How this one block arrives as the page scrolls (spec 27 E4): `rise`, `fade`,
+   * `reveal` or `none`. Absent means "match the page".
+   */
+  enter?: "rise" | "fade" | "reveal" | "none";
 };
 
 /**
@@ -77,6 +88,8 @@ export const BLOCK_STYLE_KEYS = [
   "bgImage",
   "embed",
   "lightbox",
+  "variant",
+  "enter",
 ] as const satisfies readonly (keyof BlockStyle)[];
 
 // Fails to compile if `BlockStyle` gains a key this list does not name.

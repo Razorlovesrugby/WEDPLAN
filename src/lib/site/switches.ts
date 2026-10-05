@@ -44,6 +44,7 @@ export type SwitchDef = {
 
 const MOTION_WHEN_OFF: Record<MotionEffect, string> = {
   cover_handover: "The cover stays still as it scrolls away.",
+  itinerary_draw: "The timeline's line is fully drawn, statically.",
   section_arrivals: "Sections are simply present.",
   reading_line: "No line across the top.",
   nav_condense: "The menu keeps its bar at all times.",
@@ -83,6 +84,25 @@ const coverSwitches: SwitchDef[] = [
   whenOff: whenOff as string,
 }));
 
+const blockStyleSwitches: SwitchDef[] = [
+  {
+    id: "block.enter",
+    group: "motion",
+    label: "How one block arrives (rise, fade, reveal, or stay still)",
+    where: "Block inspector → How it arrives",
+    defaultOn: "level",
+    whenOff: "'Stay still' leaves that block in place while the page around it moves.",
+  },
+  {
+    id: "block.lightbox",
+    group: "photos",
+    label: "Let guests tap a photo to enlarge it",
+    where: "Gallery, photo band, photo and words, page break → How it looks",
+    defaultOn: true,
+    whenOff: "The photographs are plain images with no pointer cursor and no viewer.",
+  },
+];
+
 const personalSwitches: SwitchDef[] = [
   {
     id: "personal.show_calendar",
@@ -97,6 +117,7 @@ const personalSwitches: SwitchDef[] = [
 
 export const SWITCHES: SwitchDef[] = [
   ...coverSwitches,
+  ...blockStyleSwitches,
   ...personalSwitches,
   ...motionSwitches,
   {

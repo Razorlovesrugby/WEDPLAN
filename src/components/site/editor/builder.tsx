@@ -497,6 +497,7 @@ export function SiteBuilder({
                   form={BLOCK_FORMS[selectedBlock.type]}
                   photos={photos}
                   onDone={afterWrite}
+                  heroDefault={theme.heroStyle}
                 />
               </Section>
             </div>

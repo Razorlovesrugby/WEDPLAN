@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlock } from "@/lib/site/blocks";
 import { flag, text } from "@/lib/site/sections";
 import { DEFAULT_COVER_LINE } from "@/lib/site/cover";
+import { resolveEntrance, resolveLook } from "@/lib/site/looks";
 import { renderGreeting } from "@/lib/site/greeting";
 import {
   replyBarCopy,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/site/reply-state";
 import { ReplyBar } from "../reply-bar";
 import { formatDate, daysUntil, timeLeft } from "@/lib/format";
-import { SiteHero, type HeroCover } from "../hero";
+import { SiteHero, type HeroCover, type HeroLook } from "../hero";
 import { ReadingLine } from "../reading-line";
 import { PhotoViewer } from "../photo-viewer";
 import { SiteImage } from "../site-image";
@@ -241,7 +242,9 @@ export function SiteBlockView({
       return (
         <>
           <SiteHero
-            style={ctx.theme.heroStyle}
+            // The block's own Look, or the theme's hero style when it has not
+            // chosen one (spec 27 E1).
+            style={resolveLook("hero", block.style?.variant, ctx.theme.heroStyle) as HeroLook}
             preset={ctx.theme.preset}
             headline={headline}
             dateLabel={dateLabel}
@@ -300,7 +303,7 @@ export function SiteBlockView({
     case "story":
       return (
         <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
-          <Story payload={payload} />
+          <Story payload={payload} look={resolveLook("story", block.style?.variant)} />
         </Shell>
       );
 
@@ -371,6 +374,7 @@ export function SiteBlockView({
               dressCodes={dressCodes}
               coachByEvent={coachByEvent}
               preset={ctx.theme.preset}
+              look={resolveLook("schedule", block.style?.variant)}
             />
             {/* One tap to put the whole weekend in a calendar. Its own switch,
                 on unless the planner turned it off (spec 27 E9). */}
@@ -395,6 +399,7 @@ export function SiteBlockView({
             dressCodes={dressCodes}
             coachByEvent={coachByEvent}
             preset={ctx.theme.preset}
+            look={resolveLook("schedule", block.style?.variant)}
           />
         </Shell>
       );
@@ -443,6 +448,7 @@ export function SiteBlockView({
                 weddingSlug: ctx.wedding.slug,
                 addressSegment: personal.addressSegment,
               }}
+              look={resolveLook("rsvp", block.style?.variant)}
               replyBy={
                 ctx.theme.layout.replyByDate
                   ? replyByLabel(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)
@@ -508,7 +514,7 @@ export function SiteBlockView({
       return (
         <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <div className="space-y-10">
-            <GalleryGrid images={images} zoom={zoom} />
+            <GalleryGrid images={images} zoom={zoom} look={resolveLook("gallery", block.style?.variant)} />
             {/* Uploading is a thing only a household can do — the open
                 internet must not be able to post into the gallery. */}
             {personal && personal.token && ctx.uploadsOpen ? (
@@ -735,7 +741,14 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
         // The id is what the builder's preview uses to scroll to a block and to
         // tell the builder which one was clicked. It carries no content, and a
         // wrapper with no styling changes nothing about the layout.
-        <div key={block.id} data-block-id={block.id} data-block-type={block.type}>
+        <div
+          key={block.id}
+          data-block-id={block.id}
+          data-block-type={block.type}
+          // How this one block arrives, when it was told to differ from the page
+          // (spec 27 E4). `globals.css` reads it; absent means "match the page".
+          data-enter={resolveEntrance(block.style?.enter) ?? undefined}
+        >
           <SiteBlockView block={block} ctx={ctx} mark={numbered ? marks.get(block.id) : undefined} />
         </div>
       ))}

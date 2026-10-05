@@ -29,6 +29,7 @@ export function InvitedEvents({
   dressCodes = [],
   coachByEvent,
   preset = "script",
+  look = "list",
 }: {
   events: {
     id: string;
@@ -55,6 +56,8 @@ export function InvitedEvents({
    * restyled one, so it is a branch here and not a rule in `globals.css`.
    */
   preset?: ThemePresetId;
+  /** `list`, `timeline` or `cards` — the block's Look (spec 27 E1). */
+  look?: string;
 }) {
   const editorial = preset === "editorial";
 
@@ -67,7 +70,7 @@ export function InvitedEvents({
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10" data-look={look}>
       {[...byDay.entries()].map(([day, dayEvents]) => (
         <div key={day}>
           <h3 className="site-h3 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">

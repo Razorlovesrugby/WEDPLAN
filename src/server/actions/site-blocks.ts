@@ -12,6 +12,7 @@ import {
   isBlockType,
   typesAtLimit,
 } from "@/lib/site/blocks";
+import { isLook } from "@/lib/site/looks";
 import { blocksNeedingWork, starterPayload } from "@/lib/site/starter";
 import { FAQ_LIBRARY } from "@/lib/site/faq-library";
 import { fail, ok, type ActionResult } from "./result";
@@ -140,6 +141,21 @@ export async function setBlockStyle(
   if (!parsed.success) return fail("That isn't a style this block offers");
 
   const supabase = await createClient();
+
+  // A Look is only valid for the kind of block it belongs to: a gallery cannot
+  // be a timeline. The schema cannot see the block's type, so it is checked here.
+  if (parsed.data.variant !== undefined) {
+    const { data: existing } = await supabase
+      .from("site_blocks")
+      .select("type")
+      .eq("wedding_id", wedding.id)
+      .eq("id", id)
+      .maybeSingle();
+    if (!existing || !isBlockType(existing.type) || !isLook(existing.type, parsed.data.variant)) {
+      return fail("That isn't a layout this block offers");
+    }
+  }
+
   const { error } = await supabase
     .from("site_blocks")
     .update({ style: compact(parsed.data) as never })

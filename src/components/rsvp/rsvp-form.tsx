@@ -44,6 +44,7 @@ export function RsvpForm({
   invites,
   weekend,
   replyBy,
+  look = "inline",
 }: {
   token: string;
   guests: GuestRow[];
@@ -67,6 +68,8 @@ export function RsvpForm({
   };
   /** "1 May", or null when there is no lock date or the planner switched it off. */
   replyBy?: string | null;
+  /** `inline` (the form as it always was) or `card` — the block's Look (spec 27 E1). */
+  look?: string;
 }) {
   const router = useRouter();
   // Once they have sent it, the form gives way to a card that says back what
@@ -296,8 +299,39 @@ export function RsvpForm({
     );
   }
 
+  // The Card look: one bordered card that says how far along they are. Same
+  // fields, same actions — only the frame and the progress line differ.
+  const answeredPeople = answering.filter((guestState) =>
+    Object.values(guestState.responses).every((value) => value !== "pending"),
+  ).length;
+  const card = look === "card";
+
   return (
-    <form onSubmit={onSubmit} className="site-rsvp-panel space-y-6">
+    <form
+      onSubmit={onSubmit}
+      data-look={look}
+      className={`site-rsvp-panel space-y-6 ${card ? "site-rsvp-card border border-line p-5 sm:p-8" : ""}`}
+    >
+      {card ? (
+        <div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="site-label text-muted">Your reply</span>
+            <span className="text-sm text-muted" aria-live="polite">
+              {answeredPeople} of {answering.length} answered
+            </span>
+          </div>
+          {/* A thin line that fills as each person is answered for. It carries
+              no information the sentence above does not, so it is hidden from
+              assistive tech rather than read out twice. */}
+          <div aria-hidden="true" className="mt-2 h-px w-full bg-line">
+            <div
+              className="h-px bg-accent transition-[width] duration-[400ms]"
+              style={{ width: `${answering.length === 0 ? 0 : (answeredPeople / answering.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {/* Most replies are "all of us" one way or the other. Asking for that
           one event at a time, per person, is twelve taps for one fact. */}
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
