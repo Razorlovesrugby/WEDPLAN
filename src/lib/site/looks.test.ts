@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BLOCK_TYPES, BLOCKS } from "./blocks";
 import {
@@ -96,5 +97,20 @@ describe("entrances", () => {
 describe("blocks that offer a Look", () => {
   it("are all real, renderable block types", () => {
     for (const type of Object.keys(LOOKS)) expect(BLOCKS[type as keyof typeof BLOCKS]).toBeDefined();
+  });
+});
+
+describe("the picker's miniatures", () => {
+  // `look-glyph.tsx` is JSX and these tests run without a DOM, so this reads its
+  // source: a Look added to the registry with no miniature would otherwise show
+  // as a blank tile in the inspector and nothing would say so.
+  const source = readFileSync(new URL("../../components/site/editor/look-glyph.tsx", import.meta.url), "utf8");
+
+  it("has one for every Look the registry offers", () => {
+    for (const [type, set] of Object.entries(LOOKS)) {
+      for (const look of set!.looks) {
+        expect(source, `${type}.${look.id}`).toContain(`"${type}.${look.id}"`);
+      }
+    }
   });
 });

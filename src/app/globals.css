@@ -130,6 +130,22 @@
   --dur-slow: 700ms;
 }
 
+/* Hover and press, on the guest site only (spec 27 §6). A button answers a
+   finger: the colour change eases rather than snapping and a press sinks a
+   hair. `[data-site-theme]` keeps this off the planner's own app, whose
+   buttons share these classes. Reduced motion gets the instant state change it
+   always had. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-site-theme] :is(.btn, .btn-primary) {
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+  [data-site-theme] :is(.btn, .btn-primary):active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+
 @keyframes site-reveal-in {
   from {
     opacity: 0;
@@ -1252,7 +1268,7 @@
   }
 }
 .std[data-animate="true"] .std-rise {
-  animation: std-rise 1s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: std-rise 1s var(--ease-out) both;
   animation-delay: var(--std-delay, 0ms);
 }
 @media (prefers-reduced-motion: reduce) {

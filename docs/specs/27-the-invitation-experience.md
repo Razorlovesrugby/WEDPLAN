@@ -1,9 +1,10 @@
 # Spec 27 — The invitation as an experience, and an editor you can play with
 
-**Status: proposed and answered (2026-10-05), not built.** All eleven §12
-questions have answers (below). Answers are not authorization to write code:
-per [`docs/specs/README.md`](README.md) and `CLAUDE.md`, nothing beyond this
-file is built until you say to build it, in words that mean "write code".
+**Status: built, steps 0–7 (2026-10-05) — never run against a live Supabase
+project.** The §15 build order was authorized in words that mean "write code"
+("Let's build it") after all eleven §12 questions were answered; see **Build
+status** at the end for what exists, where it departs from this text, and what
+has and has not been looked at.
 
 **Depends on:** spec 23 (blocks, `site_revisions`, the one renderer), spec 24
 (the builder's editing feel — partly built, five questions still open; §11
@@ -817,3 +818,108 @@ risk. If the whole thing is too much, **stop after step 4**.
 - **The handoff says which claims were *looked at* (a screenshot at a stated
   width and scroll offset) and which were only typechecked and built.** This
   repo has been burned by that distinction before.
+
+---
+
+## Build status — 2026-10-05
+
+**Steps 0 to 7 are built.** `npx tsc --noEmit`, `npm test` (852), 
+`./scripts/verify-migrations.sh` (455 assertions, up from 444) and
+`npm run build` pass. **None of that is the claim "it works against a real
+project"**: no part of this has run against a live Supabase project, a real
+phone, or a real photograph. What was looked at is listed under *Looked at*,
+and what was not under *Never looked at*.
+
+### Done
+
+| Step | What exists | Where |
+| --- | --- | --- |
+| 0 | Hero photo shows in the preview (the reported bug). Autosave in the inspector, starter content when a block is added, plain-English style controls, the preview keeping its place across edits; the zod schemas moved out of the `"use server"` file so tests can reach them | `block-schemas.ts`, `starter.ts`, `style-labels.ts`, `use-autosave.ts`, `builder.tsx`, `block-inspector.tsx` |
+| 1 | Motion layer: easing/duration tokens, `data-motion` + `data-fx` on the page root, theme `motion {level, off[], on[]}` and `layout` switches, seven effects (cover hand-over, itinerary draw, section arrivals, reading line, nav condense, photo arrival, stagger), the switch registry, and the rail's Motion and Page sections | `motion.ts`, `switches.ts`, `globals.css`, `reading-line.tsx`, `stagger.ts`, `rail.tsx` |
+| 2 | Photographs: three sizes from one browser decode, average colour, focal point, `/api/photo/<id>` stable redirect (planner session, or published/approved only), 24h signed-URL TTL, `SiteImage` with a reserved aspect ratio, a native `<dialog>` lightbox | **`0032_site_asset_images.sql`**, `supabase/tests/15_site_asset_images.sql`, `encode-image.ts`, `site-image.ts`, `photo-access.ts`, `/api/photo/[id]`, `site-image.tsx`, `photo-viewer.tsx` |
+| 3 | The cover: the household's name set large, a greeting they can word (`{names}` / `{household}`), every cover line its own switch, tall cover, scroll cue, the hand-over, the focal-point picker, "Previewing as" a real household | `greeting.ts`, `cover.ts`, `hero.tsx`, `photo-picker.tsx` |
+| 4 | Personal: the weekend as one `.ics` (credentialed by the household's address segment, no new token), add-to-Google, a sticky reply bar, a reply that remembers and answers back, a view-transition helper | `ics.ts`, `weekend.ts`, `/api/public/weekend/[slug]/[household]`, `reply-state.ts`, `reply-bar.tsx`, `view-transition.ts` |
+| 5 | Looks: hero ×4, weekend ×3, story ×3, gallery ×3, RSVP ×2 (the §E1 table's own count); a per-block entrance; the itinerary draw | `looks.ts`, `look-glyph.tsx`, `content.tsx`, `invited-events.tsx`, `gallery.tsx`, `rsvp-form.tsx` |
+| 6 | The editor: click the preview to select, hover/selected outlines, scroll-to, undo for delete (hide, then delete after 8s), drag a block from the palette onto the preview with an insertion line | `preview-bridge.tsx`, `preview-messages.ts`, `builder.tsx` |
+| 7 | Evening (a dark Editorial-family preset), Midnight and Ember palettes, `data-site-tone`, four Vibes, three templates on the empty builder, Vibe undo | `presets.ts`, `vibes.ts`, `src/server/site/vibes.ts`, `site-vibes.ts` |
+
+### Where it departs from the text above
+
+1. **Look thumbnails are schematic.** §E1 asks for thumbnails rendered from the
+   planner's own content. `look-glyph.tsx` draws shape miniatures instead; the
+   live preview re-renders with their real words when one is picked. A test
+   asserts every registered Look has a miniature.
+2. **RSVP has two Looks and the hero four**, as the §E1 table lists them — not
+   "three each" as Q4's shorthand says. The hero's fourth, *Type only*, is what
+   a hero with no photograph falls back to.
+3. **A Vibe is not stored.** §11 allowed a `vibe` key on the theme; there is
+   none. A Vibe is *applied* (theme, palette, motion, each block's Look) and
+   the rail marks the one whose preset and palette match. Undo restores a
+   snapshot held in the browser for 12 seconds — **it does not survive a
+   reload**; the draft history (revisions) is the long-term undo, as it
+   already was.
+4. **Templates are the three starter layouts plus a Vibe**, not new block sets:
+   Garden party → `classic`, Modern → `photo_led`, Evening → `short`.
+5. **Hover/press is on guest-site buttons only.** The §6 table says "buttons
+   and rows"; rows (event, FAQ) have no press state.
+6. **The save-the-date shares only what Q11 said**: its `std-rise` now uses the
+   shared `--ease-out`, and a site on *Still* no longer plays the rise. It
+   keeps its own layout system.
+7. **Photo placeholder is preview-only.** In the builder, a photo block with no
+   photograph draws a placeholder; on the guest page it draws nothing, as before.
+8. **The household note is cut (Q3), so `0032` is the photo columns.** Nothing
+   reads `households.notes` anywhere new.
+9. **Dark palettes put `ink` = light and `paper` = dark**, so every component
+   reading the tokens inverts for free and `validatePalette` checks the same
+   four pairs. Text *on a photograph* and its scrim are the one exception —
+   fixed colours (`onphoto`, `scrim`) — because `text-paper` over a photo goes
+   dark-on-dark in a dark palette.
+10. **Spec 24's "to confirm" answers** (Answered, Q10 table) are still
+    unconfirmed by the planner; steps built on them took the stated reading.
+
+### Looked at, in this sandbox's Chromium, on a throwaway harness
+
+Hero photo and its placeholder; the builder rail and inspector at 1400px; the
+preview bridge (click-to-select, scroll-to, links ignored); computed styles for
+every motion at each level, with reduced motion, and with a per-effect override;
+the lightbox; the cover in Editorial and Script; every Look; the weekend panel;
+the reply bar's visibility and the reply flow (server action **mocked**);
+per-block entrance; undo and the deferred delete; drop-to-add and its insertion
+line; Evening, Midnight, Script on Ember; the Vibes section, its undo toast and
+the empty-builder templates (server actions **mocked**).
+
+### Never looked at
+
+- **Anything against a live Supabase project:** `0032` has not been applied to
+  one; signed URLs and their 24h lifetime; uploads with variants; `/api/photo/<id>`
+  with a real session or a real published revision; the `.ics` route; saving,
+  publishing, applying a Vibe, or restoring one (the SQL paths in
+  `src/server/site/vibes.ts` have never executed — only its pure helpers have
+  tests).
+- **A real phone.** The sticky reply bar with the on-screen keyboard open; the
+  lightbox's swipe; scroll-driven motion on a real compositor; a browser
+  without `animation-timeline` (the guards are `@supports`, untested in one).
+- **The full screenshot matrix §14 asks for** (0/25/50/75/100% scroll × 390 and
+  1440px × each motion level). What was looked at is the list above.
+- **Largest contentful paint and layout shift** (§11): no throttled profile
+  was run and there are no real photographs to run it against.
+- Dark Evening printed; the Midnight palette on a household page with real
+  photos.
+
+### Budgets (§11)
+
+| Budget | Measured | |
+| --- | --- | --- |
+| Added guest-page JS ≤ ~10KB gz | **+7 kB** first-load on `/w/[slug]` and on the household page (121→128 kB, 122→129 kB, from `next build` before and after); shared chunks 102→103 kB | within |
+| Added CSS ≤ ~12KB gz | **+3.4 kB** (9,814 → 13,177 bytes, `gzip -9` of the compiled sheet; includes the planner app's) | within |
+| No new runtime dependency | none added | met |
+| LCP no worse than today's | not measured | **unknown** |
+| Layout shift of 0 from images | aspect ratios reserved by `SiteImage`; not measured | **unverified** |
+
+### To do next
+
+Apply `0032` to the live project, then open `/site` and a household link **on a
+phone** — that is the check this build can't make. The likeliest places for
+something to be wrong are the ones nobody has seen: signed URLs behind
+`/api/photo`, what a half-set focal point does to a saved block, and the
+`.ics` on a real calendar app.

@@ -132,7 +132,9 @@ export default async function SaveTheDatePage({
                 { icsHref: absoluteUrl(saveTheDateIcsPath(slug)), googleHref: google }
               : null
           }
-          animate
+          // The one thing the save-the-date shares with the site's motion
+          // control (spec 27 Q11): a Still site is still here too.
+          animate={siteTheme.motion.level !== "still"}
         />
       </div>
     </>
