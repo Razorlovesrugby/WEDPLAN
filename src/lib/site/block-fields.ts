@@ -153,7 +153,16 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   schedule: {
     blurb:
       "Times and places come from your events. On a guest's own page this shows only the events they're invited to.",
-    fields: [INTRO],
+    fields: [
+      INTRO,
+      {
+        name: "show_calendar",
+        label: "Offer to add their weekend to their calendar",
+        kind: "checkbox",
+        defaultChecked: true,
+        help: "On a guest's own page only: one file with every event they are invited to.",
+      },
+    ],
   },
   on_the_day: {
     blurb:

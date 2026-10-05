@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
 import { householdReply, replyToAll } from "@/lib/rsvp-household";
+import { replyConfirmation, summariseReply } from "@/lib/site/reply-state";
+import { withViewTransition } from "@/lib/view-transition";
+import { WeekendCalendar } from "@/components/site/weekend-calendar";
 import { QuestionField, type AnswerValue } from "./question-field";
 import type {
   EventRow,
@@ -38,6 +42,8 @@ export function RsvpForm({
   answers,
   locked,
   invites,
+  weekend,
+  replyBy,
 }: {
   token: string;
   guests: GuestRow[];
@@ -52,7 +58,28 @@ export function RsvpForm({
    * evening do to their parents and to nobody else.
    */
   invites: { guest_id: string; event_id: string }[];
+  /** What the confirmation needs to offer their weekend as a calendar file. */
+  weekend?: {
+    timeZone: string;
+    weddingName: string;
+    weddingSlug: string;
+    addressSegment: string | null;
+  };
+  /** "1 May", or null when there is no lock date or the planner switched it off. */
+  replyBy?: string | null;
 }) {
+  const router = useRouter();
+  // Once they have sent it, the form gives way to a card that says back what
+  // they said (spec 27 §7). Both live in this component, so "Change my reply"
+  // is a state change and not a navigation.
+  const [view, setView] = useState<"form" | "done">("form");
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    // Hand focus to the confirmation, so a screen reader announces it and a
+    // keyboard user is not left on a button that has just disappeared.
+    if (view === "done") headingRef.current?.focus();
+  }, [view]);
+
   // One lookup rather than a filter per guest per event.
   const invitedPairs = new Set(invites.map((row) => `${row.guest_id}:${row.event_id}`));
   const eventsFor = (guestId: string) =>
@@ -125,8 +152,15 @@ export function RsvpForm({
       });
 
       if (result.ok) {
-        setStatus("saved");
         setError(null);
+        // A view transition where the browser has them: the form morphs into
+        // the confirmation. Without, it simply swaps.
+        withViewTransition(() => {
+          setStatus("saved");
+          setView("done");
+        });
+        // The page's reply bar says what they answered; make it re-read.
+        router.refresh();
       } else {
         setStatus("error");
         setError(result.error);
@@ -184,8 +218,86 @@ export function RsvpForm({
     setStatus("idle");
   }
 
+  if (view === "done") {
+    const summary = summariseReply(
+      answering.map((guestState) => {
+        const guest = guests.find((g) => g.id === guestState.guestId)!;
+        return {
+          name: guest.preferred_name?.trim() || guest.first_name,
+          responses: Object.values(guestState.responses),
+        };
+      }),
+    );
+    const { heading, lines } = replyConfirmation(summary);
+
+    return (
+      <div className="site-rsvp-panel card p-8 text-center" role="status">
+        <svg
+          className="site-check mx-auto h-14 w-14 text-accent"
+          viewBox="0 0 56 56"
+          fill="none"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="28" cy="28" r="26" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M17 29.5l7.5 7.5L40 21"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <h3
+          ref={headingRef}
+          tabIndex={-1}
+          className="site-heading mt-5 text-3xl leading-tight outline-none"
+        >
+          {heading}
+        </h3>
+        {lines.length > 0 ? (
+          <ul className="mt-4 space-y-1 text-[1.0625rem] text-muted">
+            {lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="mt-4 text-sm text-muted">
+          {replyBy
+            ? `You can change this until ${replyBy}.`
+            : "Come back and change it whenever you need to."}
+        </p>
+
+        {/* Somebody who said yes is somebody who wants the weekend in their
+            calendar, and this is the moment they are most likely to add it. */}
+        {summary.coming.length > 0 && weekend ? (
+          <WeekendCalendar
+            events={events}
+            timeZone={weekend.timeZone}
+            weddingName={weekend.weddingName}
+            weddingSlug={weekend.weddingSlug}
+            addressSegment={weekend.addressSegment}
+          />
+        ) : null}
+
+        <button
+          type="button"
+          className="mt-6 text-sm text-muted underline underline-offset-2"
+          onClick={() =>
+            withViewTransition(() => {
+              setStatus("idle");
+              setView("form");
+            })
+          }
+        >
+          Change my reply
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={onSubmit} className="site-rsvp-panel space-y-6">
       {/* Most replies are "all of us" one way or the other. Asking for that
           one event at a time, per person, is twelve taps for one fact. */}
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">

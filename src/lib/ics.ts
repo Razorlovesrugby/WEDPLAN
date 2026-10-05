@@ -24,7 +24,7 @@ export function icsStamp(value: string | Date): string {
 export function icsText(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\;")
+    .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")
     .replace(/\r?\n/g, "\\n");
 }
@@ -67,20 +67,18 @@ export type IcsEvent = {
 /** Default length when an event has no end time. */
 export const DEFAULT_EVENT_MINUTES = 60;
 
-export function buildIcs(event: IcsEvent, now: Date = new Date()): string {
+/** One VEVENT, as lines. Shared by the single-event file and the weekend file. */
+function veventLines(event: IcsEvent, now: Date): string[] {
   // A zero-length event renders as a dot in most calendars; an hour is what
   // clients assume anyway when asked to guess.
   const end =
     event.endsAt ??
     new Date(new Date(event.startsAt).getTime() + DEFAULT_EVENT_MINUTES * 60_000).toISOString();
 
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Wedding//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
+  return [
     "BEGIN:VEVENT",
+    // Stable per event, so the same event added from two files (the single one
+    // and the weekend one) is one entry in somebody's calendar, not two.
     `UID:${event.id}@wedding`,
     `DTSTAMP:${icsStamp(now)}`,
     `DTSTART:${icsStamp(event.startsAt)}`,
@@ -89,11 +87,61 @@ export function buildIcs(event: IcsEvent, now: Date = new Date()): string {
     event.location ? `LOCATION:${icsText(event.location)}` : null,
     event.description ? `DESCRIPTION:${icsText(event.description)}` : null,
     "END:VEVENT",
-    "END:VCALENDAR",
   ].filter((line): line is string => line !== null);
+}
 
+function calendar(body: string[]): string {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Wedding//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    ...body,
+    "END:VCALENDAR",
+  ];
   // CRLF, not LF: required by the spec, and several clients reject LF-only.
   return lines.map(foldLine).join("\r\n") + "\r\n";
+}
+
+export function buildIcs(event: IcsEvent, now: Date = new Date()): string {
+  return calendar(veventLines(event, now));
+}
+
+/**
+ * Several events in one file (spec 27 §7, "your weekend").
+ *
+ * A guest invited to the ceremony, the dinner and the brunch adds all three
+ * with one tap instead of three downloads. Events without a start time are
+ * left out: there is nothing to put in a calendar for "sometime Saturday".
+ * Order is by start, whatever order they arrive in.
+ */
+export function buildIcsCalendar(events: IcsEvent[], now: Date = new Date()): string {
+  const dated = events
+    .filter((event) => Boolean(event.startsAt) && !Number.isNaN(new Date(event.startsAt).getTime()))
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  return calendar(dated.flatMap((event) => veventLines(event, now)));
+}
+
+/**
+ * Google Calendar's "create this event" link for one timed event.
+ *
+ * Google has no multi-event link, which is why the weekend offers one `.ics`
+ * for everything and one of these per event beneath it. Times are UTC
+ * (`...Z`), so they land right in whatever zone the guest's calendar is in.
+ */
+export function googleEventUrl(event: IcsEvent): string {
+  const end =
+    event.endsAt ??
+    new Date(new Date(event.startsAt).getTime() + DEFAULT_EVENT_MINUTES * 60_000).toISOString();
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: event.name,
+    dates: `${icsStamp(event.startsAt)}/${icsStamp(end)}`,
+  });
+  if (event.location) params.set("location", event.location);
+  if (event.description) params.set("details", event.description);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
 /**

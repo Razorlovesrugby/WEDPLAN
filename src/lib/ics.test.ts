@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildAllDayIcs, buildIcs, foldLine, icsStamp, icsText } from "./ics";
+import {
+  buildAllDayIcs,
+  buildIcs,
+  buildIcsCalendar,
+  foldLine,
+  googleEventUrl,
+  icsStamp,
+  icsText,
+} from "./ics";
 
 describe("icsStamp", () => {
   it("emits UTC with no punctuation", () => {
@@ -18,7 +26,7 @@ describe("icsText", () => {
   });
 
   it("escapes semicolons and backslashes", () => {
-    expect(icsText("a;b")).toBe("a\;b");
+    expect(icsText("a;b")).toBe("a\\;b");
     expect(icsText("a\\b")).toBe("a\\\\b");
   });
 
@@ -141,5 +149,97 @@ describe("buildAllDayIcs", () => {
     expect(ics).toContain("LOCATION:Wanaka\\, Otago\r\n");
     expect(ics).not.toContain("DESCRIPTION");
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
+  });
+});
+
+const event = (over: Partial<Parameters<typeof buildIcs>[0]> = {}) => ({
+  id: "e1",
+  name: "Ceremony",
+  startsAt: "2027-06-12T02:00:00Z",
+  endsAt: "2027-06-12T03:00:00Z",
+  location: "St Mary's, Church Lane",
+  description: null,
+  ...over,
+});
+
+describe("icsText, the semicolon", () => {
+  it("really is a backslash and a semicolon (RFC 5545 §3.3.11)", () => {
+    // The first version wrote "\;" in a JS string, which is just ";", and its
+    // own test asserted the same mistake — so it passed while escaping nothing.
+    expect(icsText("a;b")).toHaveLength(4);
+    expect(icsText("a;b")[1]).toBe("\\");
+  });
+});
+
+describe("buildIcsCalendar", () => {
+  const now = new Date("2027-01-01T00:00:00Z");
+
+  it("puts every event in one calendar, in start order", () => {
+    const ics = buildIcsCalendar(
+      [
+        event({ id: "late", name: "Brunch", startsAt: "2027-06-13T22:00:00Z", endsAt: null }),
+        event({ id: "early", name: "Ceremony" }),
+      ],
+      now,
+    );
+    expect(ics.match(/BEGIN:VCALENDAR/g)).toHaveLength(1);
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(ics.indexOf("SUMMARY:Ceremony")).toBeLessThan(ics.indexOf("SUMMARY:Brunch"));
+  });
+
+  it("uses CRLF throughout and ends with one", () => {
+    const ics = buildIcsCalendar([event()], now);
+    expect(ics.endsWith("\r\n")).toBe(true);
+    expect(ics.replace(/\r\n/g, "")).not.toContain("\n");
+  });
+
+  it("uses the same UID as the single-event file, so adding both is one entry", () => {
+    const single = buildIcs(event(), now);
+    const weekend = buildIcsCalendar([event()], now);
+    expect(single).toContain("UID:e1@wedding");
+    expect(weekend).toContain("UID:e1@wedding");
+  });
+
+  it("leaves out an event with no usable start", () => {
+    const ics = buildIcsCalendar(
+      [event({ startsAt: "" }), event({ id: "bad", startsAt: "not a date" }), event({ id: "ok" })],
+      now,
+    );
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+    expect(ics).toContain("UID:ok@wedding");
+  });
+
+  it("is a valid, empty calendar for no events", () => {
+    const ics = buildIcsCalendar([], now);
+    expect(ics).toContain("BEGIN:VCALENDAR");
+    expect(ics).not.toContain("BEGIN:VEVENT");
+  });
+
+  it("escapes a venue's comma and a note's semicolon", () => {
+    const ics = buildIcsCalendar([event({ description: "Park round the back; use the side gate" })], now);
+    expect(ics).toContain("LOCATION:St Mary's\\, Church Lane");
+    expect(ics).toContain("DESCRIPTION:Park round the back\\; use the side gate");
+  });
+});
+
+describe("googleEventUrl", () => {
+  it("builds a template link with UTC start and end", () => {
+    const url = new URL(googleEventUrl(event()));
+    expect(url.origin + url.pathname).toBe("https://calendar.google.com/calendar/render");
+    expect(url.searchParams.get("action")).toBe("TEMPLATE");
+    expect(url.searchParams.get("text")).toBe("Ceremony");
+    expect(url.searchParams.get("dates")).toBe("20270612T020000Z/20270612T030000Z");
+    expect(url.searchParams.get("location")).toBe("St Mary's, Church Lane");
+  });
+
+  it("assumes an hour when there is no end", () => {
+    const url = new URL(googleEventUrl(event({ endsAt: null })));
+    expect(url.searchParams.get("dates")).toBe("20270612T020000Z/20270612T030000Z");
+  });
+
+  it("encodes what needs it and leaves out what is empty", () => {
+    const raw = googleEventUrl(event({ name: "Dinner & dancing", location: null }));
+    expect(raw).toContain("Dinner+%26+dancing");
+    expect(raw).not.toContain("location=");
   });
 });

@@ -46,7 +46,7 @@ export default async function SitePreviewPage({
   if (as !== "shared") {
     let query = supabase
       .from("households")
-      .select("id, display_name")
+      .select("id, display_name, slug, slug_suffix")
       .eq("wedding_id", wedding.id)
       .is("deleted_at", null);
     query = as ? query.eq("id", as) : query.order("display_name").limit(1);

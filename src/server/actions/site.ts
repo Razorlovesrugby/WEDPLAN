@@ -182,7 +182,12 @@ const themeSchema = z.object({
     })
     .optional(),
   layout: z
-    .object({ chapter_rail: z.boolean().optional(), section_numbers: z.boolean().optional() })
+    .object({
+      chapter_rail: z.boolean().optional(),
+      section_numbers: z.boolean().optional(),
+      reply_bar: z.boolean().optional(),
+      reply_by_date: z.boolean().optional(),
+    })
     .optional(),
   custom_ink: z.string().trim().optional(),
   custom_paper: z.string().trim().optional(),

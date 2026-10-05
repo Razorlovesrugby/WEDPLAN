@@ -106,6 +106,9 @@ export const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   prose: z.object({ heading: optionalText, body: optionalText }),
   schedule: z.object({
     intro: optionalText,
+    // Off hides the "keep your weekend" panel on a guest's own page. Absent
+    // means on, so a block saved before it existed is unchanged.
+    show_calendar: z.boolean().optional(),
     events: z
       .array(
         z.object({

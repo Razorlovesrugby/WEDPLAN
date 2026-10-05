@@ -1,3 +1,4 @@
+import type { BlockType } from "./blocks";
 import { MOTION_EFFECTS, MOTION_EFFECT_COPY, type MotionEffect } from "./motion";
 
 /**
@@ -33,6 +34,12 @@ export type SwitchDef = {
   defaultOn: boolean | "level";
   /** What the page does when it is off — the "no hole" half of the rule. */
   whenOff: string;
+  /**
+   * Set when the switch is a key in a block's payload: which block and which
+   * key. The test then ties the registry to that block's form (does it offer
+   * the switch, with the same default?) and schema (does it accept it?).
+   */
+  payload?: { block: BlockType; key: string };
 };
 
 const MOTION_WHEN_OFF: Record<MotionEffect, string> = {
@@ -67,6 +74,7 @@ const coverSwitches: SwitchDef[] = [
 ].map(([key, label, where, whenOff]) => ({
   id: `cover.${key}`,
   group: "cover" as const,
+  payload: { block: "hero" as const, key: key as string },
   label: label as string,
   where: `Hero block → ${where}`,
   // Every cover line is on unless the planner chose otherwise — except the big
@@ -75,8 +83,21 @@ const coverSwitches: SwitchDef[] = [
   whenOff: whenOff as string,
 }));
 
+const personalSwitches: SwitchDef[] = [
+  {
+    id: "personal.show_calendar",
+    group: "personal",
+    payload: { block: "schedule", key: "show_calendar" },
+    label: "Offer to add their weekend to their calendar",
+    where: "The weekend block → on a guest's own page",
+    defaultOn: true,
+    whenOff: "The schedule is the whole of the section; the panel is not drawn.",
+  },
+];
+
 export const SWITCHES: SwitchDef[] = [
   ...coverSwitches,
+  ...personalSwitches,
   ...motionSwitches,
   {
     id: "layout.chapter_rail",
@@ -85,6 +106,22 @@ export const SWITCHES: SwitchDef[] = [
     where: "Rail → Page",
     defaultOn: true,
     whenOff: "The list is not drawn; the page itself is unchanged.",
+  },
+  {
+    id: "layout.reply_bar",
+    group: "layout",
+    label: "Reply bar on phones",
+    where: "Rail → Page",
+    defaultOn: true,
+    whenOff: "The reply is the form alone, as before; nothing is fixed to the screen.",
+  },
+  {
+    id: "layout.reply_by_date",
+    group: "layout",
+    label: "Say when to reply by",
+    where: "Rail → Page",
+    defaultOn: true,
+    whenOff: 'The bar says "Your reply" with no date.',
   },
   {
     id: "layout.section_numbers",

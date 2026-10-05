@@ -44,6 +44,11 @@ export type PersonalContext = {
    * publish a guestbook note without review, and vote for a song.
    */
   householdId: string;
+  /**
+   * `okonkwo-4f7ak` — the household's own address, which is the credential for
+   * anything keyed by it (the weekend calendar file). Null when it is not known.
+   */
+  addressSegment: string | null;
 };
 
 export type RenderContext = {
@@ -215,6 +220,7 @@ export async function buildPersonalContext(
   household: { id: string; display_name: string },
   token: string | null,
   rsvp: RsvpContext | null,
+  addressSegment: string | null = null,
 ): Promise<PersonalContext> {
   const [seats, uploads] = await Promise.all([
     getHouseholdSeats(weddingId, household.id),
@@ -240,6 +246,7 @@ export async function buildPersonalContext(
   return {
     householdName: household.display_name,
     householdId: household.id,
+    addressSegment,
     token,
     members,
     events: rsvp?.events ?? [],
@@ -272,7 +279,7 @@ export async function buildPersonalContext(
  */
 export async function buildPreviewPersonal(
   weddingId: string,
-  household: { id: string; display_name: string },
+  household: { id: string; display_name: string; slug?: string; slug_suffix?: string },
 ): Promise<PersonalContext> {
   const supabase = createAdminClient();
   const [{ data: guests }, { data: events }] = await Promise.all([
@@ -302,6 +309,8 @@ export async function buildPreviewPersonal(
   return {
     householdName: household.display_name,
     householdId: household.id,
+    addressSegment:
+      household.slug && household.slug_suffix ? `${household.slug}-${household.slug_suffix}` : null,
     token: null,
     members,
     events: eventRows,

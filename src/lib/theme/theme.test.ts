@@ -163,7 +163,7 @@ describe("resolveTheme", () => {
       // A theme saved before spec 27 has neither, and reads as Gentle with the
       // rail and section numbers on — what the page already did.
       motion: { level: "gentle", off: [], on: [] },
-      layout: { chapterRail: true, sectionNumbers: true },
+      layout: { chapterRail: true, sectionNumbers: true, replyBar: true, replyByDate: true },
     });
   });
 
@@ -173,7 +173,12 @@ describe("resolveTheme", () => {
       layout: { chapter_rail: false },
     });
     expect(theme.motion).toEqual({ level: "cinematic", off: ["reading_line"], on: [] });
-    expect(theme.layout).toEqual({ chapterRail: false, sectionNumbers: true });
+    expect(theme.layout).toEqual({
+      chapterRail: false,
+      sectionNumbers: true,
+      replyBar: true,
+      replyByDate: true,
+    });
   });
 
   it("survives a motion value it does not understand", () => {

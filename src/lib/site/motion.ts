@@ -174,15 +174,29 @@ export type SiteLayout = {
   chapterRail: boolean;
   /** `04 · ATTIRE` above a heading. Off leaves the heading alone. */
   sectionNumbers: boolean;
+  /** The strip along the bottom of a phone that says where their reply is (spec 27 §7). */
+  replyBar: boolean;
+  /** "· by 1 May" inside that strip, when there is a lock date. */
+  replyByDate: boolean;
 };
 
-export const DEFAULT_LAYOUT: SiteLayout = { chapterRail: true, sectionNumbers: true };
+export const DEFAULT_LAYOUT: SiteLayout = {
+  chapterRail: true,
+  sectionNumbers: true,
+  replyBar: true,
+  replyByDate: true,
+};
 
 export function resolveLayout(value: unknown): SiteLayout {
   if (!isRecord(value)) return DEFAULT_LAYOUT;
+  // Each switch reads on its own: one a later version added, missing from a
+  // theme saved by an earlier one, falls back to its own default.
+  const flag = (key: string, fallback: boolean) =>
+    typeof value[key] === "boolean" ? (value[key] as boolean) : fallback;
   return {
-    chapterRail: typeof value["chapter_rail"] === "boolean" ? value["chapter_rail"] : DEFAULT_LAYOUT.chapterRail,
-    sectionNumbers:
-      typeof value["section_numbers"] === "boolean" ? value["section_numbers"] : DEFAULT_LAYOUT.sectionNumbers,
+    chapterRail: flag("chapter_rail", DEFAULT_LAYOUT.chapterRail),
+    sectionNumbers: flag("section_numbers", DEFAULT_LAYOUT.sectionNumbers),
+    replyBar: flag("reply_bar", DEFAULT_LAYOUT.replyBar),
+    replyByDate: flag("reply_by_date", DEFAULT_LAYOUT.replyByDate),
   };
 }

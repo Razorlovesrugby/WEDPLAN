@@ -416,6 +416,115 @@
 }
 
 /* ---------------------------------------------------------------------------
+   The reply bar (spec 27 §7)
+   ---------------------------------------------------------------------------
+   A strip along the bottom of a phone. Phones only: the sticky nav already pins
+   an RSVP button beyond that. `env(safe-area-inset-bottom)` keeps it clear of
+   the home indicator. It slides in rather than appearing, and not at all for
+   somebody who has asked for less motion.
+--------------------------------------------------------------------------- */
+.site-replybar,
+.site-replybar-spacer {
+  display: none;
+}
+@media (max-width: 639px) {
+  .site-replybar-spacer {
+    display: block;
+    height: calc(64px + env(safe-area-inset-bottom));
+  }
+  .site-replybar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgb(var(--site-ink));
+    color: rgb(var(--site-paper));
+    transform: translateY(110%);
+  }
+  .site-replybar[data-shown="true"] {
+    transform: none;
+  }
+  .site-replybar-text {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  .site-replybar-action {
+    flex-shrink: 0;
+    border: 1px solid rgb(var(--site-paper) / 0.55);
+    border-radius: 999px;
+    padding: 0.5em 1.1em;
+    font-family: var(--font-label, var(--font-body));
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: inherit;
+  }
+}
+@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
+  .site-replybar {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The reply confirmation (spec 27 §7)
+   ---------------------------------------------------------------------------
+   The form and the card that replaces it share a view-transition name, so a
+   browser that has them morphs one into the other; one that does not just swaps
+   them. The tick draws itself with the spring easing.
+--------------------------------------------------------------------------- */
+.site-rsvp-panel {
+  view-transition-name: site-rsvp-panel;
+}
+::view-transition-group(site-rsvp-panel) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+.site-check path {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-check path {
+    stroke-dashoffset: 40;
+    animation: site-check-draw var(--dur-slow) var(--ease-spring) 150ms forwards;
+  }
+  .site-check circle {
+    transform-origin: center;
+    animation: site-check-pop var(--dur-slow) var(--ease-spring) both;
+  }
+}
+@keyframes site-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes site-check-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    The photograph viewer (spec 27 D5)
    ---------------------------------------------------------------------------
    One native <dialog> per page. `showModal()` makes everything behind it inert,
@@ -545,6 +654,8 @@
   .site-print .site-rail,
   .site-print .no-print-site,
   .site-print .site-viewer,
+  .site-print .site-replybar,
+  .site-print .site-replybar-spacer,
   .site-print .site-progress {
     display: none !important;
   }

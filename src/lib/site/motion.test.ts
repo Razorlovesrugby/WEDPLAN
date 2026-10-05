@@ -125,11 +125,31 @@ describe("the copy", () => {
 describe("resolveLayout", () => {
   it("keeps today's page for anybody who never chose", () => {
     expect(resolveLayout(undefined)).toEqual(DEFAULT_LAYOUT);
-    expect(DEFAULT_LAYOUT).toEqual({ chapterRail: true, sectionNumbers: true });
+    expect(DEFAULT_LAYOUT).toEqual({
+      chapterRail: true,
+      sectionNumbers: true,
+      replyBar: true,
+      replyByDate: true,
+    });
   });
 
   it("reads each switch on its own and ignores rubbish", () => {
-    expect(resolveLayout({ chapter_rail: false })).toEqual({ chapterRail: false, sectionNumbers: true });
+    expect(resolveLayout({ chapter_rail: false })).toEqual({ ...DEFAULT_LAYOUT, chapterRail: false });
     expect(resolveLayout({ section_numbers: "no" })).toEqual(DEFAULT_LAYOUT);
+    expect(resolveLayout({ reply_bar: false, reply_by_date: false })).toEqual({
+      ...DEFAULT_LAYOUT,
+      replyBar: false,
+      replyByDate: false,
+    });
+  });
+
+  it("gives a switch added later its own default when an older theme lacks it", () => {
+    // A theme saved when only the rail and the numbers existed.
+    expect(resolveLayout({ chapter_rail: false, section_numbers: false })).toEqual({
+      chapterRail: false,
+      sectionNumbers: false,
+      replyBar: true,
+      replyByDate: true,
+    });
   });
 });

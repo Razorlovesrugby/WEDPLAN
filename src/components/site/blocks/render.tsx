@@ -3,6 +3,13 @@ import { BLOCKS, sectionNumbers, type BlockStyle, type SectionMark, type SiteBlo
 import { flag, text } from "@/lib/site/sections";
 import { DEFAULT_COVER_LINE } from "@/lib/site/cover";
 import { renderGreeting } from "@/lib/site/greeting";
+import {
+  replyBarCopy,
+  replyByLabel,
+  replyMembersFromContext,
+  summariseReply,
+} from "@/lib/site/reply-state";
+import { ReplyBar } from "../reply-bar";
 import { formatDate, daysUntil, timeLeft } from "@/lib/format";
 import { SiteHero, type HeroCover } from "../hero";
 import { ReadingLine } from "../reading-line";
@@ -15,6 +22,7 @@ import { Monogram } from "../monogram";
 import { FloralRule } from "../rule";
 import { Faq, Party, Prose, RsvpPointer, Schedule, Story, ThingsToDo } from "../content";
 import { InvitedEvents } from "../invited-events";
+import { WeekendCalendar } from "../weekend-calendar";
 import { OnTheDay } from "../on-the-day";
 import { GalleryGrid } from "../gallery";
 import { CoachSection, StaysList, TransportList } from "../travel-sections";
@@ -364,6 +372,17 @@ export function SiteBlockView({
               coachByEvent={coachByEvent}
               preset={ctx.theme.preset}
             />
+            {/* One tap to put the whole weekend in a calendar. Its own switch,
+                on unless the planner turned it off (spec 27 E9). */}
+            {flag(payload, "show_calendar", true) ? (
+              <WeekendCalendar
+                events={personal.events}
+                timeZone={ctx.wedding.timezone}
+                weddingName={ctx.wedding.name}
+                weddingSlug={ctx.wedding.slug}
+                addressSegment={personal.addressSegment}
+              />
+            ) : null}
           </Shell>
         )
       ) : (
@@ -418,6 +437,17 @@ export function SiteBlockView({
               answers={personal.rsvp.answers}
               locked={personal.rsvp.locked}
               invites={personal.rsvp.invites}
+              weekend={{
+                timeZone: ctx.wedding.timezone,
+                weddingName: ctx.wedding.name,
+                weddingSlug: ctx.wedding.slug,
+                addressSegment: personal.addressSegment,
+              }}
+              replyBy={
+                ctx.theme.layout.replyByDate
+                  ? replyByLabel(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)
+                  : null
+              }
             />
           ) : (
             <p className="text-center text-[1.0625rem] text-muted">
@@ -675,6 +705,29 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
   // above them (spec 27 E9). The chapter rail reads `sectionNumbers` itself.
   const numbered = ctx.theme.layout.sectionNumbers;
 
+  // The reply bar (spec 27 §7): only on a household's own page, only when the
+  // page has somewhere to send them, and only while replying is still open.
+  // In the builder's preview, where there is no real reply, it shows what a
+  // household that has not answered would see — otherwise the planner could
+  // never see the thing the switch controls.
+  const personal = ctx.personal;
+  const hasReplySection = blocks.some((block) => block.type === "rsvp");
+  let bar: { text: string; action: string } | null = null;
+  if (personal && ctx.theme.layout.replyBar && hasReplySection) {
+    if (personal.rsvp && personal.token) {
+      if (!personal.rsvp.locked) {
+        bar = replyBarCopy(
+          summariseReply(replyMembersFromContext(personal.rsvp)),
+          ctx.theme.layout.replyByDate
+            ? replyByLabel(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)
+            : null,
+        );
+      }
+    } else if (ctx.preview) {
+      bar = { text: "Your reply", action: "Reply" };
+    }
+  }
+
   return (
     <>
       <ReadingLine />
@@ -687,6 +740,14 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
         </div>
       ))}
       <PhotoViewer enabled={!ctx.preview} />
+      {bar ? (
+        <>
+          {/* Room beneath the last block for the bar to sit in, on phones, so
+              it never covers the end of the page (`globals.css`). */}
+          <div aria-hidden="true" className="site-replybar-spacer" />
+          <ReplyBar text={bar.text} action={bar.action} />
+        </>
+      ) : null}
     </>
   );
 }

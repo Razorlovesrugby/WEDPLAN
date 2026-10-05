@@ -32,34 +32,38 @@ describe("block forms", () => {
   });
 });
 
-describe("the hero's switches", () => {
-  const cover = SWITCHES.filter((entry) => entry.group === "cover");
+describe("switches that live in a block's payload", () => {
+  const stored = SWITCHES.filter((entry) => entry.payload);
 
-  it("registers a switch for each, and the form offers it", () => {
-    expect(cover.length).toBeGreaterThan(0);
-    for (const entry of cover) {
-      const key = entry.id.replace("cover.", "");
-      const field = BLOCK_FORMS.hero.fields.find((candidate) => candidate.name === key);
-      expect(field, `${entry.id} has no field in the hero form`).toBeDefined();
-      expect(field?.kind).toBe("checkbox");
+  it("includes the whole cover", () => {
+    expect(stored.filter((entry) => entry.group === "cover").length).toBeGreaterThan(5);
+  });
+
+  it("is offered by that block's form, as a checkbox", () => {
+    for (const entry of stored) {
+      const { block, key } = entry.payload!;
+      const field = BLOCK_FORMS[block].fields.find((candidate) => candidate.name === key);
+      expect(field, `${entry.id} has no field in the ${block} form`).toBeDefined();
+      expect(field?.kind, entry.id).toBe("checkbox");
     }
   });
 
-  it("agrees, form and registry, about whether each is on when absent", () => {
-    // The form's `defaultChecked` and the renderer's `on()` must say the same
+  it("agrees, form and registry, about whether it is on when absent", () => {
+    // The form's `defaultChecked` and the renderer's default must say the same
     // thing, or the editor claims a line is off while the page shows it.
-    for (const entry of cover) {
-      const key = entry.id.replace("cover.", "");
-      const field = BLOCK_FORMS.hero.fields.find((candidate) => candidate.name === key);
+    for (const entry of stored) {
+      const { block, key } = entry.payload!;
+      const field = BLOCK_FORMS[block].fields.find((candidate) => candidate.name === key);
       expect(field?.defaultChecked === true, entry.id).toBe(entry.defaultOn === true);
     }
   });
 
-  it("is accepted by the schema, set either way", () => {
-    for (const entry of cover) {
-      const key = entry.id.replace("cover.", "");
-      expect(BLOCK_SCHEMAS.hero.safeParse({ [key]: false }).success, `${key}=false`).toBe(true);
-      expect(BLOCK_SCHEMAS.hero.safeParse({ [key]: true }).success, `${key}=true`).toBe(true);
+  it("is accepted by that block's schema, set either way", () => {
+    for (const entry of stored) {
+      const { block, key } = entry.payload!;
+      for (const value of [true, false]) {
+        expect(BLOCK_SCHEMAS[block].safeParse({ [key]: value }).success, `${entry.id}=${value}`).toBe(true);
+      }
     }
   });
 });

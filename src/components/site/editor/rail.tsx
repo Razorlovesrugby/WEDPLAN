@@ -85,6 +85,8 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
         layout: {
           chapter_rail: merged.layout.chapterRail,
           section_numbers: merged.layout.sectionNumbers,
+          reply_bar: merged.layout.replyBar,
+          reply_by_date: merged.layout.replyByDate,
         },
       });
       setError(result.ok ? null : result.error);
@@ -279,6 +281,36 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
               <span>
                 Numbers above headings
                 <span className="block text-xs text-muted">04 · Attire — off leaves the heading alone.</span>
+              </span>
+            </label>
+          </li>
+          <li>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending}
+                checked={layout.replyBar}
+                onChange={(event) => save({ layout: { ...layout, replyBar: event.target.checked } })}
+              />
+              <span>
+                Reply bar on phones
+                <span className="block text-xs text-muted">
+                  A strip along the bottom, once the cover has gone, that says where their reply is.
+                </span>
+              </span>
+            </label>
+          </li>
+          <li>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending || !layout.replyBar}
+                checked={layout.replyByDate}
+                onChange={(event) => save({ layout: { ...layout, replyByDate: event.target.checked } })}
+              />
+              <span>
+                Say when to reply by
+                <span className="block text-xs text-muted">&ldquo;Your reply · by 1 May&rdquo;, in the bar.</span>
               </span>
             </label>
           </li>

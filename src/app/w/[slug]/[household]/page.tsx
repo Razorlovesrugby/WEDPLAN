@@ -8,7 +8,7 @@ import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-
 import { resolveHouseholdAddress } from "@/server/rsvp/address";
 import { resolveCardByAddress } from "@/server/rsvp/card";
 import { resolveInvitation } from "@/server/rsvp/resolve";
-import { householdPath } from "@/lib/site/household-slug";
+import { formatAddress, householdPath } from "@/lib/site/household-slug";
 import { blockNavItems, visibleBlocks } from "@/lib/site/blocks";
 import { listNames } from "@/lib/invites";
 import { themeCssVars } from "@/lib/theme/presets";
@@ -123,7 +123,13 @@ export default async function HouseholdSitePage({
   const invitation = token ? await resolveInvitation(token) : null;
   const rsvp = invitation?.ok ? invitation.context : null;
 
-  const personal = await buildPersonalContext(wedding.id, household, token, rsvp);
+  const personal = await buildPersonalContext(
+    wedding.id,
+    household,
+    token,
+    rsvp,
+    formatAddress(resolved.address),
+  );
   const [blocks, ctx] = await Promise.all([
     loadPublishedBlocks(wedding.id),
     buildRenderContext(wedding, personal),
