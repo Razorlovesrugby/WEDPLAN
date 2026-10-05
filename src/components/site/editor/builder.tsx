@@ -665,7 +665,7 @@ export function SiteBuilder({
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(300px,25rem)_minmax(0,1fr)]">
         {/* ---- the rail ---- */}
         <div
-          className={`divide-y divide-[#f0ece5] border-r border-line bg-white lg:max-h-[calc(100vh-62px)] lg:overflow-y-auto ${
+          className={`divide-y divide-[#f0ece5] border-r border-line bg-white lg:sticky lg:top-[62px] lg:max-h-[calc(100vh-62px)] lg:self-start lg:overflow-y-auto ${
             pane === "preview" ? "hidden lg:block" : ""
           }`}
         >
@@ -833,7 +833,14 @@ export function SiteBuilder({
         </div>
 
         {/* ---- the preview ---- */}
-        <div className={`bg-paper ${pane === "edit" ? "hidden lg:block" : ""}`}>
+        {/* Sticky, so the preview stays in view however long the rail gets
+            (spec 28 §4.2). Its size depends on the window and the Phone/Desktop
+            toggle and on nothing else. */}
+        <div
+          className={`bg-paper lg:sticky lg:top-[62px] lg:self-start ${
+            pane === "edit" ? "hidden lg:block" : ""
+          }`}
+        >
           <div className="flex items-center gap-2 px-5 py-3">
             {(["phone", "desktop"] as const).map((option) => (
               <button
@@ -1097,7 +1104,11 @@ function PreviewFrame({
   return (
     <div ref={wrap} className="flex justify-center px-5 pb-5">
       <div
-        className="relative overflow-hidden border border-line bg-white"
+        // `overflow: clip`, not `hidden`: a hidden box is still a scroll
+        // container, and anything inside the iframe that asks its ancestors
+        // to scroll can move it — which is how the preview used to collapse to
+        // a strip (spec 28 §4.2). A clipped box cannot be scrolled at all.
+        className="relative overflow-clip border border-line bg-white"
         // The visible box is the scaled size. Heights are viewport units and
         // a `calc`, not a measurement, so nothing here touches `window` —
         // this component server-renders as part of the page.
