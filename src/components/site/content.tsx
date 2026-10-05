@@ -1,12 +1,11 @@
 import { stagger } from "./stagger";
 import { Label } from "./section";
 import { DressCodeTag, EditorialEventRow, ShuttleLines } from "./event-inline";
-import { FindInvitation } from "./find-invitation";
 import type { DressCode } from "@/lib/site/dress-codes";
 import type { CoachRun } from "@/server/queries/travel";
 import type { ThemePresetId } from "@/lib/theme/presets";
 import { isEditorialFamily } from "@/lib/theme/presets";
-import { faqItems, groupByTag, rows, splitFaq, text } from "@/lib/site/sections";
+import { faqItems, rows, text } from "@/lib/site/sections";
 import { formatDate, formatTime } from "@/lib/format";
 
 /** Paragraphs from a textarea. Blank lines separate, single newlines do not. */
@@ -192,49 +191,28 @@ export function Schedule({
   );
 }
 
-/** A question and its answer. Native <details> so it works without JavaScript. */
-function FaqRow({ q, a, open }: { q: string; a: string; open: boolean }) {
-  return (
-    <details open={open} className="group border-b border-line py-4">
-      <summary className="cursor-pointer list-none text-[1.0625rem] text-ink marker:content-none">
-        <span className="flex items-start justify-between gap-4">
-          <span>{q}</span>
-          <span className="mt-1 shrink-0 text-muted transition-transform duration-[220ms] group-open:rotate-45" aria-hidden="true">
-            +
-          </span>
-        </span>
-      </summary>
-      {a ? <div className="mt-3 whitespace-pre-line text-[1rem] leading-relaxed text-muted">{a}</div> : null}
-    </details>
-  );
-}
-
-/** Six open, the rest grouped and collapsed — Aisle's pattern, copied (§10). */
+/**
+ * Every question, open, in the order the planner set (spec 28 §7a.2).
+ *
+ * Plain questions and answers rather than open-but-closable `<details>`: a
+ * disclosure arrow on something already open invites a guest to close it and
+ * wonder where it went. Keeping the list short is the planner's job; the editor
+ * says so once it gets long.
+ */
 export function Faq({ payload }: { payload: unknown }) {
   const items = faqItems(payload);
-  const { featured, rest } = splitFaq(items);
-  const groups = groupByTag(rest);
 
   return (
-    <div>
-      <div>
-        {featured.map((item) => (
-          <FaqRow key={item.q} q={item.q} a={item.a} open />
-        ))}
-      </div>
-      {groups.map((group) => (
-        <div key={group.tag ?? "other"} className="mt-8">
-          {group.tag ? (
-            <h3 className="mb-1 text-center text-[0.78rem] uppercase tracking-[0.18em] text-muted">
-              {group.tag}
-            </h3>
+    <dl>
+      {items.map((item, index) => (
+        <div key={index} className="border-b border-line py-5 first:pt-0">
+          <dt className="text-[1.0625rem] text-ink">{item.q}</dt>
+          {item.a ? (
+            <dd className="mt-2 whitespace-pre-line text-[1rem] leading-relaxed text-muted">{item.a}</dd>
           ) : null}
-          {group.items.map((item) => (
-            <FaqRow key={item.q} q={item.q} a={item.a} open={false} />
-          ))}
         </div>
       ))}
-    </div>
+    </dl>
   );
 }
 
@@ -386,25 +364,6 @@ export function Story({ payload, look = "prose" }: { payload: unknown; look?: st
     <div className="space-y-8">
       {body ? <Prose body={body} /> : null}
       {milestones.length > 0 ? <MilestoneRows milestones={milestones} /> : null}
-    </div>
-  );
-}
-
-/**
- * The RSVP pointer (§3). The form itself is at /rsvp/[token] — this section is
- * a signpost, and for a guest who has lost their link, the way back to it.
- */
-export function RsvpPointer({ payload }: { payload: unknown }) {
-  const intro =
-    text(payload, "intro") ??
-    "Your invitation has a link that's personal to your household — it's how we know who's replying.";
-  const closes = text(payload, "closes_label");
-
-  return (
-    <div className="text-center">
-      <p className="mx-auto max-w-prose text-[1.0625rem] leading-relaxed text-ink">{intro}</p>
-      {closes ? <p className="mt-3 text-[0.95rem] text-muted">{closes}</p> : null}
-      <FindInvitation />
     </div>
   );
 }

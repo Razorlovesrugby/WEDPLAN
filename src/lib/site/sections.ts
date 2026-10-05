@@ -49,6 +49,11 @@ export function rows(payload: unknown, key: string): Record<string, unknown>[] {
   return value.filter(isRecord);
 }
 
+/**
+ * `featured` is the old "Show open" tick. Every question is open now (spec 28
+ * §7a.2), so nothing reads it; it stays in the type because it stays in
+ * payloads already saved, and removing it would only matter if this is reversed.
+ */
 export type FaqItem = { q: string; a: string; featured: boolean; tags: string[] };
 
 /**
@@ -70,39 +75,6 @@ export function faqItems(payload: unknown): FaqItem[] {
       },
     ];
   });
-}
-
-/**
- * Aisle's rule, copied: a handful open, the rest collapsed. Six is their
- * number and it is a good one — enough to answer the common questions without
- * a wall of text, few enough that the page still scrolls.
- *
- * Under the threshold nothing is collapsed at all: collapsing three questions
- * is pure friction.
- */
-export const FAQ_FEATURED_LIMIT = 6;
-
-export function splitFaq(items: FaqItem[]): { featured: FaqItem[]; rest: FaqItem[] } {
-  if (items.length <= FAQ_FEATURED_LIMIT) return { featured: items, rest: [] };
-
-  const explicit = items.filter((item) => item.featured);
-  // Nobody has chosen: take the first six in the order they were written.
-  const featured =
-    explicit.length > 0 ? explicit.slice(0, FAQ_FEATURED_LIMIT) : items.slice(0, FAQ_FEATURED_LIMIT);
-  const featuredSet = new Set(featured);
-  return { featured, rest: items.filter((item) => !featuredSet.has(item)) };
-}
-
-/** Group the collapsed remainder by tag, preserving first-seen tag order. */
-export function groupByTag(items: FaqItem[]): Array<{ tag: string | null; items: FaqItem[] }> {
-  const groups = new Map<string | null, FaqItem[]>();
-  for (const item of items) {
-    const tag = item.tags[0] ?? null;
-    const existing = groups.get(tag);
-    if (existing) existing.push(item);
-    else groups.set(tag, [item]);
-  }
-  return [...groups.entries()].map(([tag, grouped]) => ({ tag, items: grouped }));
 }
 
 // ---------------------------------------------------------------------------

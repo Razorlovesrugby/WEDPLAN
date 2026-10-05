@@ -70,7 +70,6 @@ export default async function SitePage() {
       theme={theme}
       publishedAt={publishState.publishedAt}
       unpublished={publishState.unpublished}
-      siteHref={`/w/${wedding.slug}`}
       households={(households ?? []).map((household) => ({ id: household.id, name: household.display_name }))}
     />
   );

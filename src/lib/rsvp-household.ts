@@ -34,3 +34,24 @@ export function replyToAll(
 ): Record<string, RsvpStatus> {
   return Object.fromEntries(Object.keys(responses).map((eventId) => [eventId, status]));
 }
+
+/**
+ * What a guest can answer, and what the reply action accepts from one
+ * (spec 28 §7a.1).
+ *
+ * There is no Maybe: two clear buttons are kinder on a phone than three, and a
+ * couple catering for a number wants a yes or a no. `maybe` stays in the
+ * database enum — removing a Postgres enum value means rebuilding every view
+ * over it — and the planner's own screens can still record one by hand; it is
+ * only the guest's side that stops offering and stops accepting it.
+ */
+export const GUEST_REPLY_STATUSES = ["yes", "no", "pending"] as const;
+
+/**
+ * A stored status as the form should open with it. A `maybe` somebody recorded
+ * by hand is shown as unanswered rather than as a button that no longer exists,
+ * so the guest is asked rather than answered for.
+ */
+export function guestFacingStatus(status: RsvpStatus): "yes" | "no" | "pending" {
+  return status === "yes" || status === "no" ? status : "pending";
+}

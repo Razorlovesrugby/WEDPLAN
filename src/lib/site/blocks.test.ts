@@ -69,30 +69,27 @@ describe("the catalogue", () => {
 });
 
 describe("visibleBlocks", () => {
-  it("drops hidden blocks for everybody", () => {
+  it("drops hidden blocks", () => {
     const blocks = [block({ visible: false }), block()];
-    expect(visibleBlocks(blocks, true)).toHaveLength(1);
-    expect(visibleBlocks(blocks, false)).toHaveLength(1);
+    expect(visibleBlocks(blocks)).toHaveLength(1);
   });
 
-  it("keeps an invited-only block off the shared site", () => {
-    const blocks = [block({ audience: "invited" })];
-    expect(visibleBlocks(blocks, false)).toHaveLength(0);
-    expect(visibleBlocks(blocks, true)).toHaveLength(1);
-  });
-
-  it("keeps a public-only block off a household's own page", () => {
-    // "Find my invitation" is noise to somebody already holding their link.
-    const blocks = [block({ audience: "public_only" })];
-    expect(visibleBlocks(blocks, true)).toHaveLength(0);
-    expect(visibleBlocks(blocks, false)).toHaveLength(1);
+  it("no longer reads a block's stored audience (spec 28 §7a.4)", () => {
+    // There is no shared page, so every reader is invited. An old value must
+    // neither hide a block from a guest nor be rewritten.
+    const blocks = [
+      block({ audience: "everyone" }),
+      block({ audience: "invited" }),
+      block({ audience: "public_only" }),
+    ];
+    expect(visibleBlocks(blocks)).toHaveLength(3);
   });
 
   it("keeps the order it was given", () => {
     const a = block({ type: "hero" });
     const b = block({ type: "schedule" });
     const c = block({ type: "footer" });
-    expect(visibleBlocks([a, b, c], false).map((x) => x.type)).toEqual([
+    expect(visibleBlocks([a, b, c]).map((x) => x.type)).toEqual([
       "hero",
       "schedule",
       "footer",

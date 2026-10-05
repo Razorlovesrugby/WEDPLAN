@@ -31,7 +31,7 @@ export default async function SiteThemePage() {
         </p>
       </div>
 
-      <ThemeEditor theme={theme} siteHref={`/w/${wedding.slug}`} />
+      <ThemeEditor theme={theme} />
     </div>
   );
 }

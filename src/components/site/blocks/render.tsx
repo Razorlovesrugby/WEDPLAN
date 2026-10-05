@@ -21,7 +21,7 @@ import { SiteSection } from "../section";
 import { Countdown } from "../countdown";
 import { Monogram } from "../monogram";
 import { FloralRule } from "../rule";
-import { Faq, Party, Prose, RsvpPointer, Schedule, Story, ThingsToDo } from "../content";
+import { Faq, Party, Prose, Schedule, Story, ThingsToDo } from "../content";
 import { InvitedEvents } from "../invited-events";
 import { WeekendCalendar } from "../weekend-calendar";
 import { OnTheDay } from "../on-the-day";
@@ -416,13 +416,9 @@ export function SiteBlockView({
     }
 
     case "rsvp":
-      if (!personal) {
-        return (
-          <Shell block={block} bgImage={bgImage} heading="RSVP" mark={mark}>
-            <RsvpPointer payload={payload} />
-          </Shell>
-        );
-      }
+      // Nobody replies without their own link, and every page is somebody's
+      // (spec 28 §7a.4) — so a reader with no household has nothing to reply to.
+      if (!personal) return null;
       return (
         <Shell
           block={block}

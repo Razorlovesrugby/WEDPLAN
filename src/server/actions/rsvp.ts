@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { coerceAnswer } from "@/lib/rsvp-answers";
+import { GUEST_REPLY_STATUSES } from "@/lib/rsvp-household";
 import { fail, ok, type ActionResult } from "./result";
 import type { GuestRow } from "@/lib/types/database";
 
@@ -40,7 +41,9 @@ const submissionSchema = z.object({
         responses: z.array(
           z.object({
             eventId: z.string().uuid(),
-            status: z.enum(["yes", "no", "maybe", "pending"]),
+            // No `maybe` from a guest (spec 28 §7a.1), so an old cached page that
+            // still offers it cannot send one either.
+            status: z.enum(GUEST_REPLY_STATUSES),
           }),
         ),
         answers: z.record(z.string().uuid(), answerValue).optional(),

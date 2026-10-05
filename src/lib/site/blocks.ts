@@ -203,7 +203,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "schedule",
     label: "The weekend",
     family: "the day",
-    blurb: "Your events, grouped by day. On a guest's own page, only theirs.",
+    blurb: "Your events, grouped by day. Each guest sees only the ones they're invited to.",
     eyebrow: "The weekend",
     max: 1,
     styles: ["width", "background"],
@@ -226,7 +226,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "rsvp",
     label: "RSVP",
     family: "the day",
-    blurb: "The form on a guest's own page; 'find my invitation' on the shared one.",
+    blurb: "The reply form. Each household sees its own people and events.",
     eyebrow: "Your reply",
     max: 1,
     styles: ["background"],
@@ -237,7 +237,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "faq",
     label: "Questions",
     family: "the day",
-    blurb: "The things everybody asks, a few open and the rest collapsed.",
+    blurb: "The things everybody asks, every one shown open.",
     eyebrow: "Questions",
     max: 1,
     styles: ["width", "background"],
@@ -381,7 +381,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "guestbook",
     label: "Guestbook",
     family: "the day",
-    blurb: "A line from everyone. Notes from a guest's own link appear at once; the rest wait for you.",
+    blurb: "A line from everyone. Notes appear at once; you can hide one.",
     max: 1,
     styles: ["width", "background"],
     personal: true,
@@ -414,19 +414,19 @@ export type SiteBlock = {
 };
 
 /**
- * The blocks a given reader sees, in order.
+ * The blocks a guest sees, in order.
  *
- * `household` is null on the shared site. Hidden blocks are dropped here
- * rather than in the renderer, so "what does a guest see" has exactly one
- * answer and the preview can ask the same question the page does.
+ * Hidden blocks are dropped here rather than in the renderer, so "what does a
+ * guest see" has exactly one answer and the preview can ask the same question
+ * the page does.
+ *
+ * `audience` is stored and not read (spec 28 §7a.4). It only ever differed on
+ * the shared page, which no longer exists: every reader holds a household's own
+ * link and is, by definition, invited. The column and the old values stay so
+ * a revision keeps its shape; nothing consults them.
  */
-export function visibleBlocks(blocks: SiteBlock[], forHousehold: boolean): SiteBlock[] {
-  return blocks.filter((block) => {
-    if (!block.visible) return false;
-    if (block.audience === "invited") return forHousehold;
-    if (block.audience === "public_only") return !forHousehold;
-    return true;
-  });
+export function visibleBlocks(blocks: SiteBlock[]): SiteBlock[] {
+  return blocks.filter((block) => block.visible);
 }
 
 /**

@@ -83,7 +83,7 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
         name: "cover_heading",
         label: "On a guest's own page",
         kind: "heading",
-        help: "Only people with their own link see these. The shared site is never addressed to anyone.",
+        help: "These address the household by name.",
       },
       {
         name: "show_greeting",
@@ -121,7 +121,7 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
         label: "Make the first screen a full-height cover",
         kind: "checkbox",
         defaultChecked: true,
-        help: "Off keeps the hero at the height the shared site has.",
+        help: "Off keeps the hero at its ordinary height.",
       },
       ALT,
     ],
@@ -172,15 +172,12 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   },
   rsvp: {
     blurb:
-      "The form, on a guest's own page. On the shared site it becomes 'find my invitation' instead.",
-    fields: [
-      INTRO,
-      { name: "closes_label", label: "Closing line", kind: "text", placeholder: "Please reply by 30 April" },
-    ],
+      "The reply form. Each household sees its own people, events and questions.",
+    fields: [INTRO],
   },
   faq: {
     blurb:
-      "The most-read part of any wedding site. Six show open, the rest are grouped and collapsed.",
+      "The most-read part of any wedding site. Every question shows, open, in the order you set.",
     fields: [INTRO],
     repeat: {
       key: "items",
@@ -188,7 +185,6 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
       fields: [
         { name: "q", label: "Question", kind: "text", placeholder: "Can I bring a plus one?" },
         { name: "a", label: "Answer", kind: "textarea", rows: 3 },
-        { name: "featured", label: "Show open", kind: "checkbox" },
       ],
     },
   },
@@ -306,7 +302,7 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   },
   guestbook: {
     blurb:
-      "A line from everyone. A note left from a guest's own link appears straight away; one from the shared address waits for you.",
+      "A line from everyone. Notes appear on the page straight away; you can hide one from Guestbook.",
     managedElsewhere: "/site/guestbook",
     fields: [
       INTRO,

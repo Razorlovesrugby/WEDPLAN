@@ -147,7 +147,6 @@ export function SiteBuilder({
   theme,
   publishedAt,
   unpublished,
-  siteHref,
   households,
 }: {
   blocks: SiteBlock[];
@@ -155,7 +154,6 @@ export function SiteBuilder({
   theme: SiteTheme;
   publishedAt: string | null;
   unpublished: number;
-  siteHref: string;
   /** Who the preview can be shown as. */
   households: { id: string; name: string }[];
 }) {
@@ -164,11 +162,10 @@ export function SiteBuilder({
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
   const [device, setDevice] = useState<Device>("desktop");
   const [pane, setPane] = useState<"edit" | "preview">("edit");
-  // Who the preview is of (spec 27 E7). A household by default: the greeting,
-  // the weekend and the reply bar exist only on a household's own page, and a
-  // preview of the shared site would show a planner none of what they are
-  // editing. "shared" is the shared site, for when that is the question.
-  const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "shared");
+  // Who the preview is of (spec 27 E7). Always a household: every page a guest
+  // can reach is somebody's own (spec 28 §7a.4), so there is no neutral version
+  // to preview. Empty only for a wedding with no households yet.
+  const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "");
 
   // ---- deleting with an undo (spec 24 §8, spec 27 E6) ----
   // A delete is not performed when it is clicked. The block is hidden at once —
@@ -249,14 +246,8 @@ export function SiteBuilder({
    * renumbers in both places at once. A band has no eyebrow and so has no
    * number; the rail shows an em dash for it rather than a gap.
    *
-   * Computed for whoever the preview is *of*: a block set to "invited only"
-   * has a number when previewing a household and none on the shared site,
-   * because that is what the page beside this list is showing.
    */
-  const marks = useMemo(
-    () => sectionNumbers(visibleBlocks(ordered, viewAs !== "shared")),
-    [ordered, viewAs],
-  );
+  const marks = useMemo(() => sectionNumbers(visibleBlocks(ordered)), [ordered]);
 
   const hero = useMemo(() => ordered.find((block) => block.type === "hero") ?? null, [ordered]);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -817,12 +808,12 @@ export function SiteBuilder({
                 ["/site/gifts", "A gift"],
                 ["/site/songs", "Song requests"],
                 ["/site/guestbook", "Guestbook"],
-                [siteHref, "See it live"],
+                [`/site/preview?as=${viewAs}`, "Open the preview"],
               ].map(([href, label]) => (
                 <li key={href}>
                   <Link
                     href={href!}
-                    target={href === siteHref ? "_blank" : undefined}
+                    target={label === "Open the preview" ? "_blank" : undefined}
                     className="text-accent underline underline-offset-2"
                   >
                     {label}
@@ -858,8 +849,7 @@ export function SiteBuilder({
             </Link>
           </div>
 
-          {/* Who the page is shown to. The shared site is addressed to nobody;
-              a household's page is addressed to them. */}
+          {/* Who the page is shown to: a household's page is addressed to them. */}
           <div className="flex items-center gap-2 px-5 pb-3 text-xs">
             <label htmlFor="preview-as" className="text-muted">
               Previewing as
@@ -870,7 +860,6 @@ export function SiteBuilder({
               value={viewAs}
               onChange={(event) => setViewAs(event.target.value)}
             >
-              <option value="shared">The shared site</option>
               {households.map((household) => (
                 <option key={household.id} value={household.id}>
                   {household.name}
@@ -1372,11 +1361,6 @@ function ChapterRow({
           className={`block truncate text-sm ${block.visible ? "" : "text-[#a9a298] line-through"}`}
         >
           {def.label}
-          {block.audience !== "everyone" ? (
-            <span className="ml-2 text-xs text-[#8b8378]">
-              {block.audience === "invited" ? "invited only" : "shared site only"}
-            </span>
-          ) : null}
         </span>
         {snippet || status ? (
           <span className="block truncate text-xs text-muted">

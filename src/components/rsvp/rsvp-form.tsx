@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
-import { householdReply, replyToAll } from "@/lib/rsvp-household";
+import { guestFacingStatus, householdReply, replyToAll } from "@/lib/rsvp-household";
 import { replyConfirmation, summariseReply } from "@/lib/site/reply-state";
 import { withViewTransition } from "@/lib/view-transition";
 import { WeekendCalendar } from "@/components/site/weekend-calendar";
@@ -30,7 +30,6 @@ type GuestState = {
 const CHOICES: { value: RsvpStatus; label: string }[] = [
   { value: "yes", label: "Yes" },
   { value: "no", label: "No" },
-  { value: "maybe", label: "Maybe" },
 ];
 
 export function RsvpForm({
@@ -98,8 +97,10 @@ export function RsvpForm({
           .filter((event) => invites.some((i) => i.guest_id === guest.id && i.event_id === event.id))
           .map((event) => [
             event.id,
-            (rsvps.find((r) => r.guest_id === guest.id && r.event_id === event.id)?.status ??
-              "pending") as RsvpStatus,
+            guestFacingStatus(
+              (rsvps.find((r) => r.guest_id === guest.id && r.event_id === event.id)?.status ??
+                "pending") as RsvpStatus,
+            ),
           ]),
       ),
       answers: Object.fromEntries(

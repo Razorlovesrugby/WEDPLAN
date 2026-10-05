@@ -33,7 +33,7 @@ const HERO_LABELS: Record<HeroStyle, string> = {
   type: "No photo — names and monogram only",
 };
 
-export function ThemeEditor({ theme, siteHref }: { theme: SiteTheme; siteHref: string }) {
+export function ThemeEditor({ theme }: { theme: SiteTheme }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -238,8 +238,8 @@ export function ThemeEditor({ theme, siteHref }: { theme: SiteTheme; siteHref: s
         <button type="button" className="btn-primary" disabled={pending || blocked} onClick={submit}>
           Save theme
         </button>
-        <a className="text-sm text-muted underline" href={siteHref} target="_blank" rel="noreferrer">
-          See the site →
+        <a className="text-sm text-muted underline" href="/site/preview" target="_blank" rel="noreferrer">
+          See the preview →
         </a>
       </div>
 

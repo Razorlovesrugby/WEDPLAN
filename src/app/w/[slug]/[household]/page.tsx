@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { findWeddingBySlug } from "@/server/queries/site";
@@ -135,7 +134,7 @@ export default async function HouseholdSitePage({
     buildRenderContext(wedding, personal),
   ]);
 
-  const shown = visibleBlocks(blocks, true);
+  const shown = visibleBlocks(blocks);
   const nav = blockNavItems(shown);
 
   return (
@@ -178,14 +177,6 @@ export default async function HouseholdSitePage({
       {ctx.theme.layout.chapterRail ? <SectionRail blocks={shown} /> : null}
 
       <SiteBlocks blocks={shown} ctx={ctx} />
-
-      <p className="px-5 pb-12 text-center text-[0.95rem] text-muted">
-        Travel, where to stay and the rest of it are{" "}
-        <Link href={`/w/${wedding.slug}`} className="text-accent underline underline-offset-2">
-          on the main site
-        </Link>
-        .
-      </p>
     </div>
   );
 }

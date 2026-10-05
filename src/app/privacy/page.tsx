@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 
@@ -256,12 +255,6 @@ export default async function PrivacyPage() {
           history to dig through: what is on this page is what applies.
         </p>
       </Section>
-
-      <footer className="border-t border-line pt-8">
-        <Link className="text-sm text-muted underline hover:text-accent" href="/w">
-          Back to the wedding site
-        </Link>
-      </footer>
     </main>
   );
 }

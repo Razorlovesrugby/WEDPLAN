@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
   BLOCKS,
-  BLOCK_AUDIENCES,
   BLOCK_BACKGROUNDS,
   type BlockStyle,
   type SiteBlock,
@@ -13,7 +12,6 @@ import type { BlockForm } from "@/lib/site/block-fields";
 import {
   addStarterFaq,
   saveBlock,
-  setBlockAudience,
   setBlockStyle,
 } from "@/server/actions/site-blocks";
 import {
@@ -32,21 +30,14 @@ import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/loo
 /**
  * One block's form (spec 23 §5).
  *
- * Content, then style, then who sees it — in that order because that is the
- * order somebody thinks in, and because the last two are the ones you set
- * once and forget.
+ * Content, then style — in that order because that is the order somebody
+ * thinks in, and because the second is the one you set once and forget.
  *
  * **Style is a fixed set of choices, not CSS.** Width, background, alignment,
  * image shape, and the embed switch where there is a third party to load.
  * Colour and type come from the theme, which is where a non-designer's
  * decisions stay good.
  */
-
-const AUDIENCE_LABEL: Record<(typeof BLOCK_AUDIENCES)[number], string> = {
-  everyone: "Everyone",
-  invited: "Only people with their own link",
-  public_only: "Only the shared site",
-};
 
 /** Swatches for the choices that are questions about how something looks. */
 const BACKGROUND_SWATCH: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
@@ -460,28 +451,6 @@ export function BlockInspector({
           </div>
         </div>
       ) : null}
-
-      {/* ---- audience ---- */}
-      <div className="space-y-1 border-t border-line pt-3">
-        <h3 className="text-xs uppercase tracking-wide text-muted">Who sees it</h3>
-        <select
-          className="field"
-          value={block.audience}
-          onChange={(event) =>
-            startTransition(async () => {
-              const result = await setBlockAudience(block.id, event.target.value);
-              if (!result.ok) setMessage(result.error);
-              else onDone();
-            })
-          }
-        >
-          {BLOCK_AUDIENCES.map((audience) => (
-            <option key={audience} value={audience}>
-              {AUDIENCE_LABEL[audience]}
-            </option>
-          ))}
-        </select>
-      </div>
 
       {/* Where the Save button was. A calm line rather than a control: the only
           way a planner can tell autosave is working is to be told. */}

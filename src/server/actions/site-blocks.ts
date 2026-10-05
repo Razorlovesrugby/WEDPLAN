@@ -7,7 +7,6 @@ import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
 import {
   BLOCKS,
-  BLOCK_AUDIENCES,
   STARTER_LAYOUTS,
   isBlockType,
   typesAtLimit,
@@ -184,23 +183,6 @@ export async function setBlockVisible(id: string, visible: boolean): Promise<Act
   const { error } = await supabase
     .from("site_blocks")
     .update({ visible })
-    .eq("wedding_id", wedding.id)
-    .eq("id", id);
-
-  if (error) return fail(error.message);
-  revalidateSite();
-  return ok(undefined);
-}
-
-export async function setBlockAudience(id: string, audience: string): Promise<ActionResult> {
-  const wedding = await requireWedding();
-  const parsed = z.enum(BLOCK_AUDIENCES).safeParse(audience);
-  if (!parsed.success) return fail("That isn't an audience");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("site_blocks")
-    .update({ audience: parsed.data })
     .eq("wedding_id", wedding.id)
     .eq("id", id);
 

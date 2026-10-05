@@ -69,7 +69,7 @@ export default async function SitePreviewPage({
   // draws nothing on a guest's page.
   const ctx = { ...built, preview: true };
 
-  const shown = visibleBlocks(blocks, personal !== null);
+  const shown = visibleBlocks(blocks);
 
   return (
     <div
