@@ -50,6 +50,13 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     fields: [
       { name: "headline", label: "Headline", kind: "text", help: "Defaults to the wedding's name." },
       { name: "date_label", label: "Date", kind: "text", placeholder: "Saturday 12 June 2027" },
+      {
+        name: "show_initials",
+        label: "Show your initials above the names",
+        kind: "checkbox",
+        defaultChecked: false,
+        help: "The small monogram. Off by default; the bar at the top has its own.",
+      },
       { name: "show_date", label: "Show the date", kind: "checkbox", defaultChecked: true },
       { name: "location", label: "Place", kind: "text", placeholder: "The Swan, Wells" },
       { name: "show_location", label: "Show the place", kind: "checkbox", defaultChecked: true },

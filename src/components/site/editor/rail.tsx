@@ -83,6 +83,7 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
         typography: merged.typography,
         motion: serialiseMotion(merged.motion),
         layout: {
+          top_nav: merged.layout.topNav,
           chapter_rail: merged.layout.chapterRail,
           section_numbers: merged.layout.sectionNumbers,
           reply_bar: merged.layout.replyBar,
@@ -260,6 +261,22 @@ export function LookSections({ theme, onSaved }: { theme: SiteTheme; onSaved: ()
 
       <Section title="Page">
         <ul className="space-y-2">
+          <li>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={pending}
+                checked={layout.topNav}
+                onChange={(event) => save({ layout: { ...layout, topNav: event.target.checked } })}
+              />
+              <span>
+                Bar at the top
+                <span className="block text-xs text-muted">
+                  Your initials and an RSVP button, stuck to the top of the page. Off draws no bar.
+                </span>
+              </span>
+            </label>
+          </li>
           <li>
             <label className="flex items-start gap-2 text-sm">
               <input

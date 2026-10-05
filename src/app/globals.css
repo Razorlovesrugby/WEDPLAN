@@ -600,6 +600,13 @@
     color: inherit;
   }
 }
+/* The top bar's RSVP button steps aside while this bar is up (spec 28 §5.2).
+   Hidden rather than removed, so the initials do not jump along the bar. */
+@media (max-width: 639px) {
+  html[data-reply-bar] .site-nav-rsvp {
+    visibility: hidden;
+  }
+}
 @media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
   .site-replybar {
     transition: transform var(--dur-base) var(--ease-out);

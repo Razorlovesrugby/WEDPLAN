@@ -253,7 +253,10 @@ export function SiteBlockView({
             image={ctx.images.get(text(payload, "image_id") ?? "") ?? null}
             imagePath={text(payload, "image_path")}
             imageAlt={text(payload, "image_alt")}
-            monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
+            // Its own switch on the cover, off unless chosen (spec 28 §5.1) —
+            // no longer the theme's flag, which lives on a screen the rail does
+            // not link to. The footer's initials still follow the theme.
+            monogramName={flag(payload, "show_initials") ? ctx.wedding.name : null}
             // The days-to-go in the corner is its own switch, apart from the
             // large countdown below: one is a detail, the other a feature.
             weddingDate={on("show_counter") ? ctx.wedding.wedding_date : null}

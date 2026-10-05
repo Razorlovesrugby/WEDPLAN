@@ -8,12 +8,11 @@ import { resolveHouseholdAddress } from "@/server/rsvp/address";
 import { resolveCardByAddress } from "@/server/rsvp/card";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatAddress, householdPath } from "@/lib/site/household-slug";
-import { blockNavItems, visibleBlocks } from "@/lib/site/blocks";
+import { visibleBlocks } from "@/lib/site/blocks";
 import { listNames } from "@/lib/invites";
 import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
 import { formatDate } from "@/lib/format";
-import { SiteNav } from "@/components/site/site-nav";
-import { Monogram } from "@/components/site/monogram";
+import { SiteTopBar } from "@/components/site/top-bar";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { SectionRail } from "@/components/site/section-rail";
 import { motionAttributes } from "@/lib/site/motion";
@@ -135,7 +134,6 @@ export default async function HouseholdSitePage({
   ]);
 
   const shown = visibleBlocks(blocks);
-  const nav = blockNavItems(shown);
 
   return (
     <div
@@ -154,13 +152,7 @@ export default async function HouseholdSitePage({
           (spec 22 §9). */}
       {token ? <ViewLogger token={token} enabled={preview !== "1"} /> : null}
 
-      {nav.length > 0 ? (
-        <SiteNav
-          items={nav}
-          rsvpLabel="RSVP"
-          monogram={<Monogram name={ctx.theme.monogram ? wedding.name : null} />}
-        />
-      ) : null}
+      <SiteTopBar ctx={ctx} blocks={shown} />
 
       {/* Arrived from the email's Yes or No button (spec 22 §8). The reply is
           applied client-side by this component, never during the render — mail

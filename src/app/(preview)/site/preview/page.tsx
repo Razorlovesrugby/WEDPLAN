@@ -9,6 +9,7 @@ import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
 import { motionAttributes } from "@/lib/site/motion";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { PreviewBridge } from "@/components/site/preview-bridge";
+import { SiteTopBar } from "@/components/site/top-bar";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Preview", robots: { index: false, follow: false } };
@@ -16,9 +17,15 @@ export const metadata = { title: "Preview", robots: { index: false, follow: fals
 /**
  * The draft, rendered exactly as a guest would get it (spec 23 §5).
  *
- * Behind the planner's own authentication, inside the `(planner)` group, and
- * reading `site_blocks` rather than a revision — this is the one place the
- * draft is visible, and it is visible only to somebody signed in.
+ * Behind the planner's own authentication and reading `site_blocks` rather than
+ * a revision — this is the one place the draft is visible, and it is visible
+ * only to somebody signed in (middleware gates the path, `requireWedding`
+ * checks again).
+ *
+ * It lives in its own `(preview)` route group, **not** `(planner)`: that group's
+ * layout draws the planner's header and menu, which inside the editor's frame
+ * would sit above the guest's cover where no guest has ever seen anything.
+ * The URL is unchanged; only the layout it inherits is.
  *
  * It renders through `SiteBlocks`, the same component the public page uses. A
  * preview with its own renderer is a preview that starts lying the moment
@@ -86,9 +93,12 @@ export default async function SitePreviewPage({
       // The builder's iframe is the only place that is true, so the flag is
       // set here rather than passed down through the renderer.
       data-site-preview="true"
-      className={`${siteFontClasses(ctx.theme.preset)} -m-4 min-h-screen bg-paper font-body text-ink antialiased sm:-m-6`}
+      className={`${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       <PreviewBridge />
+      {/* The bar a guest gets, sticky to this frame, so the switch and the bar's
+          shape can be judged while editing (spec 28 §5.2). */}
+      <SiteTopBar ctx={ctx} blocks={shown} />
       {shown.length === 0 ? (
         <p className="p-10 text-center text-sm text-muted">
           Nothing on the page yet. Add a block and it appears here.

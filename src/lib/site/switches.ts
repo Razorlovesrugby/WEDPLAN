@@ -67,6 +67,7 @@ const coverSwitches: SwitchDef[] = [
   ["show_cover_line", "A line of invitation", "On a guest's own page", "The names are followed directly by the date."],
   ["show_scroll_cue", "The arrow that says there is more", "On a guest's own page", "No arrow."],
   ["tall_cover", "A full-height first screen", "On a guest's own page", "The hero keeps its ordinary height."],
+  ["show_initials", "Initials above your names", "Hero block", "Just the names; nothing is left in the initials' place."],
   ["show_date", "The date", "Hero block", "No date line; nothing is left in its place."],
   ["show_location", "The place", "Hero block", "No place line."],
   ["show_intro", "A line about why", "Hero block", "The line is not drawn and its space closes up."],
@@ -79,8 +80,9 @@ const coverSwitches: SwitchDef[] = [
   label: label as string,
   where: `Hero block → ${where}`,
   // Every cover line is on unless the planner chose otherwise — except the big
-  // countdown, which has always been opt-in.
-  defaultOn: key !== "show_countdown",
+  // countdown, which has always been opt-in, and the initials, which the
+  // planner asked to be rid of (spec 28 §5.1) and so start off.
+  defaultOn: key !== "show_countdown" && key !== "show_initials",
   whenOff: whenOff as string,
 }));
 
@@ -120,6 +122,14 @@ export const SWITCHES: SwitchDef[] = [
   ...blockStyleSwitches,
   ...personalSwitches,
   ...motionSwitches,
+  {
+    id: "layout.top_nav",
+    group: "layout",
+    label: "Bar at the top",
+    where: "Rail → Page",
+    defaultOn: true,
+    whenOff: "No bar at all; the page begins with the cover and nothing else moves.",
+  },
   {
     id: "layout.chapter_rail",
     group: "layout",

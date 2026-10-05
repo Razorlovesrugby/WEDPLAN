@@ -75,3 +75,21 @@ export function splitHeadline(name: string | null | undefined): Headline | null 
 
   return { left: left.trim(), joiner: joiner!, right: right.trim() };
 }
+
+/**
+ * "Ray & Olivia" — the two first names, for the top bar when the wedding's name
+ * gives no initials (spec 28 §5.1).
+ *
+ * The bar's left edge is always something: initials when the name yields them,
+ * otherwise this. A name that will not split ("The Okonkwo Wedding") is shown
+ * whole rather than invented around, which is the same rule `splitHeadline`
+ * follows. Null only for a blank name.
+ */
+export function firstNamesFromName(name: string | null | undefined): string | null {
+  const split = splitHeadline(name);
+  if (split) {
+    const first = (part: string) => part.split(/\s+/)[0] ?? part;
+    return `${first(split.left)} ${split.joiner} ${first(split.right)}`;
+  }
+  return name?.trim() ? name.trim() : null;
+}

@@ -91,6 +91,9 @@ export const BLOCK_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
       .max(COVER_LINE_MAX_LENGTH)
       .optional()
       .transform((v) => (v ? v : undefined)),
+    // The monogram over the names. The one cover switch that is OFF when
+    // absent: the planner asked for it gone (spec 28 §5.1).
+    show_initials: z.boolean().optional(),
     show_date: z.boolean().optional(),
     show_location: z.boolean().optional(),
     show_intro: z.boolean().optional(),

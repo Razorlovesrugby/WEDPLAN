@@ -104,6 +104,15 @@ export function replyBarCopy(
   }
 }
 
+/**
+ * What the top bar's button says (spec 28 §5.2): **RSVP** until they have
+ * answered something, then **Your reply** — it still goes to the form, where
+ * they can change it until the lock date.
+ */
+export function navRsvpLabel(summary: ReplySummary): string {
+  return summary.state === "none" || summary.state === "partial" ? "RSVP" : "Your reply";
+}
+
 /** Words for the card that follows sending: a heading and the lines beneath. */
 export function replyConfirmation(summary: ReplySummary): { heading: string; lines: string[] } {
   const lines: string[] = [];

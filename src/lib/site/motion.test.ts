@@ -126,6 +126,7 @@ describe("resolveLayout", () => {
   it("keeps today's page for anybody who never chose", () => {
     expect(resolveLayout(undefined)).toEqual(DEFAULT_LAYOUT);
     expect(DEFAULT_LAYOUT).toEqual({
+      topNav: true,
       chapterRail: true,
       sectionNumbers: true,
       replyBar: true,
@@ -143,9 +144,16 @@ describe("resolveLayout", () => {
     });
   });
 
+  it("reads the top bar's switch, on unless it was turned off", () => {
+    expect(resolveLayout({}).topNav).toBe(true);
+    expect(resolveLayout({ top_nav: false }).topNav).toBe(false);
+    expect(resolveLayout({ top_nav: "off" }).topNav).toBe(true);
+  });
+
   it("gives a switch added later its own default when an older theme lacks it", () => {
     // A theme saved when only the rail and the numbers existed.
     expect(resolveLayout({ chapter_rail: false, section_numbers: false })).toEqual({
+      topNav: true,
       chapterRail: false,
       sectionNumbers: false,
       replyBar: true,
