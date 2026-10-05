@@ -1,40 +1,23 @@
-import type { GiftFundRow } from "@/lib/types/database";
+import type { GiftBankDetailsRow, GiftFundRow } from "@/lib/types/database";
 
 /**
- * The gift-fund block's arithmetic (0030).
+ * What the gift block shows (0030, reworked by spec 28 §6.1).
  *
- * Separate from the renderer because "how full is the bar" has edge cases —
- * no target, an over-subscribed fund, a target of nothing — and each of them
- * is a line on a real wedding site rather than a hypothetical.
+ * A fund is a name and a line about it. It used to carry a target, a "raised so
+ * far" figure and a progress rule; the couple's reading was that a gift is a
+ * transfer to their account, not a thermometer, so the page no longer reads
+ * `target_minor` or `raised_minor` at all. They stay in the database — the
+ * couple typed them, migrations are append-only, and dropping a column people
+ * have written into is a data loss — they are simply not drawn.
  */
 
 export type PublicFund = {
   id: string;
   name: string;
   blurb: string | null;
-  raisedMinor: number;
-  targetMinor: number | null;
+  /** The optional "or give online" link, already checked. */
   contributeUrl: string | null;
-  /** 0–1, or null when the fund has no target and therefore no rule to draw. */
-  progress: number | null;
 };
-
-/**
- * How full the rule is drawn.
- *
- * **Clamped at 1.** A fund that has passed its target is a good thing that
- * happened, and a bar drawn past its own container is a rendering bug the
- * couple would report. The figures underneath still say `$1,400 / $1,200`,
- * so nothing is hidden — the bar is simply full.
- *
- * Null with no target: a fund that says "anything towards the honeymoon" has
- * nothing to be a proportion of, and an empty rule under it would read as
- * "nobody has given anything".
- */
-export function fundProgress(raisedMinor: number, targetMinor: number | null): number | null {
-  if (targetMinor === null || targetMinor <= 0) return null;
-  return Math.min(1, Math.max(0, raisedMinor / targetMinor));
-}
 
 /** A stored row as the public block reads it. */
 export function toPublicFund(row: GiftFundRow): PublicFund {
@@ -42,11 +25,38 @@ export function toPublicFund(row: GiftFundRow): PublicFund {
     id: row.id,
     name: row.name,
     blurb: row.blurb,
-    raisedMinor: row.raised_minor,
-    targetMinor: row.target_minor,
     contributeUrl: safeContributeUrl(row.contribute_url),
-    progress: fundProgress(row.raised_minor, row.target_minor),
   };
+}
+
+/**
+ * The couple's account details as the popup reads them (`0033`). The account
+ * number is digits only — grouping it is the renderer's job.
+ */
+export type PublicBank = {
+  accountName: string | null;
+  accountNumber: string | null;
+  /** The warm line at the top of the popup; null means the default. */
+  message: string | null;
+  note: string | null;
+};
+
+export const DEFAULT_GIFT_MESSAGE = "Thank you — truly. If you'd like to, here's where to send it.";
+
+/**
+ * Null when there is nothing to show — a row the couple created and left
+ * empty is the same as none, and the Contribute button must not open an empty
+ * popup.
+ */
+export function toPublicBank(row: GiftBankDetailsRow | null | undefined): PublicBank | null {
+  if (!row) return null;
+  const bank: PublicBank = {
+    accountName: row.account_name?.trim() || null,
+    accountNumber: row.account_number?.trim() || null,
+    message: row.message?.trim() || null,
+    note: row.note?.trim() || null,
+  };
+  return bank.accountName || bank.accountNumber ? bank : null;
 }
 
 /**

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
+import { parseNzAccount } from "@/lib/site/bank-account";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -19,9 +20,11 @@ import { fail, ok, type ActionResult } from "./result";
  * a payment integration wearing a form, and building the form first gets you
  * a number strangers can type into a wedding's own page.
  *
- * Money is integer minor units, NZD (spec 18). The forms take dollars because
- * that is what people type; the conversion happens once, here, at the
- * boundary.
+ * Spec 28 §6.1 changed what a fund is: a name and a line, with the couple's
+ * bank details written once for the wedding (`saveGiftBankDetails`). The
+ * target and "raised so far" fields are gone from the form, but **the columns
+ * stay and this action never writes them** — an update that sent `null` and
+ * `0` for fields it no longer shows would wipe figures the couple typed.
  */
 
 function revalidateGifts(): void {
@@ -31,28 +34,10 @@ function revalidateGifts(): void {
   revalidatePath("/w", "layout");
 }
 
-/**
- * Dollars in, minor units out.
- *
- * `Math.round` rather than a truncation: "12.10" arrives as 12.099999999999999
- * often enough that truncating it stores $12.09, and a figure that is one cent
- * short of what somebody typed is the kind of bug nobody reports and everybody
- * notices.
- *
- * An empty field is null, never 0 — spec 19's lesson from the budget, where a
- * stored 0 meaning "unset" outranked every real figure beneath it.
- */
-const dollarsToMinor = z
-  .union([z.coerce.number().min(0).max(10_000_000), z.literal("")])
-  .optional()
-  .transform((value) => (value === "" || value === undefined ? null : Math.round(value * 100)));
-
 const fundSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1, "A fund needs a name").max(120),
   blurb: z.string().trim().max(400).optional().transform((v) => (v ? v : null)),
-  target: dollarsToMinor,
-  raised: dollarsToMinor,
   contribute_url: z
     .string()
     .trim()
@@ -73,17 +58,16 @@ export async function saveGiftFund(fields: Record<string, unknown>): Promise<Act
   const parsed = fundSchema.safeParse(fields);
   if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
 
-  const { id, name, blurb, target, raised, contribute_url, sort_order } = parsed.data;
+  const { id, name, blurb, contribute_url, sort_order } = parsed.data;
   const supabase = await createClient();
 
+  // No `target_minor` / `raised_minor`: see the header. A new row gets the
+  // column defaults (no target, nothing raised); an existing one keeps what it
+  // has.
   const row = {
     wedding_id: wedding.id,
     name,
     blurb,
-    target_minor: target,
-    // A fund that has never been updated has raised nothing. Null here would
-    // violate the column and mean the same thing anyway.
-    raised_minor: raised ?? 0,
     contribute_url,
     ...(sort_order === undefined ? {} : { sort_order }),
   };
@@ -122,6 +106,62 @@ export async function deleteGiftFund(id: string): Promise<ActionResult> {
     .eq("id", id);
 
   if (error) return fail(error.message);
+  revalidateGifts();
+  return ok(undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Where a guest sends a gift (0033)
+// ---------------------------------------------------------------------------
+
+const bankSchema = z.object({
+  account_name: z.string().trim().max(120).optional().transform((v) => (v ? v : null)),
+  // Checked with the same function the editor uses for its live message, so
+  // what the form says is wrong and what this refuses cannot differ.
+  account_number: z
+    .string()
+    .optional()
+    .superRefine((value, ctx) => {
+      if (!value || value.trim() === "") return;
+      const parsed = parseNzAccount(value);
+      if (!parsed.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+    })
+    .transform((value) => {
+      if (!value || value.trim() === "") return null;
+      const parsed = parseNzAccount(value);
+      return parsed.ok ? parsed.digits : null;
+    }),
+  message: z.string().trim().max(300).optional().transform((v) => (v ? v : null)),
+  note: z.string().trim().max(400).optional().transform((v) => (v ? v : null)),
+});
+
+/**
+ * Save the wedding's bank details — one row, written whole.
+ *
+ * Planner writes only, like everything here. The account number is stored as
+ * digits (the table's check insists) and grouped at render time. Saving all
+ * four fields empty removes nothing and stores nothing: the row simply holds
+ * nulls, which the guest page reads as "no details" and so shows no Contribute
+ * button.
+ */
+export async function saveGiftBankDetails(fields: Record<string, unknown>): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = bankSchema.safeParse(fields);
+  if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("gift_bank_details").upsert(
+    {
+      wedding_id: wedding.id,
+      account_name: parsed.data.account_name,
+      account_number: parsed.data.account_number,
+      message: parsed.data.message,
+      note: parsed.data.note,
+    },
+    { onConflict: "wedding_id" },
+  );
+
+  if (error) return fail(`Could not save the bank details: ${error.message}`);
   revalidateGifts();
   return ok(undefined);
 }

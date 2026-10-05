@@ -363,7 +363,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "gift_funds",
     label: "A gift",
     family: "the day",
-    blurb: "What you're saving towards, and where to send something if they'd like to.",
+    blurb: "What you're saving towards, and a Contribute button that opens your bank details.",
     eyebrow: "A gift",
     max: 1,
     styles: ["width", "background"],

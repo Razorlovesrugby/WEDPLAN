@@ -664,14 +664,19 @@ export function SiteBlockView({
     }
 
     case "gift_funds": {
-      // No funds means nothing to say. The heading over an empty list reads
-      // as "we wanted presents and could not think of any".
-      if (ctx.extras.giftFunds.length === 0) return null;
+      // Neither funds nor details means nothing to say. A heading over an empty
+      // list reads as "we wanted presents and could not think of any".
+      if (ctx.extras.giftFunds.length === 0 && !ctx.extras.giftBank) return null;
       const background = block.style?.background;
       return (
         <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
           <GiftFunds
             funds={ctx.extras.giftFunds}
+            bank={ctx.extras.giftBank}
+            // Whose reference to print on the transfer. Every page is
+            // somebody's now (spec 28 §7a.4); the fallback is only for a
+            // context built with no household at all.
+            householdName={personal?.householdName ?? ""}
             dark={background === "ink" || (background === "photograph" && bgImage !== null)}
           />
         </Shell>

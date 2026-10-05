@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireWedding } from "@/server/queries/wedding";
-import { getGiftFunds } from "@/server/queries/site-extras";
+import { getGiftBankDetails, getGiftFunds } from "@/server/queries/site-extras";
 import { GiftFundEditor } from "@/components/site/editor/gift-fund-editor";
 
 export const metadata = { title: "A gift" };
@@ -13,14 +13,15 @@ export const metadata = { title: "A gift" };
  * somewhere the couple can see all of it at once rather than in a form that
  * only opens when a particular block is selected.
  *
- * **What this screen is honest about:** nothing here takes a payment.
- * "Raised so far" is a figure the couple types from whatever account the
- * money actually lands in, and the button on the guest site is a link out.
- * The copy says so, because a progress bar implies a system behind it.
+ * **What this screen is honest about:** nothing here takes a payment. The
+ * account details are text the couple typed, shown to a guest so they can type
+ * them into their own banking app (spec 28 §6.1). There is no target and no
+ * "raised so far" any more — the columns are still in the database, because
+ * the couple typed into them, but nothing reads them.
  */
 export default async function GiftFundsPage() {
   const wedding = await requireWedding();
-  const funds = await getGiftFunds(wedding.id);
+  const [funds, bank] = await Promise.all([getGiftFunds(wedding.id), getGiftBankDetails(wedding.id)]);
 
   return (
     <div className="space-y-5">
@@ -40,13 +41,13 @@ export default async function GiftFundsPage() {
       <div className="card space-y-1 p-4 text-sm text-muted">
         <p className="font-medium text-ink">Nothing here takes a payment.</p>
         <p>
-          The <em>Contribute</em> button sends a guest to the link you give — your bank&rsquo;s
-          request page, a transfer link, a charity&rsquo;s own donation page. &ldquo;Raised so
-          far&rdquo; is a number you keep up to date from wherever the money actually arrives.
+          Guests see your account details when they press <em>Contribute</em> and type them into
+          their own banking app. You tell who sent what by the reference &mdash; each household is
+          asked to use its own name.
         </p>
       </div>
 
-      <GiftFundEditor funds={funds} />
+      <GiftFundEditor funds={funds} bank={bank} />
     </div>
   );
 }
