@@ -5,6 +5,7 @@ import {
   BLOCK_TYPES,
   STARTER_LAYOUTS,
   isBlockType,
+  isFoldedIntoSchedule,
   pageNotes,
   palletableBlocks,
   sectionNumbers,
@@ -94,6 +95,47 @@ describe("visibleBlocks", () => {
       "schedule",
       "footer",
     ]);
+  });
+});
+
+describe("On the day, folded into The weekend (spec 28 §5.3)", () => {
+  it("is dropped from a page that has The weekend, so the notes print once", () => {
+    const blocks = [block({ type: "schedule" }), block({ type: "on_the_day" }), block({ type: "faq" })];
+    expect(visibleBlocks(blocks).map((b) => b.type)).toEqual(["schedule", "faq"]);
+  });
+
+  it("still renders on a page with no weekend section", () => {
+    // A published revision can hold one; dropping it would lose the notes.
+    const blocks = [block({ type: "hero" }), block({ type: "on_the_day" })];
+    expect(visibleBlocks(blocks).map((b) => b.type)).toEqual(["hero", "on_the_day"]);
+  });
+
+  it("is not folded away by a weekend section that is itself hidden", () => {
+    const blocks = [block({ type: "schedule", visible: false }), block({ type: "on_the_day" })];
+    expect(visibleBlocks(blocks).map((b) => b.type)).toEqual(["on_the_day"]);
+    expect(isFoldedIntoSchedule(blocks[1]!, blocks)).toBe(false);
+  });
+
+  it("leaves no gap in the section numbers", () => {
+    const blocks = visibleBlocks([
+      block({ type: "schedule" }),
+      block({ type: "on_the_day" }),
+      block({ type: "faq" }),
+    ]);
+    expect([...sectionNumbers(blocks).values()].map((mark) => mark.number)).toEqual(["01", "02"]);
+  });
+
+  it("tells the editor which row is folded", () => {
+    const schedule = block({ type: "schedule" });
+    const day = block({ type: "on_the_day" });
+    expect(isFoldedIntoSchedule(day, [schedule, day])).toBe(true);
+    expect(isFoldedIntoSchedule(schedule, [schedule, day])).toBe(false);
+  });
+
+  it("is deprecated, so the palette cannot add another and no starter layout does", () => {
+    expect(BLOCKS.on_the_day.deprecated).toBe(true);
+    expect(palletableBlocks().map((def) => def.type)).not.toContain("on_the_day");
+    for (const layout of STARTER_LAYOUTS) expect(layout.types).not.toContain("on_the_day");
   });
 });
 

@@ -31,6 +31,7 @@ import {
   pageNotes,
   sectionNumbers,
   typesAtLimit,
+  isFoldedIntoSchedule,
   visibleBlocks,
   type BlockFamily,
   type PageNote,
@@ -742,6 +743,7 @@ export function SiteBuilder({
                       key={block.id}
                       block={block}
                       number={marks.get(block.id)?.number ?? null}
+                      folded={isFoldedIntoSchedule(block, ordered)}
                       selected={block.id === selected}
                       pending={pending}
                       thumb={photoFor(block, photoById)}
@@ -1307,6 +1309,7 @@ function ChapterRow({
   selected,
   pending,
   thumb,
+  folded,
   canMoveUp,
   canMoveDown,
   onMove,
@@ -1317,6 +1320,8 @@ function ChapterRow({
   block: SiteBlock;
   /** Null for a block the page does not number — a band, or a hidden one. */
   number: string | null;
+  /** "On the day" on a page that has The weekend: its notes are drawn there now. */
+  folded: boolean;
   selected: boolean;
   pending: boolean;
   /** The photograph this block points at, when it has one. */
@@ -1333,7 +1338,7 @@ function ChapterRow({
   });
   const def = BLOCKS[block.type];
   const snippet = blockSnippet(block);
-  const status = block.visible ? blockStatus(block) : null;
+  const status = block.visible && !folded ? blockStatus(block) : null;
 
   return (
     <li
@@ -1341,7 +1346,7 @@ function ChapterRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`flex items-center gap-2 px-2.5 py-2 ${isDragging ? "opacity-60" : ""} ${
         selected ? "bg-[#f6f3ee]" : ""
-      }`}
+      } ${folded ? "bg-[#faf9f7]" : ""}`}
     >
       <button
         type="button"
@@ -1393,11 +1398,19 @@ function ChapterRow({
 
       <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
         <span
-          className={`block truncate text-sm ${block.visible ? "" : "text-[#a9a298] line-through"}`}
+          className={`block truncate text-sm ${
+            block.visible ? (folded ? "text-[#a9a298]" : "") : "text-[#a9a298] line-through"
+          }`}
         >
           {def.label}
         </span>
-        {snippet || status ? (
+        {folded ? (
+          // Spec 28 §5.3: a deprecated block the page no longer draws, said
+          // plainly, with the delete beside it.
+          <span className="block truncate text-xs text-muted">
+            Now part of The weekend — you can delete this
+          </span>
+        ) : snippet || status ? (
           <span className="block truncate text-xs text-muted">
             {status ? (
               <span className="mr-1.5 rounded-sm bg-[#fbf0d3] px-1 py-px text-[10px] uppercase tracking-wide text-[#8a6a1f]">

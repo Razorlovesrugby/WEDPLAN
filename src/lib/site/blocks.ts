@@ -214,13 +214,16 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "on_the_day",
     label: "On the day",
     family: "the day",
-    blurb: "Your notes for each event — parking, timings, what happens when.",
+    blurb: "Now part of The weekend — each event's note sits under it. This block still renders on a page with no weekend section.",
     eyebrow: "On the day",
     max: 1,
     styles: ["width", "background"],
     personal: true,
     defaultAudience: "invited",
     heading: "On the day",
+    // Spec 28 §5.3. Not removed: a published revision may hold one, and
+    // `toBlock()` drops a type it does not know. See `visibleBlocks`.
+    deprecated: true,
   },
   rsvp: {
     type: "rsvp",
@@ -426,7 +429,24 @@ export type SiteBlock = {
  * a revision keeps its shape; nothing consults them.
  */
 export function visibleBlocks(blocks: SiteBlock[]): SiteBlock[] {
-  return blocks.filter((block) => block.visible);
+  const live = blocks.filter((block) => block.visible);
+
+  // "On the day" is part of "You're invited to" now (spec 28 §5.3): each event's
+  // note is drawn under the event. On a page that has both, the old block would
+  // print the same notes a second time, so it is dropped here — before the
+  // numbering, the chapter list and the top bar are worked out, so none of them
+  // is left with a gap or an entry for a section that is not there.
+  return live.some((block) => block.type === "schedule")
+    ? live.filter((block) => block.type !== "on_the_day")
+    : live;
+}
+
+/** True when this "On the day" block is one that `visibleBlocks` folds away. */
+export function isFoldedIntoSchedule(block: SiteBlock, blocks: SiteBlock[]): boolean {
+  return (
+    block.type === "on_the_day" &&
+    blocks.some((other) => other.type === "schedule" && other.visible)
+  );
 }
 
 /**
@@ -514,10 +534,11 @@ export const STARTER_LAYOUTS: StarterLayout[] = [
     id: "classic",
     label: "Classic",
     blurb: "The usual order, and the one nobody has to think about.",
-    // No `countdown` block: it is a switch on the hero now (spec 25 §7), and
-    // a starter layout that added the deprecated one would be teaching the
-    // shape we just moved away from.
-    types: ["hero", "story", "schedule", "on_the_day", "travel", "dress_code", "faq", "rsvp", "footer"],
+    // No `countdown` or `on_the_day`: the first is a switch on the hero now
+    // (spec 25 §7), the second is part of The weekend (spec 28 §5.3), and a
+    // starter layout that added a deprecated block would be teaching the shape
+    // we just moved away from.
+    types: ["hero", "story", "schedule", "travel", "dress_code", "faq", "rsvp", "footer"],
   },
   {
     id: "photo_led",
@@ -540,7 +561,7 @@ export const STARTER_LAYOUTS: StarterLayout[] = [
     id: "short",
     label: "One-pager",
     blurb: "A small wedding, told in one screen and a bit.",
-    types: ["hero", "schedule", "on_the_day", "rsvp", "footer"],
+    types: ["hero", "schedule", "rsvp", "footer"],
   },
 ];
 
