@@ -347,7 +347,9 @@ export async function applyStarterLayout(
  * Appends rather than replaces, and skips anything already asked, so pressing
  * it twice is not destructive.
  */
-export async function addStarterFaq(blockId: string): Promise<ActionResult<{ added: number }>> {
+export async function addStarterFaq(
+  blockId: string,
+): Promise<ActionResult<{ added: number; items: Record<string, unknown>[] }>> {
   const wedding = await requireWedding();
   const supabase = await createClient();
 
@@ -369,7 +371,7 @@ export async function addStarterFaq(blockId: string): Promise<ActionResult<{ add
   const additions = FAQ_LIBRARY.filter((item) => !asked.has(item.q.trim().toLowerCase())).map(
     (item) => ({ q: item.q, a: item.a, featured: false, tags: item.tags }),
   );
-  if (additions.length === 0) return ok({ added: 0 });
+  if (additions.length === 0) return ok({ added: 0, items: current });
 
   const { error } = await supabase
     .from("site_blocks")
@@ -379,7 +381,10 @@ export async function addStarterFaq(blockId: string): Promise<ActionResult<{ add
 
   if (error) return fail(error.message);
   revalidateSite();
-  return ok({ added: additions.length });
+  // The merged list comes back so the inspector can show it. Without it the
+  // form keeps the rows it opened with, the questions that were just added are
+  // invisible, and the next edit autosaves that stale list over them.
+  return ok({ added: additions.length, items: [...current, ...additions] });
 }
 
 // ---------------------------------------------------------------------------

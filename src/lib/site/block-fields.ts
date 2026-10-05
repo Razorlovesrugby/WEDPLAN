@@ -143,6 +143,8 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     repeat: {
       key: "milestones",
       noun: "milestone",
+      // "2019 · We met" — the date alone says nothing about which moment it is.
+      summary: ["date", "title"],
       fields: [
         { name: "date", label: "When", kind: "text", placeholder: "August 2019" },
         { name: "title", label: "What", kind: "text", placeholder: "We met" },

@@ -21,9 +21,9 @@ import {
   SHAPE_LABEL,
   STYLE_CHOICES,
   STYLE_TITLE,
-  repeatHeading,
 } from "@/lib/site/style-labels";
 import { FieldInput } from "./field";
+import { RepeatRows } from "./repeat-rows";
 import { PhotoPicker, type PhotoOption } from "./photo-picker";
 import { saveStatusLabel, useAutosave } from "./use-autosave";
 import { LookGlyph } from "./look-glyph";
@@ -40,6 +40,9 @@ import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/loo
  * Colour and type come from the theme, which is where a non-designer's
  * decisions stay good.
  */
+
+/** From this many questions the editor says the list is getting long. */
+const FAQ_SOFT_LIMIT = 15;
 
 /** Swatches for the choices that are questions about how something looks. */
 const BACKGROUND_SWATCH: Record<(typeof BLOCK_BACKGROUNDS)[number], string> = {
@@ -239,70 +242,44 @@ export function BlockInspector({
       ) : null}
 
       {form.repeat ? (
-        <div className="space-y-3" onBlur={flush}>
-          <h3 className="text-xs uppercase tracking-wide text-muted">
-            {repeatHeading(form.repeat.noun)}
-          </h3>
-          {repeatRows.map((row, index) => (
-            <div key={index} className="space-y-2 border-l-2 border-line pl-3">
-              {form.repeat!.fields.map((field) => (
-                <FieldInput
-                  key={field.name}
-                  field={field}
-                  value={row[field.name]}
-                  idPrefix={`block-${block.id}-${index}`}
-                  onChange={(value) => {
-                    const next = [...repeatRows];
-                    next[index] = { ...row, [field.name]: value };
-                    set(form.repeat!.key, next);
-                  }}
-                />
-              ))}
-              <button
-                type="button"
-                className="text-xs text-red-700 hover:underline"
-                onClick={() =>
-                  set(
-                    form.repeat!.key,
-                    repeatRows.filter((_, position) => position !== index),
-                  )
-                }
-              >
-                Remove this {form.repeat!.noun}
-              </button>
-            </div>
-          ))}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => set(form.repeat!.key, [...repeatRows, {}])}
-            >
-              Add a {form.repeat.noun}
-            </button>
-            {block.type === "faq" ? (
-              <button
-                type="button"
-                className="btn"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const result = await addStarterFaq(block.id);
-                    setMessage(
-                      result.ok
-                        ? result.data.added === 0
-                          ? "Everything in the starter list is already here"
-                          : `Added ${result.data.added} questions as drafts`
-                        : result.error,
-                    );
-                    onDone();
-                  })
-                }
-              >
-                Add the usual questions
-              </button>
-            ) : null}
-          </div>
+        <div onBlur={flush}>
+          <RepeatRows
+            repeat={form.repeat}
+            rows={repeatRows}
+            onChange={(next) => set(form.repeat!.key, next)}
+            idPrefix={`block-${block.id}`}
+            // Never blocks; the planner is the one who keeps it short (spec 28 §7a.2).
+            note={
+              block.type === "faq" && repeatRows.length >= FAQ_SOFT_LIMIT
+                ? `That's ${repeatRows.length} questions — a lot to read on a phone. Everything shows open, so the shortest list that answers what people ask is the kindest one.`
+                : null
+            }
+            actions={
+              block.type === "faq" ? (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await addStarterFaq(block.id);
+                      if (result.ok && result.data.added > 0) set(form.repeat!.key, result.data.items);
+                      setMessage(
+                        result.ok
+                          ? result.data.added === 0
+                            ? "Everything in the starter list is already here"
+                            : `Added ${result.data.added} questions as drafts`
+                          : result.error,
+                      );
+                      onDone();
+                    })
+                  }
+                >
+                  Add the usual questions
+                </button>
+              ) : null
+            }
+          />
         </div>
       ) : null}
 

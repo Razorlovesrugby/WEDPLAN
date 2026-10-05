@@ -1,7 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { CSS } from "@dnd-kit/utilities";
+import { moveWithin } from "@/lib/reorder";
 import { removeQuestion, reorderQuestion, saveQuestion } from "@/server/actions/questions";
 import type { QuestionScope, QuestionType, RsvpQuestionRow } from "@/lib/types/database";
 
@@ -54,9 +72,53 @@ function toDraft(question?: RsvpQuestionRow): Draft {
   };
 }
 
+/**
+ * One question's row, with a drag handle handed to whatever draws its header.
+ * The ↑ / ↓ buttons beside it stay: they are how the keyboard and a phone move
+ * a question, and both end in the same `reorderQuestion`.
+ */
+function SortableQuestion({
+  id,
+  children,
+}: {
+  id: string;
+  children: (handle: React.ReactNode) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const handle = (
+    <button
+      type="button"
+      className="cursor-grab touch-none px-1 text-[#a9a298]"
+      aria-label="Drag to reorder"
+      {...attributes}
+      {...listeners}
+    >
+      ⋮⋮
+    </button>
+  );
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={isDragging ? "bg-white opacity-70" : undefined}
+    >
+      {children(handle)}
+    </div>
+  );
+}
+
 export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // The list as the planner is arranging it. Follows the server, but a drag
+  // shows its result at once rather than waiting out the round trip and
+  // snapping back first.
+  const [ordered, setOrdered] = useState(questions);
+  useEffect(() => setOrdered(questions), [questions]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(toDraft());
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -118,6 +180,22 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
     startTransition(async () => {
       const result = await reorderQuestion(questionId, direction);
       if (!result.ok) setMessage(result.error);
+      router.refresh();
+    });
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    if (!event.over || event.active.id === event.over.id) return;
+    const from = ordered.findIndex((question) => question.id === event.active.id);
+    const to = ordered.findIndex((question) => question.id === event.over!.id);
+    if (from === -1 || to === -1) return;
+
+    setOrdered(moveWithin(ordered, from, to));
+    startTransition(async () => {
+      const result = await reorderQuestion(String(event.active.id), to);
+      if (!result.ok) setMessage(result.error);
+      // Either way the server's order is the truth: this puts it back if the
+      // write failed, and confirms it if not.
       router.refresh();
     });
   }
@@ -236,6 +314,13 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
         </p>
       ) : null}
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={[restrictToVerticalAxis]}
+        onDragEnd={onDragEnd}
+      >
+      <SortableContext items={ordered.map((question) => question.id)} strategy={verticalListSortingStrategy}>
       <div className="card divide-y divide-line">
         {questions.length === 0 ? (
           <p className="p-5 text-sm text-muted">
@@ -244,9 +329,13 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
           </p>
         ) : null}
 
-        {questions.map((question, index) => (
-          <div key={question.id}>
+        {ordered.map((question, index) => (
+          <SortableQuestion key={question.id} id={question.id}>
+          {(handle) => (
+          <>
             <div className="flex flex-wrap items-baseline justify-between gap-2 p-4">
+              <div className="flex min-w-0 items-baseline gap-2">
+              {handle}
               <div className="min-w-0">
                 <p className="text-sm font-medium">
                   {question.label}
@@ -267,6 +356,7 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
                   <p className="mt-0.5 text-xs text-muted">{question.help_text}</p>
                 ) : null}
               </div>
+              </div>
 
               <div className="flex flex-wrap gap-1">
                 <button
@@ -281,7 +371,7 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
                 <button
                   type="button"
                   className="btn px-2 py-1 text-xs"
-                  disabled={pending || index === questions.length - 1}
+                  disabled={pending || index === ordered.length - 1}
                   onClick={() => onMove(question.id, "down")}
                   aria-label={`Move “${question.label}” down`}
                 >
@@ -306,9 +396,13 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
             </div>
 
             {editing === question.id ? form(question.id) : null}
-          </div>
+          </>
+          )}
+          </SortableQuestion>
         ))}
       </div>
+      </SortableContext>
+      </DndContext>
 
       {editing === "new" ? <div className="card">{form(null)}</div> : null}
 
