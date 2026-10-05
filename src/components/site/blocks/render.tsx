@@ -197,7 +197,8 @@ export function SiteBlockView({
             headline={headline}
             dateLabel={dateLabel}
             location={text(payload, "location")}
-            imagePath={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? text(payload, "image_path")}
+            imageUrl={ctx.imageUrls.get(text(payload, "image_id") ?? "") ?? null}
+            imagePath={text(payload, "image_path")}
             imageAlt={text(payload, "image_alt")}
             monogramName={ctx.theme.monogram ? ctx.wedding.name : null}
             weddingDate={ctx.wedding.wedding_date}
