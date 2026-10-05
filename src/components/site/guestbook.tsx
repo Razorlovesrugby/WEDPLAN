@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { signGuestbook } from "@/server/actions/guestbook";
+import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
 import { Label } from "./section";
 import type { PublicNote } from "@/server/queries/site-extras";
 
@@ -24,12 +25,15 @@ export function Guestbook({
   token,
   prompt,
   notes,
+  preview = false,
 }: {
   weddingSlug: string;
-  /** Present on a household's own page; absent on the shared site. */
+  /** The household's credential. Absent before an invitation has been issued. */
   token: string | null;
   prompt: string | null;
   notes: PublicNote[];
+  /** The editor's preview: the form works and nothing is sent (spec 28 §4.3). */
+  preview?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [name, setName] = useState("");
@@ -39,6 +43,10 @@ export function Guestbook({
 
   function submit() {
     setError(null);
+    if (preview) {
+      setError(PREVIEW_NOT_SAVED);
+      return;
+    }
     startTransition(async () => {
       const result = await signGuestbook({
         weddingSlug,

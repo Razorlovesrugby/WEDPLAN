@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { reserveCoachSeats } from "@/server/actions/travel";
 import { formatTime } from "@/lib/format";
+import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
 import { availability } from "@/lib/travel/coach";
 import type { CoachRun } from "@/server/queries/travel";
 import type { CoachSeatRow } from "@/lib/types/database";
@@ -25,7 +26,8 @@ export function CoachBooking({
   held,
   timeZone,
 }: {
-  token: string;
+  /** The household's credential. **Null only in the editor's preview** (spec 28 §4.3). */
+  token: string | null;
   runs: CoachRun[];
   held: Record<string, Pick<CoachSeatRow, "coach_stop_id" | "seats">>;
   /**
@@ -46,6 +48,12 @@ export function CoachBooking({
     startTransition(async () => {
       setErrors((current) => ({ ...current, [runId]: "" }));
       setSaved((current) => ({ ...current, [runId]: "" }));
+
+      // No token, nothing to reserve with: the preview responds and says so.
+      if (token === null) {
+        setSaved((current) => ({ ...current, [runId]: PREVIEW_NOT_SAVED }));
+        return;
+      }
 
       const result = await reserveCoachSeats({
         token,

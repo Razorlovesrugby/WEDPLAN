@@ -9,6 +9,7 @@ import {
 } from "@/server/actions/gallery";
 import { MAX_UPLOAD_BYTES } from "@/lib/site/assets";
 import { toWebp } from "@/lib/site/encode-image";
+import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
 import type { GalleryImage } from "@/server/queries/gallery";
 
 /**
@@ -23,7 +24,8 @@ export function GuestUploader({
   mine,
   moderated,
 }: {
-  token: string;
+  /** The household's credential. **Null only in the editor's preview** (spec 28 §4.3). */
+  token: string | null;
   mine: GalleryImage[];
   moderated: boolean;
 }) {
@@ -34,6 +36,13 @@ export function GuestUploader({
   const [busy, setBusy] = useState(false);
 
   const upload = async (files: FileList) => {
+    // No token, nothing to upload with: the preview takes the click and says so.
+    if (token === null) {
+      setStatus(PREVIEW_NOT_SAVED);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setBusy(true);
     setStatus(null);
     let added = 0;
@@ -141,12 +150,16 @@ export function GuestUploader({
                 type="button"
                 className="mt-1 text-[0.7rem] text-muted underline"
                 disabled={pending}
-                onClick={() =>
+                onClick={() => {
+                  if (token === null) {
+                    setStatus(PREVIEW_NOT_SAVED);
+                    return;
+                  }
                   startTransition(async () => {
                     await deleteGuestUpload({ token, asset_id: image.id });
                     router.refresh();
-                  })
-                }
+                  });
+                }}
               >
                 Remove
               </button>

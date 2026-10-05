@@ -64,6 +64,7 @@ import type { StyleSnapshot } from "@/server/site/vibes";
 import { PALETTES } from "@/lib/theme/presets";
 import { TEMPLATES, VIBES, getVibe, type Vibe } from "@/lib/site/vibes";
 import type { PhotoOption } from "./photo-picker";
+import type { PreviewHousehold } from "@/lib/site/preview-households";
 
 /**
  * The builder (spec 23 §5, recomposed by spec 24, extended by spec 27).
@@ -154,8 +155,8 @@ export function SiteBuilder({
   theme: SiteTheme;
   publishedAt: string | null;
   unpublished: number;
-  /** Who the preview can be shown as. */
-  households: { id: string; name: string }[];
+  /** Who the preview can be shown as, the household with the most events first. */
+  households: PreviewHousehold[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
@@ -166,6 +167,13 @@ export function SiteBuilder({
   // can reach is somebody's own (spec 28 §7a.4), so there is no neutral version
   // to preview. Empty only for a wedding with no households yet.
   const [viewAs, setViewAs] = useState<string>(households[0]?.id ?? "");
+  // The reply form as a household that has not answered yet would see it
+  // (spec 28 §4.3, Q5): by default it shows their real answers.
+  const [blank, setBlank] = useState(false);
+  const previewSrc = `/site/preview?${[viewAs ? `as=${viewAs}` : "", blank ? "blank=1" : ""]
+    .filter(Boolean)
+    .join("&")}`;
+  const viewingAs = households.find((household) => household.id === viewAs) ?? null;
 
   // ---- deleting with an undo (spec 24 §8, spec 27 E6) ----
   // A delete is not performed when it is clicked. The block is hidden at once —
@@ -808,7 +816,7 @@ export function SiteBuilder({
                 ["/site/gifts", "A gift"],
                 ["/site/songs", "Song requests"],
                 ["/site/guestbook", "Guestbook"],
-                [`/site/preview?as=${viewAs}`, "Open the preview"],
+                [previewSrc, "Open the preview"],
               ].map(([href, label]) => (
                 <li key={href}>
                   <Link
@@ -841,7 +849,7 @@ export function SiteBuilder({
               </button>
             ))}
             <Link
-              href={`/site/preview?as=${viewAs}`}
+              href={previewSrc}
               target="_blank"
               className="ml-auto text-xs text-muted underline"
             >
@@ -863,15 +871,31 @@ export function SiteBuilder({
               {households.map((household) => (
                 <option key={household.id} value={household.id}>
                   {household.name}
+                  {household.eventCount > 0 ? "" : " (no events yet)"}
                 </option>
               ))}
             </select>
+            <label className="ml-auto flex items-center gap-1.5 text-muted">
+              <input type="checkbox" checked={blank} onChange={(event) => setBlank(event.target.checked)} />
+              Show a blank reply
+            </label>
           </div>
+          {households.length === 0 ? (
+            <p className="px-5 pb-3 text-xs text-muted">
+              Add a household on Guests and the preview becomes their page — their name on the
+              cover, their events, their reply form.
+            </p>
+          ) : viewingAs && viewingAs.eventCount === 0 ? (
+            <p className="px-5 pb-3 text-xs text-muted">
+              {viewingAs.name} isn&rsquo;t invited to any events yet, so the weekend and the reply
+              form are empty here. Pick another household, or invite them from Guests.
+            </p>
+          ) : null}
 
           <PreviewFrame
             device={device}
             iframeRef={iframeRef}
-            src={`/site/preview?as=${viewAs}`}
+            src={previewSrc}
             // A reload (a different household) forgets which block is selected.
             onLoaded={() =>
               toPreview({ channel: PREVIEW_CHANNEL, type: "highlight", blockId: selected })

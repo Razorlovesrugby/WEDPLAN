@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
 import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
@@ -23,37 +24,41 @@ export const metadata = { title: "Preview", robots: { index: false, follow: fals
  * preview with its own renderer is a preview that starts lying the moment
  * anybody changes the real one.
  *
- * `?as=<household id>` previews somebody's personalised version. It logs
- * nothing: an open count that includes the planner looking at their own work
- * is worse than no open count (spec 22 §9).
+ * `?as=<household id>` previews somebody's own page, and every page a guest can
+ * reach is somebody's (spec 28 §7a.4), so there is no neutral version: no `as`
+ * means the first household on the list. It is built from that household's
+ * real invitations and answers, and it logs nothing — an open count that
+ * includes the planner looking at their own work is worse than no open count
+ * (spec 22 §9). `?blank=1` shows the reply form as it is before anyone answers.
+ *
+ * The household has no token here, which is what makes the reply form, the
+ * vote button, the coach booking and the uploader fully usable and unable to
+ * save (`buildPreviewPersonal`).
  */
 export default async function SitePreviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ as?: string }>;
+  searchParams: Promise<{ as?: string; blank?: string }>;
 }) {
-  const { as } = await searchParams;
+  const { as, blank } = await searchParams;
   const wedding = await requireWedding();
   const blocks = await listDraftBlocks(wedding.id);
 
-  // Who the planner is previewing as. No `?as=` means the first household on
-  // the list, because the greeting, the weekend and the reply bar exist only on
-  // a household's own page and a default preview of the shared site would show
-  // none of them. `?as=shared` is the shared site, for when that is the
-  // question.
+  // Who the planner is previewing as. A value that is not a household id (an
+  // old `?as=shared` link, say) is the same as none.
   const supabase = await createClient();
-  let personal = null;
-  if (as !== "shared") {
-    let query = supabase
-      .from("households")
-      .select("id, display_name, slug, slug_suffix")
-      .eq("wedding_id", wedding.id)
-      .is("deleted_at", null);
-    query = as ? query.eq("id", as) : query.order("display_name").limit(1);
-    const { data: household } = await query.maybeSingle();
+  const householdId = z.string().uuid().safeParse(as);
+  let query = supabase
+    .from("households")
+    .select("id, display_name, slug, slug_suffix")
+    .eq("wedding_id", wedding.id)
+    .is("deleted_at", null);
+  query = householdId.success ? query.eq("id", householdId.data) : query.order("display_name").limit(1);
+  const { data: household } = await query.maybeSingle();
 
-    if (household) personal = await buildPreviewPersonal(wedding.id, household);
-  }
+  const personal = household
+    ? await buildPreviewPersonal(wedding.id, household, { blank: blank === "1" })
+    : null;
 
   const built = await buildRenderContext(
     {

@@ -54,6 +54,12 @@ export type RsvpContext = {
   locked: boolean;
 };
 
+/**
+ * An `RsvpContext` without the invitation it was reached through. What the
+ * editor's preview holds: a household's real data and no credential.
+ */
+export type RsvpData = Omit<RsvpContext, "invitationId">;
+
 export type ResolveFailure =
   | { reason: "malformed" }
   | { reason: "not_found" }
@@ -102,27 +108,25 @@ export async function recordAttempt(ipHash: string, succeeded: boolean): Promise
   await supabase.from("rsvp_token_attempts").insert({ ip_hash: ipHash, succeeded });
 }
 
-export async function resolveInvitation(rawToken: string): Promise<ResolveResult> {
-  if (!looksLikeToken(rawToken)) return { ok: false, reason: "malformed" };
-
-  const ipHash = await clientIpHash();
-  if (await isThrottled(ipHash)) return { ok: false, reason: "throttled" };
-
+/**
+ * Everything the reply form, the card and the per-event pages need for one
+ * household — the part of resolving an invitation that is *not* about proving
+ * who is asking.
+ *
+ * Split out so the editor's preview can show a household's real page
+ * (spec 28 §4.3) through the same code a guest's own link goes through, rather
+ * than a second assembly that drifts: who is invited to what comes from
+ * `v_guest_event_invites` here and nowhere else (spec 22). It takes no token and
+ * has no side effects, and its only caller that holds no credential is behind
+ * the planner's own sign-in.
+ *
+ * Null when the wedding or household cannot be found.
+ */
+export async function loadRsvpData(
+  weddingId: string,
+  householdId: string,
+): Promise<RsvpData | null> {
   const supabase = createAdminClient();
-  const { data: invitation } = await supabase
-    .from("invitations")
-    .select("id, wedding_id, household_id, opened_at")
-    .eq("token_hash", hashInviteToken(rawToken))
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (!invitation) {
-    await recordAttempt(ipHash, false);
-    return { ok: false, reason: "not_found" };
-  }
-  await recordAttempt(ipHash, true);
-
-  const { wedding_id: weddingId, household_id: householdId } = invitation;
 
   // Per person, not per household (spec 22 §4). `invitation_events` still
   // says what the household is invited to; the view applies the per-guest
@@ -181,11 +185,55 @@ export async function resolveInvitation(rawToken: string): Promise<ResolveResult
     supabase.from("rsvp_answers").select("*").eq("wedding_id", weddingId),
   ]);
 
-  if (wedding.error || !wedding.data || household.error || !household.data) {
-    return { ok: false, reason: "not_found" };
-  }
+  if (wedding.error || !wedding.data || household.error || !household.data) return null;
 
   const householdGuestIds = new Set((guests.data ?? []).map((guest) => guest.id));
+
+  return {
+    wedding: wedding.data,
+    household: household.data,
+    guests: guests.data ?? [],
+    events: (events.data ?? []) as EventRow[],
+    // Narrowed to the guests still on the list: a soft-deleted guest keeps
+    // their rows, and the form must not offer them.
+    invites: invites.filter((row) => householdGuestIds.has(row.guest_id)),
+    questions: questions.data ?? [],
+    // Narrowed to this household's own guests. The query above is scoped by
+    // wedding and invited events, which is not the same thing.
+    rsvps: (rsvps.data ?? []).filter((row) => householdGuestIds.has(row.guest_id)),
+    answers: (answers.data ?? []).filter(
+      (row) =>
+        (row.guest_id !== null && householdGuestIds.has(row.guest_id)) ||
+        row.household_id === householdId,
+    ),
+    locked: wedding.data.rsvp_lock_at !== null && new Date(wedding.data.rsvp_lock_at) < new Date(),
+  };
+}
+
+export async function resolveInvitation(rawToken: string): Promise<ResolveResult> {
+  if (!looksLikeToken(rawToken)) return { ok: false, reason: "malformed" };
+
+  const ipHash = await clientIpHash();
+  if (await isThrottled(ipHash)) return { ok: false, reason: "throttled" };
+
+  const supabase = createAdminClient();
+  const { data: invitation } = await supabase
+    .from("invitations")
+    .select("id, wedding_id, household_id, opened_at")
+    .eq("token_hash", hashInviteToken(rawToken))
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!invitation) {
+    await recordAttempt(ipHash, false);
+    return { ok: false, reason: "not_found" };
+  }
+  await recordAttempt(ipHash, true);
+
+  const { wedding_id: weddingId, household_id: householdId } = invitation;
+
+  const data = await loadRsvpData(weddingId, householdId);
+  if (!data) return { ok: false, reason: "not_found" };
 
   if (!invitation.opened_at) {
     await supabase
@@ -195,27 +243,5 @@ export async function resolveInvitation(rawToken: string): Promise<ResolveResult
       .eq("wedding_id", weddingId);
   }
 
-  return {
-    ok: true,
-    context: {
-      wedding: wedding.data,
-      household: household.data,
-      invitationId: invitation.id,
-      guests: guests.data ?? [],
-      events: (events.data ?? []) as EventRow[],
-      // Narrowed to the guests still on the list: a soft-deleted guest keeps
-      // their rows, and the form must not offer them.
-      invites: invites.filter((row) => householdGuestIds.has(row.guest_id)),
-      questions: questions.data ?? [],
-      // Narrowed to this household's own guests. The query above is scoped by
-      // wedding and invited events, which is not the same thing.
-      rsvps: (rsvps.data ?? []).filter((row) => householdGuestIds.has(row.guest_id)),
-      answers: (answers.data ?? []).filter(
-        (row) =>
-          (row.guest_id !== null && householdGuestIds.has(row.guest_id)) ||
-          row.household_id === householdId,
-      ),
-      locked: wedding.data.rsvp_lock_at !== null && new Date(wedding.data.rsvp_lock_at) < new Date(),
-    },
-  };
+  return { ok: true, context: { ...data, invitationId: invitation.id } };
 }

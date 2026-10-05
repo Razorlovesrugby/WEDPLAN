@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { requestSong } from "@/server/actions/songs";
+import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
 
 /**
  * The song request form (spec 23 §8, Q2).
@@ -20,11 +21,14 @@ export function SongRequestForm({
   weddingSlug,
   token,
   intro,
+  preview = false,
 }: {
   weddingSlug: string;
-  /** Present on a household's own page; absent on the shared site. */
+  /** The household's credential. Absent before an invitation has been issued. */
   token: string | null;
   intro: string | null;
+  /** The editor's preview: the form works and nothing is sent (spec 28 §4.3). */
+  preview?: boolean;
 }) {
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
@@ -36,6 +40,11 @@ export function SongRequestForm({
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) return;
+
+    if (preview) {
+      setError(PREVIEW_NOT_SAVED);
+      return;
+    }
 
     startTransition(async () => {
       const result = await requestSong({

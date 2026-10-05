@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { weekendIcsEvents, weekendIcsPath, weekendSummary, type WeekendEvent } from "./weekend";
+import {
+  previewWeekendPath,
+  weekendIcsEvents,
+  weekendIcsPath,
+  weekendSummary,
+  type WeekendEvent,
+} from "./weekend";
 
 const event = (over: Partial<WeekendEvent> = {}): WeekendEvent => ({
   id: "e1",
@@ -83,5 +89,14 @@ describe("weekendIcsPath", () => {
     expect(weekendIcsPath("ray-and-olivia", "okonkwo-4f7ak")).toBe(
       "/api/public/weekend/ray-and-olivia/okonkwo-4f7ak",
     );
+  });
+});
+
+describe("previewWeekendPath", () => {
+  it("is keyed by the household's id behind the planner's sign-in, never by its address", () => {
+    const path = previewWeekendPath("3f9c1a52-0000-4000-8000-000000000001");
+    expect(path).toBe("/site/preview/weekend.ics?as=3f9c1a52-0000-4000-8000-000000000001");
+    // The live route's credential must not leak into a planner-only URL.
+    expect(path).not.toContain("/api/public");
   });
 });

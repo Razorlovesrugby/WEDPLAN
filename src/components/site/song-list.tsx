@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { voteForSong } from "@/server/actions/songs";
+import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
 import { Label } from "./section";
 import type { PublicSong } from "@/server/queries/site-extras";
 
@@ -22,11 +23,15 @@ export function SongList({
   weddingSlug,
   token,
   songs,
+  preview = false,
 }: {
   weddingSlug: string;
   token: string | null;
   songs: PublicSong[];
+  /** The editor's preview: the button responds and nothing is saved (spec 28 §4.3). */
+  preview?: boolean;
 }) {
+  const canVote = Boolean(token) || preview;
   // Optimistic local state keyed by song id, so a tap feels instant on a phone
   // in a field with one bar. The server is still the authority — a failed
   // write puts the number back.
@@ -40,7 +45,7 @@ export function SongList({
     local[song.id] ?? { votes: song.votes, voted: song.votedByViewer };
 
   function vote(song: PublicSong) {
-    if (!token) return;
+    if (!canVote) return;
     const before = view(song);
     const after = {
       votes: before.votes + (before.voted ? -1 : 1),
@@ -48,6 +53,13 @@ export function SongList({
     };
     setLocal((was) => ({ ...was, [song.id]: after }));
     setError(null);
+
+    // The preview holds no token, so there is nothing to vote with: it
+    // responds locally and says so.
+    if (!token) {
+      setError(PREVIEW_NOT_SAVED);
+      return;
+    }
 
     startTransition(async () => {
       const result = await voteForSong({ weddingSlug, token, songId: song.id });
@@ -80,7 +92,7 @@ export function SongList({
                 ) : null}
               </div>
 
-              {token ? (
+              {canVote ? (
                 <button
                   type="button"
                   disabled={pending}
@@ -103,7 +115,7 @@ export function SongList({
         })}
       </ul>
       {error ? <p className="mt-3 text-[0.95rem] text-muted">{error}</p> : null}
-      {!token ? (
+      {!canVote ? (
         <p className="mt-4 text-[0.9rem] italic text-muted">
           Voting needs your own invitation link — the one in your invitation.
         </p>

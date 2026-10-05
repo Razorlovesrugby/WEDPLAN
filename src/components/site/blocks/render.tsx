@@ -39,6 +39,7 @@ import { Attire } from "../attire";
 import { Arrivals } from "../arrivals";
 import { runsByEvent } from "../event-inline";
 import { visibleDressCodes } from "@/lib/site/dress-codes";
+import { previewWeekendPath } from "@/lib/site/weekend";
 import {
   DressCode,
   MapBlock,
@@ -385,6 +386,7 @@ export function SiteBlockView({
                 weddingName={ctx.wedding.name}
                 weddingSlug={ctx.wedding.slug}
                 addressSegment={personal.addressSegment}
+                icsHref={ctx.preview ? previewWeekendPath(personal.householdId) : undefined}
               />
             ) : null}
           </Shell>
@@ -428,8 +430,10 @@ export function SiteBlockView({
               : intro
           }
         >
-          {personal.rsvp && personal.token ? (
+          {personal.rsvp ? (
             <RsvpForm
+              // Null only in the editor's preview, where the form works and
+              // sends nothing (spec 28 §4.3).
               token={personal.token}
               guests={personal.rsvp.guests}
               events={personal.rsvp.events}
@@ -443,6 +447,7 @@ export function SiteBlockView({
                 weddingName: ctx.wedding.name,
                 weddingSlug: ctx.wedding.slug,
                 addressSegment: personal.addressSegment,
+                icsHref: ctx.preview ? previewWeekendPath(personal.householdId) : undefined,
               }}
               look={resolveLook("rsvp", block.style?.variant)}
               replyBy={
@@ -513,7 +518,7 @@ export function SiteBlockView({
             <GalleryGrid images={images} zoom={zoom} look={resolveLook("gallery", block.style?.variant)} />
             {/* Uploading is a thing only a household can do — the open
                 internet must not be able to post into the gallery. */}
-            {personal && personal.token && ctx.uploadsOpen ? (
+            {personal && (personal.token || ctx.preview) && ctx.uploadsOpen ? (
               <GuestUploader
                 token={personal.token}
                 mine={personal.uploads}
@@ -624,7 +629,7 @@ export function SiteBlockView({
       if (ctx.travel.runs.length === 0) return null;
       return (
         <Shell block={block} bgImage={bgImage} intro={intro} mark={mark}>
-          {personal && personal.token ? (
+          {personal && (personal.token || ctx.preview) ? (
             <CoachBooking
               token={personal.token}
               runs={ctx.travel.runs}
@@ -661,6 +666,7 @@ export function SiteBlockView({
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             intro={intro ?? "Tell us what will get you dancing."}
+            preview={ctx.preview}
           />
           {/* Spec 25 §11 — approved requests, rendered back, because a form
               nobody sees the result of is a suggestion box. */}
@@ -668,6 +674,7 @@ export function SiteBlockView({
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             songs={ctx.extras.songs}
+            preview={ctx.preview}
           />
         </Shell>
       );
@@ -680,6 +687,7 @@ export function SiteBlockView({
             token={personal?.token ?? null}
             prompt={text(payload, "prompt")}
             notes={ctx.extras.notes}
+            preview={ctx.preview}
           />
         </Shell>
       );
@@ -716,7 +724,7 @@ export function SiteBlocks({ blocks, ctx }: { blocks: SiteBlock[]; ctx: RenderCo
   const hasReplySection = blocks.some((block) => block.type === "rsvp");
   let bar: { text: string; action: string } | null = null;
   if (personal && ctx.theme.layout.replyBar && hasReplySection) {
-    if (personal.rsvp && personal.token) {
+    if (personal.rsvp && (personal.token || ctx.preview)) {
       if (!personal.rsvp.locked) {
         bar = replyBarCopy(
           summariseReply(replyMembersFromContext(personal.rsvp)),
