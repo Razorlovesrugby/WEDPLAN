@@ -3,6 +3,17 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 32 (spec 26):** `/lists?view=today` now shows an **Overdue · N**
+group (oldest first, each row tagged "N days overdue") above "Due today".
+Overdue = dated, not done, due before today, not snoozed past today
+(`src/lib/lists/overdue.ts`, mirroring `buildDigest` — not shared code, so
+change both together). `getOverdueItems` is one extra parallel query on the
+Today view only. No migration. Open from the spec: "today" is still the UTC
+date (wrong for NZ for ~12h a day); no sidebar badge; payments not included;
+the dashboard Overdue tile still shows a count without linking. 658 tests,
+typecheck clean, build compiles (page-data stops on missing Supabase env).
+Never opened in a browser.
+
 **Session 31, follow-up (after PR #57 merged):** `/invitations` now has a
 **Save the date** column beside the invitation's — Copy link, a WhatsApp
 message of its own (`saveTheDateWhatsappMessage`, which never mentions an

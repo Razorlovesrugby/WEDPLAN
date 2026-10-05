@@ -1,5 +1,6 @@
 "use client";
 
+import { overdueLabel } from "@/lib/lists/overdue";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import {
@@ -46,8 +47,11 @@ export function ItemRow({
   sections,
   currentSectionId,
   onSelectSection,
+  overdueDays = 0,
 }: {
   item: ItemWithList;
+  /** Days past the due date (spec 26); shows a red "N days overdue" tag when above 0. */
+  overdueDays?: number;
   subItems?: ListItemRow[];
   collaborators?: CollaboratorRow[];
   currentUserId?: string;
@@ -231,6 +235,11 @@ export function ItemRow({
             <span className={`min-w-[8rem] flex-1 text-sm ${checked ? "text-muted line-through" : ""}`}>
               <InlineText value={item.title} ariaLabel="Task title" onSave={saveTitle} />
             </span>
+            {overdueDays > 0 && !checked ? (
+              <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                {overdueLabel(overdueDays)}
+              </span>
+            ) : null}
             {priority > 0 ? (
               <span className="text-xs font-medium text-amber-700" title={`Priority ${priority}`}>
                 {"!".repeat(priority)}

@@ -1,8 +1,18 @@
 # Feature spec: The Today view shows overdue tasks
 
-**Status: proposed, not built.** A spec only — nothing in this document is
-implemented, and its open questions (§5) are the planner's to answer before
-any code is written.
+**Status: built, same session (2026-10-05).** The planner asked for the
+spec, restated the core want ("Today should clearly also show what's
+overdue, not just what's due that day"), then said "let's build". The §5
+questions were not individually answered, so the build used each
+recommendation: two groups (1), snoozed items hidden (2), "today" left as
+the existing UTC date (3 — the timezone mismatch is unchanged and still a
+separate bug), no sidebar badge (4), no cap (5), no payments (6), no
+marking on other views (7). Built in `src/lib/lists/overdue.ts`,
+`getOverdueItems`, `SmartView`'s Overdue group and `ItemRow`'s
+`overdueDays` tag. `buildDigest` was **not** refactored to call `isOverdue`;
+the two encode the same rule separately. `npm run typecheck`, `npm test`
+(658) pass; `npm run build` compiles but stops at page-data collection on
+the missing Supabase env vars. Never opened in a browser.
 
 **Depends on:** Spec 1 (lists, `list_items.due_date`/`status`), spec 2
 (reminders — `buildDigest`'s definition of "overdue", `snoozed_until`),
