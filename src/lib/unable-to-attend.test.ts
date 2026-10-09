@@ -102,6 +102,12 @@ describe("declinedConfirmation", () => {
     expect(text).not.toMatch(/rsvp|reply|confirm|required/i);
   });
 
+  it("promises nothing about the invitation when only some of the household have said so", () => {
+    const text = declinedConfirmation(["Ana"], false);
+    expect(text).toBe("Thank you for letting us know — we'll miss Ana. We've noted that.");
+    expect(text).not.toMatch(/invitation/i);
+  });
+
   it("still thanks them if the names are missing", () => {
     expect(declinedConfirmation([])).toBe("Thank you for letting us know — we'll miss you.");
   });

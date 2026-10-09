@@ -95,12 +95,21 @@ export function householdGuestIds(
   return { ids, ignored };
 }
 
-/** What the guest is told after saving. Names only; nothing about attendance to confirm. */
-export function declinedConfirmation(names: readonly string[]): string {
+/**
+ * What the guest is told after saving. Names only; nothing about attendance to
+ * confirm.
+ *
+ * "Won't be sent a formal invitation" is only true when EVERYONE on the page
+ * has said so — the invitation is the household's, and it still goes to
+ * whoever is coming. When only some have, the page says it has noted them and
+ * promises nothing else.
+ */
+export function declinedConfirmation(names: readonly string[], everyoneHasDeclined = true): string {
   const who = joinNames(names);
-  return who
+  if (!who) return "Thank you for letting us know — we'll miss you.";
+  return everyoneHasDeclined
     ? `Thank you for letting us know — we'll miss you. ${who} won't be sent a formal invitation.`
-    : "Thank you for letting us know — we'll miss you.";
+    : `Thank you for letting us know — we'll miss ${who}. We've noted that.`;
 }
 
 // ---------------------------------------------------------------------------

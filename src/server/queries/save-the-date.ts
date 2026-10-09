@@ -173,3 +173,45 @@ export const getSaveTheDateContent = cache(
     return resolveSaveTheDate(data?.payload ?? null);
   },
 );
+
+export type UnableGuest = { id: string; name: string };
+
+/**
+ * Who on a household's save-the-date can tell us they can't come (spec 29).
+ *
+ * Through the service role, for a guest with no session; the caller has
+ * already resolved the household from its address, so this takes a household
+ * id the SERVER chose and never one the browser sent.
+ *
+ *   `candidates`  guests with no flag at all — the "who can't come?" list.
+ *   `declined`    guests who told us themselves, from this page. These are the
+ *                 ones the thank-you state names and "undo" gives back.
+ *
+ * A guest the planner recorded by hand appears in neither: it is already dealt
+ * with, and the guest has no business undoing something the planner did.
+ */
+export const loadUnableToAttend = cache(
+  async (
+    weddingId: string,
+    householdId: string,
+  ): Promise<{ candidates: UnableGuest[]; declined: UnableGuest[] }> => {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("guests")
+      .select("id, first_name, preferred_name, unable_to_attend_via")
+      .eq("wedding_id", weddingId)
+      .eq("household_id", householdId)
+      .is("deleted_at", null)
+      .order("sort_order")
+      .order("created_at");
+
+    const candidates: UnableGuest[] = [];
+    const declined: UnableGuest[] = [];
+    for (const guest of data ?? []) {
+      const entry = { id: guest.id, name: guest.preferred_name?.trim() || guest.first_name };
+      if (guest.unable_to_attend_via === null) candidates.push(entry);
+      else if (guest.unable_to_attend_via === "save_the_date") declined.push(entry);
+    }
+    return { candidates, declined };
+  },
+);

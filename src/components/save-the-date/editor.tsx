@@ -27,6 +27,7 @@ import {
   type SiteTheme,
 } from "@/lib/theme/presets";
 import { SaveTheDateCard, type SaveTheDateCardPhoto } from "./card";
+import { UnableToAttend } from "./unable-to-attend";
 
 /**
  * The save-the-date designer (`/invitations/save-the-date`).
@@ -446,6 +447,24 @@ function PreviewCard({
       // Buttons that look real and go nowhere: a planner testing the design
       // should not be downloading calendar files.
       calendar={google ? { icsHref: "#", googleHref: "#" } : null}
+      footer={
+        draft.showUnable ? (
+          // `key` so rewording resets it to its first state; `preview` so
+          // pressing it here records nothing about anybody.
+          <UnableToAttend
+            key={draft.unableText}
+            weddingSlug={wedding.slug}
+            address="preview"
+            text={draft.unableText.trim() || DEFAULT_UNABLE_TEXT}
+            candidates={[
+              { id: "preview-1", name: "Alex" },
+              { id: "preview-2", name: "Sam" },
+            ]}
+            declined={[]}
+            preview
+          />
+        ) : null
+      }
     />
   );
 }

@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { findWeddingBySlug } from "@/server/queries/site";
-import { loadSaveTheDate, loadSaveTheDateContent } from "@/server/queries/save-the-date";
+import {
+  loadSaveTheDate,
+  loadSaveTheDateContent,
+  loadUnableToAttend,
+} from "@/server/queries/save-the-date";
 import { resolveHouseholdAddress } from "@/server/rsvp/address";
 import { resolveCardByAddress } from "@/server/rsvp/card";
 import { formatAddress } from "@/lib/site/household-slug";
@@ -16,6 +20,7 @@ import { themeCssVars } from "@/lib/theme/presets";
 import { absoluteUrl } from "@/lib/env";
 import { SaveTheDateCard } from "@/components/save-the-date/card";
 import { SaveTheDateViewLogger } from "@/components/site/view-logger";
+import { UnableToAttend } from "@/components/save-the-date/unable-to-attend";
 
 /**
  * A household's save-the-date:
@@ -94,6 +99,12 @@ export default async function SaveTheDatePage({
   if (resolved.kind !== "ok") return <Unavailable throttled={resolved.kind === "throttled"} />;
 
   const { content, siteTheme, photos } = await loadSaveTheDate(wedding.id);
+  // Only when the couple left it on and there is someone on the page who could
+  // use it. Loaded by the household the SERVER resolved, never one from the URL.
+  const unable = content.showUnable
+    ? await loadUnableToAttend(wedding.id, resolved.household.id)
+    : null;
+  const showUnable = unable !== null && unable.candidates.length + unable.declined.length > 0;
   const display = saveTheDateDisplay(content, wedding);
   const palette =
     content.palette === "site" ? siteTheme : { ...siteTheme, palette: content.palette };
@@ -135,6 +146,21 @@ export default async function SaveTheDatePage({
           // The one thing the save-the-date shares with the site's motion
           // control (spec 27 Q11): a Still site is still here too.
           animate={siteTheme.motion.level !== "still"}
+          footer={
+            showUnable ? (
+              <UnableToAttend
+                weddingSlug={slug}
+                address={formatAddress(resolved.address)}
+                text={content.unableText}
+                candidates={unable.candidates}
+                declined={unable.declined}
+                // The planner looking at it as a guest (?preview=1) gets the
+                // real thing with nothing saved — the same convention as the
+                // view counter and the site preview.
+                preview={preview === "1"}
+              />
+            ) : null
+          }
         />
       </div>
     </>
