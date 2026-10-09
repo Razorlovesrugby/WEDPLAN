@@ -126,14 +126,24 @@ export function householdGuestIds(
  * "Won't be sent a formal invitation" is only true when EVERYONE on the page
  * has said so — the invitation is the household's, and it still goes to
  * whoever is coming. When only some have, the page says it has noted them and
- * promises nothing else.
+ * promises nothing else. A household of one is spoken to directly ("You won't
+ * be sent…"), because naming somebody to themselves reads as a form letter.
+ *
+ * Curly apostrophes throughout, to match the wording the planner supplied.
  */
-export function declinedConfirmation(names: readonly string[], everyoneHasDeclined = true): string {
+export function declinedConfirmation(
+  names: readonly string[],
+  everyoneHasDeclined = true,
+  alone = false,
+): string {
   const who = joinNames(names);
-  if (!who) return "Thank you for letting us know — we'll miss you.";
-  return everyoneHasDeclined
-    ? `Thank you for letting us know — we'll miss you. ${who} won't be sent a formal invitation.`
-    : `Thank you for letting us know — we'll miss ${who}. We've noted that.`;
+  if (!who) return "Thank you for letting us know — we’ll miss you.";
+  if (!everyoneHasDeclined) {
+    return `Thank you for letting us know — we’ll miss ${who}. We’ve noted that.`;
+  }
+  return alone
+    ? "Thank you for letting us know — we’ll miss you. You won’t be sent a formal invitation."
+    : `Thank you for letting us know — we’ll miss you. ${who} won’t be sent a formal invitation.`;
 }
 
 // ---------------------------------------------------------------------------

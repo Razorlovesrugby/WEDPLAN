@@ -100,18 +100,26 @@ describe("householdGuestIds — a browser's ids are not trusted", () => {
 describe("declinedConfirmation", () => {
   it("never mentions an RSVP, a reply or attendance to confirm", () => {
     const text = declinedConfirmation(["Ana", "Ben"]);
-    expect(text).toContain("Ana and Ben won't be sent a formal invitation");
+    expect(text).toContain("Ana and Ben won’t be sent a formal invitation");
     expect(text).not.toMatch(/rsvp|reply|confirm|required/i);
+  });
+
+  it("speaks to a household of one directly rather than naming them to themselves", () => {
+    const text = declinedConfirmation(["Ana"], true, true);
+    expect(text).toBe(
+      "Thank you for letting us know — we’ll miss you. You won’t be sent a formal invitation.",
+    );
+    expect(text).not.toContain("Ana");
   });
 
   it("promises nothing about the invitation when only some of the household have said so", () => {
     const text = declinedConfirmation(["Ana"], false);
-    expect(text).toBe("Thank you for letting us know — we'll miss Ana. We've noted that.");
+    expect(text).toBe("Thank you for letting us know — we’ll miss Ana. We’ve noted that.");
     expect(text).not.toMatch(/invitation/i);
   });
 
   it("still thanks them if the names are missing", () => {
-    expect(declinedConfirmation([])).toBe("Thank you for letting us know — we'll miss you.");
+    expect(declinedConfirmation([])).toBe("Thank you for letting us know — we’ll miss you.");
   });
 });
 

@@ -1,9 +1,10 @@
 # Feature spec: Tracking what's been sent, and "I already know I can't come"
 
-**Status: proposed and fully answered, 2026-10-09. Nothing is built, and
-nothing should be until the planner says to build it** (`docs/specs/README.md`,
-`CLAUDE.md`). Answering the questions settled the content; it is not
-authorization to write code.
+**Status: built, steps 1–6 (2026-10-09) — proposed, all nine questions answered,
+then "Let's build" as a separate turn.** See **Build status** at the foot of this
+file for the places the build departs from the text. Migration `0034` is **not
+applied to the live project** (and neither are `0026`–`0033`, which it stacks
+on). Nothing here has run against Supabase or a real phone.
 
 ## Answered — 2026-10-09
 
@@ -354,3 +355,92 @@ step when someone declines (the multi-cut tiers in spec 5 already own that), any
 **reminder** to a household that hasn't responded (the brief says they shouldn't
 be expected to), and emailing the guest a receipt (the planner has no guest
 emails).
+
+## Build status (2026-10-09)
+
+All six steps of §8 built, each committed separately on
+`claude/spec-29-save-the-date-tracking`. **Verified:** typecheck clean, 949 unit
+tests (914 before), 508 SQL assertions (471 before — 37 new in
+`supabase/tests/17_save_the_date_tracking.sql`), the single-transaction check,
+`verify-bootstrap.sh`, and `next build` (with placeholder env; without it the
+build stops at page-data on missing Supabase variables, as it always has).
+**Looked at:** the guest-facing block only, in this sandbox's Chromium on a
+throwaway harness page (since deleted) — idle, the one-step choice for a
+household of one and of two, the done state with Undo, the "someone else can't
+come either" path, in the editorial and postcard layouts at 390px and a cover at
+1280px. All of it in **preview mode**, so the two public writes never ran.
+**Never looked at or run:** `/invitations` (ticks, chip, filters, the guards), the
+household page toggle, the `/guests` marker, the stationery print, the cron skip,
+the designer's new panel, and **both public server actions against a live
+database**. They are typechecked and their rules are unit- and source-tested; none
+has touched a row.
+
+### Where the build departs from the spec
+
+1. **The catering CSV was not changed** (§4.6 listed it as a consumer). It lists
+   confirmed Yes answers only, so a flagged guest never appears unless they have
+   answered Yes — which is exactly when they should. The spec's "fix the
+   TypeScript copy" was written before reading it.
+2. **`v_guest_event_invites`' new column is `excluded_from_counts`, not
+   `unable_to_attend`** (§4.6, §5). It carries the *rule* (flagged and no Yes
+   yet), not the raw flag, so a consumer that filters on it cannot forget the Yes
+   exception. The raw flag is `guests.unable_to_attend_at`, and
+   `v_household_rsvp.unable_count` is the raw count.
+3. **The rule is one SQL function, `guest_excluded_from_counts()`**, called by the
+   view column, `v_households.seat_count`, `v_wedding_stats.outstanding_guests`
+   and `budget_guest_population`. `isExcludedFromCounts` in
+   `src/lib/unable-to-attend.ts` mirrors it for the `/guests` list — **change both
+   together**.
+4. **`v_households.seat_count` changed, which the spec did not list.** It is what
+   the dashboard's seats-versus-capacity (`above_cut_seats`), `/guests/rank`'s
+   cumulative seats and the household header read, and "seat counts" in the
+   planner's answer means exactly those. `head_count`, `adult_count`,
+   `child_count` and `infant_count` are deliberately **not** changed: they are the
+   household's composition, not attendance. So a household can read "4 people ·
+   3 seats"; the household page says why beside it.
+5. **`outstanding_guests` leaves flagged guests out but `declined_guests` does not
+   gain them** — "No" is the RSVP count and this is not an RSVP. The dashboard's
+   attending + outstanding + declined + maybe therefore no longer sums to the
+   invited number while anyone is flagged. The `/guests?rsvp=pending` filter now
+   applies the same rule, so the tile and the list behind it agree.
+6. **The send guard is on `sendInvitation`, not `loadTargets`** (§4.5 table).
+   `loadTargets` feeds the save-the-date email and broadcasts, which §4.5 leaves
+   alone. `sendInvitation` takes `{ sendAnyway }` and **the server refuses an
+   all-declined household without it**, so the confirm dialog is not the only
+   defence. A partly-flagged household sends as normal after a confirm.
+7. **Only the themed stationery print (`/invitations/print/stationery`) leaves
+   all-declined households off**, as §4.5 lists. The plain QR sheet
+   (`/invitations/print`) still prints every invitation.
+8. **A guest recorded by the planner is invisible on the guest's page** (§4.2 did
+   not say). The guest sees and can undo only what *they* set
+   (`via = 'save_the_date'`); a flag the planner entered by hand stays, because it
+   is not the guest's to undo.
+9. **The thank-you changes with the household** (§4.2 did not say): "You won't be
+   sent a formal invitation" for a household of one, "…{names} won't be sent…" when
+   everyone has declined, and only "we've noted that" when some have — the
+   invitation is the household's, and it still goes to whoever is coming.
+10. **The planner's `?preview=1` shows the block and saves nothing** (§4.3 did not
+    say), the same convention as the view counter and the site preview.
+11. **`setInvitationSent` is new rather than a change to `markInvitationSent`** —
+    the grid's menu still passes a channel and always has; the tick leaves
+    `channel` alone (Q5). Each tick logs its own `message_log` row (a key with the
+    timestamp), because tick, un-tick, tick is a real sequence.
+12. **Guards in source, not just in comments.**
+    `src/components/save-the-date/unable-to-attend.test.ts` reads the page, the
+    component and the action and fails if the page writes, the block uses RSVP
+    wording or an effect, or the action touches `rsvps`/`invitations`/
+    `message_log` or drops a household scope.
+
+### Left
+
+- **Nothing has run against Supabase.** First things to try, in order: apply
+  `0026`–`0034`; load `/api/health`; press the button on a real household's
+  save-the-date from a phone (the write, Undo, and a reload showing the saved
+  state); tick both boxes on `/invitations`; flag a guest on the household page
+  and watch `/guests/rank` and `/budget` move.
+- **The "Select all N without one" skip and the create confirm use the raw flag**
+  (`unableGuests`), so a guest who has since answered Yes still counts as flagged
+  there — the guards ask what the planner was told, not what is being counted.
+- **No undo for a bulk tick**, and no back-dating (Q6).
+- **`/guests`' marker is the only change on that screen**; its grid cells and the
+  invited columns are untouched, by design.

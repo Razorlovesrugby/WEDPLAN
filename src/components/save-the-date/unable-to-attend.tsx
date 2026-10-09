@@ -196,6 +196,7 @@ export function UnableToAttend({
             {declinedConfirmation(
               declined.map((person) => person.name),
               candidates.length === 0,
+              alone,
             )}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
