@@ -1,6 +1,7 @@
 import {
   BLOCK_ALIGNS,
   BLOCK_BACKGROUNDS,
+  BLOCK_PHOTO_TEXT,
   BLOCK_WIDTHS,
   IMAGE_SHAPES,
   type BlockStyle,
@@ -28,6 +29,13 @@ export const BACKGROUND_LABEL: Record<(typeof BLOCK_BACKGROUNDS)[number], string
   tinted: "Tinted",
   ink: "Dark",
   photograph: "Photograph",
+};
+
+export const PHOTO_TEXT_LABEL: Record<(typeof BLOCK_PHOTO_TEXT)[number], string> = {
+  none: "Photo as it is",
+  darken: "Darken photo",
+  shadow: "Soft text shadow",
+  panel: "Panel behind text",
 };
 
 export const ALIGN_LABEL: Record<(typeof BLOCK_ALIGNS)[number], string> = {

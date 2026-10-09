@@ -1,9 +1,20 @@
 # Feature spec: A "can't come" reply that sticks, and background photos shown as they are
 
-**Status: proposed (2026-10-09). Nothing built, no questions answered.** Asked
-for as a spec; per `CLAUDE.md` and `docs/specs/README.md` this stops here until
-the planner says to build, in words that mean "write code". Answering the
-questions in §6 updates this file; it is not a build instruction.
+**Status: built (2026-10-09) — asked for as a spec, then "ask open questions
+and build" as its own turn.** Not merged, no PR opened. See **Answered** and
+**Build status** below; §2–§3 are kept as proposed, with the places the build
+departs from them marked in Build status.
+
+## Answered — 2026-10-09
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | "Disregard." | Took the recommendation: build all the Part A fixes. |
+| 2 | "Disregard." | Took the recommendation: **no** invitation-page note (§2.3.5 not built) — it was never confirmed that was the page meant. |
+| 3 | Their photo was a cream print and "due to the theme it creates it all grey. **Where there is text I don't want a grey-out section** to make the text more visible, if anything make it a toggle." | No overlay by default; the darkening becomes opt-in. Blocks **and the hero** carry it; the save-the-date cover was **not** touched (see Build status). |
+| 4 | Not asked; recommendation taken. | Existing Photograph blocks and full-photo heroes lose their dimming. |
+| 5 | "Give all as options able to toggle." | `dim` (a checkbox) became **`photoText`**, a four-way choice: Photo as it is / Darken photo / Soft text shadow / Panel behind text. |
+| 6 | Not asked; recommendation taken. | The scroll hand-over is unchanged. |
 
 **Depends on:** spec 29 (the "I'm unable to attend" block, `0034`), spec 23 /
 27 (photograph backgrounds, the hero), spec 14 §12.1 (the save-the-date). All
@@ -188,3 +199,55 @@ untouched unless it is set:
 - Any change to the **gallery, page break or photo-and-text** blocks. They are
   already undimmed.
 - **Notifying the planner** when someone declines — spec 29 Q7 said no.
+
+## Build status (2026-10-09)
+
+Branch `claude/spec-30-save-the-date-reply-and-undimmed-photos`. **Verified:**
+`npm run typecheck` clean, `npm test` 953 passing (949 before, 4 new),
+`npm run build` passes with placeholder env. `verify-migrations.sh` not run —
+nothing here touches SQL. **Never opened in a browser** and nothing run against
+Supabase: the photo treatments and the reply fix are read off the source and
+typechecked, not looked at.
+
+**Where the build departs from the text above:**
+
+1. **The likeliest cause of Part A turned out to be none of the four suspects
+   in §2.2.** `next.config.mjs` sets `staleTimes.dynamic: 30`, justified by
+   "every mutation calls `revalidatePath`" — and `declineSaveTheDate` /
+   `undoSaveTheDateDecline` did not. So decline → follow a link → Back within
+   30 seconds served the page's *pre-answer* server data and asked the question
+   again. Both actions now call `revalidatePath` for that household's
+   save-the-date, and a source guard in `unable-to-attend.test.ts` pins it. **This
+   is a diagnosis from reading code, not a reproduction** — nobody has run the
+   write against a live project.
+2. **The `pageshow` effect (§2.3.2) and the `no-store` header were not built.**
+   Next already sends `no-store` on a dynamic page, and the existing guard test
+   forbids any effect in the block (its job is to keep writes off page load).
+   Safari restoring a page from its back/forward cache restores the block's own
+   state, which is the *answered* state, so it is right anyway.
+3. **`loadUnableToAttend` now throws on a query error** (§2.3.3) instead of
+   reading it as "nobody here".
+4. **Preview says what it is up front** (§2.3.4), in the idle block as well as
+   after opening it.
+5. **`dim: boolean` became `photoText`** with four values (Q5). Absent means
+   `none`. It is a style key on the block, so **no migration**; `styleSchema`,
+   `BLOCK_STYLE_KEYS`, the hero's `styles` list, the labels and both pinned
+   tests were extended together.
+6. **Where it applies.** A Photograph-background block (the picker sits beside
+   the photo chooser) and the hero's **full-photo** look (Script's and
+   Editorial's); the control only shows on a hero whose Look is Full.
+   `darken` restores each surface's old overlay exactly. `shadow` is the new
+   `.site-text-shadow` rule in `globals.css`. `panel` is a `rgba(18,22,19,0.62)`
+   box (0.55 on the hero) with the photograph showing round it.
+7. **Not done: the save-the-date cover's `.std-scrim` gradient.** It is
+   configured in its own `site_content['save_the_date']` row and designer, so
+   it needs its own field and control; Q3 did not say to include it. It is
+   still dimmed. Say the word and it is a small follow-on.
+8. **Not touched: the scroll hand-over** (Q6). Even with "Photo as it is", the
+   hero still dims as a guest scrolls if the `cover_handover` effect is on. If
+   that is the "fade" meant, it is that switch, not code.
+
+**Pick up here:** open a household's save-the-date from **Copy link** on a
+phone (not View), decline, follow any link, press Back, and expect the thank-you
+and Undo; then put a pale print behind a block, switch through the four "Text
+over photo" choices at 390px and 1440px, and look at the hero in both themes.

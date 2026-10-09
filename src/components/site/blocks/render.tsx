@@ -90,12 +90,20 @@ const BACKGROUND_CLASS: Record<NonNullable<BlockStyle["background"]>, string> = 
 /**
  * The block's ground: paper, a tint, solid ink, or a photograph.
  *
- * **The scrim over a photograph is not optional.** Same argument the hero
- * makes: without it a block passes contrast against whatever the couple
- * happened to upload, which is not a guarantee — and unlike the hero, nobody
- * is looking at this block when they choose the picture. `rgba(18,22,19,0.62)`
- * is a fixed value rather than a theme token because it has to hold over a
- * photograph, and a pale palette's `ink` would not.
+ * **A photograph is shown as it is unless the planner asks for help with the
+ * words** (spec 30). It used to carry a fixed dark overlay, which turned a
+ * cream print grey. `style.photoText` now says what, if anything, sits between
+ * the words and the picture:
+ *
+ *   none    nothing (the default — an absent key)
+ *   darken  `rgba(18,22,19,0.62)` over the photograph, the old treatment. A
+ *           fixed value, not a theme token: it has to hold over a photograph,
+ *           and a pale palette's `ink` would not.
+ *   shadow  a soft shadow on the text; the picture is untouched
+ *   panel   a dark box behind the content with the photograph showing round it
+ *
+ * The text is pale in every case, because it is laid over a picture nobody has
+ * checked the contrast of; `none` is the planner accepting that risk.
  *
  * A `photograph` background whose asset has gone missing renders as plain
  * paper rather than as a dark band over nothing — one lost object costs its
@@ -116,16 +124,30 @@ function Background({
     return <div className={BACKGROUND_CLASS[treatment === "photograph" ? "paper" : treatment]}>{children}</div>;
   }
 
+  const photoText = style.photoText ?? "none";
+
   return (
-    <div className="relative isolate text-onphoto [&_*]:text-onphoto">
+    <div
+      className={`relative isolate text-onphoto [&_*]:text-onphoto ${
+        photoText === "shadow" ? "site-text-shadow" : ""
+      }`}
+    >
       <SiteImage
         image={image}
         alt={null}
         sizes="100vw"
         className="absolute inset-0 -z-10 h-full w-full object-cover"
       />
-      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[rgba(18,22,19,0.62)]" />
-      {children}
+      {photoText === "darken" ? (
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[rgba(18,22,19,0.62)]" />
+      ) : null}
+      {photoText === "panel" ? (
+        <div className="px-3 py-6 sm:px-8 sm:py-12">
+          <div className="mx-auto max-w-5xl rounded-md bg-[rgba(18,22,19,0.62)]">{children}</div>
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -276,6 +298,7 @@ export function SiteBlockView({
             // identical on both sides of hydration.
             timeLeft={timeLeft(ctx.wedding.wedding_date)}
             cover={cover}
+            photoText={block.style?.photoText}
           />
           {/* A line about why, under the date — "to celebrate those closest to
               us". Short, and the only sentence in the hero. */}

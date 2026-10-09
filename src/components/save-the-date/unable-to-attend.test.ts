@@ -41,6 +41,22 @@ describe("the can't-come write is never made by loading a page", () => {
   });
 });
 
+describe("the answer survives going away and coming back", () => {
+  it("both writes drop the browser's cached copy of the guest's page", () => {
+    // `staleTimes.dynamic` keeps a visited page's server data for 30s, so
+    // without this, decline -> follow a link -> Back shows the question again
+    // (spec 30 §2). It is the promise next.config.mjs relies on.
+    expect(reply.match(/revalidateSaveTheDate\(parsed\.data\.weddingSlug/g)?.length).toBe(2);
+    expect(reply).toMatch(/revalidatePath\(`\/w\/\$\{weddingSlug\}\/\$\{address\}\/save-the-date`\)/);
+  });
+
+  it("a failed load is an error, never 'nobody here'", () => {
+    const queries = code(read("../../server/queries/save-the-date.ts"));
+    const loader = queries.slice(queries.indexOf("loadUnableToAttend"));
+    expect(loader).toMatch(/if \(error\) throw/);
+  });
+});
+
 describe("it is not an RSVP", () => {
   it("never writes the rsvps table", () => {
     expect(reply).not.toMatch(/["'`]rsvps["'`]/);

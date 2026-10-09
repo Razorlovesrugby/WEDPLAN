@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BLOCKS,
   BLOCK_BACKGROUNDS,
+  BLOCK_PHOTO_TEXT,
   defaultHeading,
   isTitled,
   type BlockStyle,
@@ -18,6 +19,7 @@ import {
 } from "@/server/actions/site-blocks";
 import {
   BACKGROUND_LABEL,
+  PHOTO_TEXT_LABEL,
   SHAPE_LABEL,
   STYLE_CHOICES,
   STYLE_TITLE,
@@ -113,6 +115,42 @@ export function BlockInspector({
 
   function set(name: string, value: unknown) {
     setValues((was) => ({ ...was, [name]: value }));
+  }
+
+  /**
+   * "Text over photo" (spec 30): the photograph is shown as it is unless the
+   * planner picks something. Said where the choice is made, because pale words
+   * over a bright picture are the cost of picking the first one.
+   */
+  function photoText() {
+    const current = block.style.photoText ?? "none";
+    return (
+      <div>
+        <span className="mb-1 block text-xs text-muted">Text over photo</span>
+        <div className="flex flex-wrap gap-1.5">
+          {BLOCK_PHOTO_TEXT.map((option) => (
+            <button
+              key={option}
+              type="button"
+              disabled={pending}
+              aria-pressed={current === option}
+              onClick={() => style({ photoText: option === "none" ? undefined : option })}
+              className={`rounded border px-2 py-1 text-xs ${
+                current === option ? "border-accent bg-[#f6f3ee] font-medium" : "border-line hover:border-ink"
+              }`}
+            >
+              {PHOTO_TEXT_LABEL[option]}
+            </button>
+          ))}
+        </div>
+        {current === "none" ? (
+          <p className="mt-1 text-xs text-muted">
+            The words are pale. On a light photograph they can be hard to read — try a soft text
+            shadow or a panel.
+          </p>
+        ) : null}
+      </div>
+    );
   }
 
   function style(next: Partial<BlockStyle>) {
@@ -377,17 +415,15 @@ export function BlockInspector({
                     kind="gallery"
                     onChange={(assetId) => style({ bgImage: assetId ?? undefined })}
                   />
-                  {/* Said at the moment of choosing, because the planner is
-                      looking at a photograph they already like and the scrim
-                      is about to darken it. */}
-                  <p className="text-xs text-muted">
-                    The photograph is dimmed behind the words and the text turns pale. That
-                    isn&rsquo;t a taste call — it is what keeps the block readable over a picture
-                    nobody has checked the contrast of.
-                  </p>
+                  {block.type !== "hero" ? photoText() : null}
                 </div>
               ) : null}
             </div>
+          ) : null}
+
+          {block.type === "hero" &&
+          resolveLook("hero", block.style.variant, heroDefault) === "full" ? (
+            <div className="space-y-2">{photoText()}</div>
           ) : null}
 
           {(["width", "align", "shape"] as const)

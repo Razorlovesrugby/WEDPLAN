@@ -30,6 +30,11 @@ export const BLOCK_WIDTHS = ["contained", "wide", "full"] as const;
 export const BLOCK_BACKGROUNDS = ["paper", "tinted", "ink", "photograph"] as const;
 export const BLOCK_ALIGNS = ["left", "centre"] as const;
 export const IMAGE_SHAPES = ["natural", "square", "portrait", "wide"] as const;
+/**
+ * What sits between words and the photograph behind them (spec 30). `none` is
+ * the photograph exactly as it is and is what an absent key means.
+ */
+export const BLOCK_PHOTO_TEXT = ["none", "darken", "shadow", "panel"] as const;
 
 export type BlockStyle = {
   width?: (typeof BLOCK_WIDTHS)[number];
@@ -45,6 +50,14 @@ export type BlockStyle = {
    * rendering a scrim over nothing, which would be an unexplained dark band.
    */
   bgImage?: string;
+  /**
+   * How words stay readable over a photograph (spec 30): `darken` is the old
+   * dark overlay, `shadow` a soft shadow on the text, `panel` a dark box behind
+   * it, `none` leaves the picture alone. **Absent means `none`** — the planner's
+   * photograph is shown as it is unless they ask otherwise. Applies to a
+   * `photograph` background and to the hero's full-photo look; ignored elsewhere.
+   */
+  photoText?: (typeof BLOCK_PHOTO_TEXT)[number];
   /**
    * Load this block's third-party embed (spec 23 Q1). Off by default, always:
    * an embed discloses every viewer to that company, and on a personalised
@@ -86,6 +99,7 @@ export const BLOCK_STYLE_KEYS = [
   "align",
   "shape",
   "bgImage",
+  "photoText",
   "embed",
   "lightbox",
   "variant",
@@ -172,7 +186,7 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     family: "essentials",
     blurb: "Your names, the date, and a photo behind them.",
     max: 1,
-    styles: ["background", "shape"],
+    styles: ["background", "shape", "photoText"],
   },
   countdown: {
     type: "countdown",

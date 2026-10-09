@@ -132,6 +132,11 @@ export function UnableToAttend({
           <button type="button" className="std-button mt-5" onClick={open}>
             {UNABLE_BUTTON_LABEL}
           </button>
+          {preview ? (
+            <p className="mt-3 text-xs text-muted">
+              Preview — nothing is saved, so reloading starts over. Use the copied link to see it stick.
+            </p>
+          ) : null}
         </>
       ) : null}
 
