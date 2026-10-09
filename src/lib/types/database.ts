@@ -604,6 +604,8 @@ export type HouseholdRow = {
   slug: string;
   /** Unguessable half. Minted once; an edit never changes it (spec 21 §3). */
   slug_suffix: string;
+  /** When "Save the Date Sent" was ticked or an emailed send stamped it (0034). */
+  save_the_date_sent_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -708,6 +710,13 @@ export type GuestRow = {
   is_plus_one: boolean;
   plus_one_for: string | null;
   sort_order: number;
+  /**
+   * When this guest told us (or the planner recorded) that they can't come
+   * (0034). **Not an RSVP**: no `rsvps` row exists for it. Both columns are
+   * set together or cleared together.
+   */
+  unable_to_attend_at: string | null;
+  unable_to_attend_via: "save_the_date" | "planner" | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -1290,6 +1299,11 @@ export type GuestEventInviteView = {
   override: boolean | null;
   invitation_id: string | null;
   sent_at: string | null;
+  /**
+   * The headcount rule (0034, spec 29 §4.6): flagged as unable to attend and
+   * not since answered Yes. They stay `invited`; they just aren't counted.
+   */
+  excluded_from_counts: boolean;
 }
 
 export type HouseholdView = {
@@ -1340,6 +1354,12 @@ export type HouseholdRsvpView = {
   /** Most recent open of the save-the-date page (0031). Never an invitation open. */
   std_last_viewed_at: string | null;
   std_view_count: number;
+  /** The "Save the Date Sent" tick (0034). Household-level: no invitation needed. */
+  std_sent_at: string | null;
+  /** Active guests in the household (0034). */
+  guest_total: number;
+  /** Of those, how many carry the can't-come flag. The raw flag, not the counting rule. */
+  unable_count: number;
 }
 
 export type WeddingStatsView = {
@@ -1550,7 +1570,10 @@ export type Database = {
         EventRow,
         "id" | Timestamps | "is_public" | "sort_order" | "guest_note" | "dress_code_id"
       >;
-      households: Table<HouseholdRow, "id" | Timestamps | "reminders_muted" | "slug" | "slug_suffix">;
+      households: Table<
+        HouseholdRow,
+        "id" | Timestamps | "reminders_muted" | "slug" | "slug_suffix" | "save_the_date_sent_at"
+      >;
       household_slug_aliases: Table<HouseholdSlugAliasRow, "retired_at">;
       guest_event_overrides: Table<GuestEventOverrideRow, Timestamps>;
       site_blocks: Table<
@@ -1567,7 +1590,13 @@ export type Database = {
       cut_lines: Table<CutLineRow, "id" | Timestamps>;
       guests: Table<
         GuestRow,
-        "id" | Timestamps | "age_band" | "is_plus_one" | "sort_order",
+        | "id"
+        | Timestamps
+        | "age_band"
+        | "is_plus_one"
+        | "sort_order"
+        | "unable_to_attend_at"
+        | "unable_to_attend_via",
         GuestRelationships
       >;
       tags: Table<TagRow, "id" | "created_at" | "colour">;
