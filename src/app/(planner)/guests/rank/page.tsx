@@ -4,9 +4,10 @@ import { RankList } from "@/components/rank/rank-list";
 import { CutLinePicker } from "@/components/settings/cut-line-picker";
 import { SubTabs } from "@/components/sub-tabs";
 import { GUESTS_TABS } from "@/lib/nav-tabs";
-import { listHouseholds } from "@/server/queries/guests";
+import { countGuestsLeftOut, listHouseholds } from "@/server/queries/guests";
 import { getCutLines, getWeddingStats, requireWedding } from "@/server/queries/wedding";
 import { getPerSeatCostInvited } from "@/server/queries/budget";
+import { leftOutNote } from "@/lib/unable-to-attend";
 import { ranksNeedRebalance } from "@/server/actions/rank";
 import { formatMoney, pluralise } from "@/lib/format";
 
@@ -14,12 +15,13 @@ export const metadata = { title: "Ranking" };
 
 export default async function RankPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, perSeatCost, cutLines] = await Promise.all([
+  const [households, stats, rebalanceOffered, perSeatCost, cutLines, leftOut] = await Promise.all([
     listHouseholds(wedding.id),
     getWeddingStats(wedding.id),
     ranksNeedRebalance(),
     getPerSeatCostInvited(wedding.id),
     getCutLines(wedding.id),
+    countGuestsLeftOut(wedding.id),
   ]);
 
   const aboveCutSeats = stats?.above_cut_seats ?? 0;
@@ -68,6 +70,7 @@ export default async function RankPage() {
             {formatMoney(perSeatCost)}
           </Link>{" "}
           — from every per-unit and consumption budget line, on invited counts.
+          {leftOutNote(leftOut) ? <> {leftOutNote(leftOut)}</> : null}
         </p>
       ) : null}
 

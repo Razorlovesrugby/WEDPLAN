@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   declinedConfirmation,
+  isExcludedFromCounts,
   hasUnable,
   householdGuestIds,
   isAllUnable,
   isPartlyUnable,
   joinNames,
+  leftOutNote,
   saveTheDateUnsent,
   sendAnywayMessage,
   unableChip,
@@ -124,5 +126,46 @@ describe("filters", () => {
     expect(hasUnable({ unable_count: 1 })).toBe(true);
     expect(hasUnable({ unable_count: 0 })).toBe(false);
     expect(hasUnable(null)).toBe(false);
+  });
+});
+
+describe("isExcludedFromCounts — the TypeScript copy of guest_excluded_from_counts()", () => {
+  const flagged = "2026-10-09T00:00:00Z";
+
+  it("excludes a flagged guest who has answered nothing", () => {
+    expect(isExcludedFromCounts({ unable_to_attend_at: flagged, rsvps: [] })).toBe(true);
+    expect(
+      isExcludedFromCounts({ unable_to_attend_at: flagged, rsvps: [{ status: "pending" }] }),
+    ).toBe(true);
+  });
+
+  it("counts them again once they answer Yes to anything — the answer outranks the flag", () => {
+    expect(
+      isExcludedFromCounts({
+        unable_to_attend_at: flagged,
+        rsvps: [{ status: "no" }, { status: "yes" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("stays excluded after a No or a Maybe", () => {
+    expect(isExcludedFromCounts({ unable_to_attend_at: flagged, rsvps: [{ status: "no" }] })).toBe(true);
+    expect(isExcludedFromCounts({ unable_to_attend_at: flagged, rsvps: [{ status: "maybe" }] })).toBe(true);
+  });
+
+  it("never excludes a guest who is not flagged", () => {
+    expect(isExcludedFromCounts({ unable_to_attend_at: null, rsvps: [] })).toBe(false);
+    expect(isExcludedFromCounts({ unable_to_attend_at: null, rsvps: [{ status: "no" }] })).toBe(false);
+  });
+});
+
+describe("leftOutNote", () => {
+  it("says nothing when nobody is left out", () => {
+    expect(leftOutNote(0)).toBeNull();
+  });
+
+  it("agrees with the number", () => {
+    expect(leftOutNote(1)).toBe("Leaves out 1 guest who can't come.");
+    expect(leftOutNote(3)).toBe("Leaves out 3 guests who can't come.");
   });
 });

@@ -16,6 +16,8 @@ import { NewCategoryForm } from "@/components/budget/new-category-form";
 import { AddBudgetItemForm } from "@/components/budget/add-budget-item-form";
 import { BudgetItemRow } from "@/components/budget/budget-item-row";
 import { listVendors } from "@/server/queries/vendors";
+import { countGuestsLeftOut } from "@/server/queries/guests";
+import { leftOutNote } from "@/lib/unable-to-attend";
 import { PaymentCalendar } from "@/components/budget/payment-calendar";
 import { formatMoney, pluralise } from "@/lib/format";
 import { sectionAllocation } from "@/lib/budget";
@@ -29,7 +31,7 @@ export default async function BudgetPage({
 }) {
   const { item: openItemId } = await searchParams;
   const wedding = await requireWedding();
-  const [categories, categoryTotals, items, components, payments, summary, events, lists, sections, allTasks, vendors] = await Promise.all([
+  const [categories, categoryTotals, items, components, payments, summary, events, lists, sections, allTasks, vendors, leftOut] = await Promise.all([
     listBudgetCategories(wedding.id),
     listBudgetCategoryTotals(wedding.id),
     listBudgetItems(wedding.id),
@@ -41,6 +43,7 @@ export default async function BudgetPage({
     getAllSections(wedding.id),
     getAllItems(wedding.id),
     listVendors(wedding.id),
+    countGuestsLeftOut(wedding.id),
   ]);
 
   // Guest counts, one lookup per distinct event scope actually used by an
@@ -114,6 +117,9 @@ export default async function BudgetPage({
           {summary.per_head_adult !== null ? <strong>{formatMoney(summary.per_head_adult)}/adult</strong> : null}
           {summary.per_head_adult !== null && summary.per_head_seat !== null ? " · " : null}
           {summary.per_head_seat !== null ? <strong>{formatMoney(summary.per_head_seat)}/seat</strong> : null}
+          {/* Spec 29 §4.6: these figures follow the headcount, which leaves out
+              a guest who has said they can't come. Say so beside them. */}
+          {leftOutNote(leftOut) ? <span className="ml-2 text-xs">{leftOutNote(leftOut)}</span> : null}
         </p>
       ) : null}
 

@@ -36,6 +36,30 @@ export function isAllUnable(guestTotal: number | null, unableCount: number | nul
   return (guestTotal ?? 0) > 0 && (unableCount ?? 0) >= (guestTotal ?? 0);
 }
 
+/**
+ * Is this guest left out of the counts? Flagged as unable to attend, and has
+ * not since answered Yes to anything.
+ *
+ * **This mirrors `public.guest_excluded_from_counts()` (migration 0034) — change
+ * both together.** The SQL is the one the views and the budget read; this copy
+ * exists for the places that already hold a guest and its RSVPs in memory (the
+ * `/guests` list's "haven't answered" filter), the same arrangement as
+ * `lib/lists/overdue.ts` and `buildDigest`. A Yes outranks the flag: the flag
+ * says "told us in advance", the answer is the answer.
+ */
+export function isExcludedFromCounts(guest: {
+  unable_to_attend_at: string | null;
+  rsvps: readonly { status: string }[];
+}): boolean {
+  return guest.unable_to_attend_at !== null && !guest.rsvps.some((rsvp) => rsvp.status === "yes");
+}
+
+/** "Leaves out 3 guests who can't come" — the note beside a figure that moved. */
+export function leftOutNote(count: number): string | null {
+  if (count <= 0) return null;
+  return `Leaves out ${count} ${count === 1 ? "guest" : "guests"} who can't come.`;
+}
+
 /** Some, but not everyone. This household is still invited (spec 29 §4.5). */
 export function isPartlyUnable(guestTotal: number | null, unableCount: number | null): boolean {
   return (unableCount ?? 0) > 0 && !isAllUnable(guestTotal, unableCount);
