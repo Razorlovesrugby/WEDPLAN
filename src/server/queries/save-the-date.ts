@@ -196,7 +196,7 @@ export const loadUnableToAttend = cache(
     householdId: string,
   ): Promise<{ candidates: UnableGuest[]; declined: UnableGuest[] }> => {
     const supabase = createAdminClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("guests")
       .select("id, first_name, preferred_name, unable_to_attend_via")
       .eq("wedding_id", weddingId)
@@ -204,6 +204,9 @@ export const loadUnableToAttend = cache(
       .is("deleted_at", null)
       .order("sort_order")
       .order("created_at");
+    // A failed query must not read as "nobody here": that would hide the block
+    // from someone who has already answered, and show the question again.
+    if (error) throw new Error(`Could not load who can't come: ${error.message}`);
 
     const candidates: UnableGuest[] = [];
     const declined: UnableGuest[] = [];

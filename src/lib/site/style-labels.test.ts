@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { BLOCK_ALIGNS, BLOCK_BACKGROUNDS, BLOCK_WIDTHS, IMAGE_SHAPES } from "./blocks";
+import { BLOCK_ALIGNS, BLOCK_BACKGROUNDS, BLOCK_PHOTO_TEXT, BLOCK_WIDTHS, IMAGE_SHAPES } from "./blocks";
 import {
   ALIGN_LABEL,
   BACKGROUND_LABEL,
+  PHOTO_TEXT_LABEL,
   SHAPE_LABEL,
   STYLE_CHOICES,
   WIDTH_LABEL,
@@ -13,6 +14,7 @@ describe("style labels", () => {
   it("has a label for every value of every style, and nothing extra", () => {
     expect(Object.keys(WIDTH_LABEL).sort()).toEqual([...BLOCK_WIDTHS].sort());
     expect(Object.keys(BACKGROUND_LABEL).sort()).toEqual([...BLOCK_BACKGROUNDS].sort());
+    expect(Object.keys(PHOTO_TEXT_LABEL).sort()).toEqual([...BLOCK_PHOTO_TEXT].sort());
     expect(Object.keys(ALIGN_LABEL).sort()).toEqual([...BLOCK_ALIGNS].sort());
     expect(Object.keys(SHAPE_LABEL).sort()).toEqual([...IMAGE_SHAPES].sort());
   });

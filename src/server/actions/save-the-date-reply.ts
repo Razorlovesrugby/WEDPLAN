@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findWeddingBySlug } from "@/server/queries/site";
@@ -30,6 +31,12 @@ import { fail, ok, type ActionResult } from "./result";
  *   `rsvps` row, no invitation, no message. What the planner sees, and what
  *   stops being counted, follows from those columns (migration 0034).
  *
+ *   DROPS THE BROWSER'S COPY OF THE PAGE. `next.config.mjs` keeps a visited
+ *   page's server data for 30 seconds (`staleTimes.dynamic`) on the promise that
+ *   every mutation calls `revalidatePath`. Without it, a guest who declines,
+ *   follows a link and presses Back is handed the page as it was before they
+ *   answered, and the question is asked again (spec 30 §2).
+ *
  * Service role, because guests are planner-only under RLS and `anon` is
  * revoked. It is scoped by wedding AND household on every statement.
  */
@@ -53,6 +60,11 @@ async function resolveHousehold(weddingSlug: string, address: string): Promise<R
   }
   if (resolved.kind !== "ok") return { ok: false, error: "We can't find that link." };
   return { ok: true, weddingId: wedding.id, householdId: resolved.household.id };
+}
+
+/** The guest's own page, by the address they hold — exactly that one household. */
+function revalidateSaveTheDate(weddingSlug: string, address: string) {
+  revalidatePath(`/w/${weddingSlug}/${address}/save-the-date`);
 }
 
 export async function declineSaveTheDate(payload: unknown): Promise<ActionResult<{ names: string[] }>> {
@@ -94,6 +106,8 @@ export async function declineSaveTheDate(payload: unknown): Promise<ActionResult
     .is("unable_to_attend_at", null);
   if (writeError) return fail("Something went wrong — please try again.");
 
+  revalidateSaveTheDate(parsed.data.weddingSlug, parsed.data.address);
+
   const chosen = new Set(ids);
   const names = (guests ?? [])
     .filter((guest) => chosen.has(guest.id))
@@ -127,5 +141,6 @@ export async function undoSaveTheDateDecline(payload: unknown): Promise<ActionRe
 
   const { error } = await query;
   if (error) return fail("Something went wrong — please try again.");
+  revalidateSaveTheDate(parsed.data.weddingSlug, parsed.data.address);
   return ok(undefined);
 }

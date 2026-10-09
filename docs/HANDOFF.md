@@ -3,6 +3,32 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 36 (spec 30):** two small fixes, built on branch
+`claude/spec-30-save-the-date-reply-and-undimmed-photos` (**no PR opened**). Asked
+for as a spec, then "ask open questions and build" as its own turn. Read the spec's
+**Build status** first; this is the short version.
+
+- **A "can't come" reply now survives Back.** The likely cause was
+  `staleTimes.dynamic: 30` in `next.config.mjs`: the 30s client router cache is only
+  safe because every mutation calls `revalidatePath`, and the two public actions on
+  the save-the-date didn't, so decline → follow a link → Back re-asked the question.
+  Both now revalidate that household's page; a source guard pins it. **A diagnosis
+  from reading code, not a reproduction.** Also: `loadUnableToAttend` throws on a
+  query error instead of reading as "nobody here", and preview says up front that
+  nothing is saved.
+- **Photographs are shown as they are.** The fixed dark overlay (which turned a cream
+  print grey) is now opt-in via a new block style key **`photoText`**: Photo as it is
+  (the default; absent key) / Darken photo / Soft text shadow / Panel behind text.
+  Photograph-background blocks and the hero's full-photo look. **Existing blocks lose
+  their dimming** — that was the point. **The save-the-date cover's gradient
+  (`.std-scrim`) and the scroll hand-over are unchanged.** No migration.
+- **Verified:** typecheck clean, 953 unit tests, `next build` (placeholder env). Not
+  run: `verify-migrations.sh` (no SQL touched). **Never opened in a browser** — the
+  four text treatments over a real photograph are unseen, and neither public write
+  has run against Supabase.
+- **Pick up here:** decline on a real household from **Copy link** on a phone, follow
+  a link, press Back; then try the four "Text over photo" choices over a pale print.
+
 **Session 35 (spec 29):** save-the-date tracking and "I already know I can't come",
 built end to end on branch `claude/spec-29-save-the-date-tracking` (**no PR
 opened**). Asked for as a spec, the nine questions answered, then "Let's build" as

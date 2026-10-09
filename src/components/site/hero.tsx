@@ -3,6 +3,7 @@ import { HeroCounter } from "./hero-counter";
 import { splitHeadline } from "@/lib/site/names";
 import type { TimeLeft } from "@/lib/format";
 import { objectPosition, type SiteImageData } from "@/lib/site/site-image";
+import type { BlockStyle } from "@/lib/site/blocks";
 import type { HeroStyle, ThemePresetId } from "@/lib/theme/presets";
 import { isEditorialFamily } from "@/lib/theme/presets";
 
@@ -88,6 +89,25 @@ function HeroImage({ picture, alt }: { picture: HeroPicture; alt: string | null 
   );
 }
 
+/**
+ * What sits between the names and a full-bleed photograph (spec 30). The same
+ * four choices as a photograph background; absent is `none`, the picture as it
+ * is. `darken` carries each look's own old values, so choosing it restores the
+ * previous cover exactly.
+ */
+type PhotoText = NonNullable<BlockStyle["photoText"]>;
+
+function wordsOnPhoto(photoText: PhotoText | undefined) {
+  const choice = photoText ?? "none";
+  return {
+    darken: choice === "darken",
+    // Applied to the wrapper round the words; text-shadow inherits.
+    shadow: choice === "shadow" ? "site-text-shadow" : "",
+    panel:
+      choice === "panel" ? "rounded-md bg-[rgba(18,22,19,0.55)] p-5 sm:p-8" : "",
+  };
+}
+
 /** The small arrow under the cover. Decorative, so hidden from assistive tech. */
 function ScrollCue({ className = "" }: { className?: string }) {
   return (
@@ -115,6 +135,7 @@ export function SiteHero({
   weddingDate,
   timeLeft,
   cover = null,
+  photoText,
 }: {
   style: HeroLook;
   /**
@@ -138,6 +159,8 @@ export function SiteHero({
   timeLeft?: TimeLeft | null;
   /** Null on the shared site. See `HeroCover`. */
   cover?: HeroCover | null;
+  /** How the names are kept readable over a full-bleed photograph. Absent: not at all. */
+  photoText?: PhotoText;
 }) {
   const legacy = sameOriginPath(imagePath);
   const picture: HeroPicture | null =
@@ -159,6 +182,7 @@ export function SiteHero({
         weddingDate={weddingDate ?? null}
         timeLeft={timeLeft ?? null}
         cover={cover}
+        photoText={photoText}
       />
     );
   }
@@ -193,6 +217,7 @@ export function SiteHero({
   }
 
   if (effective === "full") {
+    const help = wordsOnPhoto(photoText);
     return (
       <header id="hero" className="relative scroll-mt-16">
         <div
@@ -203,13 +228,13 @@ export function SiteHero({
           <div className="site-cover-photo absolute inset-0 overflow-hidden">
             <HeroImage picture={picture} alt={imageAlt} />
           </div>
-          {/* The scrim is what makes the text legible over an unknown photo.
-              Without it the hero passes contrast against whatever the
-              photographer happened to shoot, which is not a guarantee. */}
-          <div className="absolute inset-0 bg-scrim/45" />
+          {/* The scrim is what makes the text legible over an unknown photo, and
+              it is opt-in now (spec 30): by default the photograph is shown as
+              it is, and a cream print stays cream. */}
+          {help.darken ? <div className="absolute inset-0 bg-scrim/45" /> : null}
           <div className="site-cover-dim absolute inset-0 bg-scrim/30" />
           <div className="absolute inset-0 flex items-center justify-center px-5">
-            <div className="text-onphoto [&_*]:text-onphoto">{words}</div>
+            <div className={`text-onphoto [&_*]:text-onphoto ${help.shadow} ${help.panel}`}>{words}</div>
           </div>
           {cover?.scrollCue ? <ScrollCue className="text-onphoto" /> : null}
         </div>
@@ -252,11 +277,11 @@ export function SiteHero({
  * corner rather than under the date, where at this type size it would read as
  * part of the location.
  *
- * **The scrim is not optional.** It is the same argument the `full` hero above
- * makes: without it the names pass contrast against whatever the photographer
- * happened to shoot, which is not a guarantee. `rgba(18,22,19,0.62)` is a
- * fixed value rather than a theme token on purpose — it has to hold over a
- * photograph, and a pale palette's `ink` would not.
+ * **The scrim is opt-in** (spec 30), as in the `full` hero above: the names are
+ * pale over a photograph nobody has checked the contrast of, and `darken`,
+ * `shadow` or `panel` is how the planner buys readability. `rgba(18,22,19,0.62)`
+ * is a fixed value rather than a theme token on purpose — it has to hold over
+ * a photograph, and a pale palette's `ink` would not.
  *
  * With no photograph it sets the same type on `paper`. That is not a
  * downgrade: names this size on an empty page is a composition in its own
@@ -273,6 +298,7 @@ function EditorialHero({
   timeLeft,
   cover,
   look,
+  photoText,
 }: {
   headline: string;
   dateLabel: string | null;
@@ -283,7 +309,9 @@ function EditorialHero({
   timeLeft: TimeLeft | null;
   cover: HeroCover | null;
   look: HeroLook;
+  photoText?: PhotoText;
 }) {
+  const help = wordsOnPhoto(photoText);
   const split = splitHeadline(headline);
 
   const names = (
@@ -411,7 +439,7 @@ function EditorialHero({
         <div className="site-cover-photo absolute inset-0 overflow-hidden">
           <HeroImage picture={picture} alt={imageAlt} />
         </div>
-        <div className="absolute inset-0 bg-[rgba(18,22,19,0.62)]" />
+        {help.darken ? <div className="absolute inset-0 bg-[rgba(18,22,19,0.62)]" /> : null}
         <div className="site-cover-dim absolute inset-0 bg-[rgba(18,22,19,0.4)]" />
 
         {weddingDate ? (
@@ -425,7 +453,9 @@ function EditorialHero({
         {/* Bottom-aligned. Names this size centred in the frame leave the
             photograph with no room to be a photograph. */}
         <div className="absolute inset-x-0 bottom-0 px-5 pb-14 sm:px-10 sm:pb-20">
-          <div className="site-cover-words mx-auto w-full max-w-5xl text-onphoto [&_*]:text-onphoto">
+          <div
+            className={`site-cover-words mx-auto w-full max-w-5xl text-onphoto [&_*]:text-onphoto ${help.shadow} ${help.panel}`}
+          >
             {greeting}
             {names}
             {coverLine}

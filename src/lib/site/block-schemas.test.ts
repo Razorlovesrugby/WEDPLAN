@@ -20,6 +20,19 @@ describe("styleSchema", () => {
   });
 });
 
+describe("photoText", () => {
+  it("takes the four choices and nothing else", () => {
+    for (const value of ["none", "darken", "shadow", "panel"]) {
+      expect(styleSchema.safeParse({ photoText: value }).success).toBe(true);
+    }
+    expect(styleSchema.safeParse({ photoText: "blur" }).success).toBe(false);
+  });
+
+  it("is optional, so every existing block still validates", () => {
+    expect(styleSchema.safeParse({ background: "photograph" }).success).toBe(true);
+  });
+});
+
 describe("BLOCK_SCHEMAS", () => {
   it("has a schema for every block type", () => {
     expect(Object.keys(BLOCK_SCHEMAS).sort()).toEqual([...BLOCK_TYPES].sort());

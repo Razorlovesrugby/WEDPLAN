@@ -4,6 +4,7 @@ import { validateGreeting } from "./greeting";
 import {
   BLOCK_ALIGNS,
   BLOCK_BACKGROUNDS,
+  BLOCK_PHOTO_TEXT,
   BLOCK_WIDTHS,
   BLOCK_TYPES,
   IMAGE_SHAPES,
@@ -34,6 +35,7 @@ export const styleSchema = z
     // A site_assets id, not a URL: the renderer signs it, so a block can
     // never carry a path into a bucket or a third party's image.
     bgImage: uuid.optional(),
+    photoText: z.enum(BLOCK_PHOTO_TEXT).optional(),
     embed: z.coerce.boolean().optional(),
     // Off is the only value worth storing: absent already means on.
     lightbox: z.boolean().optional(),
