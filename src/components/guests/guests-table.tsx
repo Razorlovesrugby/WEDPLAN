@@ -236,6 +236,20 @@ export function GuestsTable({
                     {guest.age_band !== "adult" ? (
                       <span className="ml-1.5 text-xs text-muted">({guest.age_band})</span>
                     ) : null}
+                    {/* Still invited, so the grid's cells are unchanged — this is
+                        only the reminder that they won't be counted (spec 29). */}
+                    {guest.unable_to_attend_at ? (
+                      <span
+                        className="ml-1.5 rounded border border-tierB/50 bg-tierB/15 px-1 text-xs"
+                        title={
+                          guest.unable_to_attend_via === "save_the_date"
+                            ? "Told us they can't come, from their save the date"
+                            : "You recorded that they can't come"
+                        }
+                      >
+                        Can&rsquo;t attend
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-3 py-1.5">
                     <InlineText

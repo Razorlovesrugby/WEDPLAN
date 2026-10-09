@@ -5,6 +5,7 @@ import { decryptToken, householdSiteUrl } from "@/lib/tokens";
 import { digestEmail, reminderEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
+import { isAllUnable } from "@/lib/unable-to-attend";
 import { buildDigest, hasAnythingToReport, isoWeek, type DigestItem } from "@/lib/reminders/digest";
 
 /**
@@ -63,13 +64,19 @@ async function run(request: NextRequest) {
 
     const { data: outstanding } = await supabase
       .from("v_household_rsvp")
-      .select("household_id, invitation_id, sent_at, response_state")
+      .select("household_id, invitation_id, sent_at, response_state, guest_total, unable_count")
       .eq("wedding_id", wedding.id)
       .neq("response_state", "complete")
       .not("sent_at", "is", null);
 
     for (const row of outstanding ?? []) {
       if (!row.invitation_id) continue;
+      // Everyone here has told us they can't come (spec 29 §4.5): chasing them
+      // for an RSVP would undo the promise the save-the-date made.
+      if (isAllUnable(row.guest_total, row.unable_count)) {
+        skipped++;
+        continue;
+      }
 
       const { data: household } = await supabase
         .from("households")

@@ -6,6 +6,7 @@ import { HouseholdPicker } from "@/components/guests/household-picker";
 import { HouseholdAddress } from "@/components/guests/household-address";
 import { HouseholdEvents } from "@/components/guests/household-events";
 import { AnswerList } from "@/components/questions/answer-list";
+import { UnableToggle } from "@/components/guests/unable-toggle";
 import { getHousehold, listHouseholds } from "@/server/queries/guests";
 import { moveGuest, moveGuests } from "@/server/actions/guests";
 import { getHouseholdAnswers } from "@/server/queries/questions";
@@ -73,6 +74,13 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
           {pluralise(household.head_count, "person", "people")} ·{" "}
           {pluralise(household.seat_count, "seat")}
           {household.infant_count > 0 ? ` · ${household.infant_count} on laps` : null}
+          {/* The seat figure leaves out a guest who can't come (spec 29 §4.6);
+              say so beside it rather than let two numbers disagree silently. */}
+          {guests.some((guest) => guest.unable_to_attend_at) ? (
+            <span className="block text-right text-xs">
+              Seats leave out anyone who can&rsquo;t come
+            </span>
+          ) : null}
         </span>
       </div>
 
@@ -111,6 +119,15 @@ export default async function HouseholdPage({ params }: { params: Promise<{ id: 
                     {guest.age_band !== "adult" ? (
                       <span className="ml-1.5 text-xs text-muted">({guest.age_band})</span>
                     ) : null}
+                    <div className="mt-0.5">
+                      <UnableToggle
+                        guestId={guest.id}
+                        unableAt={guest.unable_to_attend_at}
+                        via={guest.unable_to_attend_via}
+                        answeredYes={(guest.rsvps ?? []).some((rsvp) => rsvp.status === "yes")}
+                        timezone={wedding.timezone}
+                      />
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted">{guest.dietary || guest.email || "—"}</span>
