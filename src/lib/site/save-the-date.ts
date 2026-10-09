@@ -53,10 +53,22 @@ export const SAVE_THE_DATE_TEXT_LIMITS = {
   dateLabel: 80,
   location: 120,
   message: 600,
+  unableText: 600,
 } as const;
 
 export const DEFAULT_SAVE_THE_DATE_MESSAGE =
   "Nothing to do yet — just keep the day free. The invitation, with all the details, follows nearer the time.";
+
+/**
+ * The optional "already know you can't come" block (spec 29 §4.2). The
+ * planner's own words: it never says RSVP, reply, confirm or required, because
+ * the whole point is that nobody undecided is being asked anything.
+ */
+export const DEFAULT_UNABLE_TEXT =
+  "Already know you won’t be able to make it? While we’d be sad to miss you, we completely understand. If you’re certain you won’t be able to join us, you can let us know below, and we’ll save you the formal invitation.";
+
+/** Fixed on purpose: the button is the planner's brief verbatim, not a setting. */
+export const UNABLE_BUTTON_LABEL = "I’m unable to attend";
 
 export type SaveTheDateContent = {
   eyebrow: string;
@@ -79,6 +91,9 @@ export type SaveTheDateContent = {
   showGreeting: boolean;
   showCountdown: boolean;
   showCalendar: boolean;
+  /** The "I'm unable to attend" block. On by default; optional for the couple too (Q9). */
+  showUnable: boolean;
+  unableText: string;
 };
 
 export const DEFAULT_SAVE_THE_DATE: SaveTheDateContent = {
@@ -93,6 +108,8 @@ export const DEFAULT_SAVE_THE_DATE: SaveTheDateContent = {
   showGreeting: true,
   showCountdown: false,
   showCalendar: true,
+  showUnable: true,
+  unableText: DEFAULT_UNABLE_TEXT,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -146,6 +163,8 @@ export function resolveSaveTheDate(payload: unknown): SaveTheDateContent {
     showGreeting: bool("show_greeting", d.showGreeting),
     showCountdown: bool("show_countdown", d.showCountdown),
     showCalendar: bool("show_calendar", d.showCalendar),
+    showUnable: bool("show_unable", d.showUnable),
+    unableText: optionalString(payload["unable_text"], L.unableText) ?? d.unableText,
   };
 }
 
@@ -163,6 +182,8 @@ export function saveTheDatePayload(content: SaveTheDateContent): Record<string, 
     show_greeting: content.showGreeting,
     show_countdown: content.showCountdown,
     show_calendar: content.showCalendar,
+    show_unable: content.showUnable,
+    unable_text: content.unableText,
   };
 }
 

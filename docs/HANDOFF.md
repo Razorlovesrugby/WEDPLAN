@@ -3,6 +3,63 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 35 (spec 29):** save-the-date tracking and "I already know I can't come",
+built end to end on branch `claude/spec-29-save-the-date-tracking` (**no PR
+opened**). Asked for as a spec, the nine questions answered, then "Let's build" as
+its own turn — so all six steps were built, each committed separately. Read the
+spec's **Build status** first; this is the short version.
+
+- **Part A — two tick boxes on `/invitations`.** *Invite Sent* is the existing
+  `invitations.sent_at` (one truth for the dashboard, the filters and the chase
+  cron), now un-tickable via `setInvitationSent`; the box is disabled until an
+  invitation exists. *Save the Date Sent* is new: `households.save_the_date_sent_at`,
+  household-level so it works with no invitation, also stamped by the emailed send.
+  Copying or opening a link never ticks anything.
+- **Part B — a guest who is certain they can't come can say so from their
+  save-the-date.** It is **a flag on the guest** (`guests.unable_to_attend_at` /
+  `_via`), **deliberately not an `rsvps` row**: that would count as an answer in
+  `v_household_rsvp`, usually has no invited event to hang on, and would show
+  pre-filled on the invitation later. The block is quiet, the planner's own words,
+  on by default and editable in the designer.
+- **The three rules most likely to be broken by accident**, each enforced by a test
+  rather than a comment (`src/components/save-the-date/unable-to-attend.test.ts`):
+  the write is a **button press only, never page load** (mail scanners fetch URLs);
+  the action **intersects the browser's guest ids with the household's own** (the
+  address resolves the household, never an id from the client); and it **writes only
+  the two flag columns** — never `rsvps`, `invitations`, `message_log`.
+- **Headcount (Q3, against the recommendation).** Flagged guests stop being counted,
+  but stay *invited* — the grid and the record of who was asked are unchanged. The
+  rule is written once, in SQL: `guest_excluded_from_counts()` = flagged **and** no
+  Yes yet (a Yes outranks the flag). It drives `v_households.seat_count`,
+  `v_wedding_stats.outstanding_guests`, `budget_guest_population` (so `/budget` and
+  `/guests/rank`) and a new `v_guest_event_invites.excluded_from_counts`.
+  `isExcludedFromCounts` in `src/lib/unable-to-attend.ts` mirrors it for the
+  `/guests` pending filter — **change both together**. `head_count` and friends are
+  *not* changed (composition, not attendance), so a household can read "4 people ·
+  3 seats"; the page says why beside it. The catering CSV needed no change.
+- **Guards, not blocks.** Select-all, the server-side `sendInvitation` (refuses an
+  all-declined household without `sendAnyway`), the themed stationery print and the
+  reminder cron skip a household where *every* guest has declined; a partly-flagged
+  household is still invited. The plain QR sheet and the save-the-date/broadcast
+  senders are unchanged.
+- **One migration, `0034_save_the_date_tracking.sql`** — additive; appended view
+  columns only; **not applied to the live project, and neither are `0026`–`0033`**,
+  which it stacks on (`0031`'s view in particular).
+- **Verified:** typecheck clean, 949 unit tests, 508 SQL assertions (37 new), the
+  single-transaction check, bootstrap and `next build` (placeholder env). **Looked
+  at:** only the guest block, in the sandbox's Chromium on a throwaway harness
+  (deleted), in preview mode — so **neither public write has ever run**. **Never
+  looked at or run:** `/invitations` (ticks, chip, filters, guards), the household
+  toggle, the `/guests` marker, the stationery print, the cron skip, the designer's
+  new panel, anything against live Supabase, a real phone.
+- **Pick up here:** apply `0026`–`0034` in order, load `/api/health`, then press the
+  button on a real household's save-the-date from a phone (decline, reload, Undo),
+  tick both boxes on `/invitations`, flag a guest on the household page and watch
+  `/guests/rank` and `/budget` move. The likeliest faults are where nobody has
+  looked: the public action against real RLS/service-role grants (the new function is
+  granted to `authenticated` and `service_role` only), and the headcount figures on a
+  real wedding.
+
 **Session 34 (spec 28):** invite polish, round one, built end to end on branch
 `claude/spec-28-invite-polish-build` (not merged, **no PR opened**). Asked for as
 "can we build the most recent spec" after the spec had been written and every

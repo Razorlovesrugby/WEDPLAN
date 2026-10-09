@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import {
   DEFAULT_SAVE_THE_DATE,
+  DEFAULT_UNABLE_TEXT,
   SAVE_THE_DATE_BLOCK_KEY,
   SAVE_THE_DATE_LAYOUTS,
   SAVE_THE_DATE_PHOTO_LIMIT,
@@ -40,6 +41,7 @@ const schema = z.object({
   dateLabel: optional(L.dateLabel),
   location: optional(L.location),
   message: optional(L.message),
+  unableText: optional(L.unableText),
   photoIds: z
     .array(z.string().uuid())
     .max(SAVE_THE_DATE_PHOTO_LIMIT, `Up to ${SAVE_THE_DATE_PHOTO_LIMIT} photos`)
@@ -49,6 +51,7 @@ const schema = z.object({
   showGreeting: z.boolean(),
   showCountdown: z.boolean(),
   showCalendar: z.boolean(),
+  showUnable: z.boolean(),
 });
 
 export async function saveSaveTheDate(fields: unknown): Promise<ActionResult> {
@@ -88,6 +91,8 @@ export async function saveSaveTheDate(fields: unknown): Promise<ActionResult> {
     showGreeting: data.showGreeting,
     showCountdown: data.showCountdown,
     showCalendar: data.showCalendar,
+    showUnable: data.showUnable,
+    unableText: data.unableText ?? DEFAULT_UNABLE_TEXT,
   });
 
   const { error } = await supabase.from("site_content").upsert(

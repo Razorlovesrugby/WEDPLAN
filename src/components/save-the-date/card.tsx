@@ -39,6 +39,12 @@ export type SaveTheDateCardProps = {
   calendar: { icsHref: string; googleHref: string } | null;
   /** The arrival animation. Off in the editor, where it would replay nothing useful. */
   animate?: boolean;
+  /**
+   * Whatever sits under the composition — today the optional "already know you
+   * can't come" block (spec 29). Inside the card, not beside it, so it takes
+   * the card's palette, type and container width like everything above it.
+   */
+  footer?: ReactNode;
 };
 
 function rise(delay: number): CSSProperties {
@@ -157,6 +163,11 @@ export function SaveTheDateCard(props: SaveTheDateCardProps) {
       {layout === "cover" ? <Cover {...props} /> : null}
       {layout === "editorial" ? <Editorial {...props} /> : null}
       {layout === "postcard" ? <Postcard {...props} /> : null}
+      {props.footer ? (
+        <div className="std-pad pb-14">
+          <div className="std-measure">{props.footer}</div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,8 @@ import { getEvents, requireWedding } from "@/server/queries/wedding";
 import { formatDate } from "@/lib/format";
 import { saveTheDateDisplay } from "@/lib/site/save-the-date";
 import { getSaveTheDateContent } from "@/server/queries/save-the-date";
+import type { InvitationListItem } from "@/server/queries/invitations";
+import { hasUnable, saveTheDateUnsent } from "@/lib/unable-to-attend";
 
 export const metadata = { title: "Invitations" };
 
@@ -17,7 +19,7 @@ export const metadata = { title: "Invitations" };
  * is what makes the spec's rule true — every number on the home screen clicks
  * through to the list behind it.
  */
-const STATUSES = ["sent", "unsent", "opened", "silent"] as const;
+const STATUSES = ["sent", "unsent", "opened", "silent", "std_unsent", "unable"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -28,7 +30,30 @@ const STATUS_LABEL: Record<Status, string> = {
   // read it, and they still have not answered. "Never opened" and "opened
   // five times and said nothing" need different messages.
   silent: "Opened, but nothing back yet",
+  // Spec 29. The first is the save-the-date's own "nothing sent yet" — kept
+  // apart from `unsent`, which has always meant the INVITATION.
+  std_unsent: "Households with no save the date sent yet",
+  unable: "Households where someone has said they can't come",
 };
+
+function matchesStatus(row: InvitationListItem, status: Status): boolean {
+  const summary = row.summary;
+  const opened = summary?.opened_at != null || (summary?.view_count ?? 0) > 0;
+  switch (status) {
+    case "sent":
+      return summary?.sent_at != null;
+    case "unsent":
+      return summary?.sent_at == null;
+    case "opened":
+      return opened;
+    case "silent":
+      return summary?.sent_at != null && opened && summary.response_state === "none";
+    case "std_unsent":
+      return saveTheDateUnsent(summary);
+    case "unable":
+      return hasUnable(summary);
+  }
+}
 
 export default async function InvitationsPage({
   searchParams,
@@ -48,21 +73,11 @@ export default async function InvitationsPage({
   ]);
   const saveTheDateWords = saveTheDateDisplay(saveTheDate, wedding);
 
-  const rows = active
-    ? allRows.filter((row) =>
-        active === "sent"
-          ? row.summary?.sent_at != null
-          : active === "opened"
-            ? row.summary?.opened_at != null || (row.summary?.view_count ?? 0) > 0
-            : active === "silent"
-              ? row.summary?.sent_at != null &&
-                (row.summary.opened_at != null || (row.summary.view_count ?? 0) > 0) &&
-                row.summary.response_state === "none"
-              : row.summary?.sent_at == null,
-      )
-    : allRows;
+  const rows = active ? allRows.filter((row) => matchesStatus(row, active)) : allRows;
 
   const sent = allRows.filter((row) => row.summary?.sent_at).length;
+  const saveTheDatesSent = allRows.filter((row) => row.summary?.std_sent_at).length;
+  const cantCome = allRows.filter((row) => hasUnable(row.summary)).length;
   const complete = allRows.filter((row) => row.summary?.response_state === "complete").length;
 
   return (
@@ -72,7 +87,17 @@ export default async function InvitationsPage({
         <h1 className="font-serif text-2xl">Invitations</h1>
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-muted">
-            {sent} sent · {complete} fully answered · {allRows.length} households
+            {saveTheDatesSent} save the dates sent · {sent} invites sent · {complete} fully answered
+            {cantCome > 0 ? (
+              <>
+                {" "}
+                ·{" "}
+                <Link href="/invitations?status=unable" className="underline">
+                  {cantCome} can&rsquo;t come
+                </Link>
+              </>
+            ) : null}{" "}
+            · {allRows.length} households
           </span>
           <Link href="/invitations/print/stationery" className="btn" prefetch={false}>
             Print invitations
@@ -107,7 +132,10 @@ export default async function InvitationsPage({
         <strong className="font-medium">save the date</strong> ends in{" "}
         <code className="text-xs">/save-the-date</code> — names, date and photos, nothing to answer.
         The <strong className="font-medium">invitation</strong> is the household&rsquo;s full page
-        with the RSVP. Each has its own column below.{" "}
+        with the RSVP. Each has its own column below, and its own tick box — tick{" "}
+        <strong className="font-medium">Save the Date Sent</strong> and{" "}
+        <strong className="font-medium">Invite Sent</strong> as you send them. Copying a link
+        doesn&rsquo;t tick anything.{" "}
         <Link href="/invitations/save-the-date" className="underline">
           Design the save the date →
         </Link>
@@ -127,6 +155,7 @@ export default async function InvitationsPage({
             ? formatDate(wedding.wedding_date, wedding.timezone)
             : "date to be confirmed"
         }
+        timezone={wedding.timezone}
         saveTheDate={{
           weddingSlug: wedding.slug,
           dateLabel: saveTheDateWords.dateLabel,

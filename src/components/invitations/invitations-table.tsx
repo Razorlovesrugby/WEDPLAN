@@ -9,8 +9,10 @@ import {
   sendInvitation,
   setRemindersMuted,
 } from "@/server/actions/invitations";
+import { setInvitationSent, setSaveTheDateSent } from "@/server/actions/invites";
 import { whatsappMessage } from "@/lib/email/templates-client";
-import { formatRelative } from "@/lib/format";
+import { formatDate, formatRelative } from "@/lib/format";
+import { isAllUnable, sendAnywayMessage, unableChip } from "@/lib/unable-to-attend";
 import type { InvitationListItem } from "@/server/queries/invitations";
 import { SaveTheDateActions, type SaveTheDateWords } from "./save-the-date-actions";
 import type { EventRow } from "@/lib/types/database";
@@ -20,12 +22,15 @@ export function InvitationsTable({
   events,
   weddingName,
   dateLabel,
+  timezone,
   saveTheDate,
 }: {
   rows: InvitationListItem[];
   events: EventRow[];
   weddingName: string;
   dateLabel: string;
+  /** The wedding's own, for the date beside a tick box. */
+  timezone: string;
   saveTheDate: SaveTheDateWords;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -34,6 +39,30 @@ export function InvitationsTable({
   const [saveTheDateLinks, setSaveTheDateLinks] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // A tick shows at once and is dropped when the server's answer lands, so the
+  // row's own data is the truth again (and a failed write snaps back).
+  const [ticks, setTicks] = useState<{
+    std: Record<string, boolean>;
+    invite: Record<string, boolean>;
+  }>({ std: {}, invite: {} });
+
+  function tick(
+    kind: "std" | "invite",
+    householdId: string,
+    checked: boolean,
+    write: (householdId: string, sent: boolean) => Promise<{ ok: boolean; error?: string }>,
+  ) {
+    setTicks((prev) => ({ ...prev, [kind]: { ...prev[kind], [householdId]: checked } }));
+    startTransition(async () => {
+      const result = await write(householdId, checked);
+      if (!result.ok) setMessage(result.error ?? "Couldn't save that tick");
+      setTicks((prev) => {
+        const next = { ...prev[kind] };
+        delete next[householdId];
+        return { ...prev, [kind]: next };
+      });
+    });
+  }
 
   function toggle(set: Set<string>, id: string, update: (next: Set<string>) => void) {
     const next = new Set(set);
@@ -52,6 +81,13 @@ export function InvitationsTable({
   }
 
   const uninvited = rows.filter((row) => !row.invitationId);
+  // A household whose every guest has said they can't come is left out of
+  // "select all" (spec 29 §4.5). It is still in the table and can still be
+  // ticked by hand — the guard is on the sweep, not on the planner.
+  const sweepable = uninvited.filter(
+    (row) => !isAllUnable(row.summary?.guest_total ?? null, row.unableGuests.length),
+  );
+  const leftOut = uninvited.length - sweepable.length;
 
   return (
     <div className="space-y-4">
@@ -85,7 +121,18 @@ export function InvitationsTable({
             type="button"
             className="btn-primary"
             disabled={pending || selected.size === 0 || chosenEvents.size === 0}
-            onClick={() =>
+            onClick={() => {
+              // Anyone in the selection who has said they can't come: name
+              // them and ask, rather than quietly creating their invitation.
+              const flagged = rows
+                .filter((row) => selected.has(row.household.id))
+                .flatMap((row) => row.unableGuests.map((guest) => guest.name));
+              if (
+                flagged.length > 0 &&
+                !confirm(sendAnywayMessage(flagged, "create their invitations"))
+              ) {
+                return;
+              }
               startTransition(async () => {
                 const result = await createInvitations([...selected], [...chosenEvents]);
                 setMessage(
@@ -94,18 +141,24 @@ export function InvitationsTable({
                     : result.error,
                 );
                 if (result.ok) setSelected(new Set());
-              })
-            }
+              });
+            }}
           >
             Create for {selected.size} selected
           </button>
           <button
             type="button"
             className="btn"
-            onClick={() => setSelected(new Set(uninvited.map((r) => r.household.id)))}
+            onClick={() => setSelected(new Set(sweepable.map((r) => r.household.id)))}
           >
-            Select all {uninvited.length} without one
+            Select all {sweepable.length} without one
           </button>
+          {leftOut > 0 ? (
+            <span className="text-xs text-muted">
+              {leftOut} left out — everyone in {leftOut === 1 ? "that household" : "those households"}{" "}
+              can&rsquo;t come.
+            </span>
+          ) : null}
         </div>
       </section>
 
@@ -152,6 +205,14 @@ export function InvitationsTable({
                   </td>
                   <td className="px-3 py-2 tabular-nums text-muted">{row.household.seat_count}</td>
                   <td className="border-l border-line bg-paper px-3 py-2 align-top">
+                    <Tick
+                      label="Save the Date Sent"
+                      checked={ticks.std[id] ?? Boolean(row.summary?.std_sent_at)}
+                      at={row.summary?.std_sent_at ?? new Date().toISOString()}
+                      timezone={timezone}
+                      onChange={(checked) => tick("std", id, checked, setSaveTheDateSent)}
+                    />
+                    <UnableChip row={row} />
                     <SaveTheDateActions
                       householdName={row.household.display_name}
                       address={{ slug: row.household.slug, suffix: row.household.slug_suffix }}
@@ -165,8 +226,18 @@ export function InvitationsTable({
                       }}
                     />
                   </td>
-                  <td className="border-l border-line px-3 py-2 text-muted">
-                    {row.summary?.sent_at ? formatRelative(row.summary.sent_at) : "—"}
+                  <td className="border-l border-line px-3 py-2 align-top">
+                    {row.invitationId ? (
+                      <Tick
+                        label="Invite Sent"
+                        checked={ticks.invite[id] ?? Boolean(row.summary?.sent_at)}
+                        at={row.summary?.sent_at ?? new Date().toISOString()}
+                        timezone={timezone}
+                        onChange={(checked) => tick("invite", id, checked, setInvitationSent)}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted">No invitation yet</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-muted">
                     {/* Every open, not just the first (spec 22 §9): "opened
@@ -211,7 +282,13 @@ export function InvitationsTable({
                           disabled={pending}
                           onClick={() =>
                             startTransition(async () => {
-                              const result = await sendInvitation(row.invitationId!);
+                              // Anyone here who has said they can't come: ask first. The
+                              // server refuses an all-declined household without this.
+                              const flagged = row.unableGuests.map((guest) => guest.name);
+                              if (flagged.length > 0 && !confirm(sendAnywayMessage(flagged))) return;
+                              const result = await sendInvitation(row.invitationId!, {
+                                sendAnyway: flagged.length > 0,
+                              });
                               setMessage(
                                 result.ok
                                   ? result.data.sentTo.length > 0
@@ -329,5 +406,61 @@ export function InvitationsTable({
         </table>
       </div>
     </div>
+  );
+}
+
+/**
+ * A checkbox that records something the planner did by hand — "I sent it".
+ * The date beside it is when it was ticked, in the wedding's timezone.
+ */
+function Tick({
+  label,
+  checked,
+  at,
+  timezone,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  at: string;
+  timezone: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>{label}</span>
+      {checked ? (
+        <span className="text-muted" title={formatRelative(at)}>
+          · {formatDate(at, timezone, { day: "numeric", month: "short" })}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+/**
+ * "Can't attend: Ana and Ben", or "All can't attend". Rendered under the save
+ * the date tick because that is where it was said. Nothing at all when nobody
+ * has — an empty badge on every row would train the eye to ignore it.
+ */
+function UnableChip({ row }: { row: InvitationListItem }) {
+  const chip = unableChip(
+    row.summary?.guest_total ?? null,
+    row.unableGuests.map((guest) => guest.name),
+  );
+  if (!chip) return null;
+  const detail = row.unableGuests
+    .map((guest) => `${guest.name} (${guest.via === "planner" ? "you recorded it" : "told us themselves"})`)
+    .join(", ");
+  return (
+    <p
+      title={detail}
+      className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-xs ${
+        chip.all ? "border-tierB/50 bg-tierB/15" : "border-line bg-line/40"
+      }`}
+    >
+      {chip.label}
+    </p>
   );
 }

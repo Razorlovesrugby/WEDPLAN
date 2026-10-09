@@ -9,6 +9,7 @@ import { Monogram } from "@/components/site/monogram";
 import { FloralRule } from "@/components/site/rule";
 import { text } from "@/lib/site/sections";
 import { formatDate } from "@/lib/format";
+import { isAllUnable } from "@/lib/unable-to-attend";
 
 export const metadata = { title: "Print invitations" };
 
@@ -36,14 +37,19 @@ export const metadata = { title: "Print invitations" };
  */
 export const dynamic = "force-dynamic";
 
-export default async function PrintStationeryPage() {
+export default async function PrintStationeryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ include?: string }>;
+}) {
+  const { include } = await searchParams;
   const wedding = await requireWedding();
   const supabase = await createClient();
 
-  const [{ data, error }, { data: blocks }] = await Promise.all([
+  const [{ data, error }, { data: blocks }, { data: counts }] = await Promise.all([
     supabase
       .from("invitations")
-      .select("id, token_encrypted, households(display_name, rank, slug, slug_suffix)")
+      .select("id, household_id, token_encrypted, households(display_name, rank, slug, slug_suffix)")
       .eq("wedding_id", wedding.id)
       .is("deleted_at", null),
     supabase
@@ -51,9 +57,28 @@ export default async function PrintStationeryPage() {
       .select("block_key, payload")
       .eq("wedding_id", wedding.id)
       .in("block_key", ["theme", "hero"]),
+    supabase
+      .from("v_household_rsvp")
+      .select("household_id, guest_total, unable_count")
+      .eq("wedding_id", wedding.id),
   ]);
 
   if (error) throw new Error(`Could not load invitations: ${error.message}`);
+
+  // A household whose every guest has told us they can't come is left off the
+  // sheet by default (spec 29 §4.5) — they were promised no formal invitation.
+  // Still one click away, and counted out loud: silently printing fewer cards
+  // than the planner expects is the failure `loadTargets` already refuses.
+  const declinedHouseholds = new Set(
+    (counts ?? [])
+      .filter((row) => isAllUnable(row.guest_total, row.unable_count))
+      .map((row) => row.household_id),
+  );
+  const includeDeclined = include === "declined";
+  const printable = includeDeclined
+    ? (data ?? [])
+    : (data ?? []).filter((invitation) => !declinedHouseholds.has(invitation.household_id));
+  const leftOut = (data ?? []).length - printable.length;
 
   const byKey = new Map((blocks ?? []).map((row) => [row.block_key, row.payload]));
   const theme = resolveTheme(byKey.get("theme") ?? null);
@@ -66,7 +91,7 @@ export default async function PrintStationeryPage() {
   const location = text(hero, "location");
 
   const cards = await Promise.all(
-    (data ?? []).map(async (invitation) => {
+    printable.map(async (invitation) => {
       // As on the QR sheet: the address is what is printed, the token is what
       // makes the form behind it work, and both have to be there.
       const token = decryptToken(invitation.token_encrypted);
@@ -110,6 +135,27 @@ export default async function PrintStationeryPage() {
           </Link>
         </div>
       </div>
+
+      {leftOut > 0 || includeDeclined ? (
+        <p className="no-print card p-3 text-sm">
+          {includeDeclined ? (
+            <>
+              Including households where everyone has said they can&rsquo;t come.{" "}
+              <Link href="/invitations/print/stationery" className="underline">
+                Leave them out
+              </Link>
+            </>
+          ) : (
+            <>
+              {leftOut} {leftOut === 1 ? "household is" : "households are"} left off because
+              everyone in {leftOut === 1 ? "it has" : "them have"} said they can&rsquo;t come.{" "}
+              <Link href="/invitations/print/stationery?include=declined" className="underline">
+                Include {leftOut === 1 ? "it" : "them"}
+              </Link>
+            </>
+          )}
+        </p>
+      ) : null}
 
       {unrecoverable.length > 0 ? (
         <p role="alert" className="no-print card border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

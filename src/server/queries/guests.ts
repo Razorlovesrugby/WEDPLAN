@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { GuestFilters } from "@/lib/filters";
+import { isExcludedFromCounts } from "@/lib/unable-to-attend";
 import type { GuestRow, HouseholdView, RsvpStatus } from "@/lib/types/database";
 
 export type GuestListItem = GuestRow & {
@@ -99,6 +100,10 @@ function matches(guest: GuestListItem, filters: GuestFilters): boolean {
       : guest.rsvps;
 
     if (filters.rsvp === "pending") {
+      // Somebody who told us they can't come is not "haven't answered" — the
+      // same rule the dashboard's Outstanding tile now follows (spec 29 §4.6),
+      // so the number and the list behind it agree.
+      if (isExcludedFromCounts(guest)) return false;
       // Pending means "no answer yet", which includes a guest who has no rsvp
       // row at all — an invitation that has not been sent for this event.
       if (relevant.length > 0 && relevant.every((r) => r.status !== "pending")) return false;
@@ -193,4 +198,27 @@ export const listHouseholds = cache(async (weddingId: string): Promise<Household
 
   if (error) throw new Error(`Could not load households: ${error.message}`);
   return (data ?? []) as HouseholdView[];
+});
+
+/**
+ * How many guests the headcount is currently leaving out because they told us
+ * they can't come (spec 29 §4.6) — so the figures that moved can say why.
+ *
+ * Counted with `isExcludedFromCounts`, the same rule the views apply, over the
+ * flagged guests only: an unflagged guest is never excluded, so there is no
+ * reason to load the whole list for this.
+ */
+export const countGuestsLeftOut = cache(async (weddingId: string): Promise<number> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("guests")
+    .select("unable_to_attend_at, rsvps(status)")
+    .eq("wedding_id", weddingId)
+    .is("deleted_at", null)
+    .not("unable_to_attend_at", "is", null);
+  // A note beside a figure must never take the figure's page down with it.
+  if (error) return 0;
+  return (data ?? []).filter((guest) =>
+    isExcludedFromCounts({ unable_to_attend_at: guest.unable_to_attend_at, rsvps: guest.rsvps ?? [] }),
+  ).length;
 });

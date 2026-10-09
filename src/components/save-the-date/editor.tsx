@@ -7,6 +7,7 @@ import { saveSaveTheDate } from "@/server/actions/save-the-date";
 import { uploadSitePhoto } from "@/components/site/editor/upload-photo";
 import {
   DEFAULT_SAVE_THE_DATE_MESSAGE,
+  DEFAULT_UNABLE_TEXT,
   SAVE_THE_DATE_LAYOUTS,
   SAVE_THE_DATE_LAYOUT_LABELS,
   SAVE_THE_DATE_PHOTO_LIMIT,
@@ -26,6 +27,7 @@ import {
   type SiteTheme,
 } from "@/lib/theme/presets";
 import { SaveTheDateCard, type SaveTheDateCardPhoto } from "./card";
+import { UnableToAttend } from "./unable-to-attend";
 
 /**
  * The save-the-date designer (`/invitations/save-the-date`).
@@ -52,6 +54,8 @@ type Draft = {
   showGreeting: boolean;
   showCountdown: boolean;
   showCalendar: boolean;
+  showUnable: boolean;
+  unableText: string;
 };
 
 function toDraft(content: SaveTheDateContent): Draft {
@@ -67,6 +71,8 @@ function toDraft(content: SaveTheDateContent): Draft {
     showGreeting: content.showGreeting,
     showCountdown: content.showCountdown,
     showCalendar: content.showCalendar,
+    showUnable: content.showUnable,
+    unableText: content.unableText,
   };
 }
 
@@ -84,6 +90,8 @@ function toContent(draft: Draft): SaveTheDateContent {
     showGreeting: draft.showGreeting,
     showCountdown: draft.showCountdown,
     showCalendar: draft.showCalendar,
+    showUnable: draft.showUnable,
+    unableText: blank(draft.unableText) ?? DEFAULT_UNABLE_TEXT,
   };
 }
 
@@ -294,6 +302,28 @@ export function SaveTheDateEditor({
             onChange={(value) => set("showCountdown", value)}
           />
         </Panel>
+
+        <Panel title="Can’t come?">
+          <Toggle
+            label="Let guests tell us they can’t come"
+            hint="A quiet button under the card, for anyone who already knows. It isn’t an RSVP and nobody undecided is asked to touch it — you’ll see who used it on Invitations."
+            checked={draft.showUnable}
+            onChange={(value) => set("showUnable", value)}
+          />
+          {draft.showUnable ? (
+            <div className="mt-3">
+              <Field
+                label="Wording"
+                value={draft.unableText}
+                placeholder={DEFAULT_UNABLE_TEXT}
+                hint="The button itself always reads “I’m unable to attend”."
+                max={LIMITS.unableText}
+                multiline
+                onChange={(value) => set("unableText", value)}
+              />
+            </div>
+          ) : null}
+        </Panel>
       </div>
 
       {/* ------------------------------------------------------------- preview */}
@@ -417,6 +447,24 @@ function PreviewCard({
       // Buttons that look real and go nowhere: a planner testing the design
       // should not be downloading calendar files.
       calendar={google ? { icsHref: "#", googleHref: "#" } : null}
+      footer={
+        draft.showUnable ? (
+          // `key` so rewording resets it to its first state; `preview` so
+          // pressing it here records nothing about anybody.
+          <UnableToAttend
+            key={draft.unableText}
+            weddingSlug={wedding.slug}
+            address="preview"
+            text={draft.unableText.trim() || DEFAULT_UNABLE_TEXT}
+            candidates={[
+              { id: "preview-1", name: "Alex" },
+              { id: "preview-2", name: "Sam" },
+            ]}
+            declined={[]}
+            preview
+          />
+        ) : null
+      }
     />
   );
 }
