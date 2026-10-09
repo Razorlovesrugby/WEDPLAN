@@ -7,6 +7,8 @@ import {
   orderByIds,
   pickSaveTheDatePhotos,
   resolveSaveTheDate,
+  DEFAULT_UNABLE_TEXT,
+  UNABLE_BUTTON_LABEL,
   saveTheDateDisplay,
   saveTheDatePath,
   saveTheDatePayload,
@@ -170,5 +172,31 @@ describe("calendarEventTitle", () => {
   it("says it is a wedding, unless the couple already did", () => {
     expect(calendarEventTitle("Ray & Olivia")).toBe("Ray & Olivia's wedding");
     expect(calendarEventTitle("The Okafor Wedding")).toBe("The Okafor Wedding");
+  });
+});
+
+describe("the can't-come block (spec 29)", () => {
+  it("is on by default, with the planner's wording", () => {
+    expect(DEFAULT_SAVE_THE_DATE.showUnable).toBe(true);
+    expect(resolveSaveTheDate(null).unableText).toBe(DEFAULT_UNABLE_TEXT);
+    // A save-the-date designed before this existed has neither key.
+    expect(resolveSaveTheDate({ eyebrow: "Save the date" }).showUnable).toBe(true);
+  });
+
+  it("never says RSVP, reply, confirm or required — it is not asking for one", () => {
+    expect(DEFAULT_UNABLE_TEXT).not.toMatch(/rsvp|reply|confirm|required|respond/i);
+    expect(UNABLE_BUTTON_LABEL).not.toMatch(/rsvp|reply|confirm|required|respond/i);
+    expect(UNABLE_BUTTON_LABEL).toBe("I’m unable to attend");
+  });
+
+  it("round-trips a switched-off block and reworded text", () => {
+    const content = { ...DEFAULT_SAVE_THE_DATE, showUnable: false, unableText: "Can't make it? Tell us." };
+    expect(resolveSaveTheDate(saveTheDatePayload(content))).toEqual(content);
+  });
+
+  it("falls back on blank or wrongly-typed values rather than breaking the page", () => {
+    const resolved = resolveSaveTheDate({ show_unable: "no", unable_text: "   " });
+    expect(resolved.showUnable).toBe(true);
+    expect(resolved.unableText).toBe(DEFAULT_UNABLE_TEXT);
   });
 });
