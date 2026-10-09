@@ -15,6 +15,7 @@ import { generateSuffix } from "@/lib/site/household-slug";
 import { invitationEmail } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
+import { isAllUnable } from "@/lib/unable-to-attend";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -162,8 +163,19 @@ export async function revealInvitationLink(
   });
 }
 
+/**
+ * Email one household its invitation.
+ *
+ * **A household where every guest has said they can't come is not sent one
+ * unless the caller says so** (`sendAnyway`, spec 29 §4.5). The planner's
+ * screen confirms first; this is the server refusing to rely on that, so a
+ * second tab, a stale page or a double click cannot mail an invitation to
+ * somebody who was promised they wouldn't get one. A household where only
+ * some have declined is sent as normal — the others are coming.
+ */
 export async function sendInvitation(
   invitationId: string,
+  options: { sendAnyway?: boolean } = {},
 ): Promise<ActionResult<{ sentTo: string[]; skipped: boolean }>> {
   const wedding = await requireWedding();
   const supabase = await createClient();
@@ -178,6 +190,20 @@ export async function sendInvitation(
 
   if (error) return fail(error.message);
   if (!invitation) return fail("That invitation no longer exists");
+
+  if (!options.sendAnyway) {
+    const { data: counts } = await supabase
+      .from("v_household_rsvp")
+      .select("guest_total, unable_count")
+      .eq("wedding_id", wedding.id)
+      .eq("household_id", invitation.household_id)
+      .maybeSingle();
+    if (isAllUnable(counts?.guest_total ?? null, counts?.unable_count ?? null)) {
+      return fail(
+        "Everyone in this household has told us they can't come. Send it anyway if you mean to.",
+      );
+    }
+  }
 
   // The link itself no longer needs the token — the address is stored in the
   // clear — but a token that will not decrypt means the RSVP form on the other

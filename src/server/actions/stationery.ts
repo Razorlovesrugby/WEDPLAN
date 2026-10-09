@@ -136,6 +136,8 @@ async function sendToTargets(
   kind: "save_the_date" | "update",
   build: (target: Target) => { subject: string; text: string; html: string },
   dedupeSuffix: string,
+  /** Called once for each household an email actually reached. */
+  onReached?: (householdId: string) => Promise<void>,
 ): Promise<SendSummary> {
   // Which households this send has already reached, so the next batch starts
   // where the last one stopped.
@@ -220,7 +222,10 @@ async function sendToTargets(
       }
     }
 
-    if (reachedOne) summary.households += 1;
+    if (reachedOne) {
+      summary.households += 1;
+      await onReached?.(target.householdId);
+    }
   }
 
   return summary;
@@ -289,6 +294,18 @@ export async function sendSaveTheDates(
     // Scoped to the date, so moving the wedding lets a corrected save-the-date
     // go out rather than being swallowed as a duplicate of the old one.
     wedding.wedding_date,
+    // The same "Save the Date Sent" tick the planner sets by hand on
+    // /invitations (spec 29 §3.3), so the box and the email log never
+    // disagree. Only the first send is kept: a second batch or a resend must
+    // not move the date.
+    async (householdId) => {
+      await supabase
+        .from("households")
+        .update({ save_the_date_sent_at: new Date().toISOString() })
+        .eq("wedding_id", wedding.id)
+        .eq("id", householdId)
+        .is("save_the_date_sent_at", null);
+    },
   );
 
   revalidatePath("/invitations");

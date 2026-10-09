@@ -382,6 +382,109 @@ export async function markInvitationSent(
 }
 
 // ---------------------------------------------------------------------------
+// The two tick boxes on /invitations (spec 29 Part A)
+// ---------------------------------------------------------------------------
+/**
+ * "Invite Sent" as a checkbox: ticking records that the invitation went out
+ * (however the planner sent it), un-ticking takes it back.
+ *
+ * It is the same `invitations.sent_at` that `markInvitationSent` and the email
+ * send write — one truth, so the dashboard, the filters and the reminder cron
+ * never disagree with the tick (spec 29 Q4). Two consequences worth knowing:
+ *
+ *   * Ticking arms the chase cron for this household, exactly as marking it
+ *     sent from the grid already does. Un-ticking disarms it.
+ *   * The invitation's `channel` is left as it was. The planner said "sent",
+ *     not "sent by what", and guessing would overwrite a real answer.
+ *
+ * Already ticked stays ticked with its original time (the first send is the
+ * useful date, and rewriting it would reset the chase clock). Un-ticking leaves
+ * the `message_log` history alone: what was logged was logged.
+ */
+export async function setInvitationSent(
+  householdId: string,
+  sent: boolean,
+): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+
+  const { data: invitation, error } = await supabase
+    .from("invitations")
+    .select("id, sent_at, channel")
+    .eq("wedding_id", wedding.id)
+    .eq("household_id", householdId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!invitation) return fail("This household has no invitation yet");
+
+  if (sent) {
+    if (invitation.sent_at) return ok(undefined);
+    const stamp = new Date().toISOString();
+    const { error: writeError } = await supabase
+      .from("invitations")
+      .update({ sent_at: stamp })
+      .eq("id", invitation.id)
+      .eq("wedding_id", wedding.id);
+    if (writeError) return fail(writeError.message);
+
+    // Not the one-per-invitation key `markInvitationSent` uses: ticking,
+    // un-ticking and ticking again is a real sequence, and each tick is a
+    // real "I sent it".
+    await supabase.from("message_log").insert({
+      wedding_id: wedding.id,
+      household_id: householdId,
+      kind: "invitation",
+      channel: invitation.channel,
+      to_address: invitation.channel,
+      dedupe_key: `invitation:tick:${invitation.id}:${stamp}`,
+      status: "sent",
+    });
+  } else {
+    if (!invitation.sent_at) return ok(undefined);
+    const { error: writeError } = await supabase
+      .from("invitations")
+      .update({ sent_at: null })
+      .eq("id", invitation.id)
+      .eq("wedding_id", wedding.id);
+    if (writeError) return fail(writeError.message);
+  }
+
+  revalidateInvites(householdId);
+  return ok(undefined);
+}
+
+/**
+ * "Save the Date Sent" as a checkbox. Household-level
+ * (`households.save_the_date_sent_at`) so it works before any invitation
+ * exists — a save-the-date predates one.
+ *
+ * Copying or opening the link never calls this: "sent" is the planner's word.
+ * The emailed save-the-date stamps the same column when it goes out, so the
+ * tick and the email log cannot contradict each other.
+ */
+export async function setSaveTheDateSent(
+  householdId: string,
+  sent: boolean,
+): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+
+  const query = supabase
+    .from("households")
+    .update({ save_the_date_sent_at: sent ? new Date().toISOString() : null })
+    .eq("wedding_id", wedding.id)
+    .eq("id", householdId)
+    .is("deleted_at", null);
+  // Ticking an already-ticked household keeps the first time.
+  const { error } = await (sent ? query.is("save_the_date_sent_at", null) : query);
+  if (error) return fail(error.message);
+
+  revalidateInvites(householdId);
+  return ok(undefined);
+}
+
+// ---------------------------------------------------------------------------
 // Answers, from the planner's side
 // ---------------------------------------------------------------------------
 /**
