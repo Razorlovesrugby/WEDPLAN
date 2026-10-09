@@ -1,9 +1,23 @@
 # Feature spec: Tracking what's been sent, and "I already know I can't come"
 
-**Status: proposed, 2026-10-09. Nothing is built, and nothing should be until
-the planner says to build it** (`docs/specs/README.md`, `CLAUDE.md`). §10 lists
-the decisions only the planner can make; each has a recommendation, none is
-answered.
+**Status: proposed and fully answered, 2026-10-09. Nothing is built, and
+nothing should be until the planner says to build it** (`docs/specs/README.md`,
+`CLAUDE.md`). Answering the questions settled the content; it is not
+authorization to write code.
+
+## Answered — 2026-10-09
+
+| Q | Answer | What it changes |
+| --- | --- | --- |
+| 1 | **Per person.** | §4.2 as written: the pre-ticked names step for multi-guest households. |
+| 2 | **Flag and guard.** | §4.5 as written. |
+| 3 | **Yes — flagged guests drop out of catering and seat counts, in this spec.** *Against the recommendation.* | New **§4.6**; the build grows by a step (§8.6) and the test plan by two assertions. This is the one answer that widens scope. |
+| 4 | **Reuse `invitations.sent_at`.** | §3.1 as written; the box is disabled until an invitation exists. |
+| 5 | **Un-tick allowed; it clears `sent_at`.** | §3.1 gains `clearInvitationSent`; ticking leaves `channel` as it was. |
+| 6 | **Now only.** | §3.2 as written. |
+| 7 | **No notification.** | §11 stands. |
+| 8 | **Undo any time.** | §4.2 / §4.3.5 as written. |
+| 9 | **On by default, wording editable in the designer.** | §6 as written. |
 
 **Depends on:** spec 14 §12.1 (the save-the-date), spec 21 (household
 addresses), spec 22 (invitations, `markInvitationSent`), `0031` (save-the-date
@@ -198,6 +212,33 @@ A partly-flagged household (one of two can't come) is **still invited** — the
 others are coming. The flagged person is simply marked on the page that invites
 them, so the planner can choose to leave their name off the card.
 
+### 4.6 Headcount — flagged guests stop counting (Q3, added by the answer)
+
+The planner chose to include this. The shape that keeps the earlier decisions
+intact:
+
+- **The guest stays invited.** `v_guest_event_invites.invited` is *not* changed
+  — spec 22's rule that invited-ness is computed in one place, and spec 14's
+  "a guest cut after invitations went out has to remain reconstructable", both
+  hold. The grid keeps showing them, with the §4.4 marker.
+- **What changes is who is *counted*.** The view gains an appended
+  `unable_to_attend` boolean (`CREATE OR REPLACE VIEW` may only append), and the
+  counting consumers filter on `invited and not unable_to_attend`.
+- **An RSVP of Yes outranks the flag** (§4.3.5): a flagged guest who has since
+  answered Yes counts again, so the number never contradicts the answer.
+- **The consumers, as far as this spec has read them:** `budget_guest_population`
+  (spec 6, rekeyed onto the invites view by spec 22), `v_wedding_stats`, the
+  catering CSV (spec 22 found its own copy of the invited-ness rule in
+  TypeScript), and the per-head figures on `/budget` and `/guests/rank`. **The
+  build must read each one before touching it** — this list is not verified, and
+  a consumer that re-derives invited-ness itself is exactly the bug spec 22
+  corrected once.
+- **Not touched:** `v_household_rsvp`'s `rsvp_*` counts and `response_state`.
+  Those are RSVP answers; this is not one (§4.1).
+- The planner should expect budget figures to move when a household declines.
+  That is the intent, and it is worth one line in the UI where per-head costs
+  are shown.
+
 ## 5. Schema — `0034_save_the_date_tracking.sql` (proposed, additive)
 
 ```sql
@@ -215,7 +256,9 @@ alter table public.guests
 and `CREATE OR REPLACE VIEW public.v_household_rsvp`, **appending** (a replaced
 view may only append, `0031`'s own note): `std_sent_at`
 (`h.save_the_date_sent_at`), `guest_total` and `unable_count` (active guests,
-and those flagged). Both existing columns on the view keep their meaning.
+and those flagged). Both existing columns on the view keep their meaning. And,
+for §4.6, `v_guest_event_invites` gains an appended `unable_to_attend` column
+(the guest's flag), with the headcount consumers recreated to filter on it.
 
 - No new table, so no new RLS surface; `wedding_id` is already on both tables.
 - `guests` must be checked for any view that lists its columns explicitly.
@@ -254,7 +297,12 @@ or a new `…-reply.ts` (guest-side decline/undo); `src/server/actions/invites.t
 5. Part B planner side: chip, filter, household toggle, then the bulk-action
    guards in §4.5, then the `/guests` marker.
 
+6. Headcount (§4.6): read every consumer of `v_guest_event_invites`, append the
+   column, recreate the counting views, fix the TypeScript copy in the catering
+   CSV, and add the one-line note by the per-head figures.
+
 Steps 3 and 4–5 are independent; Part A is the smaller and can ship alone.
+Step 6 needs 1 and 4–5 and is the riskiest, because it moves budget numbers.
 
 ## 9. Test plan
 
@@ -269,14 +317,22 @@ Beyond those, specific assertions:
   `rsvp_answered` are identical before and after** (the guard on §4.1);
 - a plain GET of the page writes nothing;
 - an all-flagged household is skipped by "Select all without one", the email
-  sender, stationery and the cron — and a partly-flagged one is not.
+  sender, stationery and the cron — and a partly-flagged one is not;
+- **headcount:** flagging a guest lowers `budget_guest_population` and the
+  catering CSV by exactly that guest and leaves the grid's invited cell
+  unchanged; a flagged guest with a Yes RSVP counts again; no other guest's
+  number moves (spec 22's "a bulk change cannot silently re-invite" in
+  reverse).
 
 Then, honestly: this repo has never run against the live project and the
 save-the-date page has only ever been looked at on a throwaway harness. The
 guest block — a public write on a page forwarded around group chats — is
 exactly the thing that needs a real phone before it is trusted.
 
-## 10. Open questions — all unanswered
+## 10. Questions — all answered 2026-10-09 (see the table at the top)
+
+Kept as asked, with the recommendation each carried. **Q3 was answered against
+its recommendation.**
 
 | # | Question | Recommendation |
 | --- | --- | --- |
