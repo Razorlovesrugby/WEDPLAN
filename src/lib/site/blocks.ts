@@ -387,11 +387,11 @@ export const BLOCKS: Record<BlockType, BlockDef> = {
     type: "song_requests",
     label: "Song requests",
     family: "music",
-    blurb: "Guests suggest songs; you get a list to hand the DJ.",
+    blurb: "Guests suggest songs and vote them up the chart; you get a list to hand the DJ.",
     eyebrow: "The playlist",
     max: 1,
     styles: ["width", "background"],
-    heading: "Songs",
+    heading: "Request a song",
   },
   playlist: {
     type: "playlist",

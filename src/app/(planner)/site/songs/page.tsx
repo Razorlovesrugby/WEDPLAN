@@ -1,32 +1,20 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { SongList } from "@/components/site/editor/song-list";
-import type { SongRequestRow } from "@/lib/types/database";
+import { getPlannerSongs } from "@/server/queries/site-extras";
 
 export const metadata = { title: "Song requests" };
 
 /**
- * The list you hand the DJ (spec 23 §8).
+ * The list you hand the DJ (spec 23 §8, spec 31 §7).
  *
- * Planner-facing, deliberately: the form is open to anyone with the site
- * address, and an open form that publishes what it receives is a billboard.
- * Nothing a guest types is rendered back onto the public page — it arrives
- * here, and here is where it is approved, marked played, or thrown away.
+ * Ranked as guests see it, with who voted. Here is where a song is hidden,
+ * merged with its twin, given the couple's ♥, or marked played on the night —
+ * which is what puts "Now playing" on every guest's chart.
  */
 export default async function SongRequestsPage() {
   const wedding = await requireWedding();
-  const supabase = await createClient();
-
-  const { data } = await supabase
-    .from("song_requests")
-    .select("*, households(display_name)")
-    .eq("wedding_id", wedding.id)
-    .order("created_at", { ascending: false });
-
-  const rows = (data ?? []) as (SongRequestRow & {
-    households: { display_name: string } | null;
-  })[];
+  const rows = await getPlannerSongs(wedding.id);
 
   return (
     <div className="space-y-5">
@@ -36,7 +24,7 @@ export default async function SongRequestsPage() {
           <p className="mt-1 text-sm text-muted">
             {rows.length === 0
               ? "Nothing yet. Add the song requests block to your site and they arrive here."
-              : `${rows.length} ${rows.length === 1 ? "request" : "requests"}`}
+              : `${rows.length} ${rows.length === 1 ? "request" : "requests"}, ranked the way your guests see them. The do-not-play list lives on the Song requests block.`}
           </p>
         </div>
         <Link href="/site" className="btn">
@@ -44,18 +32,7 @@ export default async function SongRequestsPage() {
         </Link>
       </div>
 
-      <SongList
-        rows={rows.map((row) => ({
-          id: row.id,
-          title: row.title,
-          artist: row.artist,
-          status: row.status,
-          createdAt: row.created_at,
-          // A request from a household's own page is attributed automatically;
-          // one from the shared site carries whatever name was typed, or none.
-          askedBy: row.households?.display_name ?? row.asked_by,
-        }))}
-      />
+      <SongList rows={rows} timeZone={wedding.timezone} />
     </div>
   );
 }

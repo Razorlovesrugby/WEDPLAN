@@ -647,6 +647,14 @@ export type SongRequestRow = {
   artist: string | null;
   note: string | null;
   status: "new" | "approved" | "played" | "ignored";
+  /** Stamped by a trigger on the way into 'played', cleared on the way out (0035). */
+  played_at: string | null;
+  /** The couple's ♥ — a badge, never a rank (spec 31 §6). */
+  couples_pick: boolean;
+  /** iTunes trackId for a song picked from search; null when typed in. */
+  catalogue_id: string | null;
+  /** Apple's artwork address. Only ever served through /api/public/song-art. */
+  artwork_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1583,7 +1591,18 @@ export type Database = {
       site_revisions: Table<SiteRevisionRow, "id" | "published_at" | "published_by" | "note">;
       song_requests: Table<
         SongRequestRow,
-        "id" | Timestamps | "status" | "household_id" | "guest_id" | "asked_by" | "artist" | "note",
+        | "id"
+        | Timestamps
+        | "status"
+        | "household_id"
+        | "guest_id"
+        | "asked_by"
+        | "artist"
+        | "note"
+        | "played_at"
+        | "couples_pick"
+        | "catalogue_id"
+        | "artwork_url",
         SongRequestRelationships
       >;
       invitation_views: Table<InvitationViewRow, "id" | "viewed_at" | "source">;

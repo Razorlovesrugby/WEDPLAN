@@ -1317,3 +1317,37 @@
     aspect-ratio: 3 / 4;
   }
 }
+
+/* The song chart (spec 31 §4). A changed count lifts in; the live dot breathes.
+   Reduced motion gets the number and a still dot. */
+.song-live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background-color: rgb(var(--site-accent));
+  vertical-align: 0.08em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .song-tick {
+    display: inline-block;
+    animation: song-tick var(--dur-base) var(--ease-out);
+  }
+  .song-live-dot {
+    animation: song-live 2.4s ease-in-out infinite;
+  }
+}
+@keyframes song-tick {
+  from {
+    opacity: 0.2;
+    transform: translateY(0.35em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes song-live {
+  50% {
+    opacity: 0.35;
+  }
+}

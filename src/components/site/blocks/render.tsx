@@ -40,8 +40,8 @@ import { GuestUploader } from "../guest-uploader";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
 import { GiftFunds } from "../gift-funds";
-import { SongRequestForm } from "../song-requests";
-import { SongList } from "../song-list";
+import { SongSection } from "../song-section";
+import { doNotPlayFrom, refusalLine } from "@/lib/site/song-match";
 import { Guestbook } from "../guestbook";
 import { Attire } from "../attire";
 import { Arrivals } from "../arrivals";
@@ -710,20 +710,19 @@ export function SiteBlockView({
     case "song_requests":
       return (
         <Shell block={block} bgImage={bgImage} intro={null} mark={mark}>
-          <SongRequestForm
+          {/* Spec 25 §11 — approved requests, rendered back, because a form
+              nobody sees the result of is a suggestion box; spec 31 makes
+              them a live chart with a do-not-play list under it. */}
+          <SongSection
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             intro={intro ?? "Tell us what will get you dancing."}
             placeholders={songPlaceholders(payload)}
             preview={ctx.preview}
-          />
-          {/* Spec 25 §11 — approved requests, rendered back, because a form
-              nobody sees the result of is a suggestion box. */}
-          <SongList
-            weddingSlug={ctx.wedding.slug}
-            token={personal?.token ?? null}
-            songs={ctx.extras.songs}
-            preview={ctx.preview}
+            initialSongs={ctx.extras.songs}
+            bans={doNotPlayFrom(payload)}
+            refusal={refusalLine(payload)}
+            timeZone={ctx.wedding.timezone}
           />
         </Shell>
       );

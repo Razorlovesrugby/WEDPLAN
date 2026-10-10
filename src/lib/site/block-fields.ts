@@ -319,6 +319,21 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
         kind: "text",
         help: "Optional. The hint in the artist box; empty by default.",
       },
+      {
+        name: "do_not_play",
+        label: "Do-not-play list",
+        kind: "textarea",
+        rows: 5,
+        placeholder: "Wonderwall\nChicken Dance - Werner Thomas\nanything by Nickelback",
+        help: "One per line. A title bans it whoever sings it; \"Title - Artist\" bans only that version; \"anything by …\" bans an artist. Guests see this list, struck through.",
+      },
+      {
+        name: "do_not_play_line",
+        label: "What a guest is told",
+        kind: "text",
+        placeholder: "Nice try. That one's on the do-not-play list.",
+        help: "Shown when somebody asks for a banned song. Leave it empty for the one above.",
+      },
     ],
   },
   guestbook: {
