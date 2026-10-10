@@ -1,8 +1,25 @@
 # Feature spec: The music section — a live chart guests play with
 
-**Status: proposal (2026-10-10). Asked for as a spec — nothing is built.**
-Open questions are in §9; nothing beyond this file is touched until they are
-answered *and* the planner says to build.
+**Status: questions answered (2026-10-10) — nothing is built.** Asked for as
+a spec, then the open questions were put and answered in the same session.
+That is content for this spec, not a build authorization: nothing beyond this
+file is touched until the planner says to build.
+
+## Answered — 2026-10-10
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | **Check every ~15 s** (polling). | §4.1 A1 stands. |
+| 2 | **Slide into place**, with the 3 s hold. | §4.2 stands; reopens spec 28 §6.2's frozen order. |
+| 3 | **Unlimited votes, as now** — one per household per song. | §5's vote budget is **dropped**: no trigger, no "3 of 5 left". |
+| 4 | Asked "scale by guests", then on clarification: **unlimited, flat.** | Household size doesn't matter. No per-guest voting. |
+| 5 | **Do-not-play list, played on the night, couple's pick.** Duplicate catch was in regardless. | §6 items 1–4 in; **voting closes** (5) and **rounds** (6) out. |
+| 6 | **Counts only** for guests. | Who voted is shown on `/site/songs` only. |
+| 7 | **Block editor.** | Do-not-play list and refusal line go on the block payload. Couple's pick is a per-song toggle, set on `/site/songs` (it is a fact about a row, not a block setting). |
+| 8 | **Song search with album art — in this spec**, against the recommendation. | New §7a; §8's "not recommended" entry removed. |
+| 9 | Default heading **"Request a song"** (still editable per block). | New blocks only; existing blocks keep whatever heading they have. |
+| 8a | **Artwork only** — no 30-second previews. | No audio from Apple ever reaches a guest's browser. |
+| 8b | **Can't find it? Type it in.** | Search is the main path; today's title/artist fields remain as the fallback, shown without artwork. |
 
 **Depends on:** spec 23 (`song_requests`, the Song requests block), spec 25
 Part B (`song_votes`, the public list), spec 28 §6.2–6.3 and §7a.4 (the ▲ vote
@@ -48,17 +65,21 @@ A guest opens their invitation and scrolls to Music. They see:
 ```
   THE DANCE FLOOR CHART                       updated just now · 23 songs
   ┌──────────────────────────────────────────────────────────────────┐
-  │  1  ▲1  Mr Brightside · The Killers         🔥     ▲ 14  Voted   │
-  │  2  ▼1  September · Earth, Wind & Fire              ▲ 12  Vote   │
-  │  3  NEW Dancing in the Moonlight · Toploader        ▲  9  Vote   │
+  │  ♪ NOW PLAYING  [art] September · Earth, Wind & Fire             │
+  │  1  ▲1  [art] Mr Brightside · The Killers    🔥     ▲ 14  Voted   │
+  │  2  ▼1  [art] Valerie · Amy Winehouse   ♥ Couple's pick  ▲ 12  Vote│
+  │  3  NEW [art] Dancing in the Moonlight · Toploader   ▲  9  Vote   │
   ├──────────────────────────────────────────────────────────────────┤
-  │  4      Valerie · Amy Winehouse                     ▲  6  Vote   │
+  │  4      [art] Shout · The Isley Brothers             ▲  6  Vote   │
   │  …                                                               │
   └──────────────────────────────────────────────────────────────────┘
-  You have 3 of 5 votes left.
 
-  Suggest a song  [ Anything but Wonderwall      ] [ Artist ] [Add]
-  ↳ "Wonderwall" is on the couple's do-not-play list. Nice try.
+  Request a song  [ 🔍 Anything but Wonderwall                     ]
+                  [art] Wonderwall · Oasis
+                  ↳ "That one's on the do-not-play list. Nice try."
+                  Can't find it? Add it anyway
+
+  Do not play:  ~~Wonderwall~~  ~~Chicken Dance~~  ~~Cotton Eye Joe~~
 ```
 
 While they look, other households are voting; numbers tick and rows glide
@@ -111,6 +132,10 @@ proposed to keep that reason intact:
 
 ## 5. Part B — voting with some stakes
 
+> **Dropped (Q3, Q4).** The planner kept voting as it is: one vote per
+> household per song, no limit on songs, household size irrelevant. Nothing
+> in this section is built. Kept below as the record of what was offered.
+
 Today a household has unlimited votes (one per song). That makes voting
 cheap and the ranking flat — everyone ▲s everything they like.
 
@@ -140,7 +165,8 @@ do-not-play list (Part C) is the only "no".
 
 ## 6. Part C — things that make it fun
 
-Each is independent; §9 Q5 picks which.
+Each is independent. **Q5 chose 1, 3 and 4; 2 was in regardless. 5 and 6
+are out.**
 
 1. **The do-not-play list.** The couple write a list of banned songs on the
    block ("Wonderwall", "Chicken Dance", "anything by Nickelback"). It shows
@@ -163,11 +189,11 @@ Each is independent; §9 Q5 picks which.
    minutes. Guests who suggested it see "Your song was played." Needs one
    column, `song_requests.played_at timestamptz` — the wedding's own timezone
    for display, per the platform rule.
-5. **Voting closes, and the chart is revealed.** An optional close date on
+5. ~~**Voting closes, and the chart is revealed.**~~ *Not chosen.* An optional close date on
    the block (default: none). After it, pills disappear, the list freezes and
    the header reads "Final chart". Gives the DJ a fixed list and gives
    guests a moment.
-6. **A prompt per round** — the couple pose a question ("Help us pick the
+6. ~~**A prompt per round**~~ *Not chosen.* — the couple pose a question ("Help us pick the
    last song of the night") with their own shortlist of 3–5 songs, separate
    from the open chart. Fun, but a second voting surface; recommended
    **later**, not now.
@@ -179,9 +205,8 @@ Today: a flat list, newest first, with approve / played / ignore / delete.
 - **Sort by rank** (the same `rankSongs`) by default, with vote counts and
   which households voted ("Okonkwo, Patel + 4"). Planner-only — guests see
   counts, not names (§9 Q6).
-- **Do-not-play list, couple's picks, vote budget, close date** — edited here
-  and mirrored in the block inspector, or block only (§9 Q7 — recommend
-  block inspector, since every other block setting lives there).
+- **Couple's pick** — a ♥ toggle per row, capped at three. (The do-not-play
+  list and its refusal line are edited in the block inspector, Q7.)
 - **"Mark played" big-button mode** for the night: one tap per song, large
   targets, sorted by rank, played ones sink.
 - **Export for the DJ**: CSV and a print view (rank, title, artist, votes,
@@ -190,16 +215,81 @@ Today: a flat list, newest first, with approve / played / ignore / delete.
 - **Merge duplicates**: pick two rows, keep one; votes move across (a
   household that voted both keeps one).
 
+## 7a. Part E — song search with album art (Q8, Q8a, Q8b)
+
+Reopens spec 25 §11's "no catalogue search", on the condition that made it a
+cut: **the guest's browser never talks to a third party.** Spec 23 Q1's
+reason stands — the page URL *is* the household's credential, and a referrer
+or an image request would hand it, with the guest's IP, to someone else.
+
+### 7a.1 The guest's side
+
+- The song box becomes a search box (same placeholder, same joke). After
+  ~300 ms without typing and at least 2 characters, up to 6 results appear
+  under it: artwork, title, artist. Tap one to add it.
+- A result already on the list reads **"Already on the list — ▲ vote"**; a
+  result on the do-not-play list is shown struck through with the couple's
+  refusal line, and can't be tapped.
+- Under the results: **"Can't find it? Add it anyway"** opens today's title +
+  artist fields (Q8b). Those rows have no artwork; the chart shows a plain
+  ♪ tile in the theme's accent colour in its place.
+- **No audio** (Q8a). Nothing plays; there is no preview button.
+
+### 7a.2 Where the data comes from
+
+- **The iTunes Search API** (`https://itunes.apple.com/search?media=music&entity=song`).
+  No key, no account, no OAuth. Chosen over Spotify, whose search needs an app
+  registration and a client-credentials token.
+- **Our server calls it, never the browser.** A server action
+  `searchSongs({ weddingSlug, token, query })` — token required, so only
+  invited households can drive outbound requests; on the RSVP rate-limit
+  counter, like `requestSong`.
+- **Cache results** by normalised query for 24 h, in memory per instance.
+  Apple throttles at roughly 20 requests a minute **per calling IP**, and on
+  Vercel every guest shares our IPs, so one busy evening of searching could
+  hit it. When throttled or down, search fails soft: "Search is having a
+  moment — add it by hand" opens the fallback fields.
+- **Artwork is proxied.** A route `GET /api/song-art?u=<url>` fetches through
+  the existing hardened fetcher (`src/lib/net/fetch-image.ts` — SSRF checks,
+  size caps), **only** for an allow-listed host pattern (`*.mzstatic.com`),
+  at a fixed small size (100×100 in search, 160×160 on the chart), and
+  returns it with long cache headers. The browser only ever loads our URL.
+  Not `next/image` remote patterns: that also proxies, but ties artwork to
+  Vercel's image-optimisation quota for a feature that needs one size.
+
+### 7a.3 What gets stored
+
+`song_requests` gains:
+
+```sql
+catalogue_id   text,   -- iTunes trackId, as text; null for typed-in songs
+artwork_url    text,   -- the upstream mzstatic URL, served only via /api/song-art
+```
+
+- **Duplicate catch gets exact:** two picks with the same `catalogue_id`
+  are the same song, so the second becomes a vote on the first. Typed-in
+  songs still use the title/artist normaliser (§6 item 2), and a typed-in
+  title that matches a searched row by normaliser also counts as a duplicate.
+- A partial unique index on `(wedding_id, catalogue_id) where catalogue_id
+  is not null` makes the duplicate rule hold in the database, not just in
+  the action.
+- `requestSong` re-validates a picked `catalogue_id` by looking it up
+  server-side (`/lookup?id=`) rather than trusting the title, artist and
+  artwork the client sends — otherwise a guest could post any title with any
+  image URL, and the artwork proxy would be an open image relay.
+
+### 7a.4 Risk worth naming
+
+Apple's terms allow the Search API and artwork "to promote" the content.
+A wedding song list linking nothing to the store is a grey area, not a
+clear yes. If Apple ever changes or withdraws the API, the fallback fields
+mean the section keeps working without artwork. Nothing is lost.
+
 ## 8. Considered and not recommended (now)
 
-- **Catalogue search, album art and 30-second previews** (iTunes Search /
-  Spotify). The single biggest "fun" upgrade visually, and spec 25 §11 cut it
-  for a real reason: the guest's browser would talk to a third party from a
-  page whose URL is the household's credential (spec 23 Q1). A version that
-  fits the rule exists — our server queries the iTunes Search API (no key
-  needed) and proxies artwork, so the browser never contacts Apple — but it
-  is a new outbound dependency and roughly doubles this spec. **§9 Q8 asks
-  whether to take it on as spec 31.1.**
+- **30-second previews** — declined (Q8a). Would need an audio proxy too, or
+  hand guests' IPs to Apple.
+- **Spotify search** — needs an app registration and token; iTunes doesn't.
 - **Realtime via table subscriptions** (A3): re-opens `anon` reads on tables
   `0027` closed on purpose.
 - **Downvotes** — §5.
@@ -209,7 +299,7 @@ Today: a flat list, newest first, with approve / played / ignore / delete.
   `playlist` block already links one; collaborative Spotify editing needs
   every guest to have a Spotify account.
 
-## 9. Open questions
+## 9. Open questions (all answered — see top)
 
 | # | Question | Recommendation |
 | --- | --- | --- |
@@ -228,36 +318,50 @@ Today: a flat list, newest first, with approve / played / ignore / delete.
 No new tables. Likely one migration:
 
 ```sql
--- 0035_song_chart.sql (sketch)
-alter table public.song_requests add column played_at timestamptz;
-alter table public.song_requests add column couples_pick boolean not null default false;
--- vote-budget trigger on song_votes: counts the household's rows for the
--- wedding and refuses the insert past the budget passed via the block payload
--- (or a weddings-level column, if Q7 moves settings off the block).
+-- 0035_song_chart.sql (sketch) — additive columns, no enum, so no 55P04 split
+alter table public.song_requests
+  add column played_at    timestamptz,
+  add column couples_pick boolean not null default false,
+  add column catalogue_id text,
+  add column artwork_url  text;
+create unique index song_requests_catalogue_key
+  on public.song_requests (wedding_id, catalogue_id)
+  where catalogue_id is not null;
+-- couple's pick capped at three per wedding: checked in the action
+-- (a trigger is possible but three is a UI nicety, not an integrity rule).
 ```
 
-Do-not-play list, budget, close date and the refusal line live on the
-`song_requests` block payload (`src/lib/site/block-schemas.ts`), like the
-placeholder already does.
+The do-not-play list and the refusal line live on the `song_requests` block
+payload (`src/lib/site/block-schemas.ts`), like the placeholder already does.
+The block's default heading becomes "Request a song" for new blocks
+(`src/lib/site/blocks.ts`).
 
 Build order, each step shippable alone:
 
 1. **Duplicate catch + do-not-play** — `src/lib/site/song-match.ts` (the
-   normaliser, unit-tested), wired into `requestSong`.
+   normaliser, unit-tested), wired into `requestSong`; the block inspector
+   fields; the struck-through list on the page.
 2. **Live** — a `getSongChart` read and the polling hook; numbers tick.
 3. **Motion** — FLIP re-order with the hold; movement/NEW/🔥 badges.
-4. **Vote budget** — action + trigger + "3 of 5 left".
+4. **Search and artwork** — `searchSongs`, the result cache, `/api/song-art`
+   with its host allow-list, `catalogue_id` duplicates, the fallback fields.
 5. **The night** — `played_at`, Now playing, Played badges, big-button mode.
-6. **`/site/songs`** — rank sort, voters, merge, CSV/print export.
+6. **`/site/songs`** — rank sort, voters, couple's pick, merge, CSV/print export.
 
 ## 11. Test plan
 
 - Unit: the normaliser (case, punctuation, leading "the", feat./remaster
-  suffixes), budget arithmetic, movement-since-last-visit diff, `rankSongs`
-  unchanged.
-- SQL (`supabase/tests/`): the budget trigger refuses the N+1th vote, allows
-  it after a take-back; cross-wedding vote still refused; `played_at`
-  readable by the service-role path only.
+  suffixes), do-not-play matching, movement-since-last-visit diff, the
+  iTunes response parser (from a saved fixture, not the live API), the
+  artwork host allow-list (rejects anything not `*.mzstatic.com`, including
+  look-alikes), `rankSongs` unchanged.
+- SQL (`supabase/tests/`): the catalogue unique index refuses a second row
+  with the same `catalogue_id` in one wedding but allows it across two;
+  cross-wedding vote still refused; `anon` still has no read on
+  `song_requests`.
+- The live iTunes API is **not** called from `npm test`. Whether this
+  container or Vercel can reach it at all is checked by hand, once, and
+  said so.
 - Typecheck, `npm test`, `verify-migrations.sh`, `npm run build`.
 - **In a browser, which this feature needs more than most**: two phones on
   two households' links, voting at once — numbers arriving within ~15 s,
