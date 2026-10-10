@@ -1,9 +1,10 @@
 # Feature spec: The music section — a live chart guests play with
 
-**Status: questions answered (2026-10-10) — nothing is built.** Asked for as
-a spec, then the open questions were put and answered in the same session.
-That is content for this spec, not a build authorization: nothing beyond this
-file is touched until the planner says to build.
+**Status: built (2026-10-10) — asked for as a spec, questions answered, then
+"Yea build plz" as its own turn.** All six steps of §10, on branch
+`claude/spec-31-music-section`; no PR opened. See **Build status** at the end
+for what departs from the text above. **Never opened in a browser, never run
+against Supabase, and Apple's API was unreachable from the build session.**
 
 ## Answered — 2026-10-10
 
@@ -249,7 +250,7 @@ or an image request would hand it, with the guest's IP, to someone else.
   Vercel every guest shares our IPs, so one busy evening of searching could
   hit it. When throttled or down, search fails soft: "Search is having a
   moment — add it by hand" opens the fallback fields.
-- **Artwork is proxied.** A route `GET /api/song-art?u=<url>` fetches through
+- **Artwork is proxied.** A route `GET /api/public/song-art?u=<url>` fetches through
   the existing hardened fetcher (`src/lib/net/fetch-image.ts` — SSRF checks,
   size caps), **only** for an allow-listed host pattern (`*.mzstatic.com`),
   at a fixed small size (100×100 in search, 160×160 on the chart), and
@@ -263,7 +264,7 @@ or an image request would hand it, with the guest's IP, to someone else.
 
 ```sql
 catalogue_id   text,   -- iTunes trackId, as text; null for typed-in songs
-artwork_url    text,   -- the upstream mzstatic URL, served only via /api/song-art
+artwork_url    text,   -- the upstream mzstatic URL, served only via /api/public/song-art
 ```
 
 - **Duplicate catch gets exact:** two picks with the same `catalogue_id`
@@ -343,7 +344,7 @@ Build order, each step shippable alone:
    fields; the struck-through list on the page.
 2. **Live** — a `getSongChart` read and the polling hook; numbers tick.
 3. **Motion** — FLIP re-order with the hold; movement/NEW/🔥 badges.
-4. **Search and artwork** — `searchSongs`, the result cache, `/api/song-art`
+4. **Search and artwork** — `searchSongs`, the result cache, `/api/public/song-art`
    with its host allow-list, `catalogue_id` duplicates, the fallback fields.
 5. **The night** — `played_at`, Now playing, Played badges, big-button mode.
 6. **`/site/songs`** — rank sort, voters, couple's pick, merge, CSV/print export.
@@ -367,3 +368,63 @@ Build order, each step shippable alone:
   two households' links, voting at once — numbers arriving within ~15 s,
   rows sliding but never under a finger mid-tap, reduced-motion respected.
   The motion rule cannot be verified any other way.
+
+## Build status — 2026-10-10
+
+Built in one session, all six steps of §10.
+
+| Piece | Where |
+| --- | --- |
+| Migration | `0035_song_chart.sql` — `played_at` (+ trigger following `status`), `couples_pick`, `catalogue_id` (digits), `artwork_url` (checked to `*.mzstatic.com`), partial unique index on `(wedding_id, catalogue_id)`. `supabase/tests/18_song_chart.sql`, 15 assertions. |
+| Matching | `src/lib/site/song-match.ts` — one normaliser for duplicates and the ban list; `parseDoNotPlay`, `isBanned` (stricter than `sameSong`). |
+| Catalogue | `src/lib/site/song-catalogue.ts` (parse, host allow-list, sizes) and `src/server/songs/catalogue.ts` (fixed-host fetch, 24 h in-memory cache, search results pre-seed the lookup cache). |
+| Chart rules | `src/lib/site/song-chart.ts` — hot, now playing, movement, the 3 s hold. |
+| Actions | `src/server/actions/songs.ts` — `requestSong` (outcomes `added` / `voted` / `duplicate` / `banned`), `searchSongs`, `refreshSongChart`, `setCouplesPick`, `mergeSongs`. |
+| Reads | `getPublicSongs` (shared by the page and the poll) and `getPlannerSongs` in `src/server/queries/site-extras.ts`. |
+| Artwork proxy | `src/app/api/public/song-art/route.ts`. |
+| Guest UI | `song-section.tsx` (polling, optimistic votes, do-not-play list), `song-list.tsx` (chart, FLIP, badges), `song-requests.tsx` (search + by-hand fallback). |
+| Couple's UI | `/site/songs` (ranked, voters, ♥, merge, "On the night" mode), `/site/songs/print`, `/api/export/songs`. |
+
+**Departures from the text, and why:**
+
+1. **The proxy lives at `/api/public/song-art`, not `/api/song-art`.** The
+   middleware sends every path not in `src/lib/public-paths.ts` to `/login`;
+   `/api/public` is the prefix that exists for routes that scope themselves.
+   A test in `public-paths.test.ts` pins it.
+2. **A fuzzy duplicate asks; an exact one (same `catalogue_id`) just votes.**
+   §6.2 said "offer a button", §7a.3 said "becomes a vote". Both are kept, by
+   confidence: a title match without the artist can be a different song.
+3. **The do-not-play refusal is an answer, not an error** (`outcome:
+   "banned"`), so it renders as the couple's joke rather than in red.
+4. **The ban list a guest is held to is the PUBLISHED block's.** A ban typed
+   in the editor and not published doesn't refuse anyone. The DJ print view
+   reads the draft (it is the couple's own copy).
+5. **"Request a song" is the default heading for every Song requests block
+   that has no title of its own, not only new ones** — the default is read at
+   render time, so there was no way to change it for new blocks only without
+   writing a heading into every existing payload. No real wedding has
+   published one yet.
+6. **On a first visit, movement badges compare with the ranking at page
+   load**, so a first-time guest still sees what moved while they watched.
+7. **A refused poll stops polling.** A refused poll is a failed token
+   attempt on the RSVP throttle; a forgotten tab on a reissued link would
+   otherwise lock its household's IP out of replying.
+8. **No vote budget** (Q3/Q4) — nothing in §5 was built.
+
+**Verified:** typecheck clean; 991 unit tests (38 new); `verify-migrations.sh`
+523 SQL assertions (15 new); `next build` with placeholder env.
+
+**Not verified, and worth doing first:**
+
+- **Apple's API was never called.** `itunes.apple.com` and `*.mzstatic.com`
+  are blocked by this session's network policy, so the parser was tested
+  against a fixture written from the documented response shape, not a
+  captured one. Search could fail on the first real call; if it does, the
+  form falls back to the by-hand fields.
+- **Nothing was opened in a browser.** The slide-into-place animation, the
+  3 s hold, the count tick, the search dropdown on a phone keyboard, and the
+  night mode are all unseen.
+- **Nothing ran against Supabase** — and `0026`–`0035` are still not applied
+  to the live project.
+- Two phones on two households' links, voting at once, is the test §11 asks
+  for and the only way to check the hold.

@@ -3,6 +3,40 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 37 (spec 31):** the music section, built end to end on branch
+`claude/spec-31-music-section` (**no PR opened**). Asked for as a spec, the nine
+questions put and answered, then "Yea build plz" as its own turn. Read the spec's
+**Build status** first; this is the short version.
+
+- **A live chart.** The guest's song list polls `refreshSongChart` every 15 s
+  (60 s after ten idle minutes, paused in a hidden tab) — no Realtime, nothing
+  opened to `anon`. Counts update at once; rows slide into place by FLIP, but
+  **never within 3 s of the guest touching the list** (`mayReorder`). Position
+  numbers, a top three, ▲2/▼1/NEW since last visit (localStorage), 🔥 for the
+  most votes in 48 h, top ten then "Show all".
+- **Votes unchanged** — one per household per song, unlimited (Q3/Q4).
+- **Fun:** a do-not-play list on the block (one per line; "anything by X" bans
+  an artist) shown struck through and refused with the couple's own line;
+  duplicate catching (same track → vote goes on it; similar title → "vote for
+  it, or no, mine's different"); the couple's ♥ on up to three; "played on the
+  night" (`played_at`, stamped by a trigger) → "♪ Played at 9:42 pm" and a Now
+  playing banner for five minutes.
+- **Song search with album covers.** Our server asks iTunes (NZ store, 24 h
+  cache); covers load only through `/api/public/song-art`, which fetches only
+  `*.mzstatic.com` at 100/160 px. A picked result is re-looked-up server-side,
+  never trusted from the browser. "Can't find it? Add it anyway" is the
+  fallback, and what shows when Apple is down or there's no token.
+- **`/site/songs`** ranked with who voted, ♥, merge, an "On the night" big-button
+  mode, `/api/export/songs` and `/site/songs/print` for the DJ.
+- **One migration, `0035_song_chart.sql`** — additive; not applied to the live
+  project, and neither are `0026`–`0034`.
+- **Verified:** typecheck, 991 unit tests, 523 SQL assertions, `next build`
+  (placeholder env). **Not:** any browser, Supabase, or **Apple's API — blocked by
+  this session's network policy**, so search is untested against a real response.
+- **Pick up here:** apply `0035`, publish a Song requests block with a ban list,
+  open two households' links on two phones, search, add, vote, and watch the
+  other phone's chart move.
+
 **Session 36 (spec 30):** two small fixes, built on branch
 `claude/spec-30-save-the-date-reply-and-undimmed-photos` (**no PR opened**). Asked
 for as a spec, then "ask open questions and build" as its own turn. Read the spec's
