@@ -28,12 +28,10 @@ type OnlineLink = { name: string; url: string };
 
 export function ContributeDialog({
   bank,
-  reference,
   onlineLinks,
   dark,
 }: {
   bank: PublicBank | null;
-  reference: string;
   onlineLinks: OnlineLink[];
   dark: boolean;
 }) {
@@ -60,7 +58,6 @@ export function ContributeDialog({
   const rows = [
     bank?.accountName ? { label: "Account name", value: bank.accountName } : null,
     accountNumber ? { label: "Account number", value: accountNumber } : null,
-    { label: "Reference", value: reference },
   ].filter((row): row is { label: string; value: string } => row !== null);
 
   return (
@@ -111,20 +108,23 @@ export function ContributeDialog({
             {bank?.message ?? DEFAULT_GIFT_MESSAGE}
           </p>
 
-          <dl className="mt-6 divide-y divide-line border-y border-line" data-copy-all="">
-            {rows.map((row) => (
-              <CopyRow key={row.label} label={row.label} value={row.value} canCopy={canCopy} />
-            ))}
-          </dl>
+          {rows.length > 0 ? (
+            <>
+            <dl className="mt-6 divide-y divide-line border-y border-line" data-copy-all="">
+              {rows.map((row) => (
+                <CopyRow key={row.label} label={row.label} value={row.value} canCopy={canCopy} />
+              ))}
+            </dl>
 
-          <CopyAll
-            canCopy={canCopy}
-            text={giftClipboardText({
-              accountName: bank?.accountName ?? null,
-              accountNumber: bank?.accountNumber ?? null,
-              reference,
-            })}
-          />
+            <CopyAll
+              canCopy={canCopy}
+              text={giftClipboardText({
+                accountName: bank?.accountName ?? null,
+                accountNumber: bank?.accountNumber ?? null,
+              })}
+            />
+            </>
+          ) : null}
 
           {bank?.note ? <p className="mt-5 text-[0.95rem] text-muted">{bank.note}</p> : null}
 

@@ -8,6 +8,7 @@ import {
   BLOCK_PHOTO_TEXT,
   defaultHeading,
   isTitled,
+  offersTextStyle,
   type BlockStyle,
   type SiteBlock,
 } from "@/lib/site/blocks";
@@ -24,6 +25,8 @@ import {
   STYLE_CHOICES,
   STYLE_TITLE,
 } from "@/lib/site/style-labels";
+import type { SiteTheme } from "@/lib/theme/presets";
+import { BlockTextStyle } from "./block-text-style";
 import { FieldInput } from "./field";
 import { RepeatRows } from "./repeat-rows";
 import { PhotoPicker, type PhotoOption } from "./photo-picker";
@@ -68,6 +71,7 @@ export function BlockInspector({
   photos,
   onDone,
   heroDefault,
+  theme,
   focusTitle = 0,
 }: {
   block: SiteBlock;
@@ -76,6 +80,8 @@ export function BlockInspector({
   onDone: () => void;
   /** The theme's own hero style, which a hero with no Look of its own follows. */
   heroDefault: string;
+  /** For the per-block text colour: its contrast is checked against the palette. */
+  theme: SiteTheme;
   /** Changes when the planner clicks this block's title in the preview. */
   focusTitle?: number;
 }) {
@@ -424,6 +430,10 @@ export function BlockInspector({
           {block.type === "hero" &&
           resolveLook("hero", block.style.variant, heroDefault) === "full" ? (
             <div className="space-y-2">{photoText()}</div>
+          ) : null}
+
+          {offersTextStyle(def) ? (
+            <BlockTextStyle style={block.style} theme={theme} pending={pending} onStyle={style} />
           ) : null}
 
           {(["width", "align", "shape"] as const)

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteGiftFund, saveGiftBankDetails, saveGiftFund } from "@/server/actions/gift-funds";
 import { DEFAULT_GIFT_MESSAGE } from "@/lib/site/gift-funds";
-import { accountDigits, formatNzAccount, giftReference, parseNzAccount } from "@/lib/site/bank-account";
+import { accountDigits, formatNzAccount, parseNzAccount } from "@/lib/site/bank-account";
 import type { GiftBankDetailsRow, GiftFundRow } from "@/lib/types/database";
 
 /**
@@ -191,12 +191,6 @@ function BankDetailsCard({ bank }: { bank: GiftBankDetailsRow | null }) {
           maxLength={400}
         />
       </Field>
-
-      <p className="text-xs text-muted">
-        Each household is asked to put its own name as the reference —{" "}
-        <span className="font-medium text-ink">{giftReference("The Okonkwo Family")}</span> for the
-        Okonkwos — so you can tell from your statement who sent what.
-      </p>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
         <button type="submit" className="btn-primary" disabled={pending || Boolean(numberProblem)}>

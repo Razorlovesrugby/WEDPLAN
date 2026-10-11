@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { COVER_LINE_MAX_LENGTH } from "./cover";
 import { validateGreeting } from "./greeting";
+import { FONT_IDS } from "@/lib/theme/text-style";
 import {
   BLOCK_ALIGNS,
   BLOCK_BACKGROUNDS,
@@ -26,6 +27,8 @@ export const trimmed = z.string().trim();
 export const optionalText = trimmed.max(4000).optional().transform((v) => (v ? v : undefined));
 export const uuid = z.string().uuid();
 
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
 export const styleSchema = z
   .object({
     width: z.enum(BLOCK_WIDTHS).optional(),
@@ -43,6 +46,11 @@ export const styleSchema = z
     // schema cannot see; `setBlockStyle` checks it against `looksFor(type)`.
     variant: z.string().max(24).optional(),
     enter: z.enum(["rise", "fade", "reveal", "none"]).optional(),
+    // Spec 31. Hex only (3 or 6 digits) — the value is written into a style
+    // attribute, so nothing but a hex colour or a name from the list gets in.
+    textColour: z.string().regex(HEX, "Not a hex colour").optional(),
+    mutedColour: z.string().regex(HEX, "Not a hex colour").optional(),
+    bodyFont: z.enum(FONT_IDS).optional(),
   })
   .strict();
 

@@ -9,16 +9,19 @@
  *
  * Two rules worth stating before the data:
  *
- * **Style is a closed set.** Width, background, alignment, image shape. Not
- * free-form CSS and no per-block colour or font picker: colour and type come
- * from the theme, which is where a non-designer's decisions stay good. A
- * builder that can produce an unreadable page has failed at the thing it was
- * bought for.
+ * **Style is a closed set.** Width, background, alignment, image shape, and
+ * (spec 31) a text colour, a secondary text colour and a body font. Not
+ * free-form CSS: the colours are hex values that pass a contrast check against
+ * the block's own background, and the font is a name from a short list of faces
+ * the site already hosts. A builder that can produce an unreadable page has
+ * failed at the thing it was bought for.
  *
  * **Type is not unique per page.** Three photo bands and two prose blocks are
  * a normal wedding site. The few genuinely-once blocks say so themselves
  * (`max: 1`), because two heroes is a bug rather than a choice.
  */
+
+import type { FontId } from "@/lib/theme/text-style";
 
 export const BLOCK_AUDIENCES = ["everyone", "invited", "public_only"] as const;
 export type BlockAudience = (typeof BLOCK_AUDIENCES)[number];
@@ -82,6 +85,16 @@ export type BlockStyle = {
    * `reveal` or `none`. Absent means "match the page".
    */
   enter?: "rise" | "fade" | "reveal" | "none";
+  /**
+   * This block's own text colour and secondary-text colour, as hex (spec 31).
+   * **Ignored while the theme's "same in every section" switch is on**, and
+   * checked against the block's own background when it is off. Over a
+   * photograph there is nothing to check against, so it is advisory there.
+   */
+  textColour?: string;
+  mutedColour?: string;
+  /** This block's body font — a name from `FONT_IDS`, never a CSS string. */
+  bodyFont?: FontId;
 };
 
 /**
@@ -104,12 +117,25 @@ export const BLOCK_STYLE_KEYS = [
   "lightbox",
   "variant",
   "enter",
+  "textColour",
+  "mutedColour",
+  "bodyFont",
 ] as const satisfies readonly (keyof BlockStyle)[];
 
 // Fails to compile if `BlockStyle` gains a key this list does not name.
 type StyleKeysAreExhaustive =
   Exclude<keyof BlockStyle, (typeof BLOCK_STYLE_KEYS)[number]> extends never ? true : never;
 export const STYLE_KEYS_ARE_EXHAUSTIVE: StyleKeysAreExhaustive = true;
+
+/**
+ * Whether the inspector offers the text-style controls (spec 31). Any block with
+ * a background control has words on that background; a block that is only
+ * photographs has nothing to colour.
+ */
+export function offersTextStyle(def: Pick<BlockDef, "styles" | "type">): boolean {
+  // The hero draws its own cover, photograph and type; it is not a block of words on a ground.
+  return def.type !== "hero" && def.styles.includes("background");
+}
 
 export type BlockDef = {
   type: BlockType;

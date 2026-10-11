@@ -16,6 +16,9 @@ import { getVibe } from "@/lib/site/vibes";
 import { applyVibeToDraft } from "@/server/site/vibes";
 import { blocksNeedingWork, starterPayload } from "@/lib/site/starter";
 import { FAQ_LIBRARY } from "@/lib/site/faq-library";
+import { resolveTheme, siteTokens } from "@/lib/theme/presets";
+import { resolveBlockText } from "@/lib/theme/text-style";
+import { THEME_BLOCK_KEY } from "@/lib/site/sections";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -164,6 +167,28 @@ export async function setBlockStyle(
     if (!existing || !isBlockType(existing.type) || !isLook(existing.type, parsed.data.variant)) {
       return fail("That isn't a layout this block offers");
     }
+  }
+
+  // Spec 31: a block's own text colour must be readable on the block's own
+  // background (advisory only over a photograph, where nothing can be checked).
+  // The renderer also drops a failing colour, so this is the polite refusal at
+  // the door rather than the only defence.
+  if (parsed.data.textColour !== undefined || parsed.data.mutedColour !== undefined) {
+    const { data: themeRow } = await supabase
+      .from("site_content")
+      .select("payload")
+      .eq("wedding_id", wedding.id)
+      .eq("block_key", THEME_BLOCK_KEY)
+      .maybeSingle();
+    const problems = resolveBlockText(
+      {
+        background: parsed.data.background,
+        textColour: parsed.data.textColour,
+        mutedColour: parsed.data.mutedColour,
+      },
+      siteTokens(resolveTheme(themeRow?.payload ?? null)),
+    ).problems;
+    if (problems.length > 0) return fail(problems.join(" "));
   }
 
   const { error } = await supabase

@@ -1,4 +1,5 @@
 import { contrastRatio, toRgbChannels, type PaletteTokens } from "./contrast";
+import { DEFAULT_TEXT_STYLE, applyTextColours, resolveTextStyle, textColourVars, type SiteTextStyle } from "./text-style";
 import {
   DEFAULT_LAYOUT,
   DEFAULT_MOTION,
@@ -219,6 +220,12 @@ export type SiteTheme = {
   motion: MotionSettings;
   /** The chapter rail and section numbers — switches, not theme (spec 27 E9). */
   layout: SiteLayout;
+  /**
+   * Site-wide text colours and fonts, and the "same in every section" switch
+   * (spec 31). Absent in a theme saved before it existed, which reads as no
+   * overrides with the switch on — exactly what those sites already look like.
+   */
+  textStyle: SiteTextStyle;
 };
 
 /**
@@ -241,6 +248,7 @@ export const DEFAULT_THEME: SiteTheme = {
   typography: "fraunces_garamond",
   motion: DEFAULT_MOTION,
   layout: DEFAULT_LAYOUT,
+  textStyle: DEFAULT_TEXT_STYLE,
 };
 
 /** What Script looked like when it was the default — used by its own tests. */
@@ -253,6 +261,7 @@ export const SCRIPT_THEME: SiteTheme = {
   typography: "fraunces_garamond",
   motion: DEFAULT_MOTION,
   layout: DEFAULT_LAYOUT,
+  textStyle: DEFAULT_TEXT_STYLE,
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -306,6 +315,7 @@ export function resolveTheme(payload: unknown): SiteTheme {
     typography: pick(payload["typography"], TYPOGRAPHY_IDS, DEFAULT_THEME.typography),
     motion: resolveMotion(payload["motion"]),
     layout: resolveLayout(payload["layout"]),
+    textStyle: resolveTextStyle(payload["text_colours"], payload["fonts"]),
   };
 }
 
@@ -314,6 +324,21 @@ export function themeTokens(theme: SiteTheme): PaletteTokens {
   if (theme.palette === "custom" && theme.customTokens) return theme.customTokens;
   const palette = theme.palette === "custom" ? null : PALETTES[theme.palette];
   return (palette ?? PALETTES[DEFAULT_THEME.palette as PaletteId]).tokens;
+}
+
+/**
+ * The tokens the **site's own pages** render with: the palette plus the
+ * planner's text-colour overrides (spec 31). Deliberately separate from
+ * `themeTokens`, which the save-the-date also calls — that page keeps its own
+ * colours (Q3), so the override must not leak into it through a shared function.
+ */
+export function siteTokens(theme: SiteTheme): PaletteTokens {
+  return applyTextColours(themeTokens(theme), theme.textStyle.colours);
+}
+
+/** CSS variables for the overrides alone; spread after `themeCssVars` on the site root. */
+export function siteTextVars(theme: SiteTheme): Record<string, string> {
+  return textColourVars(theme.textStyle.colours);
 }
 
 /**
