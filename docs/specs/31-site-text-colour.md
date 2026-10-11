@@ -5,6 +5,18 @@
 for this file, not authorisation to build; the build starts when the planner
 says to build it.
 
+## Added — 2026-10-11 (planner's follow-up)
+
+*"I want also a toggle to match the same across all the sections and then each
+block can have different if needed, especially with the ability to add pictures
+as backgrounds."*
+
+This reverses two of the original recommendations (**Q1** was "one colour is
+enough to start", **Q6** was "site-wide only, no per-block") and pulls the
+photograph question (**Q4**) back in, because a block with a picture behind it is
+exactly where a different text colour is needed. §3.7 is the new design; §3.4,
+§5, §6 and §7 are updated to match. §3.1–§3.3 (the site-wide half) stand.
+
 **Depends on:** spec 14 §5 (themes and palettes), spec 24/30 (the rail — theme,
 palette, typography), spec 23 (block styles), spec 29/14 §12.1 (the
 save-the-date, which has its own palette setting). All built. This spec needs
@@ -124,13 +136,73 @@ planner will notice:
 
 - **Reaches:** every block's text on the paper background, the hero when it is
   not full-photo, the household greeting, the RSVP form, the footer.
-- **Does not reach:** words over a photograph (those are `onphoto` plus the
-  spec-30 treatments — their legibility depends on the picture, not on the
-  palette). Offering a colour there is Q4.
+- **Does not reach, from the site-wide setting:** words over a photograph (those
+  are `onphoto` plus the spec-30 treatments — their legibility depends on the
+  picture, not on the palette). **Per-block colour does reach them** (§3.7);
+  that is the planner's call, made block by block.
 - **The `ink` background style** ("Ink" band, the dark `bg-ink` blocks) keeps its
   own text colour (`paper`), because that pair is chosen to contrast with each
   other. Changing the text colour must not make text on a dark band vanish; the
   tests in §5 pin this.
+
+### 3.7 Per-block colour, and a switch to keep everything matched
+
+Two controls, one default.
+
+- **Site-wide: "Same text colour in every section"** — a switch in the rail's
+  Text colour group, **on by default**. On, every block uses the site colours
+  from §3.2 and any per-block colour is **ignored**. Off, blocks that have their
+  own colour use it and the rest still follow the site. Stored as
+  `text_colours.match_all` (absent = `true`, so existing sites are unchanged).
+  Turning it on **does not delete** the per-block choices — they are ignored, as
+  `bgImage` is under a non-photo background — so flipping it back restores them.
+- **Per block: "Use the site's text colour"** — a switch in the block inspector
+  beside the existing Background control, on by default. Off reveals **Text** and
+  **Secondary text** pickers (same swatches and hex field as §3.2, plus a
+  "Match the site" reset). Links keep the site's link colour unless Q9 says
+  otherwise.
+- **Storage:** two new keys on the block's style, `textColour` and `mutedColour`
+  (hex). `styleSchema` is `.strict()` and `BLOCK_STYLE_KEYS` /
+  `blocks.test.ts` pin the list, so the ripple documented for spec 30 applies
+  exactly: `blocks.ts` (type, key list, each block's `styles`), `block-schemas.ts`,
+  `block-inspector.tsx`, `render.tsx`, `style-labels.ts` and both pinned tests, in
+  one change. Still **no migration** — block styles are JSON.
+- **Cascade, written once:** `textColour` on the block > site override
+  (`text_colours`) > the palette's own. One function in `src/lib/theme/`
+  resolves it, used by the renderer, the editor and the contrast check.
+
+**Contrast depends on what is behind the words, so the gate depends on the
+block's background:**
+
+| Block background | Checked against | Strength |
+| --- | --- | --- |
+| Plain (paper) | the palette's paper | **Blocking**, 4.5:1 — same rule as §3.3 |
+| Tinted | the tint (ink at 7% over paper, as drawn) | **Blocking**, 4.5:1 |
+| Ink band | the site's ink (the band's ground) | **Blocking**, 4.5:1 |
+| **Photograph** | **nothing — the picture is unknown** | **Advisory only** |
+
+A per-block colour is checked against the block's *own* ground, not the page's,
+so the same swatch can be available on one block and disabled on another.
+Changing a block's background re-checks its colour; if the new ground fails it,
+the colour is **kept but flagged** and the block renders with the site colour
+until the planner fixes it (never a silently unreadable block).
+
+**Photograph backgrounds — the case the planner named.** Today a Photograph
+block forces its words to the fixed pale `onphoto` colour (and spec 30 added four
+"Text over photo" treatments: Photo as it is / Darken / Soft text shadow / Panel).
+With per-block colour:
+
+- A photograph block's colour pickers **replace `onphoto`** for that block's text
+  when set (so a dark navy over a pale print is possible — the real reason to
+  want this). Unset keeps `onphoto`, exactly as today.
+- There is **no automatic pass/fail** — we cannot read a photograph. Instead the
+  inspector shows the existing "Text over photo" choice directly beneath the
+  colour, and a one-line hint: *"We can't check this against your picture.
+  Look at it on a phone; Darken, Soft shadow or Panel will help if it's hard to
+  read."* If the chosen colour is closer to `onphoto` than to dark, suggest
+  nothing; if it matches the Panel/Darken treatment's dark ground (it would
+  vanish), **warn** — that pairing is checkable against a flat colour.
+- The treatments stay independent of the colour; both are style keys.
 
 ### 3.5 Storage
 
@@ -157,7 +229,10 @@ unit-tested there, never inline in the action or the component.
 3. `saveTheme` + its zod schema: accept, validate, persist, refuse with the ratio.
 4. The rail group and the live preview — one renderer, as always, so the preview
    needs no special case.
-5. Save-the-date, per Q3. Then HANDOFF, this file's Build status, the README index row.
+5. Per-block colour (§3.7): the style keys and their ripple, the cascade
+   function, the inspector controls, the background-aware gate, and the
+   site-wide "same in every section" switch.
+6. Save-the-date, per Q3. Then HANDOFF, this file's Build status, the README index row.
 
 ## 5. Test plan
 
@@ -169,6 +244,14 @@ unit-tested there, never inline in the action or the component.
   hex or a non-string falls back per field; `saveTheme` refuses a 3.0:1 text
   colour and accepts a 4.6:1 one **on each of the eight palettes** (including the
   two dark ones, where `ink` is the light colour).
+- Cascade: block > site > palette, and `match_all` on ignores a block's colour
+  **without deleting it** (turn it off and the block's colour returns).
+- Per-block gate: a swatch passes on Plain and fails on the Ink band (and vice
+  versa) from the same hex; changing a block's background re-flags a colour that
+  now fails and the block renders with the site colour meanwhile; Photograph
+  blocks accept any valid hex and never block.
+- `styleSchema` accepts `textColour` / `mutedColour` as hex and rejects other
+  values; the known-key list in `blocks.test.ts` includes them.
 - A pinned test that the `bg-ink` / dark-band text pair does not move when the
   text colour changes (§3.4).
 - A source guard that no component outside the sweep reintroduces `text-ink` for
@@ -182,15 +265,22 @@ unit-tested there, never inline in the action or the component.
 
 | # | Question | Recommendation |
 | --- | --- | --- |
-| 1 | **Which text?** All of it as one colour, or the three roles in §3.2 (text, secondary, links)? | **Three roles**, with Text first and the other two tucked under "More". One colour for everything would flatten the hierarchy `muted` exists to make. |
+| 1 | **Which text?** All of it as one colour, or the three roles in §3.2 (text, secondary, links)? | **Three roles** site-wide, with Text first and the other two under "More". Per block (§3.7): Text and Secondary only. |
 | 2 | **Should buttons and borders change too?** Option (a) override `ink` as it is, or (b) a separate `text` token (§3.1)? | **(b).** The request is about text. (a) is half a day cheaper and makes a pale text choice produce a pale button. |
 | 3 | **The save-the-date.** Follow the site's text colour, or keep its own? | **Follow the site** when its palette is "match site"; a save-the-date that picks one of the six palettes by name keeps that palette's own colours. |
-| 4 | **Words over a photograph.** Leave them as they are, or offer a colour there too? | **Leave them.** Their legibility is the spec-30 treatments' job, and a colour picker there is the easiest way to make a cover unreadable on a particular photo. |
+| 4 | **Words over a photograph.** *Revised by the follow-up:* per-block colour reaches them. | **Yes, per block only, advisory not blocking** (§3.7). The site-wide setting still doesn't touch them. |
 | 5 | **Free colour or curated?** Custom hex alongside the swatches, or swatches only? | **Both**, because the gate in §3.3 is what makes a free field safe, and "I want exactly our invitation's green" is the likeliest ask. |
-| 6 | **Per block too?** A text colour for one block (a quote in a different colour) as well as site-wide? | **Site-wide only for now.** A per-block key is a closed-set style key with the full ripple spec 30 documents (type, key list, schema, inspector, two pinned tests) and nobody asked for it. |
+| 6 | **Per block too?** *Answered by the follow-up: yes.* | Built as §3.7. The ripple cost is accepted. |
+| 7 | **What does the "same in every section" switch do to existing per-block colours?** Ignore them (keep, restorable), or clear them? | **Ignore, don't clear** — reversible, and consistent with how `bgImage` survives a background change. |
+| 8 | **Default for the switch** on a site that has never set a text colour. | **On.** Nothing changes until the planner turns it off. |
+| 9 | **Link colour per block?** Or only Text and Secondary? | **Only Text and Secondary.** A third picker per block is clutter, and links on a custom ground can use the site's accent if it passes; revisit if asked. |
+| 10 | **Does the picture-as-background control change?** The planner mentioned adding pictures; the Photograph background and picker already exist (spec 23/27). Is anything about *adding* pictures missing, or is this only about the text over them? | Assumed **only the text over them**. If there is a gap in uploading or choosing the background picture, say what, and it becomes its own section here or its own spec. |
 
 ## 7. Left out on purpose
 
+- **A per-block link colour** (Q9), and a **per-block override of anything but
+  text** — background colour and picture are unchanged (the Photograph
+  background already exists).
 - **Fonts, sizes and weights.** Typography is its own pairing control already.
 - **Background colour** and creating palettes from scratch. This spec is text
   only; the rail deliberately offers curated palettes.
