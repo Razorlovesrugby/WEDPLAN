@@ -26,6 +26,13 @@ Two asks: **(1)** the gift section's body text should not look different from th
 other sections, and **(2)** the font should be controllable. §3.8 is the design.
 Same rule as above: this extends the spec, it does not authorise a build.
 
+## Added — 2026-10-11 (third follow-up): the gift "Reference" line
+
+*"Can we change the gift reference part in the details"* — asked to remove it
+(Contribute popup → **Remove the reference**), and to put it in this spec rather
+than build it. Unrelated to colour and font; it lives here only because it is the
+same round of feedback. §3.9.
+
 **Depends on:** spec 14 §5 (themes and palettes), spec 24/30 (the rail — theme,
 palette, typography), spec 23 (block styles), spec 29/14 §12.1 (the
 save-the-date, which has its own palette setting). All built. This spec needs
@@ -273,6 +280,34 @@ same everywhere — a pinned test lists which classes each block may use.
   A per-block font is set as a variable on the block, with the site's own as the
   fallback inside it.
 
+### 3.9 Remove the gift "Reference" line
+
+**Today.** The Contribute popup (`contribute-dialog.tsx`) lists Account name,
+Account number and a **Reference** the guest is asked to put on their transfer —
+`giftReference(householdName)` in `src/lib/site/bank-account.ts`, e.g.
+"Okonkwo gift" (or "Wedding gift" with no name, capped at 40 characters because
+banks truncate). It is computed on the page, **never stored**, so there is no
+data to migrate.
+
+**Proposal.** Drop the line: the popup shows account name and number only, and
+"Copy" copies those two. Touch points (all found by grep, none run):
+`contribute-dialog.tsx` (the `reference` prop and its row), `gift-funds.tsx` (the
+prop it passes), `giftClipboardText` and `giftReference` in `bank-account.ts` and
+their tests in `bank-account.test.ts`, and the sentence in
+`gift-fund-editor.tsx` (~line 196) telling the planner each household is asked
+for its own name. **No migration** — but `0033`'s header comment says the
+reference "exists so the couple can tell for themselves" who gave what; migrations
+are append-only, so that comment is left alone and the build status notes it is
+now out of date.
+
+**What is lost, said plainly (Q16).** With no reference, a transfer arrives with
+whatever the guest types, and the couple can no longer match a payment to a
+household reliably. Nothing in the app knew who gave what even before (the
+migration says so) — the reference was the only help — so this is a deliberate
+step back from "the couple can tell" to "the couple can tell if the guest
+bothers to say". If that matters, the alternative is the next-smallest change:
+keep the line but make it optional (Q16 b).
+
 ### 3.5 Storage
 
 No migration expected: the theme is a JSON payload in `site_content`, read by
@@ -362,6 +397,8 @@ unit-tested there, never inline in the action or the component.
 | 13 | **One switch or two?** Does "same in every section" cover colour and font together, or separately? | **One switch**, to keep the rail simple; split only if you hit a case. |
 | 14 | **Size and weight.** Controllable, or fonts only? | **Fonts only.** |
 | 15 | **Does a font choice apply to Script too?** Script's two faces are the theme today. | **Yes for body**, so the control is not Editorial-only; Script's script-face headings stay (they are the preset). |
+| 16 | **Remove the reference entirely (as asked), or make it a switch?** | **Remove it** as you said. The only alternative worth considering is a "Ask guests for a reference" switch in `/site/gifts`, default off, if matching payments to households turns out to matter. |
+| 17 | **Should the popup say anything instead?** e.g. a free line the couple writes ("Please put your name so we can thank you"). | **No.** A planner-written line can be a Text block above the gifts; adding another field is more code than the want justifies. |
 
 ## 7. Left out on purpose
 
