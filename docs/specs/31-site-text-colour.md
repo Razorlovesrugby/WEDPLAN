@@ -1,9 +1,52 @@
 # Feature spec: Text colour and fonts on the invitation website (and a few small changes from the same round of feedback)
 
-**Status: proposed (2026-10-11) — asked for as a spec. Nothing is built.** Per
-`docs/specs/README.md` and `CLAUDE.md`, answering the questions in §6 is content
-for this file, not authorisation to build; the build starts when the planner
-says to build it.
+**Status: all 19 questions answered (2026-10-11). Nothing is built.** Per
+`docs/specs/README.md` and `CLAUDE.md`, answering the questions is content for
+this file, not authorisation to build; the build starts when the planner says to
+build it.
+
+## Answered — 2026-10-11
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | Three roles (recommended). | As §3.2. |
+| 2 | **Everything ink — against the recommendation.** | Option (a) in §3.1: override `ink` itself. **No new `text` token and no component sweep**; buttons, selected states and borders follow the text colour. See "Consequences of Q2" below. |
+| 3 | **Keep its own — against the recommendation.** | The save-the-date is **not touched**; build step 6 is dropped. |
+| 4 | Yes, advisory only. | As §3.7: per-block colour reaches photograph blocks, never blocks a save. |
+| 5 | Both swatches and hex. | As §3.2/§3.3. |
+| 6 | Yes, per block (earlier follow-up). | §3.7. |
+| 7 | **Clear them — against the recommendation.** | Turning "same in every section" **on clears** every per-block colour (and per-block font). Destructive, so it confirms with a count first. §3.7's "ignored, not deleted" is superseded. |
+| 8 | On. | Switch starts on; no existing site changes. |
+| 9 | Text and Secondary only. | No per-block link colour. |
+| 10 | Only the text over pictures. | Nothing added for choosing or uploading background pictures. |
+| 11 | Plain body. | Gift description becomes ordinary Body text; italic Detail stays for the schedule. |
+| 12 | Already-hosted fonts only. | No runtime fetch. |
+| 13 | One switch. | Colour and font share the one switch. |
+| 14 | Fonts only. | No size or weight control. |
+| 15 | Yes, body only. | The body-font control works on Script too. |
+| 16 | Remove entirely. | §3.9 as written; no switch. |
+| 17 | No. | No replacement line in the popup. |
+| 18 | Board page only. | §3.10 as written. |
+| 19 | **No note.** | The shared-board note is dropped; rename is silent. |
+
+### Consequences of Q2 (override `ink` as it is)
+
+- **Smaller build, different risk.** The 56 `text-ink` / 26 `bg-ink` sites are
+  untouched, but the text colour is now also the **fill of buttons and selected
+  reply states**. The existing gate checks `ink` on `paper` at 4.5:1, which also
+  covers a button whose label is `paper`; **but those buttons are written
+  `bg-ink text-white`** (see `globals.css` ~840, which already special-cases a
+  light ink). Build step 1 must check what colour a button's label really is and,
+  if it is the fixed white, add a blocking "white on ink" pair so a pale text
+  colour cannot produce an unreadable button.
+- **Rules and borders** drawn from ink at partial opacity change colour with it.
+  This is the accepted trade for the planner's choice; the rail should say so in
+  one line ("also colours buttons and lines").
+- **Dark palettes:** `ink` is already the light colour there, so the same override
+  works and the gate is unchanged.
+- **Per-block (Q2 with §3.7):** a block's own text colour overrides `ink` *inside
+  that block only* (a CSS variable set on the block), so a block's buttons follow
+  it too.
 
 ## Added — 2026-10-11 (planner's follow-up)
 
@@ -118,7 +161,9 @@ Two ways to treat the `ink` problem in §2 (this is Q2):
   variables and a sweep of components — and a new thing every future component
   must remember to use.
 
-**Recommendation: (b), but only for headings and body text, not for buttons or
+**Recommendation was (b); the planner chose (a) (Q2), so (b) below is not built.** The text that follows is kept as the record of the alternative.
+
+**Original recommendation: (b), but only for headings and body text, not for buttons or
 rules.** It is the version that does what was asked. If the sweep turns out to be
 larger than the 56 sites suggest, stop and report rather than shipping (a) as if
 it were (b).
@@ -177,8 +222,10 @@ Two controls, one default.
   from §3.2 and any per-block colour is **ignored**. Off, blocks that have their
   own colour use it and the rest still follow the site. Stored as
   `text_colours.match_all` (absent = `true`, so existing sites are unchanged).
-  Turning it on **does not delete** the per-block choices — they are ignored, as
-  `bgImage` is under a non-photo background — so flipping it back restores them.
+  *(Q7: superseded.)* Turning it on **clears** every per-block text colour
+  and font after a confirmation that says how many blocks it will change ("Reset
+  text style on 4 blocks?"). It is destructive and has no undo, so the confirm is
+  not optional. Turning it off changes nothing by itself.
 - **Per block: "Use the site's text colour"** — a switch in the block inspector
   beside the existing Background control, on by default. Off reveals **Text** and
   **Secondary text** pickers (same swatches and hex field as §3.2, plus a
@@ -368,7 +415,9 @@ unit-tested there, never inline in the action or the component.
 1. `src/lib/theme/`: the `text_colours` type, `resolveTheme` reader,
    `themeTokens` merge, the curated swatches, and a helper that returns each
    swatch's ratio against the current paper. Unit tests first.
-2. If Q2 is (b): the `text` token end to end — `PaletteTokens`, `validatePalette`
+2. ~~If Q2 is (b): the `text` token end to end~~ **Dropped (Q2 = a).** Instead:
+   audit button label colours and add the "white on ink" blocking pair if needed
+   (see Consequences of Q2). The old text: the `text` token end to end — `PaletteTokens`, `validatePalette`
    (one new blocking pair), CSS variables, Tailwind config, then the component
    sweep, checking `bg-ink` / `border-ink` usages are untouched.
 3. `saveTheme` + its zod schema: accept, validate, persist, refuse with the ratio.
@@ -381,7 +430,7 @@ unit-tested there, never inline in the action or the component.
 5. Per-block colour (§3.7): the style keys and their ripple, the cascade
    function, the inspector controls, the background-aware gate, and the
    site-wide "same in every section" switch.
-6. Save-the-date, per Q3. Then HANDOFF, this file's Build status, the README index row.
+6. ~~Save-the-date~~ **Dropped (Q3 = keeps its own).** Then HANDOFF, this file's Build status, the README index row.
 
 ## 5. Test plan
 
@@ -393,8 +442,9 @@ unit-tested there, never inline in the action or the component.
   hex or a non-string falls back per field; `saveTheme` refuses a 3.0:1 text
   colour and accepts a 4.6:1 one **on each of the eight palettes** (including the
   two dark ones, where `ink` is the light colour).
-- Cascade: block > site > palette, and `match_all` on ignores a block's colour
-  **without deleting it** (turn it off and the block's colour returns).
+- Cascade: block > site > palette. Turning `match_all` on **clears** block
+  colours and fonts (Q7) and the confirm reports the right count; turning it off
+  clears nothing.
 - Per-block gate: a swatch passes on Plain and fails on the Ink band (and vice
   versa) from the same hex; changing a block's background re-flags a colour that
   now fails and the block renders with the site colour meanwhile; Photograph
@@ -412,14 +462,13 @@ unit-tested there, never inline in the action or the component.
   `switches.ts` pattern).
 - A pinned test that the `bg-ink` / dark-band text pair does not move when the
   text colour changes (§3.4).
-- A source guard that no component outside the sweep reintroduces `text-ink` for
-  something that should follow the setting, if Q2 is (b).
+- A button's label stays readable on a pale `ink` (the "white on ink" pair, Q2).
 - **Browser**, because this is colour and nothing else: Ivory and Midnight, each
   with a green, a navy and a deliberately faint text choice, at 390px and
   1440px; the reply form and selected-button states; a block with the Ink
   background; the hero full-photo look; and a printed page.
 
-## 6. Questions
+## 6. Questions (all answered — see **Answered** above; recommendations kept as the record)
 
 | # | Question | Recommendation |
 | --- | --- | --- |
