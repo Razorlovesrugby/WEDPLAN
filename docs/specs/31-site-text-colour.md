@@ -1,4 +1,4 @@
-# Feature spec: Changing the text colour on the invitation website
+# Feature spec: Text colour and fonts on the invitation website (text colour, per-block overrides, one consistent body font)
 
 **Status: proposed (2026-10-11) — asked for as a spec. Nothing is built.** Per
 `docs/specs/README.md` and `CLAUDE.md`, answering the questions in §6 is content
@@ -16,6 +16,15 @@ enough to start", **Q6** was "site-wide only, no per-block") and pulls the
 photograph question (**Q4**) back in, because a block with a picture behind it is
 exactly where a different text colour is needed. §3.7 is the new design; §3.4,
 §5, §6 and §7 are updated to match. §3.1–§3.3 (the site-wide half) stand.
+
+## Added — 2026-10-11 (second follow-up): fonts
+
+*"Can we ensure font is controllable. I can see that gift body text and the rest
+of the sections were different."*
+
+Two asks: **(1)** the gift section's body text should not look different from the
+other sections, and **(2)** the font should be controllable. §3.8 is the design.
+Same rule as above: this extends the spec, it does not authorise a build.
 
 **Depends on:** spec 14 §5 (themes and palettes), spec 24/30 (the rail — theme,
 palette, typography), spec 23 (block styles), spec 29/14 §12.1 (the
@@ -204,6 +213,66 @@ With per-block colour:
   vanish), **warn** — that pairing is checkable against a flat colour.
 - The treatments stay independent of the colour; both are style keys.
 
+### 3.8 Fonts: one consistent body, and a control for it
+
+**What I found (read off the source — not seen in a browser, so treat it as a
+diagnosis, not a reproduction).** Body text has no single class that every block
+uses. Each block reaches for whatever suits it, and several lean on classes
+written for something else:
+
+- The gift section's blurb (`src/components/site/gift-funds.tsx:42`) is
+  `site-event-detail mt-2 italic text-muted` — **the schedule's event-detail
+  class, plus `italic`**. Under Editorial (and Evening) `.site-event-detail` is
+  18px italic at 1.55 line height (`globals.css` ~1080). So the gift blurb is
+  italic, grey and 18px while a Text, FAQ or Story block next to it is upright and
+  inherits the page's body size. That matches "the gift body text is different".
+- The same pattern is likely elsewhere: blocks borrowing `site-event-*` or
+  `site-label` for convenience. **Build step 1 is an audit** (below) that lists
+  every block's body text and what class sets it — I only read the gift block.
+- The faces themselves are not the problem: all body text resolves through the
+  `font-body` / `font-display` / `font-label` families, set per theme and
+  typography pairing (`tailwind.config.ts`, `globals.css` §"three type roles").
+
+**Part 1 — make body text one thing.** Introduce (or confirm) three named text
+roles every block must use, and nothing else:
+
+| Role | Used for | Today |
+| --- | --- | --- |
+| **Body** | paragraphs in any block, incl. gift blurb, FAQ answers, story | inherited; varies by block |
+| **Detail** | a line beneath a name or title (event detail, gift blurb, address) | `.site-event-detail`, 18px italic under Editorial |
+| **Label** | small caps: `04 · ATTIRE`, times | `.site-label` — already consistent |
+
+The decision is **Q11**: should the gift blurb become plain Body, or is "italic
+Detail under a name" the intended look for *every* block that has a name and a
+line under it (events, gifts, dress codes, transport)? Either way it must be the
+same everywhere — a pinned test lists which classes each block may use.
+
+**Part 2 — controllable fonts.**
+
+- **Site-wide:** the rail's existing Typography group already offers pairings
+  (Fraunces · EB Garamond, EB Garamond · Inter) for Editorial only; Script's two
+  faces *are* the theme. Extend it so the planner chooses the **Body font**
+  separately from the **Heading font**, from the faces already self-hosted
+  (`src/lib/fonts`). **No Google fetch** — `index.ts` refuses a runtime request
+  because it leaks every visitor's IP, and that rule is not relaxed here (Q12).
+  Stored in the theme payload like `text_colours` (`fonts: { heading?, body? }`),
+  absent = the pairing's own, so nothing changes for an existing site.
+- **Same switch as colour.** Reuse §3.7's "Same … in every section" switch: one
+  switch for text colour *and* font, on by default, per-block values kept but
+  ignored while it is on. A second switch for fonts alone is Q13.
+- **Per block:** the inspector's "Use the site's text style" gains a **Body
+  font** picker from the same list. Stored as one more closed-set style key,
+  `bodyFont`, with the same ripple as `textColour` (type, key list, schema,
+  inspector, `style-labels.ts`, two pinned tests). A font is a name from the list
+  and **never a CSS string** — the value ends up in a `font-family`.
+- **Size and weight** are not controlled (Q14). The type scale is part of why the
+  Editorial theme looks designed; a free size slider is the easiest way to break
+  it, and nobody has asked.
+- **Fallbacks, again:** the fallback goes inside `var()` (HANDOFF session 29) —
+  an undefined custom property invalidates the whole `font-family` declaration.
+  A per-block font is set as a variable on the block, with the site's own as the
+  fallback inside it.
+
 ### 3.5 Storage
 
 No migration expected: the theme is a JSON payload in `site_content`, read by
@@ -229,6 +298,10 @@ unit-tested there, never inline in the action or the component.
 3. `saveTheme` + its zod schema: accept, validate, persist, refuse with the ratio.
 4. The rail group and the live preview — one renderer, as always, so the preview
    needs no special case.
+0. **Audit first (§3.8):** list every block's body-text class and how it differs
+   from Body/Detail, as a table in this file's Build status. Fix the gift blurb
+   (and any others found) per Q11 before adding any control — a font picker
+   over inconsistent blocks just moves the inconsistency around.
 5. Per-block colour (§3.7): the style keys and their ripple, the cascade
    function, the inspector controls, the background-aware gate, and the
    site-wide "same in every section" switch.
@@ -252,6 +325,15 @@ unit-tested there, never inline in the action or the component.
   blocks accept any valid hex and never block.
 - `styleSchema` accepts `textColour` / `mutedColour` as hex and rejects other
   values; the known-key list in `blocks.test.ts` includes them.
+- **Consistency:** a unit test that renders (or reads the source of) every block
+  type and asserts its body text uses only the allowed Body/Detail/Label classes
+  — it would have caught the gift blurb. The gift blurb and an FAQ answer compute
+  the same `font-family`, size and style (per Q11).
+- Fonts: `resolveTheme` with no `fonts` is today's theme exactly; an unknown font
+  name falls back per field; `bodyFont` rejects anything not in the list
+  (including a CSS string); the face list equals the self-hosted set, so adding a
+  font in `src/lib/fonts` without registering it fails the build (the
+  `switches.ts` pattern).
 - A pinned test that the `bg-ink` / dark-band text pair does not move when the
   text colour changes (§3.4).
 - A source guard that no component outside the sweep reintroduces `text-ink` for
@@ -274,6 +356,11 @@ unit-tested there, never inline in the action or the component.
 | 7 | **What does the "same in every section" switch do to existing per-block colours?** Ignore them (keep, restorable), or clear them? | **Ignore, don't clear** — reversible, and consistent with how `bgImage` survives a background change. |
 | 8 | **Default for the switch** on a site that has never set a text colour. | **On.** Nothing changes until the planner turns it off. |
 | 9 | **Link colour per block?** Or only Text and Secondary? | **Only Text and Secondary.** A third picker per block is clutter, and links on a custom ground can use the site's accent if it passes; revisit if asked. |
+| 11 | **The gift blurb and its siblings.** Plain Body text like every other block, or is "name with an italic Detail line" the look you want for events, gifts, attire and transport alike? | **Plain Body for the gift blurb** (it is a paragraph, not a detail line), and keep Detail for the schedule only. Whichever you pick, one rule for all blocks. |
+| 12 | **Which fonts?** Only the faces already self-hosted (Fraunces, EB Garamond, Inter, Script), or do you want others added? | **Self-hosted only** to start. Adding a face is two files in `src/lib/fonts` and a row; name the ones you want and each is small. |
+| 13 | **One switch or two?** Does "same in every section" cover colour and font together, or separately? | **One switch**, to keep the rail simple; split only if you hit a case. |
+| 14 | **Size and weight.** Controllable, or fonts only? | **Fonts only.** |
+| 15 | **Does a font choice apply to Script too?** Script's two faces are the theme today. | **Yes for body**, so the control is not Editorial-only; Script's script-face headings stay (they are the preset). |
 | 10 | **Does the picture-as-background control change?** The planner mentioned adding pictures; the Photograph background and picker already exist (spec 23/27). Is anything about *adding* pictures missing, or is this only about the text over them? | Assumed **only the text over them**. If there is a gap in uploading or choosing the background picture, say what, and it becomes its own section here or its own spec. |
 
 ## 7. Left out on purpose
@@ -281,7 +368,8 @@ unit-tested there, never inline in the action or the component.
 - **A per-block link colour** (Q9), and a **per-block override of anything but
   text** — background colour and picture are unchanged (the Photograph
   background already exists).
-- **Fonts, sizes and weights.** Typography is its own pairing control already.
+- **Font size and weight** (Q14), and **web fonts fetched at runtime** (leaks IPs).
+  Choosing among already-hosted faces is in (§3.8).
 - **Background colour** and creating palettes from scratch. This spec is text
   only; the rail deliberately offers curated palettes.
 - **Automatic text colour from the photo or paper.** Real work, new failure
