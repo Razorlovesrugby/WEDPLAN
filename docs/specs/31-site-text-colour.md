@@ -356,12 +356,12 @@ unit-tested there, never inline in the action or the component.
 | 7 | **What does the "same in every section" switch do to existing per-block colours?** Ignore them (keep, restorable), or clear them? | **Ignore, don't clear** — reversible, and consistent with how `bgImage` survives a background change. |
 | 8 | **Default for the switch** on a site that has never set a text colour. | **On.** Nothing changes until the planner turns it off. |
 | 9 | **Link colour per block?** Or only Text and Secondary? | **Only Text and Secondary.** A third picker per block is clutter, and links on a custom ground can use the site's accent if it passes; revisit if asked. |
+| 10 | **Does the picture-as-background control change?** The planner mentioned adding pictures; the Photograph background and picker already exist (spec 23/27). Is anything about *adding* pictures missing, or is this only about the text over them? | Assumed **only the text over them**. If there is a gap in uploading or choosing the background picture, say what, and it becomes its own section here or its own spec. |
 | 11 | **The gift blurb and its siblings.** Plain Body text like every other block, or is "name with an italic Detail line" the look you want for events, gifts, attire and transport alike? | **Plain Body for the gift blurb** (it is a paragraph, not a detail line), and keep Detail for the schedule only. Whichever you pick, one rule for all blocks. |
 | 12 | **Which fonts?** Only the faces already self-hosted (Fraunces, EB Garamond, Inter, Script), or do you want others added? | **Self-hosted only** to start. Adding a face is two files in `src/lib/fonts` and a row; name the ones you want and each is small. |
 | 13 | **One switch or two?** Does "same in every section" cover colour and font together, or separately? | **One switch**, to keep the rail simple; split only if you hit a case. |
 | 14 | **Size and weight.** Controllable, or fonts only? | **Fonts only.** |
 | 15 | **Does a font choice apply to Script too?** Script's two faces are the theme today. | **Yes for body**, so the control is not Editorial-only; Script's script-face headings stay (they are the preset). |
-| 10 | **Does the picture-as-background control change?** The planner mentioned adding pictures; the Photograph background and picker already exist (spec 23/27). Is anything about *adding* pictures missing, or is this only about the text over them? | Assumed **only the text over them**. If there is a gap in uploading or choosing the background picture, say what, and it becomes its own section here or its own spec. |
 
 ## 7. Left out on purpose
 
