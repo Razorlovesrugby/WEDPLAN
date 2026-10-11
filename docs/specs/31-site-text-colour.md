@@ -1,6 +1,6 @@
 # Feature spec: Text colour and fonts on the invitation website (and a few small changes from the same round of feedback)
 
-**Status: all 19 questions answered (2026-10-11). Nothing is built.** Per
+**Status: built (2026-10-11) — all 19 questions answered, then "Okay let's build" as its own turn.** Branch `claude/spec-31-site-text-colour`, no PR opened. See **Build status** at the foot. Per
 `docs/specs/README.md` and `CLAUDE.md`, answering the questions is content for
 this file, not authorisation to build; the build starts when the planner says to
 build it.
@@ -506,3 +506,76 @@ unit-tested there, never inline in the action or the component.
 - **The invitation email's colours and the link-preview (Open Graph) image.**
   They render outside the site's CSS and have their own styling.
 - **A "readable" override.** The gate has no escape hatch, on purpose.
+
+## Build status (2026-10-11)
+
+**Verified:** `npm run typecheck` clean; `npm test` **984 passing** (953 before, 31
+new); `npm run build` passes with placeholder env. `verify-migrations.sh` **not
+run — no SQL was touched** and no migration was added. **One thing looked at:**
+the cascade, in headless Chromium on a static page using the built stylesheet — a
+block's own text colour, secondary colour and font apply; its buttons follow;
+a dark band's own background does not move; a photograph block's colour replaces
+the cream. **Never opened in the real app, never run against Supabase** — the rail
+panel, the inspector controls, the confirm dialog, the two server actions and the
+mood board title are typechecked and built, not seen.
+
+**What was built**
+- `src/lib/theme/text-style.ts` (+ tests): the pure logic — overrides, the "same in
+  every section" state, the gate (`textColourFailures` = `validatePalette` on the
+  merged tokens), a block's ground and its check, the swatches, font choices.
+- Theme gains `textStyle` (`text_colours`, `match_all`, `fonts` in the existing
+  `site_content` theme JSON). `siteTokens()` applies it; **`themeTokens()` does not**
+  — the save-the-date calls that one, so it keeps its own colours (Q3).
+- Block style keys `textColour`, `mutedColour`, `bodyFont` (type, key list, schema,
+  tests). `offersTextStyle()` decides which blocks show the controls (not the hero).
+- `siteRoot()` in `src/lib/fonts` builds the root's style and font classes for the
+  guest page and the editor preview, so the two cannot drift.
+- Rail panel **Text colour & font** and per-block **Use the site's text style**.
+  Actions: `saveTheme` gains `text_colours` / `fonts` (re-checked against the palette
+  being saved); new `setMatchAllText(on)` clears block overrides when turned on.
+- Gift description is Body text (Q11); the Reference line is gone (Q16); the mood
+  board title is `InlineText` with a "✎ Rename" button (§3.10).
+
+**Where the build departs from the text above**
+1. **Q2 (a) turned out to need no "white on ink" pair.** The one `bg-ink text-white`
+   (the RSVP selected state) is remapped to `paper` on a dark page, and on a light
+   page any ink that passes 4.5:1 against paper passes against white. Other buttons
+   use `text-paper`, which `validatePalette` already checks.
+2. **Tinted ground is accent at 8% over paper** (what `BACKGROUND_CLASS` draws), not
+   "ink at 7%" as §3.7 said.
+3. **The mood board's blank title was never "silently ignored"** (§3.10 was wrong):
+   the schema's `min(1)` rejects it, and the header showed "Some fields need fixing"
+   over a blank field. The fix is the schema's own message ("Give the board a name").
+4. **Heading font is Editorial-only; body font works on both** (Q15). The per-block
+   control is body font only.
+5. **Script sites that pick Fraunces or Inter now load those faces** (they were not
+   loaded for Script before); a page that picks neither loads nothing extra.
+   **Fraunces and Inter ship no italic file**, so italic text in them is the
+   browser's synthesised slant.
+6. **A per-block colour that fails its background is stored but not drawn** — the
+   block shows the site's colour and the inspector says why. The server also refuses
+   it in `setBlockStyle`. Over a photograph nothing is checked.
+7. **Secondary text is not offered over a photograph** — a photograph block forces
+   one colour onto every descendant.
+8. **Applying a Vibe drops any text colour that is unreadable on the Vibe's palette**
+   (a dark green on Midnight) and keeps fonts and the switch. Not in the spec.
+9. **Site-wide colours/fonts are live immediately** (the theme is not revisioned,
+   like the palette); **block-level changes are the draft** and reach guests on the
+   next Publish. Turning the switch on clears the *draft* blocks.
+10. **The consistency test only pins the gift blurb.** §3.8's audit of *every*
+    block's body text was **not done**; only the gift section was fixed. A look at
+    the source shows other blocks that use italic or the schedule's detail class
+    (`arrivals.tsx` address notes, `content.tsx` event detail, `guestbook.tsx`,
+    `song-list.tsx`) — some are plainly intended (an event's venue line). They are
+    listed here, not changed, because deciding which are intended is the planner's.
+11. **No `lint` was run** — the project has no ESLint config (`next lint` prompts to
+    create one).
+
+**Pick up here:** open `/site`, choose a palette, then Text colour & font: pick a
+swatch and watch the preview; switch "Same text style in every section" off, select a
+block, set its own colour and body font, then switch it back on and expect the
+count in the confirm. Try a Photograph-background block with a dark colour over a pale
+print, and the gift section beside a Text block. On a phone, rename a mood board with
+the Rename button. The likeliest faults are where nobody has looked: the rail's
+swatches on the two dark palettes, a Script site choosing a body font (extra faces),
+and the confirm's count after a refresh.

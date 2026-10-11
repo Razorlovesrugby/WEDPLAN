@@ -1,4 +1,6 @@
 import { isEditorialFamily } from "@/lib/theme/presets";
+import { siteTextVars, themeCssVars, type SiteTheme } from "@/lib/theme/presets";
+import { fontChoiceVars, usesExtraFaces, type FontId } from "@/lib/theme/text-style";
 import localFont from "next/font/local";
 
 /**
@@ -100,9 +102,24 @@ export const label = localFont({
  * defines `--font-display` falls back to Pinyon exactly as it did before
  * spec 25 existed.
  */
-export function siteFontClasses(preset: string): string {
+export function siteFontClasses(preset: string, allFaces = false): string {
   const base = `${script.variable} ${body.variable}`;
-  return isEditorialFamily(preset) ? `${base} ${display.variable} ${label.variable}` : base;
+  return isEditorialFamily(preset) || allFaces ? `${base} ${display.variable} ${label.variable}` : base;
+}
+
+/**
+ * The chosen faces by their planner-facing names (spec 31), as custom
+ * properties on the site root. A block or the site then sets
+ * `--font-body: var(--face-garamond)` — a name from a closed list, never a
+ * CSS string from the database. These are always safe to emit; they only
+ * *render* if `siteFontClasses(preset, true)` also loaded the face.
+ */
+export function faceVars(): Record<string, string> {
+  return {
+    "--face-fraunces": display.style.fontFamily,
+    "--face-garamond": body.style.fontFamily,
+    "--face-inter": label.style.fontFamily,
+  };
 }
 
 /**
@@ -145,5 +162,29 @@ export function typographyCssVars(
     "--font-display": display.style.fontFamily,
     "--font-body": body.style.fontFamily,
     "--font-label": label.style.fontFamily,
+  };
+}
+
+/**
+ * Everything the site's root element needs for colour and type, in one place so
+ * the guest page and the editor's preview cannot drift apart (spec 31). Block
+ * fonts only count while "same in every section" is off — the renderer ignores
+ * them otherwise, so loading their faces would be bytes for nothing.
+ */
+export function siteRoot(
+  theme: SiteTheme,
+  blocks: ReadonlyArray<{ style?: { bodyFont?: FontId } | null }>,
+): { style: Record<string, string>; fontClasses: string } {
+  const { fonts, matchAll } = theme.textStyle;
+  const blockFonts = matchAll ? [] : blocks.map((block) => block.style?.bodyFont);
+  return {
+    style: {
+      ...themeCssVars(theme),
+      ...typographyCssVars(theme.preset, theme.typography),
+      ...faceVars(),
+      ...fontChoiceVars(isEditorialFamily(theme.preset), fonts),
+      ...siteTextVars(theme),
+    },
+    fontClasses: siteFontClasses(theme.preset, usesExtraFaces(fonts, blockFonts)),
   };
 }

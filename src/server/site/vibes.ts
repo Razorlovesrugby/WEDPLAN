@@ -4,6 +4,8 @@ import { styleSchema } from "@/lib/site/block-schemas";
 import type { SiteBlock } from "@/lib/site/blocks";
 import { serialiseMotion } from "@/lib/site/motion";
 import { THEME_BLOCK_KEY } from "@/lib/site/sections";
+import { PALETTES } from "@/lib/theme/presets";
+import { TEXT_ROLES, resolveTextStyle, serialiseTextStyle, textColourFailures } from "@/lib/theme/text-style";
 import { vibeVariants, type Vibe } from "@/lib/site/vibes";
 import { THEME_PRESETS } from "@/lib/theme/presets";
 
@@ -82,6 +84,10 @@ export async function applyVibeToDraft(
     motion: serialiseMotion({ level: vibe.theme.motion, off: [], on: [] }),
     // A saved custom palette is replaced by the Vibe's own.
     custom_tokens: undefined,
+    // Spec 31: the planner's text colours survive a Vibe only where they are still
+    // readable on its palette — a dark green chosen on Ivory is invisible on
+    // Midnight. Fonts and the "same in every section" switch always survive.
+    ...keptTextStyle(previous, vibe.theme.palette),
   });
 
   const { error: themeError } = await supabase.from("site_content").upsert(
@@ -150,4 +156,15 @@ export async function restoreSnapshot(
     if (error) return { ok: false, error: error.message };
   }
   return { ok: true };
+}
+
+function keptTextStyle(previous: Record<string, unknown> | null, palette: keyof typeof PALETTES) {
+  const before = resolveTextStyle(previous?.["text_colours"], previous?.["fonts"]);
+  const tokens = PALETTES[palette].tokens;
+  const colours = { ...before.colours };
+  for (const role of TEXT_ROLES) {
+    const value = colours[role];
+    if (value && textColourFailures(tokens, { [role]: value }).length > 0) delete colours[role];
+  }
+  return serialiseTextStyle({ ...before, colours });
 }

@@ -3,6 +3,41 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 37 (spec 31):** text colour, fonts, and three small fixes, built on branch
+`claude/spec-31-site-text-colour` (**no PR opened**). Asked for as a spec, grew over
+four follow-ups, nineteen questions answered one by one, then "Okay let's build" as its
+own turn. Read the spec's **Build status** first; this is the short version.
+
+- **Text colour and font, site-wide and per block.** A rail panel (Text, Secondary,
+  Links; body and heading font) and, per block, "Use the site's text style". One switch,
+  **"Same text style in every section"**, on by default; **turning it on clears every
+  block's own colour/font** (Q7, against the recommendation) after a confirm with a count.
+  Stored in the existing theme JSON (`text_colours`, `match_all`, `fonts`) and three
+  block style keys (`textColour`, `mutedColour`, `bodyFont`). **No migration.**
+- **Q2 against the recommendation: the override replaces `ink`/`muted`/`accent` itself**,
+  so buttons, selected states and lines follow the text colour. `themeTokens()` is
+  deliberately **not** changed — the save-the-date calls it and keeps its own colours (Q3);
+  the site's pages use `siteTokens()`.
+- **Readability is a gate, not a suggestion.** The same `validatePalette` a palette passes,
+  on the merged tokens; a block's colour is checked against *its own* ground (paper, the
+  8% accent tint, the site's ink) and is advisory only over a photograph. A colour that
+  fails is stored but **not drawn**. `saveTheme` re-checks against the palette being
+  saved; applying a Vibe drops overrides that no longer pass.
+- **Small ones:** the gift description is plain Body text (it borrowed the schedule's
+  italic detail class); the gift **Reference** line and `giftReference` are gone; a mood
+  board title has a visible "✎ Rename" and `InlineText`. Spec 31 §3.10's claim that a blank
+  title was silently ignored was wrong (the schema rejects it) — corrected in the build status.
+- **Verified:** typecheck clean, **984 tests** (953 before), `next build` (placeholder env).
+  **Looked at:** only the colour/font cascade, in headless Chromium on a static page using
+  the built stylesheet. **Never opened in the real app or against Supabase**; `verify-migrations.sh`
+  not run (no SQL). The spec's §3.8 audit of *every* block's body text was **not** done —
+  only the gift section was fixed and pinned; the other italic/detail uses are listed in the
+  spec, not changed. Fraunces and Inter have no italic file, so italics in them are synthesised.
+- **Pick up here:** `/site` → Text colour & font on both a light and a dark palette; switch
+  the sitewide switch off and style one block (try a dark colour on a Photograph block over a
+  pale print); a Script site choosing a body font (loads two extra faces); rename a mood board
+  on a phone. `0026`–`0034` are still not applied to the live project.
+
 **Session 36 (spec 30):** two small fixes, built on branch
 `claude/spec-30-save-the-date-reply-and-undimmed-photos` (**no PR opened**). Asked
 for as a spec, then "ask open questions and build" as its own turn. Read the spec's

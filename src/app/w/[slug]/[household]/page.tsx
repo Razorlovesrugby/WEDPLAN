@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
-import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
+import { siteRoot } from "@/lib/fonts";
 import { findWeddingBySlug } from "@/server/queries/site";
 import { loadPublishedBlocks } from "@/server/queries/site-blocks";
 import { buildPersonalContext, buildRenderContext } from "@/server/queries/site-render";
@@ -10,7 +10,7 @@ import { resolveInvitation } from "@/server/rsvp/resolve";
 import { formatAddress, householdPath } from "@/lib/site/household-slug";
 import { visibleBlocks } from "@/lib/site/blocks";
 import { listNames } from "@/lib/invites";
-import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
+import { themeAttributes } from "@/lib/theme/presets";
 import { formatDate } from "@/lib/format";
 import { SiteTopBar } from "@/components/site/top-bar";
 import { SiteBlocks } from "@/components/site/blocks/render";
@@ -134,10 +134,11 @@ export default async function HouseholdSitePage({
   ]);
 
   const shown = visibleBlocks(blocks);
+  const root = siteRoot(ctx.theme, shown);
 
   return (
     <div
-      style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
+      style={root.style}
       // The preset's own name, so `globals.css` can carry everything that
       // separates one theme from another — type scale, alignment, the
       // itinerary grid — without a `preset === "editorial"` branch in a dozen
@@ -146,7 +147,7 @@ export default async function HouseholdSitePage({
       // How much it moves (spec 27): the level and the effects it switches on,
       // which `globals.css` reads. Nothing in React looks at them.
       {...motionAttributes(ctx.theme.motion)}
-      className={`site-print ${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
+      className={`site-print ${root.fontClasses} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       {/* Counted from the browser, and never when the planner is previewing
           (spec 22 §9). */}

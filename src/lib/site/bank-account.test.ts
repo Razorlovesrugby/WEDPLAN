@@ -3,7 +3,6 @@ import {
   accountDigits,
   formatNzAccount,
   giftClipboardText,
-  giftReference,
   parseNzAccount,
 } from "./bank-account";
 
@@ -70,43 +69,18 @@ describe("formatNzAccount", () => {
   });
 });
 
-describe("giftReference", () => {
-  it("is the household's name without the filler, then 'gift'", () => {
-    expect(giftReference("The Okonkwo Family")).toBe("Okonkwo gift");
-    expect(giftReference("Okonkwo")).toBe("Okonkwo gift");
-    expect(giftReference("The Smith-Jones household")).toBe("Smith-Jones gift");
-  });
-
-  it("keeps a name that merely starts with 'the'", () => {
-    expect(giftReference("Theodore Blake")).toBe("Theodore Blake gift");
-  });
-
-  it("falls back rather than printing ' gift'", () => {
-    expect(giftReference("")).toBe("Wedding gift");
-    expect(giftReference(null)).toBe("Wedding gift");
-    expect(giftReference("The Family")).toBe("The Family gift");
-  });
-
-  it("is capped, because a bank cuts a long reference where it likes", () => {
-    const reference = giftReference("Wolfeschlegelsteinhausenbergerdorff Wolfeschlegelsteinhausen");
-    expect(reference.length).toBeLessThanOrEqual(40);
-  });
-});
-
 describe("giftClipboardText", () => {
-  it("is three labelled lines, the number grouped for reading", () => {
+  it("is labelled lines, the number grouped for reading", () => {
     expect(
       giftClipboardText({
         accountName: "Ray & Olivia Smith",
         accountNumber: "123456789012300",
-        reference: "Okonkwo gift",
       }),
-    ).toBe("Account name: Ray & Olivia Smith\nAccount number: 12-3456-7890123-00\nReference: Okonkwo gift");
+    ).toBe("Account name: Ray & Olivia Smith\nAccount number: 12-3456-7890123-00");
   });
 
   it("leaves out what the couple have not filled in", () => {
-    expect(giftClipboardText({ accountName: null, accountNumber: null, reference: "Okonkwo gift" })).toBe(
-      "Reference: Okonkwo gift",
-    );
+    expect(giftClipboardText({ accountName: null, accountNumber: null })).toBe("");
+    expect(giftClipboardText({ accountName: "Ray & Olivia", accountNumber: null })).toBe("Account name: Ray & Olivia");
   });
 });

@@ -16,6 +16,7 @@ export function InlineText({
   ariaLabel,
   onSave,
   className,
+  id,
 }: {
   value: string | null;
   placeholder?: string;
@@ -23,6 +24,8 @@ export function InlineText({
   onSave: (next: string) => Promise<{ ok: boolean; error?: string }>;
   /** Overrides the default small-field type scale — e.g. matching a page heading. */
   className?: string;
+  /** So something else on the page (a "Rename" button) can focus the field. */
+  id?: string;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +46,7 @@ export function InlineText({
   return (
     <span className="block">
       <input
+        id={id}
         aria-label={ariaLabel}
         aria-invalid={error ? true : undefined}
         value={draft}

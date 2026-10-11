@@ -1,4 +1,3 @@
-import { stripHouseholdFiller } from "./household-slug";
 
 /**
  * A NZ bank account number, and what goes with it in the gift popup (spec 28 §6.1).
@@ -41,29 +40,11 @@ export function parseNzAccount(input: string): NzAccount {
   return { ok: true, digits, formatted: formatNzAccount(digits) };
 }
 
-/**
- * The reference a household is asked to put on its transfer: its name without
- * the filler, then "gift" — `The Okonkwo Family` is `Okonkwo gift`. It is how
- * the couple tell, from a bank statement, who sent what; nothing else reads it.
- *
- * Capped, because banks truncate a reference and a long one is cut where it
- * stops being useful.
- */
-export function giftReference(householdName: string | null | undefined): string {
-  const raw = (householdName ?? "").replace(/\s+/g, " ").trim();
-  // The same fallback the address derivation has: a name that is nothing but
-  // filler ("The Family") keeps itself rather than losing its whole name.
-  const name = stripHouseholdFiller(raw).trim() || raw;
-  const reference = name === "" ? "Wedding gift" : `${name} gift`;
-  return reference.length > 40 ? `${reference.slice(0, 39).trimEnd()}…` : reference;
-}
-
-/** The three values as labelled lines, for a guest pasting into a note. */
-export function giftClipboardText(details: { accountName: string | null; accountNumber: string | null; reference: string }): string {
+/** The values as labelled lines, for a guest pasting into a note. */
+export function giftClipboardText(details: { accountName: string | null; accountNumber: string | null }): string {
   return [
     details.accountName ? `Account name: ${details.accountName}` : null,
     details.accountNumber ? `Account number: ${formatNzAccount(details.accountNumber)}` : null,
-    `Reference: ${details.reference}`,
   ]
     .filter((line): line is string => line !== null)
     .join("\n");
