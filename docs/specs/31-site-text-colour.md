@@ -1,4 +1,4 @@
-# Feature spec: Text colour and fonts on the invitation website (text colour, per-block overrides, one consistent body font)
+# Feature spec: Text colour and fonts on the invitation website (and a few small changes from the same round of feedback)
 
 **Status: proposed (2026-10-11) — asked for as a spec. Nothing is built.** Per
 `docs/specs/README.md` and `CLAUDE.md`, answering the questions in §6 is content
@@ -32,6 +32,13 @@ Same rule as above: this extends the spec, it does not authorise a build.
 (Contribute popup → **Remove the reference**), and to put it in this spec rather
 than build it. Unrelated to colour and font; it lives here only because it is the
 same round of feedback. §3.9.
+
+## Added — 2026-10-11 (fourth follow-up): renaming a mood board
+
+*"Can we also add on the spec the ability to change the name of a mood board."*
+§3.10. Unrelated to the site; same round of feedback. **Finding: the ability
+already exists but is invisible** — see below, so this is a discoverability fix,
+not a new capability.
 
 **Depends on:** spec 14 §5 (themes and palettes), spec 24/30 (the rail — theme,
 palette, typography), spec 23 (block styles), spec 29/14 §12.1 (the
@@ -308,6 +315,40 @@ step back from "the couple can tell" to "the couple can tell if the guest
 bothers to say". If that matters, the alternative is the next-smallest change:
 keep the line but make it optional (Q16 b).
 
+### 3.10 Renaming a mood board
+
+**Today (read off the source, not seen in a browser).** `BoardHeader`
+(`src/components/moodboards/board-header.tsx`) renders the board's title as a bare
+`<input>` — no border, no background, `font-serif text-3xl` — so it looks exactly
+like a heading. Editing it works by clicking into it and clicking away: `onBlur`
+calls `updateMoodboard(id, { title, description })`. There is no pencil, no hover
+state, no placeholder, no Save button and no confirmation, so a planner has no
+reason to think it is editable. That fits "can we add the ability" for something
+already built. Three smaller faults in the same few lines:
+
+- **Blanking the title is silently ignored.** `updateMoodboard` only patches
+  `title` when it is non-empty (and the table has `check (title <> '')`), but the
+  field still *shows* empty, so the screen and the database disagree until a
+  reload.
+- **Every blur saves**, even with nothing changed, and then `router.refresh()`s.
+- A failed save's error is never cleared, even after a good one.
+
+**Proposal.**
+1. Make the title visibly editable: an underline on hover/focus and a small
+   "Rename" affordance beside it (pencil icon with text for touch, since hover
+   does not exist on a phone). Reuse `InlineText` — the project's existing inline
+   editor used for list titles (spec 11) — instead of a second hand-rolled input,
+   so a board renames the way a list does.
+2. Save on Enter or blur **only if the value changed**; Escape reverts. An empty
+   title reverts to the last good one and says so.
+3. Fix the stale error.
+4. **Where else (Q18).** The `/moodboards` list has no rename; opening a board
+   just to rename it is one extra step. Options in Q18.
+
+**No migration.** `updateMoodboard`, its schema and RLS already handle `title`; the
+public share page reads the same column, so a rename reaches `/m/<token>` and the
+site's moodboard sections on the next load with no further work.
+
 ### 3.5 Storage
 
 No migration expected: the theme is a JSON payload in `site_content`, read by
@@ -399,6 +440,8 @@ unit-tested there, never inline in the action or the component.
 | 15 | **Does a font choice apply to Script too?** Script's two faces are the theme today. | **Yes for body**, so the control is not Editorial-only; Script's script-face headings stay (they are the preset). |
 | 16 | **Remove the reference entirely (as asked), or make it a switch?** | **Remove it** as you said. The only alternative worth considering is a "Ask guests for a reference" switch in `/site/gifts`, default off, if matching payments to households turns out to matter. |
 | 17 | **Should the popup say anything instead?** e.g. a free line the couple writes ("Please put your name so we can thank you"). | **No.** A planner-written line can be a Text block above the gifts; adding another field is more code than the want justifies. |
+| 18 | **Rename from the list too?** From the board page only (fixing §3.10), or also a rename action on each card in `/moodboards`? | **Board page only.** It is a rare action and the fix makes it findable; add the list action if you find yourself opening boards just to rename them. |
+| 19 | **Does a rename change the public link?** Share links are token-based, so renaming never breaks one. Should a board that has been shared show a note that guests will see the new name? | **Yes, one quiet line** when the board has an active share ("Guests with the link will see the new name"). |
 
 ## 7. Left out on purpose
 
