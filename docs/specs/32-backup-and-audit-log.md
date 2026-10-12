@@ -1,8 +1,22 @@
 # Feature spec: Backups you can restore from on the free plan, and an audit log of who changed what
 
-**Status: proposed (2026-10-12) — asked for as a spec. Nothing is built.** Not a
-green light: per `docs/specs/README.md`, nothing beyond this document exists until the
-Open Questions (§9) have answers *and* the planner says to build it, in those words.
+**Status: building (2026-10-12) — asked for as a spec; then "Okay let's build and ask
+questions" as its own turn.** Four questions were asked and answered (below); the other
+five took the recommendation. See **Answered** and **Build status**.
+
+## Answered — 2026-10-12
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | "Live, all applied" — the live project is level with the repo through `0034`. | `0035` simply stacks on top; the backup workflow can be switched on as soon as the secrets exist. |
+| 2 | GitHub Actions artifact. | 30-day retention, private repo. |
+| 3 | Not asked; recommendation taken. | Dumps 30 days; audit rows 12 months. |
+| 4 | Everything in §4.2. | The full list, `site_blocks` as a diff. |
+| 5 | Not asked; recommendation taken. | `updated_at`/`rank`-only updates write nothing. |
+| 6 | Read-only first. | No `revertAuditEntry`; §4.4 is not built. |
+| 7 | Not asked; recommendation taken. | Any collaborator can read the activity page. |
+| 8 | Not asked; recommendation taken. | Public (signed-out) writes are logged. |
+| 9 | Not asked; recommendation taken. | GitHub's own failure email is the alert. |
 
 **Depends on:** `0001`/`0002` (tenancy, `is_collaborator()`), `0016` (collaborator
 display names), the existing `verify.yml` workflow and `scripts/verify-migrations.sh`.
