@@ -1,0 +1,136 @@
+name: backup
+
+# Nightly encrypted copy of the database, and a weekly copy of the images
+# (spec 32 §3). Free-plan Supabase has no downloadable backups and no
+# point-in-time recovery, so this is the only copy that is not in Supabase.
+#
+# Setup, once (docs/RESTORE.md "Setting it up"):
+#   repository secrets
+#     SUPABASE_DB_URL             the *session pooler* connection string (not the
+#                                 direct one — see "Connection" below)
+#     BACKUP_AGE_PUBLIC_KEY       `age1...`; the PRIVATE half lives with you only
+#     NEXT_PUBLIC_SUPABASE_URL    } for the weekly image copy
+#     SUPABASE_SERVICE_ROLE_KEY   }
+#   then Actions → backup → Run workflow, and open the artifact.
+#
+# Failure is loud: a failed run emails the repository owner through GitHub's own
+# Actions notifications. Nothing here swallows an error.
+
+on:
+  schedule:
+    # 14:17 UTC is 03:17 in New Zealand. Monday–Saturday: database only.
+    - cron: "17 14 * * 1-6"
+    # Sunday: database and images.
+    - cron: "17 14 * * 0"
+  workflow_dispatch:
+    inputs:
+      include_storage:
+        description: "Also copy the images"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Two runs at once would race on the same artifact name.
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_AGE_PUBLIC_KEY: ${{ secrets.BACKUP_AGE_PUBLIC_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      WITH_STORAGE: ${{ github.event.schedule == '17 14 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.include_storage) }}
+    steps:
+      - name: Refuse to run in a public repository
+        # Artifacts of a public repository can be downloaded by anyone signed in
+        # to GitHub. They are encrypted, but guest details are not something to
+        # leave lying around on the strength of that alone.
+        # (`null == false` is true in expressions, hence the explicit presence test.)
+        if: ${{ github.event.repository && github.event.repository.private == false }}
+        run: |
+          echo "::error::This repository is public; backup artifacts would be downloadable by anyone. Make it private, or store backups elsewhere (docs/specs/32, Q2)."
+          exit 1
+
+      - name: Check the secrets are set
+        run: |
+          missing=0
+          for name in SUPABASE_DB_URL BACKUP_AGE_PUBLIC_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::secret $name is not set (docs/RESTORE.md, \"Setting it up\")"; missing=1; fi
+          done
+          if [ "$WITH_STORAGE" = "true" ]; then
+            for name in NEXT_PUBLIC_SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; do
+              if [ -z "${!name}" ]; then echo "::error::secret $name is not set (needed for the image copy)"; missing=1; fi
+            done
+          fi
+          case "$BACKUP_AGE_PUBLIC_KEY" in age1*) ;; *) echo "::error::BACKUP_AGE_PUBLIC_KEY must be an age public key (starts age1)"; missing=1;; esac
+          exit "$missing"
+
+      - uses: actions/checkout@v4
+
+      - name: Install a pg_dump that matches the server
+        # pg_dump refuses to dump a server newer than itself, and the runner's
+        # client is whatever Ubuntu shipped. Ask the server, install that major.
+        run: |
+          major="$(psql "$SUPABASE_DB_URL" -Atc "select current_setting('server_version_num')::int / 10000")"
+          echo "server is PostgreSQL $major"
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSLo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-$major" age
+          echo "/usr/lib/postgresql/$major/bin" >> "$GITHUB_PATH"
+
+      - name: Dump the database
+        # Connection: the direct host of a free Supabase project is IPv6-only and
+        # GitHub's runners are IPv4, so SUPABASE_DB_URL must be the session-mode
+        # pooler string (Project → Connect → Session pooler).
+        run: ./scripts/backup-db.sh "$SUPABASE_DB_URL" backup/db
+
+      - name: Sanity-check the dump
+        # An empty database dumps "successfully". The guests table being absent
+        # or the file being tiny means something is wrong with the connection,
+        # not that there is nothing to back up.
+        run: |
+          size="$(wc -c < backup/db/public.dump)"
+          if [ "$size" -lt 10240 ]; then echo "::error::public.dump is only $size bytes"; exit 1; fi
+          pg_restore --list backup/db/public.dump | grep -q "TABLE DATA public guests " \
+            || { echo "::error::public.dump has no guests table data entry"; exit 1; }
+          pg_restore --list backup/db/public.dump | grep -q "TABLE DATA public audit_log " \
+            || { echo "::error::public.dump has no audit_log entry (is migration 0035 applied?)"; exit 1; }
+
+      - uses: actions/setup-node@v4
+        if: ${{ env.WITH_STORAGE == 'true' }}
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Copy the images
+        if: ${{ env.WITH_STORAGE == 'true' }}
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node scripts/backup-storage.mjs backup/storage
+
+      - name: Encrypt
+        # age to a public key: this runner can encrypt but never decrypt.
+        run: |
+          stamp="$(date -u +%Y-%m-%d)"
+          tar -C backup -cf - . | age -r "$BACKUP_AGE_PUBLIC_KEY" -o "wedplan-$stamp.tar.age"
+          size="$(wc -c < "wedplan-$stamp.tar.age")"
+          echo "wedplan-$stamp.tar.age is $size bytes"
+          [ "$size" -gt 1024 ] || { echo "::error::encrypted file is implausibly small"; exit 1; }
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wedplan-backup-${{ env.STAMP }}
+          path: wedplan-${{ env.STAMP }}.tar.age
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 0
