@@ -3,6 +3,46 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 38 (spec 32):** backups you can restore from on the free plan, and an audit
+log, built on branch `claude/spec-32-backup-and-audit-log` (**no PR opened**). Asked for
+as a spec, committed as one, then "Okay let's build and ask questions" as its own turn;
+four questions asked and answered, five took the recommendation. Read the spec's **Build
+status** first; this is the short version.
+
+- **Audit log (`0035`).** One append-only `audit_log` table, written only by an
+  `AFTER ... FOR EACH ROW` trigger (`audit_row()`) on 50 planner-authored tables, so it
+  catches server actions, the service-role public routes, and the SQL editor alike.
+  Inserts/deletes store the whole row, updates store `{col: [old, new]}`; `updated_at`,
+  `rank` and `sort_order`-only updates write nothing. `actor_id` is `auth.uid()`;
+  signed-out writes are `actor_kind = 'public'`. Bank details and every token hash are
+  `[redacted]`. Immutable even for its owner (a guard trigger); the only delete path is
+  `prune_audit_log()`, called weekly by `/api/cron/audit-prune` (keeps 12 months).
+  **A new table must either get the trigger or be added to the exception list in
+  `supabase/tests/18_audit_log.sql`** — that test fails otherwise, on purpose.
+- **`/settings/activity`** (linked from Settings): newest first, grouped by day in the
+  wedding's timezone, filter by area / person / dates, "Older changes" paging. Read-only.
+  Undo was **not** built (Q6). Sentences come from `src/lib/audit/describe.ts`.
+- **Backups.** `.github/workflows/backup.yml` nightly (03:17 NZ): `scripts/backup-db.sh`
+  → `public.dump` + `auth.dump`, `age`-encrypted to a public key, 30-day Actions
+  artifact; Sundays also copy the images (`scripts/backup-storage.mjs`, refuses above
+  200 MB). Refuses to run in a public repo. **`docs/RESTORE.md`** is the runbook;
+  `scripts/restore-db.sh` / `restore-storage.mjs` do the work.
+- **`scripts/verify-restore.sh`** (now in `verify.yml`) dumps a migrated+seeded database
+  with the real backup script and restores it into a fresh one, comparing row counts and
+  every policy/trigger/function/view/grant. It found two real bugs while being written
+  (see spec build status item 10): `--no-privileges` loses the grants, and keeping them
+  lets Supabase's default privileges re-grant `anon` everything.
+- **Verified:** typecheck clean, **1006 tests** (984 before), `verify-migrations.sh`
+  **541 assertions** (508 before), `verify-restore.sh` passes, `next build` (placeholder
+  env). Each guard was shown to fail when the thing it guards is removed.
+  **Not verified:** `backup.yml` has never run (no way to here); the restore is proven
+  against plain PostgreSQL only; `/settings/activity` never opened in a browser; the
+  trigger has never fired on a live project.
+- **Pick up here:** apply `0035` to the live project (**before** the first backup run —
+  the workflow checks the dump contains `audit_log`); make the repo private if it isn't;
+  do "Setting it up" then the "Rehearsal" in `docs/RESTORE.md`; open `/settings/activity`.
+  Keep a copy of your Vercel env vars, above all `INVITE_TOKEN_PEPPER`.
+
 **Session 37 (spec 31):** text colour, fonts, and three small fixes, built on branch
 `claude/spec-31-site-text-colour` (**no PR opened**). Asked for as a spec, grew over
 four follow-ups, nineteen questions answered one by one, then "Okay let's build" as its

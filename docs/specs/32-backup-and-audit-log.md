@@ -1,8 +1,10 @@
 # Feature spec: Backups you can restore from on the free plan, and an audit log of who changed what
 
-**Status: building (2026-10-12) — asked for as a spec; then "Okay let's build and ask
+**Status: built (2026-10-12) — asked for as a spec; then "Okay let's build and ask
 questions" as its own turn.** Four questions were asked and answered (below); the other
-five took the recommendation. See **Answered** and **Build status**.
+five took the recommendation. Branch `claude/spec-32-backup-and-audit-log`, **no PR
+opened**. See **Answered** and **Build status** at the end — in particular, nothing here
+has run against a real Supabase project or GitHub Actions.
 
 ## Answered — 2026-10-12
 
@@ -260,3 +262,80 @@ Point-in-time recovery, multi-region replicas, restoring *into* a live running w
 | 7 | Who can read the activity page — any collaborator, or only the wedding's owner? | Any collaborator (they are your partner and family helping out), with nothing redacted but the §4.2 list. |
 | 8 | Should guests' own actions (RSVP, song request) appear in the log? | Yes, as "Guest (via link)" — it answers "did they really change that?". |
 | 9 | Email the planner when a backup run fails, beyond GitHub's own notification? | GitHub's default is enough; revisit if it's ever missed. |
+
+## Build status (2026-10-12)
+
+**Verified:** `npm run typecheck` clean; `npm test` 1006 passing (984 before, 22 new:
+the describe/filter logic, a drift guard that reads `0035` and fails when an audited
+table has no filter area or noun, and the storage backup/restore scripts against a
+fake client); `./scripts/verify-migrations.sh` 541 assertions (508 before, 33 new in
+`supabase/tests/18_audit_log.sql`); `./scripts/verify-restore.sh` passes (new);
+`npm run build` — see HANDOFF for the result. The two checks that guard the risky
+parts were each shown to **fail** when the thing they guard is removed (the redaction,
+and the privilege reset in `restore-db.sh`).
+
+**Not verified, and the things most likely to need a second attempt:**
+- **`backup.yml` has never run.** Nothing in this sandbox can execute a GitHub
+  workflow, so the YAML is parsed and its shell logic is the same scripts CI already
+  exercises, but the PGDG client install, the pooler connection string, the `age`
+  step and the artifact upload are untested.
+- **The restore has been proven against plain PostgreSQL only.** Supabase's `postgres`
+  role may not be allowed to write `auth.users` (docs/RESTORE.md names the fallback).
+  The rehearsal in that file is the first real test.
+- **`/settings/activity` was never opened in a browser**, and the trigger has never
+  fired against a live Supabase project. `0035` must be applied to the live project
+  **before** the first backup run: the workflow's sanity check looks for `audit_log` in
+  the dump and fails the run if it isn't there.
+
+**Where the build departs from the text above:**
+
+1. **`row_key jsonb`, not `row_id uuid`.** Nine audited tables have composite or
+   non-`id` primary keys (`guest_tags`, `invitation_events`, `budget_item_*`,
+   `guest_event_overrides`, `gift_bank_details`), so a single uuid column couldn't hold
+   them. The key columns are passed to the trigger as an argument.
+2. **`actor_kind` is `'planner'` or `'public'`, not `'guest_link'`/`'system'`.** A guest
+   on their link and the cron are both `service_role` with no `auth.uid()`, so the
+   database can't tell them apart. The page says "A guest (via their link)" for the
+   tables a guest writes to and "An automatic update" for the rest. A check constraint
+   ties `actor_id` to `actor_kind = 'planner'`.
+3. **A `label` column** (not in §4.1): the row's name at the time ("Okonkwo",
+   "Ceremony"), set per table by a trigger argument, so the log reads as sentences
+   without joining 50 tables and still names a row after it's deleted.
+4. **`sort_order` counts as ordering churn, with `rank` and `updated_at`.** Q5 named
+   `rank` only; reordering a list or moodboard re-numbers neighbours the same way.
+   `cut_lines.position` deliberately does **not** — moving a cut line is a decision.
+5. **No foreign key from `audit_log.wedding_id` to `weddings`.** The log is immutable;
+   an `ON DELETE CASCADE` would make deleting a wedding fail on the guard. Retention is
+   what removes old rows. (Side effect: a deleted wedding's log lingers up to a year.)
+6. **Retention is `prune_audit_log()` plus `/api/cron/audit-prune`** (weekly, Sunday
+   03:30 UTC, in `vercel.json`), gated by `CRON_SECRET` like the reminders cron. The
+   function refuses a window under 30 days and is the only thing that can delete a row
+   (a transaction-local flag the guard trigger honours). Vercel's free plan allows two
+   cron jobs; this is the second.
+7. **Redacted updates show no old/new pair.** For a redacted column the log stores the
+   bare string `[redacted]`, so the page says a bank-details row "changed" with no
+   detail. That is the point.
+8. **Backups: images weekly, not nightly, and capped at 200 MB** (`STORAGE_BACKUP_MAX_MB`).
+   Free GitHub accounts have 500 MB of artifact storage in total; a nightly copy of up
+   to 1 GB of images would blow it. The step refuses loudly above the cap rather than
+   silently filling the quota.
+9. **Two scripts the spec didn't list:** `scripts/restore-db.sh` and
+   `scripts/restore-storage.mjs`, so the runbook is a command and not a recipe — and the
+   restore CI check runs the *same* restore script a person would.
+10. **Privileges are kept in the dump, and the restore switches the project's default
+    privileges off while it runs.** Found by the restore check: dumping with
+    `--no-privileges` (the spec's first instinct) would have restored an app that
+    couldn't read its own tables, and restoring with them kept would have given `anon`
+    back every grant the migrations revoke, because Supabase's default privileges hand
+    new tables to `anon`. `restore-db.sh` resets and restores those defaults around the
+    restore. `pg_restore --clean` would also have tried to drop the `public` schema
+    itself, so that entry is filtered out with a list file.
+11. **`auth.users` is restored before `public`**, because `collaborators.user_id`
+    references it and the foreign key wouldn't validate against an empty table.
+12. **The workflow refuses to run in a public repository** (not in the spec) and fails
+    if the dump is under 10 KB or lacks `guests`/`audit_log` data entries.
+13. **Not built, as answered:** `revertAuditEntry` (Q6). Q9's alert is GitHub's own.
+
+**Pick up here:** apply `0035` to the live project; make the repo private if it isn't;
+do "Setting it up" and the "Rehearsal" in `docs/RESTORE.md`; open `/settings/activity`
+after changing a guest and a budget line, and once as a guest from a link.
