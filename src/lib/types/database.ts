@@ -560,6 +560,24 @@ export type CoachRunView = CoachRunRow & {
   seats_left: number | null;
 };
 
+/** One row of the audit log (spec 32). Written only by a trigger; the app only reads it. */
+export type AuditLogRow = {
+  id: number;
+  wedding_id: string;
+  at: string;
+  /** The signed-in planner, or null for a change made with no one signed in. */
+  actor_id: string | null;
+  actor_kind: "planner" | "public";
+  table_name: string;
+  /** The row's primary key as {column: value} — composite for the join tables. */
+  row_key: Record<string, unknown>;
+  /** A name for the row at the time, where the table has one. */
+  label: string | null;
+  action: "insert" | "update" | "delete";
+  /** insert/delete: the whole row. update: only what changed, as {column: [old, new]}. Secrets read "[redacted]". */
+  changed: Record<string, unknown>;
+};
+
 export type CollaboratorRow = {
   id: string;
   wedding_id: string;
@@ -1757,6 +1775,7 @@ export type Database = {
       >;
     };
     Views: {
+      audit_log: View<AuditLogRow>;
       v_households: View<HouseholdView>;
       v_household_rsvp: View<HouseholdRsvpView>;
       v_guest_event_invites: View<GuestEventInviteView>;
@@ -1773,6 +1792,11 @@ export type Database = {
       v_coach_runs: View<CoachRunView>;
     };
     Functions: {
+      /** Spec 32: drops audit rows older than the window; service role only. */
+      prune_audit_log: {
+        Args: { p_keep_days?: number };
+        Returns: number;
+      };
       budget_guest_counts: {
         Args: { p_wedding_id: string; p_event_id?: string | null; p_force_invited?: boolean };
         Returns: { adult: number; child: number; seat: number }[];

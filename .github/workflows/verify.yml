@@ -18,6 +18,12 @@ jobs:
       - name: Verify the bootstrap script on a clean database
         run: ./scripts/verify-bootstrap.sh
 
+      # The nightly backup's dump and restore scripts, run end to end against
+      # a throwaway cluster, so a migration that breaks them fails here and
+      # not on the night a restore is needed (spec 32 §3.3).
+      - name: Verify a backup restores
+        run: ./scripts/verify-restore.sh
+
   app:
     runs-on: ubuntu-latest
     steps:
