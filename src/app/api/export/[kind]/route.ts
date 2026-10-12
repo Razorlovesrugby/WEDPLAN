@@ -9,9 +9,10 @@ import { listInvites } from "@/server/queries/invites";
 import { getItemsForExport } from "@/server/queries/lists";
 import { parseGuestFilters } from "@/lib/filters";
 import { csvDocument } from "@/lib/csv";
+import { zip } from "@/lib/zip";
 import { guestName, formatDateTime } from "@/lib/format";
 import { getCoachManifest } from "@/server/queries/travel";
-import type { ListItemStatus } from "@/lib/types/database";
+import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
 
 /**
  * CSV exports.
@@ -33,21 +34,14 @@ function isKind(value: string): value is Kind {
   return (KINDS as readonly string[]).includes(value);
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ kind: string }> }) {
-  const { kind } = await params;
-  if (!isKind(kind)) {
-    return NextResponse.json({ error: "Unknown export" }, { status: 404 });
-  }
+type Built = { filename: string; body: string };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-
-  const wedding = await getCurrentWedding();
-  if (!wedding) return NextResponse.json({ error: "No wedding" }, { status: 404 });
-
+/**
+ * One export, as a filename and a CSV body. Pulled out of the route handler so
+ * `/api/export/all` builds exactly the files the individual buttons do — the
+ * zip can't drift from them, because there is only one place that makes them.
+ */
+async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSearchParams): Promise<Built> {
   const stamp = new Date().toISOString().slice(0, 10);
   let body: string;
   let filename: string;
@@ -60,8 +54,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // it: everything below this point loads the guest list and ends in an
     // `else` that would overwrite whatever body was built.
     const manifest = await getCoachManifest(wedding.id);
-    return new NextResponse(
-      csvDocument(
+    return {
+      filename: `coach-manifest-${stamp}.csv`,
+      body: csvDocument(
         ["Coach", "Direction", "Stop", "Pickup", "Household", "Seats"],
         manifest.map((row) => [
           row.run,
@@ -72,14 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           row.seats,
         ]),
       ),
-      {
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="coach-manifest-${stamp}.csv"`,
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+    };
   }
 
   if (kind === "tasks") {
@@ -112,18 +100,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         item.notes ?? "",
       ]),
     );
-    filename = `tasks-${stamp}.csv`;
-
-    return new NextResponse(body, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
-    });
+    return { filename: `tasks-${stamp}.csv`, body };
   }
 
-  const filters = parseGuestFilters(Object.fromEntries(request.nextUrl.searchParams));
+  const filters = parseGuestFilters(Object.fromEntries(searchParams));
   const guests = await listGuests(wedding.id, filters);
 
   if (kind === "catering") {
@@ -235,11 +215,65 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     filename = `guests-${stamp}.csv`;
   }
 
-  return new NextResponse(body, {
+  return { filename, body };
+}
+
+const csvResponse = ({ filename, body }: Built) =>
+  new NextResponse(body, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store",
     },
   });
+
+const BUNDLE_README = `Your wedding data, downloaded from WEDPLAN.
+
+These are spreadsheets (CSV) you can open in Excel, Numbers or Google Sheets:
+  guests            every guest, with RSVP, dietary and accessibility notes
+  households        every household and its save-the-date link
+  catering-numbers  confirmed attendees only, for the caterer
+  tasks             every task across every list
+  coach-manifest    who is on which coach, from which stop
+
+This is a copy of what you can read, not a full backup: it can't be loaded back
+in automatically, and it doesn't include the budget, vendors, moodboards, the
+website or images. Treat it as private - it contains your guests' details.
+`;
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ kind: string }> }) {
+  const { kind } = await params;
+  if (kind !== "all" && !isKind(kind)) {
+    return NextResponse.json({ error: "Unknown export" }, { status: 404 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+
+  const wedding = await getCurrentWedding();
+  if (!wedding) return NextResponse.json({ error: "No wedding" }, { status: 404 });
+
+  if (kind === "all") {
+    // Everything unfiltered: a bundle is a copy of the whole list, not of
+    // whatever view happened to be open.
+    const files = await Promise.all(KINDS.map((k) => buildExport(k, wedding, new URLSearchParams())));
+    const encoder = new TextEncoder();
+    const bytes = zip([
+      { name: "README.txt", data: encoder.encode(BUNDLE_README) },
+      ...files.map((f) => ({ name: f.filename, data: encoder.encode(f.body) })),
+    ]);
+    const stamp = new Date().toISOString().slice(0, 10);
+    return new NextResponse(bytes as BodyInit, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="wedding-data-${stamp}.zip"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  return csvResponse(await buildExport(kind, wedding, request.nextUrl.searchParams));
 }

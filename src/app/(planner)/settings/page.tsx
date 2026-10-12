@@ -78,6 +78,23 @@ export default async function SettingsPage() {
         <ListAppearanceEditor lists={lists} />
       </section>
 
+      <section aria-labelledby="download" className="card space-y-2 p-4">
+        <h2 id="download" className="text-sm font-medium uppercase tracking-wide text-muted">
+          Download your data
+        </h2>
+        <p className="text-sm text-muted">
+          One zip of spreadsheets: guests, households, catering numbers, tasks and the coach
+          manifest. Open them in Excel, Numbers or Sheets. It&rsquo;s a copy of what you can read,
+          not a full backup &mdash; the budget, vendors, moodboards and website aren&rsquo;t in it.
+          It holds your guests&rsquo; details, so keep it private.
+        </p>
+        <p>
+          <a className="btn" href="/api/export/all" download>
+            Download everything (.zip)
+          </a>
+        </p>
+      </section>
+
       <section aria-labelledby="activity" className="card space-y-2 p-4">
         <h2 id="activity" className="text-sm font-medium uppercase tracking-wide text-muted">
           Activity

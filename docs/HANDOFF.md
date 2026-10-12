@@ -38,6 +38,14 @@ status** first; this is the short version.
   **Not verified:** `backup.yml` has never run (no way to here); the restore is proven
   against plain PostgreSQL only; `/settings/activity` never opened in a browser; the
   trigger has never fired on a live project.
+- **Follow-up, same session: "Download everything (.zip)"** in Settings
+  (`/api/export/all`): the five CSV exports plus a README in one zip, so a planner on an
+  iPad with no terminal can keep a copy. A readable copy, **not** a restore file; no
+  budget/vendors/moodboards/website/images. The export route's per-kind code moved into
+  `buildExport()` (behaviour unchanged by reading; **not run against a live project**);
+  `src/lib/zip.ts` is new and tested. The nightly workflow is untouched, and the
+  command-line scripts are no use to someone with no terminal — whether to make
+  `backup.yml`'s encryption optional (so setup is two pasted secrets) is still open.
 - **Pick up here:** apply `0035` to the live project (**before** the first backup run —
   the workflow checks the dump contains `audit_log`); make the repo private if it isn't;
   do "Setting it up" then the "Rehearsal" in `docs/RESTORE.md`; open `/settings/activity`.

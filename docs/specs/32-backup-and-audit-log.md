@@ -339,3 +339,23 @@ and the privilege reset in `restore-db.sh`).
 **Pick up here:** apply `0035` to the live project; make the repo private if it isn't;
 do "Setting it up" and the "Rehearsal" in `docs/RESTORE.md`; open `/settings/activity`
 after changing a guest and a budget line, and once as a guest from a link.
+
+## Follow-up (2026-10-12): "I don't need it automated", then "I'm on iPad"
+
+Asked whether there was an easier way to back up, the planner said they didn't need it
+automated, then that they are **on an iPad with no terminal** — which rules out the
+manual `backup-db.sh` / `restore-db.sh` route as well. Asked whether to add a one-click
+download, they answered "Yes, add it", so that was built.
+
+- **Built: `/api/export/all`** — one zip (`wedding-data-YYYY-MM-DD.zip`) of the five
+  existing CSV exports (guests, households, catering numbers, tasks, coach manifest)
+  plus a README, behind a "Download everything (.zip)" button in Settings. The route
+  handler was refactored so the zip and the individual buttons share one
+  `buildExport()`; `src/lib/zip.ts` is a small dependency-free stored-only ZIP writer,
+  checked against Python's `zipfile`. **It is a readable copy, not a restore file**, and
+  it does not include the budget, vendors, moodboards, the website or images (those have
+  no CSV export). Never run against a live project.
+- **Not decided:** the nightly `backup.yml` is untouched. The scripts need a terminal;
+  the workflow's *Run workflow* button and artifact download work from an iPad browser,
+  but setting it up needs an `age` key made in a terminal. See the open question to the
+  planner: make encryption optional, so setup is two secrets pasted into github.com.
