@@ -78,6 +78,20 @@ export default async function SettingsPage() {
         <ListAppearanceEditor lists={lists} />
       </section>
 
+      <section aria-labelledby="activity" className="card space-y-2 p-4">
+        <h2 id="activity" className="text-sm font-medium uppercase tracking-wide text-muted">
+          Activity
+        </h2>
+        <p className="text-sm text-muted">
+          Who changed what, and when &mdash; including changes guests made through their own link.
+        </p>
+        <p className="text-sm">
+          <Link className="underline hover:text-accent" href="/settings/activity">
+            See recent activity
+          </Link>
+        </p>
+      </section>
+
       <PinterestCard account={pinterest} configured={pinterestConfig() !== null} />
 
       <ClipTokensCard
