@@ -36,6 +36,14 @@ on §13 and on a separate "build it".
 | 8 | Find your table on the site? | **In scope** — Part F. New Q10–Q12 cover its privacy choices. |
 | 1, 7, 9, 10 | Which events; delete confirm; tray default; nav | Carried into §13 unchanged. |
 
+**Second revision, same day — "make sure you're researching what top other
+websites offer."** §2A is a survey of nine products. It changed the spec in six
+places: escort cards (§G), colouring guests by side / tag / an RSVP answer such
+as a meal choice (§A.2) and per-table meal counts (§G), optional clearance rings
+around tables (§C.1), the entrance chart drawn in the site's own theme (§G), and
+four new questions (§13 Q15–Q18), including whether to reopen auto-seating,
+which most newer tools now sell.
+
 ## 1. What was asked
 
 "Plan and spec out a seating plan function," then "scope out all of this."
@@ -73,6 +81,59 @@ spec's own call ("V4 or never"), and nothing the planner said reopened it.
   project or been opened in a real browser. Part C (the canvas) is the most
   interaction-heavy thing proposed so far; §11 is plain about what no automated
   check can vouch for.
+
+## 2A. What other products offer (researched 2026-10-13)
+
+Read from the products' own pages and help docs where search reached them, and
+from third-party listings otherwise. Direct page fetches failed from this
+environment (DNS), so everything below comes from search results; **nothing
+here was tried hands-on**, and several of the third-party sources are
+competitors' comparison pages, so they're noted as such.
+
+| Product | Seating offer, as described | What it means for us |
+| --- | --- | --- |
+| **Zola** | Seating chart per wedding event, fed from the guest list; tables then guests, drag to specific seats; group by dietary restriction or custom tags; download as **PDF or Excel**; iOS app + desktop, synced. Free up to 15 guests, then Premium. | Per-event, seat-level, guest-list-fed: all already in the spec. Their paywall is a reason not to have one. |
+| **The Knot** | A legacy tool its own staff say is no longer being updated. Forum complaints: tables silently change size, **seating one person from a party drags in the whole party**, a chart "that took hours… just disappeared". | Three lessons the spec already acts on: a household moves together by choice, not by force (§A.3); table size changes only when you change it; snapshots and per-move saves (§E, §A.3). |
+| **WeddingWire** | Free; tables, dance floor, DJ booth placed to mimic the room; guests grouped; **chart view and list view**; seating for every event; print, export, email to partner/planner/venue. | Same two-view shape as our Tables/Room. |
+| **Aisle Planner** (planner-facing) | Upload a venue image and **"Set Image Scale" by drawing a line between two points of known distance**; **service-area guides** showing room between tables; **coloured meal indicators** per guest; seating stats (enough chairs for the headcount); Table View synced with the layout; PDF of layout + guest list with meals and seats. A competitor says the editor has a steep learning curve and hard-copy output needs workarounds. | Confirms calibration (§C.3, Q7). Adds clearance rings (§C.1) and meal colouring (§A.2). Print quality is a real gap in the market — §G matters. |
+| **Prismm** (formerly AllSeated) | To-scale furniture; JPG/PNG/PDF venue upload; 2D and a **3D walk-through**; guests imported with RSVP status, **meal type** and notes; seat-level assignment; real-time collaboration, comments, vendor access. | 3D stays out (the core spec's own call). Meal type confirmed again. |
+| **PerfectTablePlan** (desktop, since 2005) | **Automatic seating** from together/apart preferences, or drag and drop; prints floor plans, charts **by name or by table**, place cards, **escort cards**, table cards, labels; data merged into card designs; meal choices printed on place cards for catering staff; a **scrolling chart on a screen at the venue**; offline. | Adds escort cards (§G). Auto-seating → Q15. |
+| **Wedibox** | Floor-plan canvas, round/long/head tables, drag names onto chairs; declined guests left out automatically; **moving tables is desktop-only**, phones get a list; **"Find your seat" name search on the wedding site + a printable QR code**, only finds seated guests, on the top paid plan. | Our phone story is already better (§C.4). Name search + QR → Q16. |
+| **Seatbee, Tablecharm, WedSites** (newer tools) | All sell **one-click auto-seating** from together/apart/VIP/dietary rules; trace a venue photo to scale; PDF export; Tablecharm texts guests a find-my-seat link. | The market now treats auto-seating as standard → Q15. |
+| **Joy, Bridebook** | Joy: guest tags to filter while seating; whether it has a real chart tool is disputed (competitors say no). Bridebook: assign seats in the guest list, then **export** to build the chart elsewhere. | Not leaders here; nothing to borrow. |
+
+**Where we'd already be ahead:** seating that follows per-person, per-event
+invitations (spec 22) rather than a household-wide guest list; warnings that
+remember rules across revisions; full editing on a phone; no paywall or guest
+cap; a guest-facing lookup that doesn't let a stranger search the guest list.
+
+**Where we'd be behind, by choice:** no 3D, no real-time co-editing, and — unless
+Q15 says otherwise — no auto-seating.
+
+Sources: [Zola seating chart](https://www.zola.com/wedding-planning/seating-chart),
+[Zola FAQ](https://www.zola.com/faq/360038917171-how-do-i-use-the-zola-seating-chart-),
+[The Knot feedback forum](https://help.theknot.com/forums/263843-theknot-com-ideas-feedback/suggestions/7837734--seating-chart-seating-chart-is-glitchy),
+[The Knot — parties and seating](https://help.theknot.com/forums/263843-theknot-com-ideas-feedback/suggestions/11509791-guest-list-parties-and-seating-chart),
+[WeddingWire seating chart](https://www.weddingwire.com/wedding-planning/wedding-seating-tables.html),
+[Aisle Planner — Layouts & Seating](https://www.aisleplanner.com/blog/feature-spotlight/designing-perfect-event-layouts-seating-aisle-planner),
+[Aisle Planner — Todd Harper on layouts](https://aisleplanner.com/blog/feature-spotlight/dive-layout-guest-list-seating-tools-todd-harper),
+[Aisle Planner — Samantha Joder's tips](https://aisleplanner.com/blog/feature-spotlight/samantha-joders-top-layout-guest-seating-tool-tips),
+[That's The One — floorplans (competitor)](https://www.thatstheone.com/planners/wedding-guides/floorplan),
+[Prismm wedding planning software](https://prismm.com/wedding-planning-software),
+[Prismm floor plan guide](https://prismm.com/blog/how-to-design-a-wedding-floor-plan-with-seating-style-ideas),
+[PerfectTablePlan — weddings](https://www.perfecttableplan.com/html/weddings_and_celebrations.html),
+[PerfectTablePlan — escort cards](https://www.perfecttableplan.com/html/escort_cards.html),
+[PerfectTablePlan — tour](https://www.perfecttableplan.com/html/tour.html),
+[Wedibox — seating chart on website](https://app.wedibox.com/help/seating-chart-on-website),
+[Wedibox — find your seat](https://app.wedibox.com/help/guests-find-your-seat),
+[Wedibox — add and arrange tables](https://app.wedibox.com/help/add-and-arrange-tables),
+[Seatbee (Product Hunt)](https://www.producthunt.com/p/seatbee),
+[Tablecharm (Product Hunt)](https://www.producthunt.com/products/tablecharm),
+[WedSites seating charts](https://help.wedsites.com/en/articles/14456409-seating-charts),
+[Joy seating guide](https://withjoy.com/blog/how-to-create-a-wedding-seating-chart-step-by-step-guide-etiquette-rules/),
+[Tableplanner — Joy comparison (competitor)](https://www.tableplanner.io/compare/joy-alternative),
+[Bridebook guest list](https://bridebook.com/uk/wedding-planning-tools/guestlist),
+[Bemerri meal labelling](https://welcome.bemerri.com/help/meal-labeling).
 
 ## 3. The whole thing, in one paragraph
 
@@ -114,6 +175,8 @@ chooses. A **print pack** and a **CSV** come out the other end.
   their next action, not live.
 - **A name search on the public site.** The shared page doesn't exist (spec 28)
   and a name search would tell anyone holding a link who is coming.
+- **A 3D view** (Prismm) and **a scrolling chart on a screen at the venue**
+  (PerfectTablePlan). Expensive, and nobody asked; the print pack covers the day.
 - **Server-side PDF rendering.** Print pages are HTML + `@media print`; the
   browser makes the PDF. The core spec's Vercel-limits warning doesn't arise.
 
@@ -347,7 +410,15 @@ Guests where `v_guest_event_invites.invited` and not `excluded_from_counts`
 for this event, **not yet seated**, grouped by household. Status filter: *Yes
 only* / *Yes + no answer yet* (Q2: the latter until the first Yes arrives).
 Filter by tag and side; search by name. A household header drags (or taps)
-the whole household.
+the whole household; one person can still be moved alone (The Knot's forum is
+a record of what forcing the whole party costs).
+
+**Colour by** (a view switch, not stored): side, a tag, or the answer to one
+`single_select` RSVP question — typically the meal choice, if the couple asks
+one. Each answer gets a colour and a key; chips in the tray, on table cards,
+in chairs and in the print views use it. This is what Aisle Planner, Prismm
+and Bemerri call meal indicators, built from questions the RSVP already asks
+(`rsvp_questions` / `rsvp_answers`) — **no meal schema** (Q18).
 
 ### A.3 Moving people
 
@@ -411,6 +482,11 @@ Select a table or fixture to move it (drag), rotate it (a handle; 15° steps,
 free with a modifier), or edit it in a side panel. Snap to a 25 cm grid,
 toggleable. Arrow keys nudge 5 cm (25 with shift). Unplaced tables sit in a
 strip along the bottom: drag one into the room to place it.
+
+**Clearance rings** (a toggle): a faint outline around each table at chair
+depth + walkway (default 120 cm beyond the table edge), so a crowded room is
+visible at a glance — Aisle Planner's "service area guides". Drawn, not
+warned on (Q6).
 
 Each table draws as its shape, label, and `7 / 10`, tinted when it has a
 warning. Fixtures draw as labelled rectangles (dance floor, bar…), added from
@@ -508,8 +584,9 @@ same approach as `/invitations/print` and `/vendors/contact-sheet`:
 | View | For | Content |
 | --- | --- | --- |
 | `tables` | Venue, caterer | Per table: chairs in order (or names, if no chairs), dietary, accessibility, high chairs, reserved seats. One table per block, page breaks avoided. |
-| `names` | Entrance board | Alphabetical by surname: name → table. |
-| `catering` | Caterer | Per table: adults / children / infants / reserved, and each dietary line; totals. |
+| `names` | Entrance board | Alphabetical by surname: name → table, in the **site's own fonts and colours** (spec 31's tokens) at poster size, so it can go straight to a print shop as a PDF. |
+| `catering` | Caterer | Per table: adults / children / infants / reserved, each dietary line, and — if a "Colour by" question is chosen — counts per answer (e.g. 5 beef, 3 fish); totals. |
+| `escort` | Escort cards | One small card per guest: name and table (and the colour-by answer's colour dot if chosen), alphabetical, 8–10 per A4. Table-level, so they work before chairs are chosen — the difference from place cards. |
 | `floor` | Venue | The Room view as SVG on A4/A3 landscape: tables with label and count, fixtures; no guest names. |
 | `cards` | Place cards | §D.4. |
 
@@ -525,7 +602,7 @@ household, age band, dietary, accessibility), included in "Download everything
 | 1 | Tables: queries (`cache()`), actions (`ActionResult`), the Tables view without a tray. | — |
 | 2 | Tray and assignment, tap-to-place. | **Yes — a working plan.** |
 | 3 | Warnings; `together`/`apart`/`avoid_table`/`accessible` rules; "Return all declined". | |
-| 4 | Print `tables`/`names`/`catering`; CSV. | **Yes — the venue and caterer get what they need.** |
+| 4 | Print `tables`/`names`/`catering`/`escort`; colour-by; CSV. | **Yes — the venue and caterer get what they need.** |
 | 5 | Geometry lib; the Room view; positions, rotation, fixtures; `near` and overlap warnings. | |
 | 6 | Venue image upload; calibration; print `floor`. | |
 | 7 | Table drawer; chairs; swap; place cards. | |
@@ -573,7 +650,7 @@ this app so far; a reasonable stopping point after step 4 exists by design.
 | 3 | Nav: under each event beside Run sheet, or a top-level "Seating"? | **Under Events**, plus a `/seating` shortcut. |
 | 4 | Long tables: chairs at the ends? | **Off by default, a tick box per table.** |
 | 5 | Chair numbering: clockwise from the top; head table left to right as guests face it. | **Yes.** |
-| 6 | Place cards: name + table only, or a dietary marker too? Spacing: overlap warning only, or also a minimum walkway between tables? | **Name + table only; overlap only.** |
+| 6 | Place cards: name + table only, or a dietary/meal marker too? Spacing: overlap warning only, or also a minimum walkway between tables? | **Name + table, plus the colour-by dot if one is chosen** (PerfectTablePlan users print meals on place cards for the servers). **Overlap warning + clearance rings drawn, no walkway warning.** |
 | 7 | Calibration (two points + a real distance) — keep, or position by eye over the image only? | **Keep, optional.** It's one small dialog and makes `near` meaningful. |
 | 8 | Are the two of you entered as guests? If not, the head table uses reserved seats (also good for vendor meals). | **Reserved seats** either way — tell me if you're already guest records. |
 | 9 | Do snapshots include pair/accessibility rules? | **No** — those are facts about people, not about a layout. |
@@ -582,3 +659,7 @@ this app so far; a reasonable stopping point after step 4 exists by design.
 | 12 | After the reveal, should moving someone notify them? | **No** — the page just shows the current table. |
 | 13 | Table names: "Table 1, 2…" by default, renamable? | **Yes.** |
 | 14 | Deleting a table: confirm only, or undo too? | **Confirm only** (snapshots now cover bigger mistakes). |
+| 15 | **Auto-seating.** The core spec said "V4 or never", but PerfectTablePlan, Seatbee, Tablecharm and WedSites all sell one-click seating from together/apart rules now. Reopen it? | **Not in this build. If you want it, a modest "Seat the rest" button as a final step:** places unseated households into empty chairs, keeping households and `together` pairs whole and never breaking `apart`/`avoid_table`/`accessible`; never moves anyone already seated; shows what it did and can be undone by a snapshot it takes first. Not an optimiser. |
+| 16 | **Day-of name search + a QR code** on the entrance sign (Wedibox, Tablecharm). Our household pages can't serve a QR that works for everyone. Add a separate search page, live only on the event day? | **No.** It lets anyone with the code search who's coming. The household page (Part F) plus the printed entrance board covers it. If yes: only during a window you set, and only exact full-name matches. |
+| 17 | **A read-only link for the venue / caterer** (WeddingWire emails it, Prismm invites vendors)? | **No — the print pack as PDFs.** A live link changes under them after they've planned staffing. |
+| 18 | **Meal choices:** rely on a `single_select` RSVP question for "colour by" and the catering counts, or make meal choice a first-class field? | **The RSVP question.** It already exists, already shows on the RSVP form, and needs no migration. |
