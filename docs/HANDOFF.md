@@ -3,6 +3,47 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 39 (spec 33):** the seating plan, specced, scoped in full, researched
+against nine competing products (§2A), then built end to end on branch
+`claude/spec-33-seating-plan` (**no PR opened**). "Build it" came with none of the
+spec's 18 questions answered, so **every one took its recommendation** — the spec's
+**Answered** section lists them; any can be changed. Read the spec's **Build status**
+first; this is the short version.
+
+- **`0036_seating.sql`.** `seating_plans` (room size, venue image, guests' reveal
+  date; one per event), `seating_tables`, `seating_fixtures`, `seat_assignments`
+  (PK guest+event; a partial unique index for one guest per chair; a
+  **three-column FK** so a table always belongs to the assignment's own event),
+  `seating_rules` (together / apart / near / avoid_table / accessible, one check
+  constraint per kind), `seating_snapshots` (**not audited** — on
+  `18_audit_log.sql`'s exception list). `take_seating_snapshot()` /
+  `restore_seating_snapshot()` are SECURITY INVOKER and take the creator from the
+  app (`p_created_by`), like `vendor_notes.author_id`. Restore saves the layout it
+  replaces first and skips guests deleted since.
+- **Screens.** `/seating` → `/events/[id]/seating`: a tray of the event's
+  attendees (from `v_guest_event_invites`, never re-derived) grouped by household;
+  a **Tables** view (dnd-kit) and a **Room** view (SVG + pointer events, to
+  scale, fixtures, venue image, two-point calibration, clearance rings);
+  **tap-to-place** everywhere; a table drawer with chairs (tap; taken chairs
+  swap); warnings that never block, from `src/lib/seating/warnings.ts`;
+  "Colour by" side / tag / a single-choice RSVP answer (meal); saved copies;
+  the reveal date. Print pack at `/events/[id]/seating/print` (by table, entrance
+  board in the site's theme, caterer numbers, floor plan, escort cards, place
+  cards). A `seating` CSV kind, in the zip too. A `your_table` site block shows a
+  household its own table after the reveal date.
+- **Verified:** typecheck clean, **1047 unit tests** (38 new), `verify-migrations.sh`
+  **586 assertions** (45 new), single-transaction check, `next build` (placeholder
+  env). **Seen in headless Chromium with sample data and no database**, through a
+  temporary page that was deleted, never committed: both views, tap-to-place, a
+  mouse drag onto a table, moving and rotating a table, the drawer, phone width.
+  That found and fixed a dnd-kit hydration mismatch and two layout faults.
+  **Not verified:** no seating action has ever run against Supabase; no touch on
+  a real iPad; the print views have never rendered (they need the database).
+- **Also:** `scripts/check-migrations.sql` was stale at `0034`; now lists `0035`
+  and `0036`.
+- **Pick up here:** apply `0026`–`0036` to the live project in order, then the
+  spec's "Pick up here" walk-through on an iPad.
+
 **Session 38 (spec 32):** backups you can restore from on the free plan, and an audit
 log, built on branch `claude/spec-32-backup-and-audit-log` (**no PR opened**). Asked for
 as a spec, committed as one, then "Okay let's build and ask questions" as its own turn;

@@ -676,3 +676,82 @@ this app so far; a reasonable stopping point after step 4 exists by design.
 | 16 | **Day-of name search + a QR code** on the entrance sign (Wedibox, Tablecharm). Our household pages can't serve a QR that works for everyone. Add a separate search page, live only on the event day? | **No.** It lets anyone with the code search who's coming. The household page (Part F) plus the printed entrance board covers it. If yes: only during a window you set, and only exact full-name matches. |
 | 17 | **A read-only link for the venue / caterer** (WeddingWire emails it, Prismm invites vendors)? | **No — the print pack as PDFs.** A live link changes under them after they've planned staffing. |
 | 18 | **Meal choices:** rely on a `single_select` RSVP question for "colour by" and the catering counts, or make meal choice a first-class field? | **The RSVP question.** It already exists, already shows on the RSVP form, and needs no migration. |
+
+## Build status (2026-10-14)
+
+Built on branch `claude/spec-33-seating-plan`, every step in §10, each committed
+separately. **No PR opened.** Every §13 question took its recommendation (see
+**Answered**).
+
+**What exists**
+
+- **`0036_seating.sql`** — all six tables of §5, both functions, RLS, audit
+  triggers (snapshots on the exception list). `supabase/tests/19_seating.sql`
+  adds **45 assertions** (tenancy against the second account, the cross-event
+  FK, one place per guest, one guest per chair, every branch of the rules
+  check, the restore round trip including a guest deleted in between, the
+  automatic "Before restoring" copy, audit firing on a move).
+- **`src/lib/seating/`** — `geometry` (sizes, chairs, overlap, distance,
+  snapping, calibration), `model`, `tray`, `warnings`, `colour`, `moves` (the
+  screen's optimistic copy of the swap rule), `listings` (print + CSV shapes).
+  **38 unit tests** in `seating.test.ts`.
+- **`src/server/actions/seating.ts`** / **`src/server/queries/seating.ts`** —
+  every write in §6–§9; one read for the screen.
+  `src/server/queries/seating-public.ts` is the household-page read (Part F).
+- **Screens:** `/seating` (picker, as `/run-sheet`), `/events/[id]/seating`
+  (Tables and Room views, tray, table drawer with chairs, rules, saved copies,
+  reveal date), `/events/[id]/seating/print?view=tables|names|catering|floor|escort|cards`.
+  Linked from each event on `/events` ("Seating →") and lit under the nav's
+  Events item.
+- **CSV:** a `seating` kind on `/api/export/[kind]` (`?event=` for one event;
+  every planned event in the "Download everything" zip).
+- **Site block:** `your_table` (family "the day", personal).
+
+**Where the build departs from the text**
+
+1. **`take_seating_snapshot` / `restore_seating_snapshot` take `p_created_by`
+   from the app** rather than reading `auth.uid()` inside. An invoker-rights
+   function can only call `auth.uid()` where the role has usage on the `auth`
+   schema; the test shim doesn't grant it, and passing it in is how
+   `vendor_notes.author_id` already works.
+2. **The `your_table` block has no event picker.** The builder's field kinds
+   have no dynamic select, so the block shows every event whose seating has
+   been revealed (one line per event when there's more than one). Payload is
+   `{intro, show_seat, show_tablemates}`.
+3. **Chairs are placed by tap only, not drag**, inside the table drawer (tap a
+   guest or chair to pick up, tap a chair to put down; a taken chair swaps).
+   Dragging chips between tables and the tray works in both views.
+4. **On a phone the tray sits above the tables**, not in a bottom sheet (§6.1).
+   Tap-to-place makes this workable; a bottom sheet is a follow-up if it isn't.
+5. **"Place" for an unplaced table drops it in the middle of the current view**
+   (a button), rather than dragging it in from the strip.
+6. **Calibration asks for the distance in a browser prompt** ("How far apart
+   are those two points, in metres?") rather than an inline field.
+7. The **floor-plan print** draws tables, chairs and fixtures but not the
+   venue image.
+
+**What was seen, and what wasn't**
+
+- **Automated:** typecheck clean; **1047 unit tests**; `verify-migrations.sh`
+  **586 assertions**; `verify-migrations-single-tx.sh` passes; `next build`
+  (placeholder env) passes.
+- **Seen in headless Chromium, with sample data and no database** (a temporary
+  page, deleted, never committed): the Tables view, tap-to-place, the warnings
+  list, the table drawer with chairs, the Room view (to scale, chairs coloured
+  by a meal answer), a phone-width layout, a **mouse drag of a guest onto a
+  table** (seated at once), and **dragging and rotating a table** in the Room
+  view (snaps to 25 cm, turns 90°). That pass found and fixed three things: a
+  hydration mismatch from dnd-kit's ids, a table name truncated on its card,
+  and labels too big for small tables.
+- **Not seen:** anything against Supabase — no action has ever run, so no
+  save, restore, upload, calibration or reveal has been exercised end to end;
+  touch drag and pinch on a real iPad; the print views on paper (or at all —
+  they need data from the database); the `your_table` block on a real
+  household page.
+
+**Pick up here:** apply `0026`–`0036` to the live project (in order; `0036`
+needs `0034`'s view and `0035`'s `audit_row()`), then on an iPad: add tables to
+the reception, seat a household by dragging and by tapping, open a table and
+place chairs, switch to Room, upload the venue plan and set the scale, save a
+copy and restore it, print "By table" and "Escort cards", set a reveal date in
+the past and open a household's page with a "Your table" section.
