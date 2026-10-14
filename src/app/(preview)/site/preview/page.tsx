@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { siteFontClasses, typographyCssVars } from "@/lib/fonts";
+import { siteRoot } from "@/lib/fonts";
 import { requireWedding } from "@/server/queries/wedding";
 import { listDraftBlocks } from "@/server/queries/site-blocks";
 import { buildPreviewPersonal, buildRenderContext } from "@/server/queries/site-render";
 import { createClient } from "@/lib/supabase/server";
 import { visibleBlocks } from "@/lib/site/blocks";
-import { themeCssVars, themeAttributes } from "@/lib/theme/presets";
+import { themeAttributes } from "@/lib/theme/presets";
 import { motionAttributes } from "@/lib/site/motion";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { PreviewBridge } from "@/components/site/preview-bridge";
@@ -82,10 +82,11 @@ export default async function SitePreviewPage({
   const ctx = { ...built, preview: true };
 
   const shown = visibleBlocks(blocks);
+  const root = siteRoot(ctx.theme, shown);
 
   return (
     <div
-      style={{ ...themeCssVars(ctx.theme), ...typographyCssVars(ctx.theme.preset, ctx.theme.typography) }}
+      style={root.style}
       {...themeAttributes(ctx.theme)}
       {...motionAttributes(ctx.theme.motion)}
       // The section rail is `position: fixed`, which inside this frame would
@@ -93,7 +94,7 @@ export default async function SitePreviewPage({
       // The builder's iframe is the only place that is true, so the flag is
       // set here rather than passed down through the renderer.
       data-site-preview="true"
-      className={`${siteFontClasses(ctx.theme.preset)} min-h-screen bg-paper font-body text-ink antialiased`}
+      className={`${root.fontClasses} min-h-screen bg-paper font-body text-ink antialiased`}
     >
       <PreviewBridge />
       {/* The bar a guest gets, sticky to this frame, so the switch and the bar's

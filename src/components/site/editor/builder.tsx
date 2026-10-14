@@ -727,7 +727,14 @@ export function SiteBuilder({
 
           {/* Remounted when the theme changes on the server, so a Vibe's choices
               are what the controls below show rather than a stale local echo. */}
-          <LookSections key={JSON.stringify(theme)} theme={theme} onSaved={afterWrite} />
+          <LookSections
+            key={JSON.stringify(theme)}
+            theme={theme}
+            onSaved={afterWrite}
+            blocksWithOwnStyle={
+              blocks.filter((block) => block.style?.textColour || block.style?.mutedColour || block.style?.bodyFont).length
+            }
+          />
 
           <Section
             title="Chapters"
@@ -806,6 +813,7 @@ export function SiteBuilder({
                   photos={photos}
                   onDone={afterWrite}
                   heroDefault={theme.heroStyle}
+                  theme={theme}
                   focusTitle={titleFocus}
                 />
               </Section>

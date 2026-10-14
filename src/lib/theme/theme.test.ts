@@ -167,6 +167,9 @@ describe("resolveTheme", () => {
       // rail and section numbers on — what the page already did.
       motion: { level: "gentle", off: [], on: [] },
       layout: { topNav: true, chapterRail: true, sectionNumbers: true, replyBar: true, replyByDate: true },
+      // Spec 31: a theme saved before it existed has no overrides and is matched
+      // everywhere — what every existing site already looks like.
+      textStyle: { colours: {}, matchAll: true, fonts: {} },
     });
   });
 

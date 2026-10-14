@@ -71,3 +71,17 @@ describe("the hero's cover", () => {
     expect(hero.parse({ greeting_text: "   " }).greeting_text).toBeUndefined();
   });
 });
+
+describe("text colour and font (spec 31)", () => {
+  it("accepts a hex colour (3 or 6 digits) and a font from the list", () => {
+    expect(styleSchema.safeParse({ textColour: "#1f3a2c", mutedColour: "#abc", bodyFont: "inter" }).success).toBe(true);
+  });
+
+  it("refuses anything that could end up as CSS rather than a colour or a name", () => {
+    for (const bad of ["red", "#12", "#1234567", "#1f3a2c; background:url(x)", "rgb(0,0,0)", ""]) {
+      expect(styleSchema.safeParse({ textColour: bad }).success, bad).toBe(false);
+    }
+    expect(styleSchema.safeParse({ bodyFont: "Comic Sans" }).success).toBe(false);
+    expect(styleSchema.safeParse({ bodyFont: "'x'; color:red" }).success).toBe(false);
+  });
+});

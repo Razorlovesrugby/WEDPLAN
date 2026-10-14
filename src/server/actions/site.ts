@@ -4,15 +4,23 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
-import { validatePalette, isHexColor } from "@/lib/theme/contrast";
+import { validatePalette, isHexColor, type PaletteTokens } from "@/lib/theme/contrast";
 import {
   HERO_STYLES,
+  PALETTES,
   PALETTE_IDS,
   THEME_PRESETS,
   THEME_PRESET_IDS,
   TYPOGRAPHY_IDS,
   type ThemePresetId,
 } from "@/lib/theme/presets";
+import {
+  FONT_IDS,
+  resolveTextStyle,
+  serialiseTextStyle,
+  textColourFailures,
+  type SiteTextStyle,
+} from "@/lib/theme/text-style";
 import { THEME_BLOCK_KEY } from "@/lib/site/sections";
 import { MOTION_EFFECTS, MOTION_LEVELS, resolveMotion, serialiseMotion } from "@/lib/site/motion";
 import { fail, ok, type ActionResult } from "./result";
@@ -190,6 +198,23 @@ const themeSchema = z.object({
       reply_by_date: z.boolean().optional(),
     })
     .optional(),
+  // Spec 31. Optional with "absent = leave what is stored", like motion: an
+  // old caller must not wipe a planner's text colours by saving a palette. To
+  // clear a colour, send `text_colours: {}`. The "same in every section" switch
+  // is NOT here — it has its own action because turning it on is destructive.
+  text_colours: z
+    .object({
+      ink: z.string().trim().optional(),
+      muted: z.string().trim().optional(),
+      accent: z.string().trim().optional(),
+    })
+    .optional(),
+  fonts: z
+    .object({
+      heading: z.enum(FONT_IDS).optional(),
+      body: z.enum(FONT_IDS).optional(),
+    })
+    .optional(),
   custom_ink: z.string().trim().optional(),
   custom_paper: z.string().trim().optional(),
   custom_muted: z.string().trim().optional(),
@@ -256,6 +281,30 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
   const motion = data.motion ? serialiseMotion(resolveMotion(data.motion)) : previous["motion"];
   const layout = data.layout ?? previous["layout"];
 
+  // Spec 31: site-wide text colours and fonts, carried forward unless sent.
+  const before = resolveTextStyle(previous["text_colours"], previous["fonts"]);
+  const colours = data.text_colours
+    ? Object.fromEntries(Object.entries(data.text_colours).filter(([, v]) => v)) as SiteTextStyle["colours"]
+    : before.colours;
+  const nextText: SiteTextStyle = {
+    colours,
+    matchAll: before.matchAll,
+    fonts: data.fonts ?? before.fonts,
+  };
+  // Always re-checked against the palette being saved, not just when the colours
+  // changed: a dark ink that was fine on Ivory is invisible on Midnight, and
+  // saving the palette would otherwise strand it. The same gate a palette passes.
+  const paletteTokens =
+    data.palette === "custom" && customTokens
+      ? (customTokens as PaletteTokens)
+      : PALETTES[data.palette as keyof typeof PALETTES]?.tokens;
+  const textProblems = paletteTokens ? textColourFailures(paletteTokens, nextText.colours) : [];
+  if (textProblems.length > 0) {
+    return fail(`That text colour isn't readable enough. ${textProblems.join(" ")}`, {
+      text_colours: textProblems,
+    });
+  }
+
   const { error } = await supabase.from("site_content").upsert(
     {
       wedding_id: wedding.id,
@@ -269,6 +318,7 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
         custom_tokens: customTokens,
         motion,
         layout,
+        ...serialiseTextStyle(nextText),
       }) as never,
       sort_order: -1, // Config, not a section. Never rendered in the list.
     },
@@ -278,6 +328,67 @@ export async function saveTheme(fields: Record<string, unknown>): Promise<Action
 
   revalidateSite();
   return ok(undefined);
+}
+
+/**
+ * "Same text colour and font in every section" (spec 31, Q7, Q8, Q13).
+ *
+ * **Turning it ON clears every block's own text colour, secondary colour and
+ * font** — the planner chose that over keeping them, so it is destructive and the
+ * caller confirms with a count first. Turning it OFF changes nothing by itself.
+ * Cleared blocks are the draft; the published site changes when the planner next
+ * publishes, like any other edit.
+ */
+export async function setMatchAllText(on: boolean): Promise<ActionResult<{ cleared: number }>> {
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+
+  const { data: stored } = await supabase
+    .from("site_content")
+    .select("payload")
+    .eq("wedding_id", wedding.id)
+    .eq("block_key", THEME_BLOCK_KEY)
+    .maybeSingle();
+  const previous = (stored?.payload ?? {}) as Record<string, unknown>;
+  const before = resolveTextStyle(previous["text_colours"], previous["fonts"]);
+
+  let cleared = 0;
+  if (on) {
+    const { data: blocks, error: readError } = await supabase
+      .from("site_blocks")
+      .select("id, style")
+      .eq("wedding_id", wedding.id);
+    if (readError) return fail(`Could not read the blocks: ${readError.message}`);
+    for (const block of blocks ?? []) {
+      const style = (block.style ?? {}) as Record<string, unknown>;
+      if (!("textColour" in style) && !("mutedColour" in style) && !("bodyFont" in style)) continue;
+      const { textColour: _t, mutedColour: _m, bodyFont: _f, ...rest } = style;
+      const { error } = await supabase
+        .from("site_blocks")
+        .update({ style: rest as never })
+        .eq("wedding_id", wedding.id)
+        .eq("id", block.id);
+      if (error) return fail(`Could not clear a block's text style: ${error.message}`);
+      cleared += 1;
+    }
+  }
+
+  const { error } = await supabase.from("site_content").upsert(
+    {
+      wedding_id: wedding.id,
+      block_key: THEME_BLOCK_KEY,
+      payload: compact({
+        ...previous,
+        ...serialiseTextStyle({ ...before, matchAll: on }),
+      }) as never,
+      sort_order: -1,
+    },
+    { onConflict: "wedding_id,block_key", ignoreDuplicates: false },
+  );
+  if (error) return fail(`Could not save that: ${error.message}`);
+
+  revalidateSite();
+  return ok({ cleared });
 }
 
 function revalidateSite() {

@@ -11,6 +11,7 @@ import {
   type GalleryImage,
 } from "@/server/queries/gallery";
 import { getHouseholdSeats, getPublicTravel } from "@/server/queries/travel";
+import { getHouseholdSeating, type HouseholdSeating } from "@/server/queries/seating-public";
 import { getPublicSiteExtras, type SiteExtras } from "@/server/queries/site-extras";
 import { flag, text } from "@/lib/site/sections";
 import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
@@ -39,6 +40,12 @@ export type PersonalContext = {
   rsvp: RsvpData | null;
   seats: Record<string, Pick<CoachSeatRow, "coach_stop_id" | "seats">>;
   uploads: GalleryImage[];
+  /**
+   * Where they're sitting, per event (spec 33 Part F). Only events whose
+   * reveal date has passed — except in the planner's preview, which shows
+   * every seated event and says when guests will see it.
+   */
+  seating: HouseholdSeating[];
   /**
    * Who is reading, for the things only a known guest may do (spec 25 §10):
    * publish a guestbook note without review, and vote for a song.
@@ -221,10 +228,12 @@ export async function buildPersonalContext(
   token: string | null,
   rsvp: RsvpData | null,
   addressSegment: string | null = null,
+  options: { preview?: boolean } = {},
 ): Promise<PersonalContext> {
-  const [seats, uploads] = await Promise.all([
+  const [seats, uploads, seating] = await Promise.all([
     getHouseholdSeats(weddingId, household.id),
     getHouseholdUploads(weddingId, household.id),
+    getHouseholdSeating(weddingId, household.id, { preview: options.preview }),
   ]);
 
   const members = (rsvp?.guests ?? []).map((guest) => ({
@@ -259,6 +268,7 @@ export async function buildPersonalContext(
       ]),
     ),
     uploads,
+    seating,
   };
 }
 
@@ -294,5 +304,6 @@ export async function buildPreviewPersonal(
     null,
     rsvp,
     household.slug && household.slug_suffix ? `${household.slug}-${household.slug_suffix}` : null,
+    { preview: true },
   );
 }
