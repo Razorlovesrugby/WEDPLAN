@@ -679,9 +679,9 @@ export type SongRequestRow = {
   artist: string | null;
   note: string | null;
   status: "new" | "approved" | "played" | "ignored";
-  /** Stamped by a trigger on the way into 'played', cleared on the way out (0035). */
+  /** Stamped by a trigger on the way into 'played', cleared on the way out (0037). */
   played_at: string | null;
-  /** The couple's ♥ — a badge, never a rank (spec 31 §6). */
+  /** The couple's ♥ — a badge, never a rank (spec 34 §6). */
   couples_pick: boolean;
   /** iTunes trackId for a song picked from search; null when typed in. */
   catalogue_id: string | null;

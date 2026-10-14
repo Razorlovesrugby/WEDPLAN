@@ -30,7 +30,7 @@ describe("isPublicPath", () => {
   });
 
   it("lets a guest's browser fetch album covers on the song chart", () => {
-    // Spec 31 §7a. The route first went in at /api/song-art, which this list
+    // Spec 34 §7a. The route first went in at /api/song-art, which this list
     // would have bounced to /login — every cover a broken image.
     expect(isPublicPath("/api/public/song-art")).toBe(true);
     expect(isPublicPath("/api/song-art")).toBe(false);

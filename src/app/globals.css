@@ -1318,7 +1318,7 @@
   }
 }
 
-/* The song chart (spec 31 §4). A changed count lifts in; the live dot breathes.
+/* The song chart (spec 34 §4). A changed count lifts in; the live dot breathes.
    Reduced motion gets the number and a still dot. */
 .song-live-dot {
   width: 0.45rem;

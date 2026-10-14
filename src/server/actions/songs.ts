@@ -112,7 +112,7 @@ export type RequestSongOutcome =
   | { outcome: "added" }
   /** It was already there — the same track — so their vote went on that one. */
   | { outcome: "voted"; title: string }
-  /** Something very like it is already there; the guest decides (spec 31 §6.2). */
+  /** Something very like it is already there; the guest decides (spec 34 §6.2). */
   | { outcome: "duplicate"; songId: string; title: string; artist: string | null }
   /** On the do-not-play list. `line` is the couple's refusal, in their words. */
   | { outcome: "banned"; line: string };
@@ -156,7 +156,7 @@ export async function requestSong(payload: unknown): Promise<ActionResult<Reques
     supabase.from("song_requests").select("id, title, artist, status, catalogue_id").eq("wedding_id", weddingId),
   ]);
 
-  // The do-not-play list (spec 31 §6.1). Refused with the couple's own line —
+  // The do-not-play list (spec 34 §6.1). Refused with the couple's own line —
   // an answer, not an error: it is the joke the couple wrote for this moment.
   if (isBanned(song, doNotPlayFrom(block))) {
     await recordAttempt(ipHash, true);
@@ -170,7 +170,7 @@ export async function requestSong(payload: unknown): Promise<ActionResult<Reques
   const listed = (row: { status: string }) => row.status === "approved" || row.status === "played";
 
   // The same track: their vote goes on the one already there. Exact, so it is
-  // not a question (spec 31 §7a.3).
+  // not a question (spec 34 §7a.3).
   const sameTrack = song.catalogueId ? existing.find((row) => row.catalogue_id === song.catalogueId) : undefined;
   // Very like one already there: asked, unless they have said it's different.
   const alike = sameTrack ?? (parsed.data.force ? undefined : findDuplicate(song, existing.filter(listed)) ?? undefined);
@@ -209,7 +209,7 @@ export async function requestSong(payload: unknown): Promise<ActionResult<Reques
 
   if (error?.code === "23505" && song.catalogueId) {
     // Two households picked the same track in the same moment and the other
-    // got there first. The index is what made that one row (0035).
+    // got there first. The index is what made that one row (0037).
     const { data: winner } = await supabase
       .from("song_requests")
       .select("id, title, status")
@@ -237,7 +237,7 @@ export async function requestSong(payload: unknown): Promise<ActionResult<Reques
 }
 
 // ---------------------------------------------------------------------------
-// Searching for one (spec 31 §7a)
+// Searching for one (spec 34 §7a)
 // ---------------------------------------------------------------------------
 
 const searchSchema = z.object({
@@ -289,7 +289,7 @@ export async function searchSongs(payload: unknown): Promise<ActionResult<SongSe
 }
 
 // ---------------------------------------------------------------------------
-// The live chart (spec 31 §4)
+// The live chart (spec 34 §4)
 // ---------------------------------------------------------------------------
 
 const chartSchema = z.object({
@@ -300,7 +300,7 @@ const chartSchema = z.object({
 /**
  * The chart as it is now, for the page to poll every fifteen seconds.
  *
- * A server action rather than a Realtime channel (spec 31 Q1): it reads
+ * A server action rather than a Realtime channel (spec 34 Q1): it reads
  * through the same service-role path the page loaded with, so nothing was
  * opened to `anon` to make the list live. Needs the household's token — the
  * page it runs on is theirs, and a stranger has no business watching.
@@ -413,7 +413,7 @@ export async function setSongStatus(
 const MAX_COUPLES_PICKS = 3;
 
 /**
- * The couple's pick (spec 31 §6.3) — a ♥ badge on up to three songs. It never
+ * The couple's pick (spec 34 §6.3) — a ♥ badge on up to three songs. It never
  * changes the order: the chart is the guests', the badge is the couple's voice
  * on it.
  */
@@ -445,7 +445,7 @@ export async function setCouplesPick(id: string, on: boolean): Promise<ActionRes
 }
 
 /**
- * Two rows that are the same song, made one (spec 31 §7). The votes on the
+ * Two rows that are the same song, made one (spec 34 §7). The votes on the
  * one going move to the one staying — a household that voted for both keeps
  * one vote, by the unique constraint — and then it is deleted, like any other
  * song request (see `deleteSongRequest` for why that delete is a real one).

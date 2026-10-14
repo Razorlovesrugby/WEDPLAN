@@ -4,7 +4,7 @@ import { ARTWORK_SIZES, artworkAt, isAppleArtworkUrl, type ArtworkSize } from "@
 
 /**
  * GET /api/public/song-art?s=160&u=<Apple artwork URL> — album covers on the song
- * chart (spec 31 §7a).
+ * chart (spec 34 §7a).
  *
  * The reason it exists: a guest's page is their household's credential (spec
  * 23 Q1), and an <img> pointing at Apple would hand Apple the guest's IP and,
@@ -14,7 +14,7 @@ import { ARTWORK_SIZES, artworkAt, isAppleArtworkUrl, type ArtworkSize } from "@
  * Unlike /api/proxy-image it needs no sign-in — guests have no session — so
  * what keeps it from being an open proxy is narrower:
  *
- *   1. Apple's image host only (`isAppleArtworkUrl`), the same rule the 0035
+ *   1. Apple's image host only (`isAppleArtworkUrl`), the same rule the 0037
  *      check constraint holds the stored column to.
  *   2. Two sizes only. The size is rewritten into Apple's path here, so a
  *      request cannot ask for a 3000-pixel original.

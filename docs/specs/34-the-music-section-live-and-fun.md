@@ -311,7 +311,7 @@ mean the section keeps working without artwork. Nothing is lost.
 | 5 | Which of Part C's fun features: **1** do-not-play, **2** duplicate catch, **3** couple's pick, **4** played on the night, **5** voting closes, **6** rounds? | 1, 2, 4 now; 3 and 5 are small, include if wanted; 6 later. |
 | 6 | Should **guests see who voted** for a song (household names), or only counts? | Counts only for guests; names for the couple. |
 | 7 | Where do the new settings live — **block inspector**, `/site/songs`, or both? | Block inspector. |
-| 8 | **Song search with album art** (server-side iTunes lookup, artwork proxied) — follow-up spec 31.1, or not at all? | 31.1, after this ships. |
+| 8 | **Song search with album art** (server-side iTunes lookup, artwork proxied) — follow-up spec 34.1, or not at all? | 34.1, after this ships. |
 | 9 | The section's **name on the page**: keep "Songs" / "What everyone's picked", or "The Dance Floor Chart" (editable either way)? | Planner's call — default heading is already editable per block. |
 
 ## 10. Shape of the build (once answered)
@@ -319,7 +319,7 @@ mean the section keeps working without artwork. Nothing is lost.
 No new tables. Likely one migration:
 
 ```sql
--- 0035_song_chart.sql (sketch) — additive columns, no enum, so no 55P04 split
+-- 0037_song_chart.sql (sketch) — additive columns, no enum, so no 55P04 split
 alter table public.song_requests
   add column played_at    timestamptz,
   add column couples_pick boolean not null default false,
@@ -375,7 +375,7 @@ Built in one session, all six steps of §10.
 
 | Piece | Where |
 | --- | --- |
-| Migration | `0035_song_chart.sql` — `played_at` (+ trigger following `status`), `couples_pick`, `catalogue_id` (digits), `artwork_url` (checked to `*.mzstatic.com`), partial unique index on `(wedding_id, catalogue_id)`. `supabase/tests/18_song_chart.sql`, 15 assertions. |
+| Migration | `0037_song_chart.sql` — `played_at` (+ trigger following `status`), `couples_pick`, `catalogue_id` (digits), `artwork_url` (checked to `*.mzstatic.com`), partial unique index on `(wedding_id, catalogue_id)`. `supabase/tests/18_song_chart.sql`, 15 assertions. |
 | Matching | `src/lib/site/song-match.ts` — one normaliser for duplicates and the ban list; `parseDoNotPlay`, `isBanned` (stricter than `sameSong`). |
 | Catalogue | `src/lib/site/song-catalogue.ts` (parse, host allow-list, sizes) and `src/server/songs/catalogue.ts` (fixed-host fetch, 24 h in-memory cache, search results pre-seed the lookup cache). |
 | Chart rules | `src/lib/site/song-chart.ts` — hot, now playing, movement, the 3 s hold. |
@@ -424,7 +424,7 @@ Built in one session, all six steps of §10.
 - **Nothing was opened in a browser.** The slide-into-place animation, the
   3 s hold, the count tick, the search dropdown on a phone keyboard, and the
   night mode are all unseen.
-- **Nothing ran against Supabase** — and `0026`–`0035` are still not applied
+- **Nothing ran against Supabase** — and `0026`–`0037` are still not applied
   to the live project.
 - Two phones on two households' links, voting at once, is the test §11 asks
   for and the only way to check the hold.

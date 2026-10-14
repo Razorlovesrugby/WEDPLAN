@@ -16,10 +16,10 @@ const NEXT_LABEL: Record<Status, { label: string; next: Status }> = {
 };
 
 /**
- * The couple's list (spec 23 §8, spec 31 §7).
+ * The couple's list (spec 23 §8, spec 34 §7).
  *
  * Ranked the way guests see the chart, with who voted — names here, counts
- * only on the guest page (spec 31 Q6). Two modes:
+ * only on the guest page (spec 34 Q6). Two modes:
  *
  *   **The list** — approve / ignore / delete, the ♥ couple's pick (three at
  *   most, a badge that never changes the order), and Merge for two rows that

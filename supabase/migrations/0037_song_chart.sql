@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 0035: the song chart (spec 31)
+-- 0037: the song chart (spec 34)
 -- ===========================================================================
 -- Four columns on `song_requests` and one index. Nothing new is a table: the
 -- chart is the same list spec 23 built and spec 25 rendered back, made to
@@ -28,7 +28,7 @@
 --   artwork_url   The upstream artwork address. NEVER put in front of a
 --                 browser directly: the guest page loads it only through
 --                 /api/song-art, so a guest's IP and their private page URL
---                 never reach Apple (spec 23 Q1, spec 31 §7a). The check
+--                 never reach Apple (spec 23 Q1, spec 34 §7a). The check
 --                 constrains it to Apple's image host, so a row that somehow
 --                 carried any other URL could not make that route a relay.
 --

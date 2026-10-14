@@ -2,7 +2,7 @@ import "server-only";
 import { parseCatalogueResults, searchKey, type CatalogueSong } from "@/lib/site/song-catalogue";
 
 /**
- * Asking Apple about songs (spec 31 §7a) — the network half.
+ * Asking Apple about songs (spec 34 §7a) — the network half.
  *
  * Only ever called from the server. The host is fixed here, never taken from
  * a request, so this is not the SSRF shape `src/lib/net/fetch-image.ts`

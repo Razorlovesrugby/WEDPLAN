@@ -1,5 +1,5 @@
 /**
- * Reading Apple's song catalogue (spec 31 §7a) — the pure half.
+ * Reading Apple's song catalogue (spec 34 §7a) — the pure half.
  *
  * The network half is `src/server/songs/catalogue.ts`. This file only turns
  * what Apple sends into what we keep, and decides which artwork addresses the
@@ -29,7 +29,7 @@ export type ArtworkSize = (typeof ARTWORK_SIZES)[number];
 /**
  * Apple's image host and nothing else: https, no port, no credentials, a
  * hostname that ends in `.mzstatic.com` at a dot boundary. Mirrors the check
- * constraint in 0035, so a row and a request fail in the same direction.
+ * constraint in 0037, so a row and a request fail in the same direction.
  */
 export function isAppleArtworkUrl(raw: unknown): raw is string {
   if (typeof raw !== "string" || raw.length > 500) return false;

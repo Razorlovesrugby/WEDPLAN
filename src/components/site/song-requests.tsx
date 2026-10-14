@@ -8,7 +8,7 @@ import type { PublicSong } from "@/server/queries/site-extras";
 import { Art } from "./song-list";
 
 /**
- * Asking for a song (spec 23 §8, spec 31 §6 and §7a).
+ * Asking for a song (spec 23 §8, spec 34 §6 and §7a).
  *
  * On a household's own page the song box is a search: our server asks Apple,
  * up to six results come back with their covers (through our proxy — the

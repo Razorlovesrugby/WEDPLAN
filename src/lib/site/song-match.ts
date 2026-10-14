@@ -1,6 +1,6 @@
 /**
  * When two songs are the same song, and when one is on the do-not-play list
- * (spec 31 §6, items 1 and 2).
+ * (spec 34 §6, items 1 and 2).
  *
  * Both are the same question — "does what this guest typed name that song?" —
  * so both go through one normaliser. Two normalisers is how "Mr. Brightside"

@@ -3,7 +3,7 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
-**Session 37 (spec 31):** the music section, built end to end on branch
+**Session 40 (spec 34):** the music section, built end to end on branch
 `claude/spec-31-music-section` (**no PR opened**). Asked for as a spec, the nine
 questions put and answered, then "Yea build plz" as its own turn. Read the spec's
 **Build status** first; this is the short version.
@@ -28,14 +28,138 @@ questions put and answered, then "Yea build plz" as its own turn. Read the spec'
   fallback, and what shows when Apple is down or there's no token.
 - **`/site/songs`** ranked with who voted, ♥, merge, an "On the night" big-button
   mode, `/api/export/songs` and `/site/songs/print` for the DJ.
-- **One migration, `0035_song_chart.sql`** — additive; not applied to the live
+- **One migration, `0037_song_chart.sql`** — additive; not applied to the live
   project, and neither are `0026`–`0034`.
 - **Verified:** typecheck, 991 unit tests, 523 SQL assertions, `next build`
   (placeholder env). **Not:** any browser, Supabase, or **Apple's API — blocked by
   this session's network policy**, so search is untested against a real response.
-- **Pick up here:** apply `0035`, publish a Song requests block with a ban list,
+- **Pick up here:** apply `0037`, publish a Song requests block with a ban list,
   open two households' links on two phones, search, add, vote, and watch the
   other phone's chart move.
+
+**Session 39 (spec 33):** the seating plan, specced, scoped in full, researched
+against nine competing products (§2A), then built end to end on branch
+`claude/spec-33-seating-plan` (**no PR opened**). "Build it" came with none of the
+spec's 18 questions answered, so **every one took its recommendation** — the spec's
+**Answered** section lists them; any can be changed. Read the spec's **Build status**
+first; this is the short version.
+
+- **`0036_seating.sql`.** `seating_plans` (room size, venue image, guests' reveal
+  date; one per event), `seating_tables`, `seating_fixtures`, `seat_assignments`
+  (PK guest+event; a partial unique index for one guest per chair; a
+  **three-column FK** so a table always belongs to the assignment's own event),
+  `seating_rules` (together / apart / near / avoid_table / accessible, one check
+  constraint per kind), `seating_snapshots` (**not audited** — on
+  `18_audit_log.sql`'s exception list). `take_seating_snapshot()` /
+  `restore_seating_snapshot()` are SECURITY INVOKER and take the creator from the
+  app (`p_created_by`), like `vendor_notes.author_id`. Restore saves the layout it
+  replaces first and skips guests deleted since.
+- **Screens.** `/seating` → `/events/[id]/seating`: a tray of the event's
+  attendees (from `v_guest_event_invites`, never re-derived) grouped by household;
+  a **Tables** view (dnd-kit) and a **Room** view (SVG + pointer events, to
+  scale, fixtures, venue image, two-point calibration, clearance rings);
+  **tap-to-place** everywhere; a table drawer with chairs (tap; taken chairs
+  swap); warnings that never block, from `src/lib/seating/warnings.ts`;
+  "Colour by" side / tag / a single-choice RSVP answer (meal); saved copies;
+  the reveal date. Print pack at `/events/[id]/seating/print` (by table, entrance
+  board in the site's theme, caterer numbers, floor plan, escort cards, place
+  cards). A `seating` CSV kind, in the zip too. A `your_table` site block shows a
+  household its own table after the reveal date.
+- **Verified:** typecheck clean, **1047 unit tests** (38 new), `verify-migrations.sh`
+  **586 assertions** (45 new), single-transaction check, `next build` (placeholder
+  env). **Seen in headless Chromium with sample data and no database**, through a
+  temporary page that was deleted, never committed: both views, tap-to-place, a
+  mouse drag onto a table, moving and rotating a table, the drawer, phone width.
+  That found and fixed a dnd-kit hydration mismatch and two layout faults.
+  **Not verified:** no seating action has ever run against Supabase; no touch on
+  a real iPad; the print views have never rendered (they need the database).
+- **Also:** `scripts/check-migrations.sql` was stale at `0034`; now lists `0035`
+  and `0036`.
+- **Pick up here:** apply `0026`–`0036` to the live project in order, then the
+  spec's "Pick up here" walk-through on an iPad.
+
+**Session 38 (spec 32):** backups you can restore from on the free plan, and an audit
+log, built on branch `claude/spec-32-backup-and-audit-log` (**no PR opened**). Asked for
+as a spec, committed as one, then "Okay let's build and ask questions" as its own turn;
+four questions asked and answered, five took the recommendation. Read the spec's **Build
+status** first; this is the short version.
+
+- **Audit log (`0035`).** One append-only `audit_log` table, written only by an
+  `AFTER ... FOR EACH ROW` trigger (`audit_row()`) on 50 planner-authored tables, so it
+  catches server actions, the service-role public routes, and the SQL editor alike.
+  Inserts/deletes store the whole row, updates store `{col: [old, new]}`; `updated_at`,
+  `rank` and `sort_order`-only updates write nothing. `actor_id` is `auth.uid()`;
+  signed-out writes are `actor_kind = 'public'`. Bank details and every token hash are
+  `[redacted]`. Immutable even for its owner (a guard trigger); the only delete path is
+  `prune_audit_log()`, called weekly by `/api/cron/audit-prune` (keeps 12 months).
+  **A new table must either get the trigger or be added to the exception list in
+  `supabase/tests/18_audit_log.sql`** — that test fails otherwise, on purpose.
+- **`/settings/activity`** (linked from Settings): newest first, grouped by day in the
+  wedding's timezone, filter by area / person / dates, "Older changes" paging. Read-only.
+  Undo was **not** built (Q6). Sentences come from `src/lib/audit/describe.ts`.
+- **Backups.** `.github/workflows/backup.yml` nightly (03:17 NZ): `scripts/backup-db.sh`
+  → `public.dump` + `auth.dump`, `age`-encrypted to a public key, 30-day Actions
+  artifact; Sundays also copy the images (`scripts/backup-storage.mjs`, refuses above
+  200 MB). Refuses to run in a public repo. **`docs/RESTORE.md`** is the runbook;
+  `scripts/restore-db.sh` / `restore-storage.mjs` do the work.
+- **`scripts/verify-restore.sh`** (now in `verify.yml`) dumps a migrated+seeded database
+  with the real backup script and restores it into a fresh one, comparing row counts and
+  every policy/trigger/function/view/grant. It found two real bugs while being written
+  (see spec build status item 10): `--no-privileges` loses the grants, and keeping them
+  lets Supabase's default privileges re-grant `anon` everything.
+- **Verified:** typecheck clean, **1006 tests** (984 before), `verify-migrations.sh`
+  **541 assertions** (508 before), `verify-restore.sh` passes, `next build` (placeholder
+  env). Each guard was shown to fail when the thing it guards is removed.
+  **Not verified:** `backup.yml` has never run (no way to here); the restore is proven
+  against plain PostgreSQL only; `/settings/activity` never opened in a browser; the
+  trigger has never fired on a live project.
+- **Follow-up, same session: "Download everything (.zip)"** in Settings
+  (`/api/export/all`): the five CSV exports plus a README in one zip, so a planner on an
+  iPad with no terminal can keep a copy. A readable copy, **not** a restore file; no
+  budget/vendors/moodboards/website/images. The export route's per-kind code moved into
+  `buildExport()` (behaviour unchanged by reading; **not run against a live project**);
+  `src/lib/zip.ts` is new and tested. The nightly workflow is untouched, and the
+  command-line scripts are no use to someone with no terminal — whether to make
+  `backup.yml`'s encryption optional (so setup is two pasted secrets) is still open.
+- **Pick up here:** apply `0035` to the live project (**before** the first backup run —
+  the workflow checks the dump contains `audit_log`); make the repo private if it isn't;
+  do "Setting it up" then the "Rehearsal" in `docs/RESTORE.md`; open `/settings/activity`.
+  Keep a copy of your Vercel env vars, above all `INVITE_TOKEN_PEPPER`.
+
+**Session 37 (spec 31):** text colour, fonts, and three small fixes, built on branch
+`claude/spec-31-site-text-colour` (**no PR opened**). Asked for as a spec, grew over
+four follow-ups, nineteen questions answered one by one, then "Okay let's build" as its
+own turn. Read the spec's **Build status** first; this is the short version.
+
+- **Text colour and font, site-wide and per block.** A rail panel (Text, Secondary,
+  Links; body and heading font) and, per block, "Use the site's text style". One switch,
+  **"Same text style in every section"**, on by default; **turning it on clears every
+  block's own colour/font** (Q7, against the recommendation) after a confirm with a count.
+  Stored in the existing theme JSON (`text_colours`, `match_all`, `fonts`) and three
+  block style keys (`textColour`, `mutedColour`, `bodyFont`). **No migration.**
+- **Q2 against the recommendation: the override replaces `ink`/`muted`/`accent` itself**,
+  so buttons, selected states and lines follow the text colour. `themeTokens()` is
+  deliberately **not** changed — the save-the-date calls it and keeps its own colours (Q3);
+  the site's pages use `siteTokens()`.
+- **Readability is a gate, not a suggestion.** The same `validatePalette` a palette passes,
+  on the merged tokens; a block's colour is checked against *its own* ground (paper, the
+  8% accent tint, the site's ink) and is advisory only over a photograph. A colour that
+  fails is stored but **not drawn**. `saveTheme` re-checks against the palette being
+  saved; applying a Vibe drops overrides that no longer pass.
+- **Small ones:** the gift description is plain Body text (it borrowed the schedule's
+  italic detail class); the gift **Reference** line and `giftReference` are gone; a mood
+  board title has a visible "✎ Rename" and `InlineText`. Spec 31 §3.10's claim that a blank
+  title was silently ignored was wrong (the schema rejects it) — corrected in the build status.
+- **Verified:** typecheck clean, **984 tests** (953 before), `next build` (placeholder env).
+  **Looked at:** only the colour/font cascade, in headless Chromium on a static page using
+  the built stylesheet. **Never opened in the real app or against Supabase**; `verify-migrations.sh`
+  not run (no SQL). The spec's §3.8 audit of *every* block's body text was **not** done —
+  only the gift section was fixed and pinned; the other italic/detail uses are listed in the
+  spec, not changed. Fraunces and Inter have no italic file, so italics in them are synthesised.
+- **Pick up here:** `/site` → Text colour & font on both a light and a dark palette; switch
+  the sitewide switch off and style one block (try a dark colour on a Photograph block over a
+  pale print); a Script site choosing a body font (loads two extra faces); rename a mood board
+  on a phone. `0026`–`0034` are still not applied to the live project.
 
 **Session 36 (spec 30):** two small fixes, built on branch
 `claude/spec-30-save-the-date-reply-and-undimmed-photos` (**no PR opened**). Asked
