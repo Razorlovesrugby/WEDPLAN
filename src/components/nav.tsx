@@ -20,7 +20,7 @@ const LINKS = [
   { href: "/guests", label: "Guests", matchPrefixes: ["/guests", "/invitations", "/households"] },
   { href: "/budget", label: "Budget" },
   { href: "/vendors", label: "Vendors" },
-  { href: "/events", label: "Events" },
+  { href: "/events", label: "Events", matchPrefixes: ["/events", "/run-sheet", "/seating"] },
   { href: "/questions", label: "Questions" },
   { href: "/lists", label: "Tasks", matchPrefixes: ["/lists", "/calendar", "/board", "/timeline"] },
   { href: "/moodboards", label: "Moodboards" },

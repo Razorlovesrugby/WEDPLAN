@@ -57,9 +57,12 @@ export function EventsEditor({ events, timeZone }: { events: EventRow[]; timeZon
                     {event.is_public ? null : " · hidden from the public site"}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Link href={`/events/${event.id}/run-sheet`} className="btn" prefetch={false}>
                     Run sheet →
+                  </Link>
+                  <Link href={`/events/${event.id}/seating`} className="btn" prefetch={false}>
+                    Seating →
                   </Link>
                   <button type="button" className="btn" onClick={() => setEditing(event.id)}>
                     Edit
