@@ -12,6 +12,8 @@ import { csvDocument } from "@/lib/csv";
 import { zip } from "@/lib/zip";
 import { guestName, formatDateTime } from "@/lib/format";
 import { getCoachManifest } from "@/server/queries/travel";
+import { getPlannerSongs } from "@/server/queries/site-extras";
+import type { ListItemStatus } from "@/lib/types/database";
 import { getEventIdsWithSeating, getSeatingPlan } from "@/server/queries/seating";
 import { SEATING_CSV_HEADER, seatingCsvRows } from "@/lib/seating/listings";
 import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
@@ -29,6 +31,7 @@ import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
  * filter again.
  */
 
+const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs"] as const;
 const KINDS = ["guests", "catering", "households", "tasks", "coach", "seating"] as const;
 type Kind = (typeof KINDS)[number];
 
@@ -47,6 +50,34 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
   const stamp = new Date().toISOString().slice(0, 10);
   let body: string;
   let filename: string;
+
+  if (kind === "songs") {
+    // The song chart for the DJ (spec 31 §7): rank order as guests see it,
+    // every status, so the couple can filter in a spreadsheet if they like.
+    const songs = await getPlannerSongs(wedding.id);
+    return new NextResponse(
+      csvDocument(
+        ["Rank", "Song", "Artist", "Votes", "Asked for by", "Couple's pick", "Status", "Played at"],
+        songs.map((song, index) => [
+          index + 1,
+          song.title,
+          song.artist ?? "",
+          song.votes,
+          song.askedBy ?? "",
+          song.couplesPick ? "Yes" : "",
+          song.status,
+          song.playedAt ? formatDateTime(song.playedAt, wedding.timezone) : "",
+        ]),
+      ),
+      {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="songs-${stamp}.csv"`,
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  }
 
   if (kind === "coach") {
     // The manifest: who is on which coach, from which stop. Ordered the way it

@@ -29,6 +29,13 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/api/photographs")).toBe(false);
   });
 
+  it("lets a guest's browser fetch album covers on the song chart", () => {
+    // Spec 31 §7a. The route first went in at /api/song-art, which this list
+    // would have bounced to /login — every cover a broken image.
+    expect(isPublicPath("/api/public/song-art")).toBe(true);
+    expect(isPublicPath("/api/song-art")).toBe(false);
+  });
+
   it("lets the cron sender and the health check through", () => {
     expect(isPublicPath("/api/cron/reminders")).toBe(true);
     expect(isPublicPath("/api/health")).toBe(true);
