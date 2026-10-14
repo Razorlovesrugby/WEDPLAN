@@ -85,11 +85,11 @@ function TableCard({ table }: { table: SeatingTable }) {
         <ShapeIcon shape={table.shape} />
         <h3 className="min-w-0 flex-1 truncate font-medium">{table.label}</h3>
         {table.accessible ? (
-          <span className="text-xs text-muted" title="Accessible table">
-            Accessible
+          <span className="shrink-0 text-xs text-muted" title="Accessible table" aria-label="Accessible table">
+            ♿
           </span>
         ) : null}
-        <span className={`text-sm tabular-nums ${over ? "font-semibold text-red-700" : "text-muted"}`}>
+        <span className={`shrink-0 text-sm tabular-nums ${over ? "font-semibold text-red-700" : "text-muted"}`}>
           {occ.chairsTaken} / {table.capacity}
         </span>
         <button

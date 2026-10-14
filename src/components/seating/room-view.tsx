@@ -474,6 +474,8 @@ function TableShape({
     assignments.filter((a) => a.tableId === table.id && a.seatIndex !== null).map((a) => [a.seatIndex!, a.guestId]),
   );
   const stroke = selected ? "#1a1a1a" : warn ? "#b45309" : isOver ? "#7c5c3e" : "#8a8580";
+  // Big enough to read zoomed out, never wider than the table it names.
+  const fs = Math.min(fontSize, Math.max(length, width) / (0.62 * Math.max(4, table.label.length)));
 
   return (
     <g
@@ -520,13 +522,13 @@ function TableShape({
         />
       )}
       <g transform={`rotate(${-table.rotation_deg})`} style={{ pointerEvents: "none" }}>
-        <text textAnchor="middle" y={-fontSize * 0.15} fontSize={fontSize} fill="#1a1a1a">
+        <text textAnchor="middle" y={-fs * 0.15} fontSize={fs} fill="#1a1a1a">
           {table.label}
         </text>
         <text
           textAnchor="middle"
-          y={fontSize * 1.05}
-          fontSize={fontSize * 0.8}
+          y={fs * 1.05}
+          fontSize={fs * 0.8}
           fill={occ.chairsTaken > table.capacity ? "#b91c1c" : "#6b6560"}
         >
           {occ.chairsTaken}/{table.capacity}
