@@ -782,13 +782,11 @@ export function SiteBlockView({
     // -- music --------------------------------------------------------------
     case "song_requests":
       return (
-        <Shell block={block} bgImage={bgImage} intro={null} mark={mark}>
+        <Shell block={block} bgImage={bgImage} text={textLook} intro={null} mark={mark}>
           {/* Spec 25 §11 — approved requests, rendered back, because a form
-              nobody sees the result of is a suggestion box; spec 31 makes
+              nobody sees the result of is a suggestion box; spec 33 makes
               them a live chart with a do-not-play list under it. */}
           <SongSection
-        <Shell block={block} bgImage={bgImage} text={textLook} intro={null} mark={mark}>
-          <SongRequestForm
             weddingSlug={ctx.wedding.slug}
             token={personal?.token ?? null}
             intro={intro ?? "Tell us what will get you dancing."}
