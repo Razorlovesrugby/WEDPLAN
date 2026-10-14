@@ -296,6 +296,21 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     managedElsewhere: "/travel",
     fields: [INTRO],
   },
+  your_table: {
+    blurb:
+      "Each household sees only its own table, and only from the date set under Seating. Before then this section doesn't appear.",
+    managedElsewhere: "/seating",
+    fields: [
+      INTRO,
+      { name: "show_seat", label: "Show their seat number too", kind: "checkbox" },
+      {
+        name: "show_tablemates",
+        label: "Show who else is at their table",
+        kind: "checkbox",
+        help: "Tells each household who else is coming. Off unless you want it.",
+      },
+    ],
+  },
   gift_funds: {
     blurb: "Two or three things you'd like help with. The funds themselves live on their own screen.",
     managedElsewhere: "/site/gifts",

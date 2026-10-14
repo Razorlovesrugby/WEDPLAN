@@ -20,7 +20,7 @@ import {
   summariseReply,
 } from "@/lib/site/reply-state";
 import { ReplyBar } from "../reply-bar";
-import { formatDate, daysUntil, timeLeft } from "@/lib/format";
+import { formatDate, formatDateTime, daysUntil, timeLeft } from "@/lib/format";
 import { SiteHero, type HeroCover, type HeroLook } from "../hero";
 import { ReadingLine } from "../reading-line";
 import { PhotoViewer } from "../photo-viewer";
@@ -705,6 +705,60 @@ export function SiteBlockView({
           ) : (
             <CoachSection runs={ctx.travel.runs} timeZone={ctx.wedding.timezone} bookable={false} />
           )}
+        </Shell>
+      );
+    }
+
+    case "your_table": {
+      // Only ever a household's own table, and only once revealed (spec 33
+      // Part F). Before that, or with nobody seated, the section isn't drawn at
+      // all (Q11) — a heading over "not yet" invites the question it can't answer.
+      if (!personal || personal.seating.length === 0) {
+        // The builder's preview says where this went, rather than showing a gap.
+        return ctx.preview ? (
+          <Shell block={block} bgImage={bgImage} text={textLook} intro={intro} mark={mark}>
+            <p className="text-center text-sm text-muted">
+              {personal
+                ? "Nobody in this household has a seat yet."
+                : "Each household sees its own table here, on its own page. Preview as a household to see it."}
+            </p>
+          </Shell>
+        ) : null;
+      }
+      const events = personal.seating.filter((e) => e.revealed || ctx.preview);
+      if (events.length === 0) return null;
+      const showSeat = flag(payload, "show_seat");
+      const showMates = flag(payload, "show_tablemates");
+      return (
+        <Shell block={block} bgImage={bgImage} text={textLook} intro={intro} mark={mark}>
+          <div className="space-y-6 text-center">
+            {events.map((event) => (
+              <div key={event.eventId}>
+                {events.length > 1 ? <p className="site-label mb-2 text-muted">{event.eventName}</p> : null}
+                {ctx.preview && !event.revealed ? (
+                  <p className="mb-2 text-xs text-muted">
+                    {event.revealAt
+                      ? `Guests see this from ${formatDateTime(event.revealAt, ctx.wedding.timezone)}.`
+                      : "Guests won't see this until you set a date on the seating plan."}
+                  </p>
+                ) : null}
+                <ul className="space-y-3">
+                  {event.members.map((m) => (
+                    <li key={m.guestId}>
+                      <span className="block text-lg">
+                        {event.members.length > 1 ? `${m.name} — ` : ""}
+                        <strong className="font-medium">{m.table}</strong>
+                        {showSeat && m.seat !== null ? `, seat ${m.seat}` : ""}
+                      </span>
+                      {showMates && m.tablemates.length > 0 ? (
+                        <span className="mt-1 block text-sm text-muted">With {m.tablemates.join(", ")}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </Shell>
       );
     }
