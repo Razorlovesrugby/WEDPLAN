@@ -1,7 +1,6 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { signPath } from "@/lib/supabase/storage";
 import type { ColourContext } from "@/lib/seating/colour";
 import type {
   SeatingAssignment,
@@ -15,8 +14,6 @@ import type { RsvpStatus } from "@/lib/types/database";
 
 export type SeatingPlanData = {
   plan: SeatingPlan | null;
-  /** A signed URL for the venue image, good for an hour; null if none or storage is unreachable. */
-  backgroundUrl: string | null;
   tables: SeatingTable[];
   fixtures: SeatingFixture[];
   assignments: SeatingAssignment[];
@@ -143,12 +140,8 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     };
   });
 
-  const planRow = plan.data ?? null;
-  const backgroundUrl = planRow?.background_path ? await signPath(planRow.background_path) : null;
-
   return {
-    plan: planRow,
-    backgroundUrl,
+    plan: plan.data ?? null,
     tables: tables.data ?? [],
     fixtures: fixtures.data ?? [],
     assignments: (assignments.data ?? []).map((a) => ({

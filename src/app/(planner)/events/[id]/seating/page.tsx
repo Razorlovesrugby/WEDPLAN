@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SeatingScreen } from "@/components/seating/seating-screen";
 import { parseColourBy } from "@/lib/seating/colour";
+import { signPath } from "@/lib/supabase/storage";
 import { getSeatingPlan, listSeatingSnapshots } from "@/server/queries/seating";
 import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 
@@ -26,6 +27,8 @@ export default async function EventSeatingPage({
     listSeatingSnapshots(wedding.id, id),
     getCollaborators(wedding.id),
   ]);
+  // Signed here, not in the query: the print page and the CSV share the query and never draw the image.
+  const backgroundUrl = data.plan?.background_path ? await signPath(data.plan.background_path) : null;
 
   return (
     <div className="space-y-4">
@@ -43,7 +46,7 @@ export default async function EventSeatingPage({
       <SeatingScreen
         eventId={id}
         timeZone={wedding.timezone}
-        data={data}
+        data={{ ...data, backgroundUrl }}
         snapshots={snapshots}
         collaborators={collaborators.map((c) => ({ user_id: c.user_id, display_name: c.display_name, role: c.role }))}
         initialColourBy={parseColourBy(colour)}

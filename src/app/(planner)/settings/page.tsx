@@ -83,8 +83,8 @@ export default async function SettingsPage() {
           Download your data
         </h2>
         <p className="text-sm text-muted">
-          One zip of spreadsheets: guests, households, catering numbers, tasks and the coach
-          manifest. Open them in Excel, Numbers or Sheets. It&rsquo;s a copy of what you can read,
+          One zip of spreadsheets: guests, households, catering numbers, tasks, the coach
+          manifest and the seating plan. Open them in Excel, Numbers or Sheets. It&rsquo;s a copy of what you can read,
           not a full backup &mdash; the budget, vendors, moodboards and website aren&rsquo;t in it.
           It holds your guests&rsquo; details, so keep it private.
         </p>

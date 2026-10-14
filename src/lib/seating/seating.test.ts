@@ -15,6 +15,7 @@ import { compareBySurname, guestName, nextTableLabel, type SeatingGuest, type Se
 import { defaultTrayMode, isAttending, trayHouseholds } from "./tray";
 import { computeWarnings, declinedSeatedGuestIds, occupancy, summarise, warningsByTable } from "./warnings";
 import { applyMove } from "./moves";
+import { chairsNeeded, nameIndex, placeCardOrder, seatingCsvRows, tableListings } from "./listings";
 import { colourCounts, colourLegend, guestColour, parseColourBy, serialiseColourBy } from "./colour";
 
 function guest(id: string, over: Partial<SeatingGuest> = {}): SeatingGuest {
@@ -444,5 +445,43 @@ describe("applyMove (the screen's optimistic copy of assignGuests)", () => {
 
   it("sends the displaced person to the tray when the mover came from the tray", () => {
     expect(applyMove([a("y", "t2", 3)], ["x"], "t2", 3)).toEqual([a("x", "t2", 3)]);
+  });
+});
+
+describe("listings", () => {
+  const plan = {
+    tables: [table("t1", { label: "Table 1", reserved_seats: 1 }), table("t2", { label: "Table 2" })],
+    guests: [
+      guest("ana", { firstName: "Ana", lastName: "Zed" }),
+      guest("bo", { firstName: "Bo", lastName: "Able", ageBand: "infant" }),
+      guest("cy", { firstName: "Cy", lastName: "Mid", dietary: "Vegan" }),
+    ],
+    assignments: [
+      { guestId: "ana", tableId: "t1", seatIndex: 1 },
+      { guestId: "bo", tableId: "t1", seatIndex: null },
+      { guestId: "cy", tableId: "t2", seatIndex: 0 },
+      { guestId: "gone", tableId: "t2", seatIndex: 1 },
+    ],
+  };
+
+  it("lists each table in chair order, chairless last, skipping deleted guests", () => {
+    const l = tableListings(plan);
+    expect(l[0]!.guests.map((s) => s.guest.id)).toEqual(["ana", "bo"]);
+    expect(l[1]!.guests.map((s) => s.guest.id)).toEqual(["cy"]);
+    expect([l[0]!.adults, l[0]!.infants]).toEqual([1, 1]);
+    expect(chairsNeeded(l[0]!)).toBe(2); // Ana and the reserved seat; the infant needs none.
+  });
+
+  it("indexes by surname and orders place cards table by table", () => {
+    expect(nameIndex(plan).map((e) => e.guest.id)).toEqual(["bo", "cy", "ana"]);
+    expect(placeCardOrder(plan).map((e) => e.guest.id)).toEqual(["ana", "bo", "cy"]);
+  });
+
+  it("builds CSV rows with 1-based chairs", () => {
+    expect(seatingCsvRows("Reception", plan)).toEqual([
+      ["Reception", "Table 1", 2, "Ana Zed", "House ana", "adult", "", ""],
+      ["Reception", "Table 1", "", "Bo Able", "House bo", "infant", "", ""],
+      ["Reception", "Table 2", 1, "Cy Mid", "House cy", "adult", "Vegan", ""],
+    ]);
   });
 });
