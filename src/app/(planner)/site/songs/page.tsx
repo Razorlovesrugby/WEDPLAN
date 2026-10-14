@@ -6,7 +6,7 @@ import { getPlannerSongs } from "@/server/queries/site-extras";
 export const metadata = { title: "Song requests" };
 
 /**
- * The list you hand the DJ (spec 23 §8, spec 31 §7).
+ * The list you hand the DJ (spec 23 §8, spec 34 §7).
  *
  * Ranked as guests see it, with who voted. Here is where a song is hidden,
  * merged with its twin, given the couple's ♥, or marked played on the night —

@@ -13,7 +13,6 @@ import { zip } from "@/lib/zip";
 import { guestName, formatDateTime } from "@/lib/format";
 import { getCoachManifest } from "@/server/queries/travel";
 import { getPlannerSongs } from "@/server/queries/site-extras";
-import type { ListItemStatus } from "@/lib/types/database";
 import { getEventIdsWithSeating, getSeatingPlan } from "@/server/queries/seating";
 import { SEATING_CSV_HEADER, seatingCsvRows } from "@/lib/seating/listings";
 import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
@@ -31,8 +30,7 @@ import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs"] as const;
-const KINDS = ["guests", "catering", "households", "tasks", "coach", "seating"] as const;
+const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -52,11 +50,12 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
   let filename: string;
 
   if (kind === "songs") {
-    // The song chart for the DJ (spec 31 §7): rank order as guests see it,
+    // The song chart for the DJ (spec 33 §7): rank order as guests see it,
     // every status, so the couple can filter in a spreadsheet if they like.
     const songs = await getPlannerSongs(wedding.id);
-    return new NextResponse(
-      csvDocument(
+    return {
+      filename: `songs-${stamp}.csv`,
+      body: csvDocument(
         ["Rank", "Song", "Artist", "Votes", "Asked for by", "Couple's pick", "Status", "Played at"],
         songs.map((song, index) => [
           index + 1,
@@ -69,14 +68,7 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
           song.playedAt ? formatDateTime(song.playedAt, wedding.timezone) : "",
         ]),
       ),
-      {
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="songs-${stamp}.csv"`,
-          "Cache-Control": "no-store",
-        },
-      },
-    );
+    };
   }
 
   if (kind === "coach") {

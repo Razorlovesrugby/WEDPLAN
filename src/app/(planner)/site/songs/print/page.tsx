@@ -7,7 +7,7 @@ import { doNotPlayFrom } from "@/lib/site/song-match";
 export const metadata = { title: "Songs for the DJ" };
 
 /**
- * The page you hand the DJ (spec 31 §7): the chart in rank order, the
+ * The page you hand the DJ (spec 34 §7): the chart in rank order, the
  * couple's picks marked, and the do-not-play list at the bottom where it
  * cannot be missed. Listed songs only — a hidden one is hidden from the DJ
  * too. The do-not-play list is read from the draft block, because this is the

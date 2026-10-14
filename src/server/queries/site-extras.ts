@@ -42,13 +42,13 @@ export type PublicSong = {
   votedByViewer: boolean;
   /** True when the household reading the page is the one that asked for it. */
   askedByViewer: boolean;
-  /** Our proxied artwork address (`/api/public/song-art?…`), never Apple's (spec 31 §7a). */
+  /** Our proxied artwork address (`/api/public/song-art?…`), never Apple's (spec 34 §7a). */
   art: string | null;
   /** The couple's ♥ — a badge only. */
   couplesPick: boolean;
   /** When it was played on the night, or null. */
   playedAt: string | null;
-  /** The one song with the most votes in the last 48 hours (spec 31 §4.3). */
+  /** The one song with the most votes in the last 48 hours (spec 34 §4.3). */
   hot: boolean;
 };
 
@@ -97,7 +97,7 @@ async function readDressCodes(
 }
 
 /**
- * The song chart, ranked, as one household sees it (spec 25 §11, spec 31).
+ * The song chart, ranked, as one household sees it (spec 25 §11, spec 34).
  *
  * Its own function because two callers need exactly this and nothing else:
  * the page as it loads, and the chart polling for fresh counts every fifteen
@@ -291,7 +291,7 @@ export const getGiftFunds = cache(async (weddingId: string): Promise<GiftFundRow
 });
 
 // ---------------------------------------------------------------------------
-// The couple's song list (spec 31 §7)
+// The couple's song list (spec 34 §7)
 // ---------------------------------------------------------------------------
 
 export type PlannerSong = {
@@ -303,7 +303,7 @@ export type PlannerSong = {
   /** The household that asked, else whatever name was typed, else null. */
   askedBy: string | null;
   votes: number;
-  /** Which households voted — the couple's to see, never a guest's (spec 31 Q6). */
+  /** Which households voted — the couple's to see, never a guest's (spec 34 Q6). */
   voters: string[];
   couplesPick: boolean;
   playedAt: string | null;

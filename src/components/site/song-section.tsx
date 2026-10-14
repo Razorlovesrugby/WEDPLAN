@@ -13,9 +13,9 @@ import { Label } from "./section";
 /**
  * The music section: the request form, the chart, and the do-not-play list,
  * sharing one copy of the chart so a song added in the form appears in the
- * chart without reloading the page (spec 31).
+ * chart without reloading the page (spec 34).
  *
- * LIVE BY POLLING (spec 31 Q1). Every fifteen seconds while the tab is
+ * LIVE BY POLLING (spec 34 Q1). Every fifteen seconds while the tab is
  * visible, the chart asks `refreshSongChart` for fresh counts — the same
  * service-role read the page loaded with, so nothing was opened to `anon` to
  * make it live. After ten minutes without the guest touching the page it

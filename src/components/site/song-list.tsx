@@ -15,9 +15,9 @@ import {
 import type { PublicSong } from "@/server/queries/site-extras";
 
 /**
- * The chart (spec 25 §11, spec 28 §6.2, spec 31 §4).
+ * The chart (spec 25 §11, spec 28 §6.2, spec 34 §4).
  *
- * Spec 23 kept this list planner-facing; spec 25 showed it back; spec 31 makes
+ * Spec 23 kept this list planner-facing; spec 25 showed it back; spec 34 makes
  * it move. The counts update the moment fresh data arrives. The ORDER updates
  * too — rows slide to their new place — but never within three seconds of the
  * guest touching the list (`mayReorder`): a row that moves out from beneath a

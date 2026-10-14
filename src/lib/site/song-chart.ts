@@ -1,5 +1,5 @@
 /**
- * The small rules that make the song list read as a chart (spec 31 §4.3, §6).
+ * The small rules that make the song list read as a chart (spec 34 §4.3, §6).
  *
  * All pure and all here, so the guest's component only draws: which song is
  * hot, which one is playing, how far each moved since this guest last looked,
