@@ -175,6 +175,11 @@ const PAYLOAD_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
   travel: z.object({ intro: optionalText, body: optionalText }),
   stays: z.object({ intro: optionalText }),
   coach: z.object({ intro: optionalText }),
+  your_table: z.object({
+    intro: optionalText,
+    show_seat: z.boolean().optional(),
+    show_tablemates: z.boolean().optional(),
+  }),
   // The funds live in `gift_funds`; the block holds only the line above them.
   gift_funds: z.object({ intro: optionalText }),
   // The grey hints in the song box (spec 28 §6.3). Blank means the default.

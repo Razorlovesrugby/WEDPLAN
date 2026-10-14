@@ -132,6 +132,7 @@ const STARTERS: Record<BlockType, StarterDef> = {
   travel: NONE,
   stays: NONE,
   coach: NONE,
+  your_table: NONE,
   gift_funds: NONE,
   song_requests: NONE,
   guestbook: NONE,

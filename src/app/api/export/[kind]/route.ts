@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCollaborators, getCurrentWedding } from "@/server/queries/wedding";
+import { getCollaborators, getCurrentWedding, getEvents } from "@/server/queries/wedding";
 import { listGuests, listHouseholds } from "@/server/queries/guests";
 import { listSaveTheDateOpens } from "@/server/queries/save-the-date";
 import { absoluteUrl } from "@/lib/env";
@@ -12,6 +12,8 @@ import { csvDocument } from "@/lib/csv";
 import { zip } from "@/lib/zip";
 import { guestName, formatDateTime } from "@/lib/format";
 import { getCoachManifest } from "@/server/queries/travel";
+import { getEventIdsWithSeating, getSeatingPlan } from "@/server/queries/seating";
+import { SEATING_CSV_HEADER, seatingCsvRows } from "@/lib/seating/listings";
 import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
 
 /**
@@ -27,7 +29,7 @@ import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households", "tasks", "coach"] as const;
+const KINDS = ["guests", "catering", "households", "tasks", "coach", "seating"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -68,6 +70,20 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
         ]),
       ),
     };
+  }
+
+  if (kind === "seating") {
+    // Who sits where (spec 33 §G): one event from the seating screen's button,
+    // or every event with a plan in the bundle. Seated guests only, table by
+    // table in chair order — the same listing the printed sheets use.
+    const events = await getEvents(wedding.id);
+    const only = searchParams.get("event");
+    const withTables = await getEventIdsWithSeating(wedding.id);
+    const chosen = events.filter((e) => (only ? e.id === only : withTables.has(e.id)));
+    const rows = (
+      await Promise.all(chosen.map(async (e) => seatingCsvRows(e.name, await getSeatingPlan(wedding.id, e.id))))
+    ).flat();
+    return { filename: `seating-${stamp}.csv`, body: csvDocument([...SEATING_CSV_HEADER], rows) };
   }
 
   if (kind === "tasks") {
@@ -235,6 +251,7 @@ These are spreadsheets (CSV) you can open in Excel, Numbers or Google Sheets:
   catering-numbers  confirmed attendees only, for the caterer
   tasks             every task across every list
   coach-manifest    who is on which coach, from which stop
+  seating           who sits at which table (and chair), for every event with a plan
 
 This is a copy of what you can read, not a full backup: it can't be loaded back
 in automatically, and it doesn't include the budget, vendors, moodboards, the
