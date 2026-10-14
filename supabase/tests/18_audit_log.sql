@@ -293,7 +293,8 @@ declare
     'moodboard_clip_tokens', -- a credential
     'pinterest_accounts',    -- a credential
     'list_templates',        -- shared across weddings, no wedding_id
-    'household_slug_aliases' -- derived from a household's name
+    'household_slug_aliases', -- derived from a household's name
+    'seating_snapshots'      -- itself a saved copy; auditing it would duplicate the payload
   ];
 begin
   select string_agg(c.relname, ', ' order by c.relname) into v_missing

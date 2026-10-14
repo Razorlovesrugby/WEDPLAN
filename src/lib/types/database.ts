@@ -370,6 +370,20 @@ export type VendorStage =
 export type EstimateSource = "entered" | "allocation" | "none";
 export type ReminderDueSource = "list_item" | "payment";
 export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
+export type SeatingTableShape = "round" | "long" | "square" | "head";
+export type SeatingFixtureKind =
+  | "dance_floor"
+  | "bar"
+  | "band"
+  | "dj"
+  | "stage"
+  | "cake"
+  | "gifts"
+  | "entrance"
+  | "photo_booth"
+  | "buffet"
+  | "other";
+export type SeatingRuleKind = "together" | "apart" | "near" | "avoid_table" | "accessible";
 export type MoodboardShareChannel = "link" | "public_site" | "rsvp";
 export type MoodboardItemOrigin = "upload" | "clip" | "pinterest";
 export type MoodboardLayout = "grid" | "canvas";
@@ -1205,6 +1219,102 @@ export type RunSheetItemRow = {
 }
 
 // ---------------------------------------------------------------------------
+// Seating plan (spec 33)
+// ---------------------------------------------------------------------------
+/** One per event, created the first time anything needs it. */
+export type SeatingPlanRow = {
+  wedding_id: string;
+  event_id: string;
+  room_width_cm: number;
+  room_depth_cm: number;
+  /** An object in the private bucket, `seating/<wedding>/<event>/<uuid>.<ext>`. */
+  background_path: string | null;
+  background_w_px: number | null;
+  background_h_px: number | null;
+  calibrated: boolean;
+  /** When guests may see their table on their own page. Null = never. */
+  reveal_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingTableRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  label: string;
+  shape: SeatingTableShape;
+  capacity: number;
+  /** Chairs for people who aren't guest records — they count against capacity. */
+  reserved_seats: number;
+  reserved_note: string | null;
+  ends_seated: boolean;
+  accessible: boolean;
+  sort_order: number;
+  notes: string | null;
+  /** Centre, in room centimetres. Both null until placed. */
+  pos_x_cm: number | null;
+  pos_y_cm: number | null;
+  rotation_deg: number;
+  /** Null = derived from shape and capacity. */
+  width_cm: number | null;
+  length_cm: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingFixtureRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  kind: SeatingFixtureKind;
+  label: string | null;
+  pos_x_cm: number;
+  pos_y_cm: number;
+  width_cm: number;
+  depth_cm: number;
+  rotation_deg: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatAssignmentRow = {
+  wedding_id: string;
+  event_id: string;
+  guest_id: string;
+  table_id: string;
+  /** Null = at the table, chair not chosen. 0-based, clockwise from the top. */
+  seat_index: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingRuleRow = {
+  id: string;
+  wedding_id: string;
+  kind: SeatingRuleKind;
+  guest_a: string;
+  /** Pair kinds only; always the larger uuid of the two. */
+  guest_b: string | null;
+  /** `avoid_table` only. */
+  table_id: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingSnapshotRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  name: string;
+  automatic: boolean;
+  created_by: string | null;
+  payload: Json;
+  created_at: string;
+};
+
+// ---------------------------------------------------------------------------
 // Moodboards
 // ---------------------------------------------------------------------------
 export type MoodboardRow = {
@@ -1773,6 +1883,28 @@ export type Database = {
         | "sort_order",
         RunSheetItemRelationships
       >;
+      seating_plans: Table<
+        SeatingPlanRow,
+        | Timestamps
+        | "room_width_cm"
+        | "room_depth_cm"
+        | "calibrated"
+      >;
+      seating_tables: Table<
+        SeatingTableRow,
+        | "id"
+        | Timestamps
+        | "shape"
+        | "reserved_seats"
+        | "ends_seated"
+        | "accessible"
+        | "sort_order"
+        | "rotation_deg"
+      >;
+      seating_fixtures: Table<SeatingFixtureRow, "id" | Timestamps | "rotation_deg">;
+      seat_assignments: Table<SeatAssignmentRow, Timestamps>;
+      seating_rules: Table<SeatingRuleRow, "id" | Timestamps>;
+      seating_snapshots: Table<SeatingSnapshotRow, "id" | "created_at" | "automatic">;
     };
     Views: {
       audit_log: View<AuditLogRow>;
@@ -1792,6 +1924,16 @@ export type Database = {
       v_coach_runs: View<CoachRunView>;
     };
     Functions: {
+      /** Spec 33: saves the event's layout under a name; returns the snapshot id. */
+      take_seating_snapshot: {
+        Args: { p_event_id: string; p_name: string; p_automatic?: boolean; p_created_by?: string | null };
+        Returns: string;
+      };
+      /** Spec 33: puts a snapshot back, saving the layout it replaces first. */
+      restore_seating_snapshot: {
+        Args: { p_snapshot_id: string; p_created_by?: string | null };
+        Returns: { tables: number; fixtures: number; seated: number; skipped: number };
+      };
       /** Spec 32: drops audit rows older than the window; service role only. */
       prune_audit_log: {
         Args: { p_keep_days?: number };
@@ -1817,6 +1959,9 @@ export type Database = {
       budget_quantity_basis: BudgetQuantityBasis;
       budget_guest_basis: BudgetGuestBasis;
       run_sheet_track: RunSheetTrack;
+      seating_table_shape: SeatingTableShape;
+      seating_fixture_kind: SeatingFixtureKind;
+      seating_rule_kind: SeatingRuleKind;
       moodboard_share_channel: MoodboardShareChannel;
       moodboard_item_origin: MoodboardItemOrigin;
       moodboard_layout: MoodboardLayout;

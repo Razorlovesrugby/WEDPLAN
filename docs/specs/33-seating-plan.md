@@ -1,9 +1,22 @@
 # Feature spec: The seating plan
 
-**Status: proposed, fully scoped (2026-10-13) — nothing is built.** No
-migration, no code. Per `docs/specs/README.md` and `CLAUDE.md`, nothing beyond
-this document is written until the open questions in §13 are answered **and**
-the planner says to build it as its own turn.
+**Status: building (2026-10-14) — asked for as a spec, scoped in full,
+researched against nine competing products, then "Build it" as its own turn.**
+See **Build status** at the foot of this file for what was built and what was
+not seen.
+
+## Answered — 2026-10-14
+
+"Build it" came without answers to §13, so **every question takes its
+recommendation**, as written in §13. In one line each: any event (1); *Yes +
+no answer yet* until the first Yes (2); under Events plus `/seating` (3); end
+chairs off by default (4); clockwise from the top (5); name + table + colour
+dot, overlap warning + clearance rings (6); calibration kept, optional (7);
+reserved seats (8); rules not in snapshots (9); tablemates off by default
+(10); hidden before the reveal (11); no notification (12); "Table N" (13);
+confirm only (14); **no auto-seating** (15); **no day-of name search or QR**
+(16); **no live venue link** (17); meal colour from an RSVP question (18).
+Any of these can still be changed — say which.
 
 **Depends on:** V1 (`guests`, `households`, `tags`, `events`, `rsvps`), spec 9
 (the private storage bucket and its signed-URL pattern), spec 22
