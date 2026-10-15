@@ -45,54 +45,56 @@ export function QuestionField({
   const selected = Array.isArray(value) ? value : [];
 
   const label = (
-    <span className="mb-1 block text-sm font-medium">
+    <span className="site-label mb-1 block text-muted">
       {question.label}
       {question.required ? <span aria-hidden> *</span> : null}
     </span>
   );
 
+  const legend = (
+    <legend className="site-label mb-2 block text-muted">
+      {question.label}
+      {question.required ? <span aria-hidden> *</span> : null}
+    </legend>
+  );
+
   const help = question.help_text ? (
-    <span className="mt-1 block text-xs text-muted">{question.help_text}</span>
+    <span className="mt-1.5 block text-sm italic text-muted">{question.help_text}</span>
   ) : null;
 
   // Radios and checkboxes cannot sit inside a single <label> wrapping the
-  // whole group — each input needs its own. So those two render a fieldset,
-  // and everything else keeps the label wrapper used across the form.
+  // whole group — each input needs its own. So the choice types render a
+  // fieldset of chips: a real input, visually hidden, under a label that
+  // looks like a button. Keyboard, screen readers and `required` all keep
+  // working because the input is still there.
   if (question.type === "single_select" && options.length > 0) {
     return (
-      <fieldset className="mt-3 block">
-        <legend className="mb-1 block text-sm font-medium">
-          {question.label}
-          {question.required ? <span aria-hidden> *</span> : null}
-        </legend>
-        <div className="space-y-1">
+      <fieldset className="block">
+        {legend}
+        <div className="flex flex-wrap gap-2">
           {options.map((option) => (
-            <label key={option} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name={`${idPrefix}-${question.id}`}
-                value={option}
-                checked={text === option}
-                required={question.required}
-                onChange={() => onChange(option)}
-              />
-              {option}
-            </label>
+            <Chip
+              key={option}
+              type="radio"
+              name={`${idPrefix}-${question.id}`}
+              label={option}
+              checked={text === option}
+              required={question.required}
+              onChange={() => onChange(option)}
+            />
           ))}
           {/* Without this there is no way back to "no answer" once one is
               picked, and a required question is the only kind where that
               should be impossible. */}
           {!question.required ? (
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <input
-                type="radio"
-                name={`${idPrefix}-${question.id}`}
-                value=""
-                checked={text === ""}
-                onChange={() => onChange("")}
-              />
-              No preference
-            </label>
+            <Chip
+              type="radio"
+              name={`${idPrefix}-${question.id}`}
+              label="No preference"
+              quiet
+              checked={text === ""}
+              onChange={() => onChange("")}
+            />
           ) : null}
         </div>
         {help}
@@ -102,29 +104,25 @@ export function QuestionField({
 
   if (question.type === "multi_select" && options.length > 0) {
     return (
-      <fieldset className="mt-3 block">
-        <legend className="mb-1 block text-sm font-medium">
-          {question.label}
-          {question.required ? <span aria-hidden> *</span> : null}
-        </legend>
-        <div className="space-y-1">
+      <fieldset className="block">
+        {legend}
+        <div className="flex flex-wrap gap-2">
           {options.map((option) => (
-            <label key={option} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.includes(option)}
-                onChange={(event) =>
-                  onChange(
-                    event.target.checked
-                      ? // Rebuilt from the option list rather than appended,
-                        // so the saved order matches the order on screen.
-                        options.filter((o) => o === option || selected.includes(o))
-                      : selected.filter((o) => o !== option),
-                  )
-                }
-              />
-              {option}
-            </label>
+            <Chip
+              key={option}
+              type="checkbox"
+              label={option}
+              checked={selected.includes(option)}
+              onChange={(checked) =>
+                onChange(
+                  checked
+                    ? // Rebuilt from the option list rather than appended,
+                      // so the saved order matches the order on screen.
+                      options.filter((o) => o === option || selected.includes(o))
+                    : selected.filter((o) => o !== option),
+                )
+              }
+            />
           ))}
         </div>
         {help}
@@ -134,14 +132,14 @@ export function QuestionField({
 
   if (question.type === "long_text") {
     return (
-      <label className="mt-3 block">
+      <label className="block">
         {label}
         <textarea
           rows={3}
           required={question.required}
           value={text}
           onChange={(event) => onChange(event.target.value)}
-          className="field"
+          className="site-rsvp-input resize-y"
         />
         {help}
       </label>
@@ -149,27 +147,40 @@ export function QuestionField({
   }
 
   if (question.type === "boolean") {
+    // Same three values the select stored ("yes", "no", "" for not sure), as
+    // chips. A required question offers no "not sure", exactly as the select's
+    // empty option could never satisfy `required`.
     return (
-      <label className="mt-3 block">
-        {label}
-        <select
-          required={question.required}
-          value={text}
-          onChange={(event) => onChange(event.target.value)}
-          className="field"
-        >
-          <option value="">Not sure yet</option>
-          <option value="yes">Yes</option>
-          <option value="no">No</option>
-        </select>
+      <fieldset className="block">
+        {legend}
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { value: "yes", label: "Yes" },
+              { value: "no", label: "No" },
+              ...(question.required ? [] : [{ value: "", label: "Not sure yet" }]),
+            ] as const
+          ).map((choice) => (
+            <Chip
+              key={choice.value}
+              type="radio"
+              name={`${idPrefix}-${question.id}`}
+              label={choice.label}
+              quiet={choice.value === ""}
+              checked={text === choice.value}
+              required={question.required}
+              onChange={() => onChange(choice.value)}
+            />
+          ))}
+        </div>
         {help}
-      </label>
+      </fieldset>
     );
   }
 
   if (question.type === "number") {
     return (
-      <label className="mt-3 block">
+      <label className="block">
         {label}
         <input
           type="number"
@@ -177,7 +188,7 @@ export function QuestionField({
           required={question.required}
           value={text}
           onChange={(event) => onChange(event.target.value)}
-          className="field"
+          className="site-rsvp-input max-w-[10rem]"
         />
         {help}
       </label>
@@ -187,15 +198,50 @@ export function QuestionField({
   // short_text, and any select type whose options were never filled in —
   // a text box still collects the answer rather than rendering nothing.
   return (
-    <label className="mt-3 block">
+    <label className="block">
       {label}
       <input
         required={question.required}
         value={text}
         onChange={(event) => onChange(event.target.value)}
-        className="field"
+        className="site-rsvp-input"
       />
       {help}
+    </label>
+  );
+}
+
+/** One option as a pill. The input is real and focusable; only its box is hidden. */
+function Chip({
+  type,
+  name,
+  label,
+  checked,
+  required,
+  quiet,
+  onChange,
+}: {
+  type: "radio" | "checkbox";
+  name?: string;
+  label: string;
+  checked: boolean;
+  required?: boolean;
+  /** "No preference" and friends: present, but not competing with real answers. */
+  quiet?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`site-rsvp-chip ${quiet ? "is-quiet" : ""}`}>
+      <input
+        type={type}
+        name={name}
+        value={label}
+        checked={checked}
+        required={required}
+        onChange={(event) => onChange(event.target.checked)}
+        className="peer sr-only"
+      />
+      <span>{label}</span>
     </label>
   );
 }

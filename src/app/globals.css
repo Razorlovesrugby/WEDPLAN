@@ -675,6 +675,322 @@
 }
 
 /* ---------------------------------------------------------------------------
+   The RSVP form, in the site's own clothes
+   ---------------------------------------------------------------------------
+   The form used to be dressed in the planner app's admin classes (`.card`,
+   `.field`, `.btn-primary`): white boxes and native radios on a page otherwise
+   set in the couple's type and palette. Everything here is written against the
+   five tokens, so a preset or a dark palette restyles it with the rest of the
+   page and nothing needs a `[data-site-tone="dark"]` patch.
+--------------------------------------------------------------------------- */
+
+/* A sheet of the page's own paper, lifted a hair so it reads as a card. */
+.site-rsvp-sheet {
+  border: 1px solid rgb(var(--site-line));
+  border-radius: 14px;
+  background-color: color-mix(in srgb, rgb(var(--site-ink)) 2.5%, rgb(var(--site-paper)));
+}
+
+/* The two big "for all of us" answers. */
+.site-rsvp-choice {
+  position: relative;
+  border: 1px solid rgb(var(--site-line));
+  border-radius: 14px;
+  background-color: rgb(var(--site-paper));
+  color: rgb(var(--site-ink));
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+.site-rsvp-choice:hover {
+  border-color: rgb(var(--site-ink) / 0.5);
+  box-shadow: 0 10px 30px -18px rgb(var(--site-ink) / 0.45);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-rsvp-choice:hover {
+    transform: translateY(-2px);
+  }
+  .site-rsvp-choice:active {
+    transform: translateY(0) scale(0.99);
+  }
+}
+.site-rsvp-choice[aria-pressed="true"] {
+  border-color: rgb(var(--site-ink));
+  background-color: rgb(var(--site-ink));
+  color: rgb(var(--site-paper));
+  box-shadow: 0 14px 34px -20px rgb(var(--site-ink) / 0.6);
+}
+.site-rsvp-choice-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  color: rgb(var(--site-accent));
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    transform var(--dur-slow) var(--ease-spring);
+}
+.site-rsvp-choice[aria-pressed="true"] .site-rsvp-choice-mark {
+  background-color: rgb(var(--site-accent));
+  border-color: rgb(var(--site-accent));
+  color: rgb(var(--site-paper));
+  transform: scale(1.08);
+}
+.site-rsvp-choice[data-reply="yes"][aria-pressed="true"] .site-rsvp-choice-mark svg path {
+  fill: currentColor;
+}
+
+/* "— or answer one by one —" */
+.site-rsvp-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.site-rsvp-divider::before,
+.site-rsvp-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: rgb(var(--site-line));
+}
+
+/* A guest's monogram: the first letter in the display face, in an accent ring. */
+.site-rsvp-initial {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(var(--site-accent) / 0.6);
+  color: rgb(var(--site-accent));
+  font-family: var(--font-display, var(--font-script)), Georgia, serif;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* Yes / No per event: a segmented pill whose selected half fills. */
+.site-rsvp-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid rgb(var(--site-line));
+  border-radius: 9999px;
+  background-color: rgb(var(--site-paper));
+}
+.site-rsvp-toggle > button {
+  min-width: 4.25rem;
+  padding: 0.4rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  color: rgb(var(--site-muted));
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+.site-rsvp-toggle > button:hover {
+  color: rgb(var(--site-ink));
+}
+.site-rsvp-toggle > button[aria-checked="true"] {
+  background-color: rgb(var(--site-ink));
+  color: rgb(var(--site-paper));
+}
+/* A no is not a failure; it just steps back a shade. */
+.site-rsvp-toggle > button[aria-checked="true"]:last-child {
+  background-color: rgb(var(--site-muted));
+}
+
+/* Fields: a ruled line to write on, like a reply card, not a form box. */
+.site-rsvp-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.125rem;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--site-line));
+  border-radius: 0;
+  background: transparent;
+  color: rgb(var(--site-ink));
+  font-size: 1.0625rem;
+  outline: none;
+  transition: border-color var(--dur-base) var(--ease-out);
+}
+.site-rsvp-input::placeholder {
+  color: rgb(var(--site-muted) / 0.8);
+  font-style: italic;
+}
+.site-rsvp-input:hover {
+  border-bottom-color: rgb(var(--site-muted));
+}
+.site-rsvp-input:focus {
+  border-bottom-color: rgb(var(--site-accent));
+  box-shadow: 0 1px 0 0 rgb(var(--site-accent));
+}
+textarea.site-rsvp-input {
+  border: 1px solid rgb(var(--site-line));
+  border-radius: 10px;
+  padding: 0.625rem 0.75rem;
+}
+textarea.site-rsvp-input:focus {
+  border-color: rgb(var(--site-accent));
+  box-shadow: 0 0 0 1px rgb(var(--site-accent));
+}
+
+/* An option as a pill. The real input sits inside, visually hidden (`peer`). */
+.site-rsvp-chip {
+  position: relative;
+  cursor: pointer;
+}
+.site-rsvp-chip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid rgb(var(--site-line));
+  border-radius: 9999px;
+  background-color: rgb(var(--site-paper));
+  font-size: 0.95rem;
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+.site-rsvp-chip:hover > span {
+  border-color: rgb(var(--site-ink) / 0.5);
+}
+.site-rsvp-chip.is-quiet > span {
+  border-style: dashed;
+  color: rgb(var(--site-muted));
+}
+.site-rsvp-chip > input:checked + span {
+  border-color: rgb(var(--site-ink));
+  background-color: rgb(var(--site-ink));
+  color: rgb(var(--site-paper));
+}
+.site-rsvp-chip > input:checked + span::before {
+  content: "✓";
+  font-size: 0.8em;
+}
+.site-rsvp-chip > input:focus-visible + span,
+.site-rsvp-choice:focus-visible,
+.site-rsvp-toggle > button:focus-visible,
+.site-rsvp-submit:focus-visible {
+  outline: 2px solid rgb(var(--site-accent));
+  outline-offset: 2px;
+}
+
+/* The send button: the one solid, rounded thing on the page. */
+.site-rsvp-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-width: min(100%, 16rem);
+  padding: 0.95rem 2rem;
+  border-radius: 9999px;
+  background-color: rgb(var(--site-ink));
+  color: rgb(var(--site-paper));
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    opacity var(--dur-base) var(--ease-out);
+}
+.site-rsvp-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -16px rgb(var(--site-ink) / 0.7);
+}
+.site-rsvp-submit:hover svg {
+  transform: translateX(3px);
+}
+.site-rsvp-submit svg {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.site-rsvp-submit:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.site-rsvp-error {
+  color: rgb(185 28 28);
+}
+[data-site-tone="dark"] .site-rsvp-error {
+  color: rgb(252 165 165);
+}
+
+/* Petals that drift down once behind a "we'll be there". Decorative only;
+   nothing at all under reduced motion. */
+.site-petals {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.site-petals > span {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .site-petals > span {
+    display: block;
+    position: absolute;
+    top: -12px;
+    left: calc(4% + var(--p) * 8%);
+    width: 9px;
+    height: 12px;
+    border-radius: 9px 0 9px 0;
+    background-color: rgb(var(--site-accent) / 0.55);
+    opacity: 0;
+    animation: site-petal-fall 2.6s var(--ease-out) forwards;
+    animation-delay: calc(var(--p) * 55ms);
+  }
+  .site-petals > span:nth-child(3n) {
+    width: 6px;
+    height: 8px;
+    background-color: rgb(var(--site-accent) / 0.35);
+    animation-duration: 3.2s;
+  }
+  .site-petals > span:nth-child(2n) {
+    animation-name: site-petal-fall-alt;
+  }
+
+  /* People arrive one after another rather than all at once. */
+  .site-rsvp-guest {
+    animation: site-rsvp-in var(--dur-slow) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 70ms);
+  }
+}
+@keyframes site-petal-fall {
+  10% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(28px, 340px) rotate(260deg);
+    opacity: 0;
+  }
+}
+@keyframes site-petal-fall-alt {
+  10% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(-24px, 300px) rotate(-220deg);
+    opacity: 0;
+  }
+}
+@keyframes site-rsvp-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ---------------------------------------------------------------------------
    The photograph viewer (spec 27 D5)
    ---------------------------------------------------------------------------
    One native <dialog> per page. `showModal()` makes everything behind it inert,

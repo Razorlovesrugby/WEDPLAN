@@ -516,6 +516,11 @@ export function SiteBlockView({
                 icsHref: ctx.preview ? previewWeekendPath(personal.householdId) : undefined,
               }}
               look={resolveLook("rsvp", block.style?.variant)}
+              eventWhen={Object.fromEntries(
+                personal.rsvp.events
+                  .filter((event) => event.starts_at)
+                  .map((event) => [event.id, formatDateTime(event.starts_at, ctx.wedding.timezone)]),
+              )}
               replyBy={
                 ctx.theme.layout.replyByDate
                   ? replyByLabel(personal.rsvp.wedding.rsvp_lock_at, ctx.wedding.timezone)
