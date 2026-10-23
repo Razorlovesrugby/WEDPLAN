@@ -1,7 +1,7 @@
 # Feature spec: A gift registry, on a page of its own
 
-**Status: proposed (2026-10-23). Not built, no migration written.** Asked for as
-a plan, to be shaped together. Nothing here is a decision until the open
+**Status: proposed, questions answered (2026-10-23), Q7a still open. Not built, no migration written.** Asked for as
+a plan, to be shaped together. Q1-Q14 are answered in the table below; anything else is a
 questions in §12 are answered, and answering them is not "build it" — that is
 a separate word (`CLAUDE.md`, "Spec requests are not build authorization").
 
@@ -11,6 +11,36 @@ spec 30/28 (`gift_funds`, the bank-details popup), spec 9.1 (`src/lib/net/`, the
 SSRF-safe fetcher), spec 32 (audit-log rule for new tables). All built.
 **`0026`–`0037` are not applied to the live project** (`docs/HANDOFF.md`), and
 this would be `0038`.
+
+## Answered — 2026-10-23
+
+All fourteen questions in §12 were answered. **Two went against the
+recommendation (Q1, Q7); one is still open as a consequence (Q7a).** Still not
+authorization to build.
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | **Plain name**, e.g. `/registry/ray-and-olivia`. | **Against the recommendation.** §4.1: no `slug_suffix`, no credential; the address is `weddings.slug`. The page is guessable by anyone who knows the couple, so the shipping address stays hidden (Q2) and "Turn off" is the only revocation — "Make a new link" is dropped. Claim-spam guards (§6.4) matter more, not less. |
+| 2 | Address **only after a claim**. | §5.5/§6.3 stand. This is now the main privacy control. |
+| 3 | **Quantity**, default 1. | §6.4 stands. |
+| 4 | **Private undo link**; couple can also release. | §6.3 stands. |
+| 5 | **No chasing**; the couple tracks status. | §7 stands; nothing auto-expires. |
+| 6 | **Prices shown**, with a hide switch. | §5.3 stands. |
+| 7 | **Its own separate design**, not the site theme. | **Against the recommendation.** §4.2: the registry no longer reads `siteTokens()`; it needs its own look. **Q7a below is open.** |
+| 8 | Gift funds: **optional switch, off**. | §9 stands. |
+| 9 | **Dashboard tile only.** | §7 stands. |
+| 10 | **Plain shop links**, no commission. | §5.4: the disclosure line stays in the build but **off by default**; `rel="sponsored"` is dropped (it asserts a commercial relationship that doesn't exist) in favour of `rel="noopener noreferrer"`. |
+| 11 | **Top-level "Registry"** nav entry. | §12 stands. |
+| 12 | **Paste-a-link autofill**, manual fallback. | §11 step 6 stands. |
+| 13 | **No buyer email.** | §6.1 stands. |
+| 14 | **Colour/size: owner, free text.** | §5.3 stands. |
+
+**Q7a — open.** "Its own separate design" needs saying. Options: (a) one fixed,
+curated registry look (one layout, a few accent colours the couple pick from) —
+smallest and what I'd suggest; (b) a handful of registry-only palettes and
+fonts, independent of the site's; (c) fully editable like the site builder (a
+design project of its own). Also: should it still carry the couple's names and
+hero photo in a style that echoes the invitation, or deliberately stand apart?
 
 ## 1. What was asked
 
@@ -63,29 +93,27 @@ registry deliberately is not one.)
 
 ### 4.1 Address
 
-`/registry/<slug>-<suffix>`, e.g. `/registry/ray-and-olivia-k4m7x`.
+`/registry/<slug>`, e.g. `/registry/ray-and-olivia` (**Q1: plain name**).
 
 - One address per wedding. **No per-guest links, no tokens in the query** — as
   asked.
-- The readable half is `weddings.slug` (already unique). The suffix is a
-  five-character credential minted once, in the spec-21 pattern, **not** because
-  the page is secret — it is meant to be forwarded — but so that it can't be
-  *enumerated* (`/registry/ray-and-olivia` is guessable by anyone who knows the
-  couple, and the page leads to a home address and a list of what people bought).
-- "Turn off" and "Make a new link" in the planner screen. Regenerating
-  invalidates the old address (no alias — the point is to stop a leaked one).
+- The address is `weddings.slug` (already unique). There is **no suffix and no
+  credential**: the page is meant to be forwarded, and anyone who knows the
+  couple can guess it. That is accepted; it is why the home address is revealed
+  only after a claim (Q2) and why claims are guarded (§6.4).
+- "Turn off" in the planner screen is the only revocation. (An earlier draft
+  had "Make a new link" and a spec-21-style suffix; Q1 dropped both.)
 - `noindex`, no sitemap entry, a non-confirming "This link isn't active" page for
   anything unknown or off (the `/m/[token]` rule, `HANDOFF.md` §7).
 - Open Graph image: the registry hero with the couple's names, so the link
   looks like something when pasted into a chat.
 
-**Q1** below: plain slug vs. suffix.
 
 ### 4.2 Landing
 
-Rendered in the **wedding's own site theme** (`siteTokens()`, palette,
-typography — one renderer family, so it matches the invitation without a second
-design system). Top to bottom:
+**Look: its own design (Q7), not the site theme — shape pending Q7a.** The
+registry therefore does not call `siteTokens()`; it carries its own tokens and
+stylesheet scope. Layout below is unchanged. Top to bottom:
 
 1. **Hero** — a photograph chosen for the registry (§5.2), names, and one line
    the couple writes ("Your being there is the gift. If you'd like to give
@@ -161,7 +189,7 @@ Item fields:
 | Field | Notes |
 | --- | --- |
 | Title | Required. |
-| Link | Required `http(s)` only (a check constraint, as `gift_funds.contribute_url` has — it ends up in an `href` in front of every visitor). Rendered `rel="noopener noreferrer sponsored" target="_blank"`. |
+| Link | Required `http(s)` only (a check constraint, as `gift_funds.contribute_url` has — it ends up in an `href` in front of every visitor). Rendered `rel="noopener noreferrer" target="_blank"`. |
 | Image | §5.2/§5.3. Optional but strongly nudged. |
 | Price | Optional, **NZD integer minor units** (spec 18; no currency column). Shown as "$120" or "about $120" (see Q6). |
 | Note | One or two lines from the couple — why they want it. |
@@ -174,10 +202,12 @@ Item fields:
 
 ### 5.4 Affiliate disclosure
 
-If any link earns the couple a commission, a plain sentence at the foot of the
-page is the honest and (in NZ and most places) the expected thing: "Some of
-these links may earn us a small commission." Off by default; wording editable;
-on if switched on. `rel="sponsored"` goes on every outbound link regardless.
+**Q10: plain shop links, no commission.** If any link ever does earn the couple
+a commission, a plain sentence at the foot of the page is the honest and (in NZ
+and most places) the expected thing: "Some of these links may earn us a small
+commission." Off by default; wording editable; a switch. Outbound links use
+`rel="noopener noreferrer"` (not `sponsored`, since there is no commercial
+relationship to declare).
 **This app does not create or track affiliate links** — the couple pastes
 whatever URL they have (plain product link or their own affiliate link); the app
 only renders it (§13).
@@ -342,7 +372,7 @@ append-only migration. Names are proposals.
 
 | Table | Holds |
 | --- | --- |
-| `registry_settings` | One row per wedding: `enabled`, `open`, `slug_suffix`, `title`/`intro`, `hero_asset_id`, hero focal point, `thanks_text`, `thanks_asset_id`, `no_gifts_line`, `show_prices`, `show_taken`, `show_funds`, `disclosure_on`, `disclosure_text`, `last_viewed_claims_at`. |
+| `registry_settings` | One row per wedding: `enabled`, `open`, `title`/`intro`, `hero_asset_id`, hero focal point, `thanks_text`, `thanks_asset_id`, `no_gifts_line`, `show_prices`, `show_taken`, `show_funds`, `disclosure_on`, `disclosure_text`, `last_viewed_claims_at`. |
 | `registry_shipping` | One row per wedding: address fields, courier note. Own table (the `0033` rule). |
 | `registry_items` | `title`, `url` (http(s) check), `store`, `image_asset_id` (→ `site_assets`), `price_minor`, `note`, `quantity`, `specs jsonb`, `ship_note`, `starred`, `hidden`, `sort_order`, `deleted_at`. |
 | `registry_tags`, `registry_item_tags` | The couple's tag list and the join (join carries `wedding_id`; composite FKs so a tag and item can't belong to different weddings). |
@@ -428,7 +458,7 @@ network policy) and the only one that can be cut without losing the feature.
   reject cross-wedding tag/item; soft-delete of an item doesn't orphan claims;
   `18_audit_log.sql` coverage.
 - Source guards, in the repo's style: the public page's query selects no claim
-  columns; the claim action returns only the caller's own record; `rel=sponsored`
+  columns; the claim action returns only the caller's own record; `rel="noopener noreferrer"`
   on every outbound link.
 - `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh`,
   `npm run build`, then the page in a real browser at phone width — and the
