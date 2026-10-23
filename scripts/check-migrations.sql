@@ -72,7 +72,10 @@ with expected(version, files) as (
     ('0033', 'gift_bank_details.sql'),
     ('0034', 'save_the_date_tracking.sql'),
     ('0035', 'audit_log.sql'),
-    ('0036', 'seating.sql')
+    ('0036', 'seating.sql'),
+    ('0037', 'song_chart.sql'),
+    ('0038', 'registry_asset_kind.sql'),
+    ('0039', 'registry.sql')
 ),
 applied as (
   select version from supabase_migrations.schema_migrations
@@ -98,7 +101,8 @@ with expected(version) as (
     ('0016'), ('0017'), ('0018'), ('0019'), ('0020'),
     ('0021'), ('0022'), ('0023'), ('0024'), ('0025'),
     ('0026'), ('0027'), ('0028'), ('0029'), ('0030'),
-    ('0031'), ('0032'), ('0033'), ('0034'), ('0035'), ('0036')
+    ('0031'), ('0032'), ('0033'), ('0034'), ('0035'), ('0036'),
+    ('0037'), ('0038'), ('0039')
 )
 select version as unexpected_applied_version
 from supabase_migrations.schema_migrations

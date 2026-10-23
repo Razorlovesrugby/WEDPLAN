@@ -158,6 +158,12 @@ const NOUNS: Record<string, string> = {
   dress_code_notes: "dress code note",
   song_requests: "song request",
   song_votes: "song vote",
+  registry_settings: "registry settings",
+  registry_shipping: "registry delivery address",
+  registry_items: "registry item",
+  registry_tags: "registry tag",
+  registry_item_tags: "registry tag on an item",
+  registry_claims: "registry claim",
 };
 
 /** Tables a guest writes to through their own link. */
@@ -171,6 +177,9 @@ const GUEST_WRITES = new Set([
   "rsvp_answers",
   "song_requests",
   "song_votes",
+  // A registry visitor is not a guest, but the claim is written from their
+  // browser with no session, which is all this set says.
+  "registry_claims",
 ]);
 
 const COLUMN_LABELS: Record<string, string> = {
