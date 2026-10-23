@@ -44,6 +44,7 @@ export function RsvpForm({
   invites,
   weekend,
   replyBy,
+  eventWhen,
   look = "inline",
 }: {
   /**
@@ -73,6 +74,12 @@ export function RsvpForm({
     /** The preview's own calendar file; absent on a live page. */
     icsHref?: string;
   };
+  /**
+   * "Sat 13 Mar, 15:00" per event id, formatted on the server. Not formatted
+   * here: Node's and the browser's Intl disagree on punctuation, and a client
+   * component that formats a date hydrates with a mismatch.
+   */
+  eventWhen?: Record<string, string>;
   /** "1 May", or null when there is no lock date or the planner switched it off. */
   replyBy?: string | null;
   /** `inline` (the form as it always was) or `card` — the block's Look (spec 27 E1). */
@@ -197,8 +204,9 @@ export function RsvpForm({
 
   if (locked) {
     return (
-      <div className="card p-5">
-        <p className="text-sm">
+      <div className="site-rsvp-sheet p-6 text-center sm:p-8">
+        <span className="site-label text-muted">Replies are closed</span>
+        <p className="mt-3 text-[1.0625rem] leading-relaxed">
           RSVPs have closed, so this can no longer be changed. If something has come up, please
           get in touch with the couple directly.
         </p>
@@ -255,7 +263,10 @@ export function RsvpForm({
     const { heading, lines } = replyConfirmation(summary);
 
     return (
-      <div className="site-rsvp-panel card p-8 text-center" role="status">
+      <div className="site-rsvp-panel site-rsvp-sheet relative overflow-hidden p-8 text-center sm:p-12" role="status">
+        {/* A little celebration for a yes. Pure CSS, decorative, and gone
+            entirely under reduced motion (globals.css). */}
+        {summary.coming.length > 0 ? <Petals /> : null}
         <svg
           className="site-check mx-auto h-14 w-14 text-accent"
           viewBox="0 0 56 56"
@@ -311,7 +322,7 @@ export function RsvpForm({
 
         <button
           type="button"
-          className="mt-6 text-sm text-muted underline underline-offset-2"
+          className="mt-8 text-sm text-muted underline decoration-line underline-offset-4 transition-colors hover:text-ink hover:decoration-accent"
           onClick={() =>
             withViewTransition(() => {
               setStatus("idle");
@@ -336,7 +347,7 @@ export function RsvpForm({
     <form
       onSubmit={onSubmit}
       data-look={look}
-      className={`site-rsvp-panel space-y-6 ${card ? "site-rsvp-card border border-line p-5 sm:p-8" : ""}`}
+      className={`site-rsvp-panel space-y-6 ${card ? "site-rsvp-sheet p-5 sm:p-8" : ""}`}
     >
       {card ? (
         <div>
@@ -346,12 +357,12 @@ export function RsvpForm({
               {answeredPeople} of {answering.length} answered
             </span>
           </div>
-          {/* A thin line that fills as each person is answered for. It carries
-              no information the sentence above does not, so it is hidden from
+          {/* A line that fills as each person is answered for. It carries no
+              information the sentence above does not, so it is hidden from
               assistive tech rather than read out twice. */}
-          <div aria-hidden="true" className="mt-2 h-px w-full bg-line">
+          <div aria-hidden="true" className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-line">
             <div
-              className="h-px bg-accent transition-[width] duration-[400ms]"
+              className="h-full rounded-full bg-accent transition-[width] duration-[400ms] ease-out"
               style={{ width: `${answering.length === 0 ? 0 : (answeredPeople / answering.length) * 100}%` }}
             />
           </div>
@@ -360,58 +371,81 @@ export function RsvpForm({
 
       {/* Most replies are "all of us" one way or the other. Asking for that
           one event at a time, per person, is twelve taps for one fact. */}
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
         {(
           [
-            { value: "yes", title: "Yes, we'll be there", note: "We'll save you a seat" },
-            { value: "no", title: "Not able to", note: "We'll miss you" },
+            { value: "yes", title: answering.length > 1 ? "Yes, we'll be there" : "Yes, I'll be there", note: "We'll save you a seat" },
+            { value: "no", title: "Sadly, can't make it", note: "We'll miss you" },
           ] as const
-        ).map((card) => {
-          const active = collective === card.value;
+        ).map((choice) => {
+          const active = collective === choice.value;
           return (
             <button
-              key={card.value}
+              key={choice.value}
               type="button"
               aria-pressed={active}
-              onClick={() => replyForEveryone(card.value)}
-              className={`rounded border p-[26px_28px] text-left transition-colors ${
-                active
-                  ? "border-ink bg-ink text-paper"
-                  : "border-line bg-white hover:border-ink"
-              }`}
+              data-reply={choice.value}
+              onClick={() => replyForEveryone(choice.value)}
+              className="site-rsvp-choice group flex items-center gap-4 p-5 text-left sm:p-6"
             >
-              <span className="site-heading block text-2xl">{card.title}</span>
-              <span className="site-label mt-2 block opacity-70">{card.note}</span>
+              <span className="site-rsvp-choice-mark" aria-hidden="true">
+                {choice.value === "yes" ? <HeartIcon /> : <WaveIcon />}
+              </span>
+              <span className="min-w-0">
+                <span className="site-heading block text-2xl leading-tight">{choice.title}</span>
+                <span className="site-label mt-1.5 block opacity-70">{choice.note}</span>
+              </span>
             </button>
           );
         })}
       </div>
 
-      {answering.map((guestState) => {
+      <p className="site-rsvp-divider site-label text-muted" aria-hidden="true">
+        or answer one by one
+      </p>
+
+      {answering.map((guestState, index) => {
         const guest = guests.find((g) => g.id === guestState.guestId)!;
+        const title = guest.is_plus_one && !guest.last_name ? "Your guest" : guestName(guest);
         return (
-          <fieldset key={guest.id} className="card p-5">
-            <legend className="px-1 font-serif text-lg">
-              {guest.is_plus_one && !guest.last_name ? "Your guest" : guestName(guest)}
-            </legend>
+          <fieldset
+            key={guest.id}
+            className="site-rsvp-sheet site-rsvp-guest p-5 sm:p-7"
+            style={{ ["--i" as string]: index }}
+          >
+            <legend className="sr-only">{title}</legend>
+            <div className="flex items-center gap-3" aria-hidden="true">
+              <span className="site-rsvp-initial">{initialOf(guestState.name || title)}</span>
+              <span className="site-heading text-2xl leading-tight">{guestState.name || title}</span>
+            </div>
 
             {guest.is_plus_one ? (
-              <label className="mt-2 block">
-                <span className="mb-1 block text-sm font-medium">Their name</span>
+              <label className="mt-5 block">
+                <span className="site-label mb-1 block text-muted">Their name</span>
                 <input
                   value={guestState.name}
                   onChange={(e) => updateGuest(guest.id, { name: e.target.value })}
                   placeholder="So we can write their place card"
-                  className="field"
+                  className="site-rsvp-input"
                 />
               </label>
             ) : null}
 
-            <div className="mt-4 space-y-3">
+            <ul className="mt-5 divide-y divide-line border-y border-line">
               {eventsFor(guest.id).map((event) => (
-                <div key={event.id} className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm">{event.name}</span>
-                  <div className="flex gap-1" role="radiogroup" aria-label={`${guestName(guest)} — ${event.name}`}>
+                <li key={event.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3.5">
+                  <span className="min-w-0">
+                    <span className="block text-[1.0625rem]">{event.name}</span>
+                    {eventWhen?.[event.id] ? (
+                      <span className="site-label mt-0.5 block text-muted">{eventWhen[event.id]}</span>
+                    ) : null}
+                  </span>
+                  <div
+                    className="site-rsvp-toggle"
+                    role="radiogroup"
+                    aria-label={`${guestName(guest)} — ${event.name}`}
+                    data-value={guestState.responses[event.id]}
+                  >
                     {CHOICES.map((choice) => {
                       const active = guestState.responses[event.id] === choice.value;
                       return (
@@ -425,90 +459,141 @@ export function RsvpForm({
                               responses: { ...guestState.responses, [event.id]: choice.value },
                             })
                           }
-                          className={`rounded border px-3 py-1.5 text-sm ${
-                            active
-                              ? "border-ink bg-ink text-white"
-                              : "border-line bg-white hover:bg-line/40"
-                          }`}
                         >
                           {choice.label}
                         </button>
                       );
                     })}
                   </div>
-                </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="space-y-5 pt-5">
+              <label className="block">
+                <span className="site-label mb-1 block text-muted">Dietary requirements</span>
+                <input
+                  value={guestState.dietary}
+                  onChange={(e) => updateGuest(guest.id, { dietary: e.target.value })}
+                  placeholder="Vegetarian, coeliac, allergies — anything the kitchen should know"
+                  className="site-rsvp-input"
+                />
+              </label>
+
+              <label className="block">
+                <span className="site-label mb-1 block text-muted">Anything else we should arrange?</span>
+                <input
+                  value={guestState.accessibility}
+                  onChange={(e) => updateGuest(guest.id, { accessibility: e.target.value })}
+                  placeholder="Step-free access, a seat near the front, a high chair…"
+                  className="site-rsvp-input"
+                />
+              </label>
+
+              {guestQuestions.map((question) => (
+                <QuestionField
+                  key={question.id}
+                  question={question}
+                  idPrefix={guest.id}
+                  value={guestState.answers[question.id]}
+                  onChange={(value) =>
+                    updateGuest(guest.id, {
+                      answers: { ...guestState.answers, [question.id]: value },
+                    })
+                  }
+                />
               ))}
             </div>
-
-            <label className="mt-4 block">
-              <span className="mb-1 block text-sm font-medium">Dietary requirements</span>
-              <input
-                value={guestState.dietary}
-                onChange={(e) => updateGuest(guest.id, { dietary: e.target.value })}
-                placeholder="Vegetarian, coeliac, allergies — anything the kitchen should know"
-                className="field"
-              />
-            </label>
-
-            <label className="mt-3 block">
-              <span className="mb-1 block text-sm font-medium">Anything else we should arrange?</span>
-              <input
-                value={guestState.accessibility}
-                onChange={(e) => updateGuest(guest.id, { accessibility: e.target.value })}
-                placeholder="Step-free access, a seat near the front, a high chair…"
-                className="field"
-              />
-            </label>
-
-            {guestQuestions.map((question) => (
-              <QuestionField
-                key={question.id}
-                question={question}
-                idPrefix={guest.id}
-                value={guestState.answers[question.id]}
-                onChange={(value) =>
-                  updateGuest(guest.id, {
-                    answers: { ...guestState.answers, [question.id]: value },
-                  })
-                }
-              />
-            ))}
           </fieldset>
         );
       })}
 
       {householdQuestions.length > 0 ? (
-        <fieldset className="card p-5">
-          <legend className="px-1 font-serif text-lg">A few last things</legend>
-          {householdQuestions.map((question) => (
-            <QuestionField
-              key={question.id}
-              question={question}
-              idPrefix="household"
-              value={householdAnswers[question.id]}
-              onChange={(value) =>
-                setHouseholdAnswers((prev) => ({ ...prev, [question.id]: value }))
-              }
-            />
-          ))}
+        <fieldset className="site-rsvp-sheet p-5 sm:p-7">
+          <legend className="sr-only">A few last things</legend>
+          <span className="site-heading block text-2xl leading-tight" aria-hidden="true">
+            A few last things
+          </span>
+          <div className="space-y-5 pt-5">
+            {householdQuestions.map((question) => (
+              <QuestionField
+                key={question.id}
+                question={question}
+                idPrefix="household"
+                value={householdAnswers[question.id]}
+                onChange={(value) =>
+                  setHouseholdAnswers((prev) => ({ ...prev, [question.id]: value }))
+                }
+              />
+            ))}
+          </div>
         </fieldset>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className="btn-primary" disabled={pending}>
-          {pending ? "Saving…" : "Confirm our RSVP"}
+      <div className="flex flex-col items-center gap-3 pt-2 text-center">
+        <button type="submit" className="site-rsvp-submit" disabled={pending}>
+          <span>{pending ? "Sending…" : answering.length > 1 ? "Send our reply" : "Send my reply"}</span>
+          {pending ? null : (
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true" focusable="false">
+              <path d="M4 10h11m-4-4.5L15.5 10 11 14.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
         </button>
         {status === "saved" ? (
-          <span className="text-sm text-tierA">
+          <span className="text-sm text-muted">
             Saved, thank you. Come back and change it whenever.
           </span>
         ) : null}
-        {status === "error" && error ? <span className="text-sm text-red-700">{error}</span> : null}
+        {status === "error" && error ? (
+          <span className="site-rsvp-error text-sm" role="alert">
+            {error}
+          </span>
+        ) : null}
       </div>
     </form>
   );
 }
 
+function initialOf(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "·";
+}
+
+function HeartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" focusable="false">
+      <path
+        d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function WaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" focusable="false">
+      <path
+        d="M4 12c2-3 4-3 6 0s4 3 6 0 4-3 4-3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Twelve petals that fall once behind the confirmation. Decorative only. */
+function Petals() {
+  return (
+    <span className="site-petals" aria-hidden="true">
+      {Array.from({ length: 12 }, (_, i) => (
+        <span key={i} style={{ ["--p" as string]: i }} />
+      ))}
+    </span>
+  );
+}
 
 /**
  * A stored answer back into form state.
