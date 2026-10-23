@@ -143,10 +143,18 @@ function Background({
     <div
       // A block's own colour replaces the fixed cream (spec 31, Q4). Nothing can
       // be checked against a photograph, so this is the planner's call alone.
+      //
+      // Forced onto every descendant **except** anything inside a
+      // `data-own-ground` element: a surface that draws its own opaque ground
+      // (the RSVP form's cards, fields and buttons) keeps the theme's ink, or its
+      // words go cream on cream (spec 35). `:where()` keeps the selector's
+      // specificity exactly what `[&_*]` had, so nothing else on a photograph
+      // changes.
+      data-ground="photo"
       className={`relative isolate ${
         look.photoColour
-          ? "text-[color:var(--block-text)] [&_*]:text-[color:var(--block-text)]"
-          : "text-onphoto [&_*]:text-onphoto"
+          ? "text-[color:var(--block-text)] [&_*:where(:not([data-own-ground]):not([data-own-ground]_*))]:text-[color:var(--block-text)]"
+          : "text-onphoto [&_*:where(:not([data-own-ground]):not([data-own-ground]_*))]:text-onphoto"
       } ${look.ownFont ? "font-body" : ""} ${photoText === "shadow" ? "site-text-shadow" : ""}`}
       style={look.style}
     >

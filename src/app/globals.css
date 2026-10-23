@@ -970,6 +970,37 @@ textarea.site-rsvp-input:focus {
   background-color: rgb(var(--site-paper));
 }
 
+/* The reply form over a photograph (spec 35). A photograph block forces its
+   cream onto every descendant except a `data-own-ground` one (render.tsx). The
+   form's roots carry it: the form draws its own opaque ground, so it keeps the
+   theme's ink and drops the photograph's text shadow. In the Inline layout the
+   whole form becomes one sheet, so nothing is left half on the picture, and the
+   people inside it are sections, not cards inside a card. */
+[data-ground="photo"] [data-own-ground] {
+  color: rgb(var(--site-ink));
+  text-shadow: none;
+}
+[data-ground="photo"] form.site-rsvp-panel[data-look="inline"] {
+  border: 1px solid rgb(var(--site-line));
+  border-radius: 14px;
+  background-color: color-mix(in srgb, rgb(var(--site-ink)) 2.5%, rgb(var(--site-paper)));
+  padding: 1.25rem;
+}
+@media (min-width: 640px) {
+  [data-ground="photo"] form.site-rsvp-panel[data-look="inline"] {
+    padding: 2rem;
+  }
+}
+[data-ground="photo"] form.site-rsvp-panel:not([data-rsvp-off~="flat_card_look"]) .site-rsvp-sheet {
+  border: 0;
+  border-top: 1px solid rgb(var(--site-line));
+  border-radius: 0;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
 /* What each RSVP-block switch puts back when it is off (spec 35,
    `rsvp-features.ts`). The form's root carries `data-rsvp-off` with the names
    of the features switched off; the rules above are the "on" state. */

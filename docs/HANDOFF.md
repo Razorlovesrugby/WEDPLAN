@@ -44,6 +44,14 @@ spec's **Build status** (§15); this is the short version.
   colour/size; email to the couple on a claim (dashboard tile only, Q9).
 - **Pick up here:** the spec's "Pick up here" (§15), on a phone, with a real shop link.
 
+**Session 41, follow-up (after PR #74 merged):** the planner found the reply form
+unreadable on a **Photograph** background. The photo block forces cream text onto
+every descendant, and the form's light cards went cream on cream. Fixed: the photo
+rule now skips anything inside `data-own-ground` (the form's roots carry it, and keep
+the theme's ink). In the Inline layout over a photo, the form is one sheet. See spec
+35, "Fix — the form over a photograph background". Checked in headless Chromium with
+a gradient standing in for the photo; **not on a real photograph or site**.
+
 **Session 41 (spec 35):** the guest RSVP form, restyled in the site's own theme.
 Round one (asked for as a change, built, merged as PR #73) moved the form off the
 planner's admin classes (`.card`/`.field`/`.btn-primary`) onto tokens-only

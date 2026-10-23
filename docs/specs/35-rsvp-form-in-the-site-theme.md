@@ -425,3 +425,50 @@ that attribute. The petals and arrivals use `[data-fx~="reply_petals"]` and
 - The banner switch was checked by typecheck only.
 - **One test run had a single failure that I could not reproduce or identify.** It
   ran while the dev server was being stopped. Eight runs since have all passed.
+
+## Fix — the form over a photograph background (2026-10-23)
+
+**Reported by the planner while testing:** "doesn't work with a photo background."
+
+**Cause.** A block with a Photograph background forces its fixed cream (or the
+block's own text colour) onto **every** descendant, using `[&_*]:text-onphoto` in
+`Background()`, `render.tsx`. That is right for words on a photo. But the reply form
+draws its own light cards, fields and buttons, so its words went cream on cream:
+measured, `rgb(251 248 243)` text on a card of about the same colour. The classic
+look (all switches off) broke the same way on its white `.card`s.
+
+**Fix.**
+
+- `Background()` now forces the colour on every descendant **except** what is inside
+  a `data-own-ground` element:
+  `[&_*:where(:not([data-own-ground]):not([data-own-ground]_*))]`. The `:where()`
+  keeps the specificity exactly what `[&_*]` had, so no other block on a photo
+  changes. The wrapper also gains `data-ground="photo"`.
+- `RsvpForm`'s four roots (form, confirmation, closed, closed classic) carry
+  `data-own-ground`.
+- Under `[data-ground="photo"]`, they take the theme's `ink` and drop the photo's
+  text shadow.
+- In the Inline layout over a photo, the form becomes one sheet, so nothing is left
+  half on the picture. The people inside it become sections, as in the Card layout.
+  This follows the `flat_card_look` switch.
+
+**Verified:**
+
+- Headless Chromium, on a temporary page that mirrors `Background()`'s photo markup,
+  with a gradient standing in for the photograph:
+  - text inside the form is the theme ink: `rgb(43 39 36)` on Ivory and
+    `rgb(239 232 218)` on Midnight;
+  - the section heading and intro outside the form stay cream, and keep the shadow
+    under "Soft text shadow";
+  - all switches off is also readable;
+  - selected Yes and a picked chip are paper on ink;
+  - the confirmation is ink on its sheet.
+- 1184 unit tests and `next build` pass on top of the latest `main`.
+- The compiled CSS was checked to contain the new selector.
+
+**Not verified:**
+
+- A real photograph, or a real site.
+- The "Panel" photo-text treatment: the form now sits as a light sheet inside that
+  dark panel. It should be readable, but it was not looked at.
+

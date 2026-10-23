@@ -270,7 +270,7 @@ export function RsvpForm({
   if (locked) {
     return (
       on("soft_panels") ? (
-        <div className="site-rsvp-sheet p-6 text-center sm:p-8" {...offAttr}>
+        <div className="site-rsvp-sheet p-6 text-center sm:p-8" {...offAttr} data-own-ground="">
           <span className="site-label text-muted">Replies are closed</span>
           <p className="mt-3 text-[1.0625rem] leading-relaxed">
             RSVPs have closed, so this can no longer be changed. If something has come up, please
@@ -278,7 +278,7 @@ export function RsvpForm({
           </p>
         </div>
       ) : (
-        <div className="card p-5" {...offAttr}>
+        <div className="card p-5" {...offAttr} data-own-ground="">
           <p className="text-sm">
             RSVPs have closed, so this can no longer be changed. If something has come up, please
             get in touch with the couple directly.
@@ -343,6 +343,7 @@ export function RsvpForm({
         }`}
         role="status"
         {...offAttr}
+        data-own-ground=""
       >
         {/* A little celebration for a yes. Pure CSS, decorative, and only
             under the motion effect `reply_petals` (globals.css). */}
@@ -433,6 +434,8 @@ export function RsvpForm({
       onSubmit={onSubmit}
       data-look={look}
       {...offAttr}
+      // Over a photograph, keeps the theme's ink rather than the forced cream.
+      data-own-ground=""
       className={`site-rsvp-panel space-y-6 ${
         card
           ? on("soft_panels")
