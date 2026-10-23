@@ -15,6 +15,8 @@ import { getCoachManifest } from "@/server/queries/travel";
 import { getPlannerSongs } from "@/server/queries/site-extras";
 import { getEventIdsWithSeating, getSeatingPlan } from "@/server/queries/seating";
 import { SEATING_CSV_HEADER, seatingCsvRows } from "@/lib/seating/listings";
+import { getRegistryClaims } from "@/server/queries/registry";
+import { REGISTRY_CSV_HEADER, registryCsvRows } from "@/lib/registry/export";
 import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
 
 /**
@@ -30,7 +32,7 @@ import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating"] as const;
+const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating", "registry"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -48,6 +50,19 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
   const stamp = new Date().toISOString().slice(0, 10);
   let body: string;
   let filename: string;
+
+  if (kind === "registry") {
+    // The thank-you list (spec 36 §7): who gave what, what they wrote, and who
+    // still needs a card. Runs as the planner, so RLS is what lets claims out.
+    const claims = await getRegistryClaims(wedding.id);
+    return {
+      filename: `registry-${stamp}.csv`,
+      body: csvDocument(
+        [...REGISTRY_CSV_HEADER],
+        registryCsvRows(claims, (iso) => (iso ? formatDateTime(iso, wedding.timezone) : "")),
+      ),
+    };
+  }
 
   if (kind === "songs") {
     // The song chart for the DJ (spec 33 §7): rank order as guests see it,
@@ -275,6 +290,7 @@ These are spreadsheets (CSV) you can open in Excel, Numbers or Google Sheets:
   tasks             every task across every list
   coach-manifest    who is on which coach, from which stop
   seating           who sits at which table (and chair), for every event with a plan
+  registry          who is giving what from your registry, their messages, and who needs a thank-you
 
 This is a copy of what you can read, not a full backup: it can't be loaded back
 in automatically, and it doesn't include the budget, vendors, moodboards, the

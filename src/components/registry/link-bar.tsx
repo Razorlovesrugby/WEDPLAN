@@ -47,6 +47,9 @@ export function RegistryLinkBar({
       <a className="btn" href={previewHref} target="_blank" rel="noopener">
         Preview
       </a>
+      <a className="btn" href="/api/registry/qr" target="_blank" rel="noopener" title="A QR code for an invitation insert or shower card">
+        QR code
+      </a>
       {!enabled ? (
         <p className="w-full text-xs text-muted">
           Nobody can open this yet. Turn the page on under <em>Page &amp; address</em> when

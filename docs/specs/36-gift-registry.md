@@ -1,9 +1,10 @@
 # Feature spec: A gift registry, on a page of its own
 
-**Status: proposed; Q1–Q14 and Q7a answered (2026-10-23). Not built, no
-migration written.** Asked for as a plan, to be shaped together. Answers are in
-the table below; none of them is "build it" — that is a separate word
-(`CLAUDE.md`, "Spec requests are not build authorization").
+**Status: built (2026-10-23) — asked for as a plan, Q1–Q14 and Q7a answered, then
+"Okay lets build it" as its own turn.** Steps 1–7 of §11, on branch
+`claude/spec-36-gift-registry`; no PR opened. See **Build status** at the end for
+what departs from the text. **Never run against Supabase, never seen on a real
+phone; migrations `0038`/`0039` are not applied to the live project.**
 
 **Depends on:** spec 14 (the public surface, `weddings.slug`, the theme), spec 21
 (a suffix as the credential), spec 23/27 (site assets and the image pipeline),
@@ -486,3 +487,61 @@ network policy) and the only one that can be cut without losing the feature.
   handoff will say which of those was and wasn't done. **The app has never run
   against a live Supabase project or been opened on a real phone**, and this is
   the feature where a visitor on a real phone is the whole point.
+
+## 15. Build status (2026-10-23)
+
+Built end to end on branch `claude/spec-36-gift-registry`, one commit per step.
+`npm run typecheck` clean, **1184 unit tests** (about 120 new), `verify-migrations.sh`
+**656 assertions** (55 new, in `21_registry.sql`), the single-transaction check,
+`verify-bootstrap.sh` and `next build` (placeholder env) all pass. A deliberate
+break of the claim function's over-claim check was caught by the SQL test.
+
+**Seen:** the public page, item sheet, claim form and receipt, and the planner's
+items / claims components, in headless Chromium on sample data, with no database
+(a throwaway harness, deleted, never committed). Phone (390px) and desktop.
+**Not seen / not run:** anything against Supabase — no claim has ever been written,
+no image uploaded or served through `/api/photo`, no link fetched from a real shop
+(this sandbox's network policy), no real phone, no screen reader, no keyboard-only
+pass, the Open Graph image, the QR code, the CSV, the dashboard tile, and the
+`/gifts` pages as wired into the planner layout (their components were rendered
+alone). The claim race is covered by a source guard for `FOR UPDATE` and
+sequential SQL tests; **two truly concurrent claims have not been run.**
+
+### Where it departs from the text above
+
+1. **Planner route is `/gifts`, not `/registry`** (the nav label is still
+   "Registry"). `/registry/<slug>` is the public page and the public-path list
+   matches whole segments by prefix, so a planner screen at `/registry` would have
+   been readable by anyone. `src/lib/public-paths.test.ts` pins both halves.
+2. **Two migrations, not one:** `0038` (the `registry` photograph kind, enum only —
+   the 55P04 rule) and `0039` (everything else). Run in that order.
+3. **`registry_settings.palette` / `type_pairing`** are stored ids with the closed
+   lists in `src/lib/registry/look.ts` (§4.3); no migration to add a palette.
+4. **No `localStorage` memory of claims** (§6.3 mentioned it). The receipt tells the
+   buyer to keep the private link; remembering it in the browser would be a second,
+   unreliable way to find it, and nothing reads it back.
+5. **Autofill pictures come through `/api/registry/import-image`** (signed-in, SSRF-
+   guarded via `fetchImage`) into the browser, which re-encodes and uploads them —
+   there is no image library on the server and re-encoding strips EXIF. Thumbnails of
+   candidates are shown straight from the shop with `referrerpolicy="no-referrer"`.
+   `fetch-image.ts` gained two optional header overrides and exports `once` /
+   `parseHttpsUrl`; behaviour for existing callers is unchanged (its tests pass).
+6. **Photographs:** `/api/photo/<id>` serves a `registry`-kind asset while that
+   wedding's registry is switched on (`mayServeRegistryAsset`). A hero focal point
+   is saved through the existing site-photo action.
+7. **The "sample items in the seed" (§8) was not built.** `21_registry.sql`'s
+   fixtures use the seed wedding's ids; seeding settings there would collide.
+8. **The dashboard tile fails soft** (`.catch(() => null)`) so the overview doesn't
+   break before `0039` is applied. `/gifts` itself does not — it needs the tables.
+9. **"Show taken" cards** show only the title, picture and "Someone's got this one"
+   — the note and specs are withheld too, not just names and messages.
+
+### Pick up here
+
+Apply `0038` then `0039` to the live project; open `/gifts/settings` (turn the page
+on, set the address and a palette), add three items by pasting real shop links,
+open `/registry/<slug>` on a phone, claim one from a second phone and watch it
+leave; then `/gifts/claims`, the CSV, the QR code and the Open Graph preview in a
+chat. The likeliest faults are where nobody has looked: the signed-URL route for
+registry photos, a shop that blocks the autofill, and the claim function under
+real concurrency.

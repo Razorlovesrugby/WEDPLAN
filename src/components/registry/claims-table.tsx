@@ -24,7 +24,8 @@ export function ClaimsTable({ claims }: { claims: ClaimRowData[] }) {
   // Opening this tab is what clears "N new claims". Done on the planner's own
   // visit, in the browser — nothing a link scanner fetching a URL could trigger.
   useEffect(() => {
-    void markClaimsViewed();
+    // Best effort: a failed "mark as seen" must never surface as an unhandled rejection.
+    markClaimsViewed().catch(() => {});
   }, []);
 
   const shown = useMemo(() => {
