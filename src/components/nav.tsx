@@ -24,6 +24,9 @@ const LINKS = [
   { href: "/questions", label: "Questions" },
   { href: "/lists", label: "Tasks", matchPrefixes: ["/lists", "/calendar", "/board", "/timeline"] },
   { href: "/moodboards", label: "Moodboards" },
+  // The route is /gifts, not /registry: /registry/<slug> is the PUBLIC page and
+  // the public-path list matches whole segments by prefix (spec 36 §5).
+  { href: "/gifts", label: "Registry" },
   { href: "/site", label: "Site", matchPrefixes: ["/site", "/travel", "/gallery"] },
   { href: "/settings", label: "Settings" },
 ] as const;

@@ -44,7 +44,7 @@ export type FetchedImage = {
 
 export type FetchImageResult = { ok: true; image: FetchedImage } | { ok: false; reason: string };
 
-class BlockedAddressError extends Error {
+export class BlockedAddressError extends Error {
   constructor(readonly address: string) {
     super(`Refusing to connect to ${address}`);
     this.name = "BlockedAddressError";
@@ -85,7 +85,7 @@ const guardedLookup: LookupFunction = (
   });
 };
 
-function parseHttpsUrl(raw: string): URL | null {
+export function parseHttpsUrl(raw: string): URL | null {
   let url: URL;
   try {
     url = new URL(raw);
@@ -108,14 +108,19 @@ function parseHttpsUrl(raw: string): URL | null {
   return url;
 }
 
-type Attempt = {
+export type Attempt = {
   status: number;
   headers: Record<string, string | string[] | undefined>;
   body: Buffer | null;
   location: string | null;
 };
 
-function once(url: URL, maxBytes: number, timeoutMs: number): Promise<Attempt> {
+export function once(
+  url: URL,
+  maxBytes: number,
+  timeoutMs: number,
+  headerOverrides: { accept?: string; userAgent?: string } = {},
+): Promise<Attempt> {
   return new Promise<Attempt>((resolve, reject) => {
     const options: RequestOptions = {
       method: "GET",
@@ -126,8 +131,8 @@ function once(url: URL, maxBytes: number, timeoutMs: number): Promise<Attempt> {
       lookup: guardedLookup,
       headers: {
         // No cookies, no Authorization, no forwarded credentials of any kind.
-        accept: ACCEPTED_IMAGE_TYPES.join(","),
-        "user-agent": "wedplan-moodboards/1.0",
+        accept: headerOverrides.accept ?? ACCEPTED_IMAGE_TYPES.join(","),
+        "user-agent": headerOverrides.userAgent ?? "wedplan-moodboards/1.0",
         "accept-encoding": "identity",
       },
       timeout: timeoutMs,
