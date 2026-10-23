@@ -26,7 +26,7 @@ authorization to build.
 | 4 | **Private undo link**; couple can also release. | §6.3 stands. |
 | 5 | **No chasing**; the couple tracks status. | §7 stands; nothing auto-expires. |
 | 6 | **Prices shown**, with a hide switch. | §5.3 stands. |
-| 7 | **Its own separate design**, not the site theme. | **Against the recommendation.** §4.2: the registry no longer reads `siteTokens()`; it needs its own look. **Q7a below is open.** |
+| 7 | **Its own separate design**, not the site theme. | **Against the recommendation.** §4.2: the registry no longer reads `siteTokens()`; it needs its own look. Q7a (below) answered: palettes and fonts of its own. |
 | 8 | Gift funds: **optional switch, off**. | §9 stands. |
 | 9 | **Dashboard tile only.** | §7 stands. |
 | 10 | **Plain shop links**, no commission. | §5.4: the disclosure line stays in the build but **off by default**; `rel="sponsored"` is dropped (it asserts a commercial relationship that doesn't exist) in favour of `rel="noopener noreferrer"`. |
