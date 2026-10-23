@@ -1,6 +1,6 @@
 # Feature spec: A gift registry, on a page of its own
 
-**Status: proposed; Q1–Q14 answered (2026-10-23), Q7a still open. Not built, no
+**Status: proposed; Q1–Q14 and Q7a answered (2026-10-23). Not built, no
 migration written.** Asked for as a plan, to be shaped together. Answers are in
 the table below; none of them is "build it" — that is a separate word
 (`CLAUDE.md`, "Spec requests are not build authorization").
@@ -15,7 +15,7 @@ this would be `0038`.
 ## Answered — 2026-10-23
 
 All fourteen questions in §12 were answered. **Two went against the
-recommendation (Q1, Q7); one is still open as a consequence (Q7a).** Still not
+recommendation (Q1, Q7); Q7a, which followed from Q7, is answered too.** Still not
 authorization to build.
 
 | Q | Answer | What it changed |
@@ -35,12 +35,11 @@ authorization to build.
 | 13 | **No buyer email.** | §6.1 stands. |
 | 14 | **Colour/size: owner, free text.** | §5.3 stands. |
 
-**Q7a — open.** "Its own separate design" needs saying. Options: (a) one fixed,
-curated registry look (one layout, a few accent colours the couple pick from) —
-smallest and what I'd suggest; (b) a handful of registry-only palettes and
-fonts, independent of the site's; (c) fully editable like the site builder (a
-design project of its own). Also: should it still carry the couple's names and
-hero photo in a style that echoes the invitation, or deliberately stand apart?
+**Q7a — answered: (b), a handful of registry-only palettes and fonts**,
+independent of the site's. §4.3 below says what that means. One sub-question
+was not answered and takes its recommendation unless changed: the registry
+**stands apart** from the invitation's styling rather than echoing it, but
+carries the couple's names and their chosen hero photo.
 
 ## 1. What was asked
 
@@ -111,7 +110,7 @@ registry deliberately is not one.)
 
 ### 4.2 Landing
 
-**Look: its own design (Q7), not the site theme — shape pending Q7a.** The
+**Look: its own design (Q7), not the site theme — palettes and fonts per Q7a, §4.3.** The
 registry therefore does not call `siteTokens()`; it carries its own tokens and
 stylesheet scope. Layout below is unchanged. Top to bottom:
 
@@ -140,6 +139,28 @@ Mobile-first (phone width is the main case — this link is mostly opened from a
 text message). Gentle/Still motion levels apply as on the rest of the site;
 reduced motion respected; every control keyboard-reachable; images have alt
 text from the item title.
+
+### 4.3 The registry's own look (Q7a: b)
+
+- **Palettes:** five or six curated registry palettes (e.g. Linen, Sage,
+  Blush, Ink, Terracotta, Sea), each stating its own `ink`, `paper`, `muted`,
+  `line` and `accent`. They run through the same `validatePalette` contrast
+  gate the site's palettes use, and a test asserts contrast for every one, so a
+  registry can't be unreadable in a car park. **No custom hex** (the `/site`
+  editor dropped it for the same reason).
+- **Fonts:** three pairings chosen from faces already self-hosted in
+  `src/lib/fonts` (Fraunces, Inter, EB Garamond). Adding a face means adding
+  files there; no runtime Google fetch (a third-party request leaks every
+  visitor's IP, `src/lib/fonts/index.ts`).
+- **Independent of the site theme:** stored on `registry_settings`
+  (`palette`, `type_pairing`) with defaults, never read from `site_content`.
+  Changing the site's theme doesn't restyle the registry, and the reverse.
+- **Picked in the registry's settings strip** with a live preview; no
+  per-section styling, no motion levels beyond the site's Still/Gentle default
+  (YAGNI: that is option c).
+- Scoped as `[data-registry-theme]` tokens in `globals.css`, following how
+  `[data-site-theme]` already works, so the registry doesn't touch the site's
+  rules.
 
 ## 5. The planner's side
 
