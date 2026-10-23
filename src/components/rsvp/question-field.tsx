@@ -34,6 +34,9 @@ export function QuestionField({
   onChange,
   idPrefix,
   missing = false,
+  chips = true,
+  ruled = true,
+  ownCheck = true,
 }: {
   question: RsvpQuestionRow;
   value: AnswerValue | undefined;
@@ -45,26 +48,49 @@ export function QuestionField({
    * 7). The form decides; this only says so beside the question.
    */
   missing?: boolean;
+  /** Spec 35 switches. Off: native radios, tick boxes and a yes/no dropdown. */
+  chips?: boolean;
+  /** Off: boxed fields with plain labels. */
+  ruled?: boolean;
+  /** Off: chips carry `required` and the browser checks them, as before. */
+  ownCheck?: boolean;
 }) {
   const options = questionOptions(question);
   const text = typeof value === "string" ? value : "";
   const selected = Array.isArray(value) ? value : [];
+  const fieldClass = ruled ? "site-rsvp-input" : "field";
+  // The browser's `required` on a chip only when the form is not checking.
+  const chipRequired = ownCheck ? undefined : question.required;
+
+  if (!chips) {
+    return (
+      <ClassicChoice
+        question={question}
+        options={options}
+        text={text}
+        selected={selected}
+        onChange={onChange}
+        idPrefix={idPrefix}
+        ruled={ruled}
+      />
+    );
+  }
 
   const label = (
-    <span className="site-label mb-1 block text-muted">
+    <span className={ruled ? "site-label mb-1 block text-muted" : "mb-1 block text-sm font-medium"}>
       {question.label}
       {question.required ? <span aria-hidden> *</span> : null}
     </span>
   );
 
   const legend = (
-    <legend className="site-label mb-2 block text-muted">
+    <legend className={ruled ? "site-label mb-2 block text-muted" : "mb-1 block text-sm font-medium"}>
       {question.label}
       {question.required ? (
         <>
           <span aria-hidden> *</span>
           {/* The chips carry no `required` (see below), so say it in words. */}
-          <span className="sr-only"> (required)</span>
+          {ownCheck ? <span className="sr-only"> (required)</span> : null}
         </>
       ) : null}
     </legend>
@@ -100,6 +126,7 @@ export function QuestionField({
               name={`${idPrefix}-${question.id}`}
               label={option}
               checked={text === option}
+              required={chipRequired}
               onChange={() => onChange(option)}
             />
           ))}
@@ -161,7 +188,7 @@ export function QuestionField({
           required={question.required}
           value={text}
           onChange={(event) => onChange(event.target.value)}
-          className="site-rsvp-input resize-y"
+          className={`${fieldClass} resize-y`}
         />
         {help}
       </label>
@@ -189,6 +216,7 @@ export function QuestionField({
               label={choice.label}
               quiet={choice.value === ""}
               checked={text === choice.value}
+              required={chipRequired}
               onChange={() => onChange(choice.value)}
             />
           ))}
@@ -209,7 +237,7 @@ export function QuestionField({
           required={question.required}
           value={text}
           onChange={(event) => onChange(event.target.value)}
-          className="site-rsvp-input max-w-[10rem]"
+          className={`${fieldClass} max-w-[10rem]`}
         />
         {help}
       </label>
@@ -225,7 +253,7 @@ export function QuestionField({
         required={question.required}
         value={text}
         onChange={(event) => onChange(event.target.value)}
-        className="site-rsvp-input"
+        className={fieldClass}
       />
       {help}
     </label>
@@ -238,6 +266,7 @@ function Chip({
   name,
   label,
   checked,
+  required,
   quiet,
   onChange,
 }: {
@@ -245,6 +274,7 @@ function Chip({
   name?: string;
   label: string;
   checked: boolean;
+  required?: boolean;
   /** "No preference" and friends: present, but not competing with real answers. */
   quiet?: boolean;
   onChange: (checked: boolean) => void;
@@ -256,10 +286,141 @@ function Chip({
         name={name}
         value={label}
         checked={checked}
+        required={required}
         onChange={(event) => onChange(event.target.checked)}
         className="sr-only"
       />
       <span>{label}</span>
     </label>
+  );
+}
+
+/**
+ * The question as it was before chips (spec 35, `chips` switched off): native
+ * radios, tick boxes and a yes/no dropdown, each checked by the browser's own
+ * `required`. Text questions are the same in both, so this hands them back.
+ */
+function ClassicChoice({
+  question,
+  options,
+  text,
+  selected,
+  onChange,
+  idPrefix,
+  ruled,
+}: {
+  question: RsvpQuestionRow;
+  options: string[];
+  text: string;
+  selected: string[];
+  onChange: (value: AnswerValue) => void;
+  idPrefix: string;
+  ruled: boolean;
+}) {
+  const labelClass = ruled ? "site-label mb-1 block text-muted" : "mb-1 block text-sm font-medium";
+  const fieldClass = ruled ? "site-rsvp-input" : "field";
+  const heading = (
+    <>
+      {question.label}
+      {question.required ? <span aria-hidden> *</span> : null}
+    </>
+  );
+  const help = question.help_text ? (
+    <span className="mt-1 block text-xs text-muted">{question.help_text}</span>
+  ) : null;
+
+  if (question.type === "single_select" && options.length > 0) {
+    return (
+      <fieldset className="block">
+        <legend className={labelClass}>{heading}</legend>
+        <div className="space-y-1">
+          {options.map((option) => (
+            <label key={option} className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name={`${idPrefix}-${question.id}`}
+                value={option}
+                checked={text === option}
+                required={question.required}
+                onChange={() => onChange(option)}
+              />
+              {option}
+            </label>
+          ))}
+          {!question.required ? (
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <input
+                type="radio"
+                name={`${idPrefix}-${question.id}`}
+                value=""
+                checked={text === ""}
+                onChange={() => onChange("")}
+              />
+              No preference
+            </label>
+          ) : null}
+        </div>
+        {help}
+      </fieldset>
+    );
+  }
+
+  if (question.type === "multi_select" && options.length > 0) {
+    return (
+      <fieldset className="block">
+        <legend className={labelClass}>{heading}</legend>
+        <div className="space-y-1">
+          {options.map((option) => (
+            <label key={option} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={(event) =>
+                  onChange(
+                    event.target.checked
+                      ? options.filter((o) => o === option || selected.includes(o))
+                      : selected.filter((o) => o !== option),
+                  )
+                }
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+        {help}
+      </fieldset>
+    );
+  }
+
+  if (question.type === "boolean") {
+    return (
+      <label className="block">
+        <span className={labelClass}>{heading}</span>
+        <select
+          required={question.required}
+          value={text}
+          onChange={(event) => onChange(event.target.value)}
+          className={fieldClass}
+        >
+          <option value="">Not sure yet</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+        {help}
+      </label>
+    );
+  }
+
+  // Text, long text and number are the same with or without chips.
+  return (
+    <QuestionField
+      question={question}
+      value={text}
+      onChange={onChange}
+      idPrefix={idPrefix}
+      ruled={ruled}
+      chips
+      ownCheck={false}
+    />
   );
 }

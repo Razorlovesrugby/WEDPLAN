@@ -19,6 +19,19 @@ never on a real phone, and never with a screen reader.**
 
 Any of these can still be reversed.
 
+## Answered — 2026-10-23, later: "Make sure that all of the changes are optional and toggleable"
+
+Two questions were put, and answered:
+
+| Question | Answer |
+| --- | --- |
+| Which changes get a switch? | **Literally everything**, readability and phone fixes included. This was chosen over "design choices only", which was the recommendation. |
+| Where do the switches live? | **On the RSVP block** (recommended). The petals and the person-by-person arrival go in the existing **Motion** list, so the Still level turns them off. |
+
+Built the same session; see **Build status — switches**. This goes against the rule in
+`switches.ts` that correctness is not a switch. The planner asked for it explicitly, so
+each fix's switch says plainly what turning it off costs.
+
 ## 1. What was asked
 
 > *"Regarding invited, where people rsvp and answer questions, can we make that more
@@ -327,3 +340,88 @@ answers, so a guest with JavaScript off is unaffected either way.
 **Pick up here:** §8, plus: on a real phone, leave the main course unanswered and
 press Send, and check that the page scrolls to it and says so. Then answer No for
 one person and check their questions go away.
+
+## Build status — switches (2026-10-23)
+
+**How it is stored.** It follows `lightbox`: the RSVP block's style gains `rsvpOff`,
+the list of features switched **off** (`src/lib/site/rsvp-features.ts`,
+`RSVP_FEATURES`). When nothing is off the key is absent, so every existing block keeps
+everything on. **There is no migration**, because block style is already JSON. The
+style schema accepts only names from the list. `BLOCK_STYLE_KEYS` gained `rsvpOff`
+(the compile-time guard insisted).
+
+**Where the planner finds it.** In the site editor, on the RSVP block, there is a
+"Reply form" panel with three groups of tick boxes: How it looks, Readability and
+phones, What it asks. Each box says what happens when it is off. A switch that
+depends on another (`steady_chips` and `own_required_check` need `chips`;
+`readable_text` needs `ruled_fields`) dims, and says it has no effect while the one
+it needs is off. All of them are also in the site's switch registry, as `rsvp.<name>`.
+
+| Switch | Off puts back |
+| --- | --- |
+| `answer_cards` | Plain square "all of us" boxes |
+| `person_cards` | A `.card` per person with a serif legend; events as plain rows |
+| `divider` | No "or answer one by one" line |
+| `event_times` | Event name only |
+| `pill_toggles` | Small square Yes/No buttons |
+| `ruled_fields` | Boxed `.field` inputs with plain labels |
+| `chips` | Native radios, tick boxes and the yes/no `<select>`, all with the browser's `required` (`ClassicChoice` in `question-field.tsx`) |
+| `pill_button` | Square `btn-primary` on the left |
+| `soft_panels` | Square confirmation, closed note and Card frame; hairline progress bar |
+| `new_wording` | "Not able to", "Confirm our RSVP", "Saving…" |
+| `readable_text` | Placeholder `muted`/80%, field lines in `line`, red-700 error text |
+| `touch_hover` | Hover everywhere, phones included |
+| `flat_card_look` | Cards inside the Card layout |
+| `steady_chips` | Tick inline; the chip grows when picked |
+| `skip_not_coming` | Everyone is asked everything |
+| `own_required_check` | Chips carry `required`; the browser warns; a required pick-several is not enforced |
+| `round_calendar` | Square calendar box in the confirmation |
+| `banner_style` | The email-reply banner's older square look. Read from the page's RSVP block in `/w/[slug]/[household]/page.tsx` |
+
+The motion effects are `reply_arrivals` and `reply_petals`. They are in Gentle and
+Cinematic, which keeps them on wherever they showed before, and **off under Still,
+which they ignored until now**. Each can also be switched on its own under
+Motion → Customise.
+
+**How the stylesheet reads it.** The form's root carries `data-rsvp-off="…"`. The
+fix-type switches are rules in `globals.css` that apply only when their name is in
+that attribute. The petals and arrivals use `[data-fx~="reply_petals"]` and
+`[data-fx~="reply_arrivals"]`.
+
+**Verified:**
+
+- Typecheck is clean.
+- **1097 unit tests**, seven of them new in `rsvp-features.test.ts`. They check:
+  - an absent or unknown value reads as all on;
+  - only what is off is stored;
+  - the schema accepts the list and rejects unknown names;
+  - every switch says what happens when it is off and is in the registry.
+
+  One existing test (`motion.test.ts`) was changed: Gentle's effect list now
+  includes the two reply effects.
+- `next build` succeeds, using placeholder environment variables.
+- Headless Chromium, using a temporary page with sample data (deleted, never
+  committed). Every switch was checked on and off by script:
+  - **All off** is the original form: 9 native radios, a `<select>`, 10 boxed
+    fields, "Confirm our RSVP", "Not able to", no divider, no times, `.card`
+    fieldsets, Tom asked everything, and the browser blocks the send. A screenshot
+    matches the pre-spec form.
+  - **All on** is unchanged from round two.
+  - `readable_text` changes the placeholder colour.
+  - `touch_hover`: a tapped card on touch is lifted only when the switch is off.
+  - `steady_chips`: chip width stays at 86.69 px when on; it goes from 81.9 to
+    99.0 px when off.
+  - `flat_card_look`: the inner card's border is 0 px when on, 1 px when off.
+  - `round_calendar`: the calendar box's corners are 12 px when on, 0 when off.
+  - Under the Still motion level, the petals don't show.
+  - `own_required_check` off hands the check to the browser.
+  - `skip_not_coming` off asks Tom everything.
+
+**Not verified:**
+
+- **The editor panel itself was never rendered**: it needs a signed-in planner and
+  the database.
+- `setBlockStyle` saving `rsvpOff` has never run against Supabase.
+- The banner switch was checked by typecheck only.
+- **One test run had a single failure that I could not reproduce or identify.** It
+  ran while the dev server was being stopped. Eight runs since have all passed.

@@ -12,6 +12,7 @@ import {
   isTitled,
   type BlockType,
 } from "./blocks";
+import { RSVP_FEATURES } from "./rsvp-features";
 
 /**
  * What a block's payload and style may contain on the way in (spec 23 §4).
@@ -51,6 +52,9 @@ export const styleSchema = z
     textColour: z.string().regex(HEX, "Not a hex colour").optional(),
     mutedColour: z.string().regex(HEX, "Not a hex colour").optional(),
     bodyFont: z.enum(FONT_IDS).optional(),
+    // Spec 35: the RSVP form's features that are switched off. Only the off
+    // ones are stored; absent means every one on.
+    rsvpOff: z.array(z.enum(RSVP_FEATURES)).max(RSVP_FEATURES.length).optional(),
   })
   .strict();
 

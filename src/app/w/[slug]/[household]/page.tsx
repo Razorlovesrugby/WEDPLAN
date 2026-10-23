@@ -16,6 +16,7 @@ import { SiteTopBar } from "@/components/site/top-bar";
 import { SiteBlocks } from "@/components/site/blocks/render";
 import { SectionRail } from "@/components/site/section-rail";
 import { motionAttributes } from "@/lib/site/motion";
+import { resolveRsvpOff } from "@/lib/site/rsvp-features";
 import { ReplyBanner } from "@/components/site/reply-banner";
 import { ViewLogger } from "@/components/site/view-logger";
 
@@ -163,6 +164,10 @@ export default async function HouseholdSitePage({
         <ReplyBanner
           token={token}
           reply={reply}
+          // The RSVP block's own switch decides how the banner looks (spec 35).
+          matching={!resolveRsvpOff(shown.find((block) => block.type === "rsvp")?.style?.rsvpOff).includes(
+            "banner_style",
+          )}
           names={listNames(personal.members.map((member) => member.name))}
         />
       ) : null}

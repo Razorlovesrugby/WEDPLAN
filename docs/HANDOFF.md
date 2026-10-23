@@ -25,7 +25,19 @@ took its recommendation. Read the spec's **Build status — round two**.
 - **Verified:** typecheck, 1090 unit tests, `next build` (placeholder env), and
   scripted checks in headless Chromium with sample data. **Not verified:**
   Supabase, a real phone, a screen reader. `ReplyBanner` was never rendered.
-- **Pick up here:** the spec's "Pick up here", on a real phone.
+- **Then every change became a switch** ("make sure that all of the changes are
+  optional and toggleable"; asked, and answered "literally everything", "on the RSVP
+  block"). `BlockStyle.rsvpOff` lists what is off (absent means all on, so no
+  migration): 18 features in `src/lib/site/rsvp-features.ts`. Ticked in a "Reply
+  form" panel on the RSVP block in the site editor, and listed in `switches.ts` as
+  `rsvp.*`. The petals and the arrivals are now motion effects (`reply_petals`,
+  `reply_arrivals`): on in Gentle and Cinematic, **off under Still**, which they
+  used to ignore. With every switch off you get the original form.
+- **Verified:** 1097 tests, `next build`, and each switch on and off by script in
+  Chromium. **Not verified:** the editor panel was never rendered; Supabase. One
+  test run failed once and could not be reproduced (eight clean runs since).
+- **Pick up here:** the spec's "Pick up here", on a real phone. Then, in the
+  editor, untick a few Reply form switches and reload the household page.
 
 **Session 40 (spec 34):** the music section, built end to end on branch
 `claude/spec-31-music-section` (**no PR opened**). Asked for as a spec, the nine

@@ -33,6 +33,14 @@ import { PhotoPicker, type PhotoOption } from "./photo-picker";
 import { saveStatusLabel, useAutosave } from "./use-autosave";
 import { LookGlyph } from "./look-glyph";
 import { ENTRANCES, ENTRANCE_LABEL, looksFor, resolveLook } from "@/lib/site/looks";
+import {
+  RSVP_FEATURES,
+  RSVP_FEATURE_COPY,
+  resolveRsvpOff,
+  toggleRsvpFeature,
+  type RsvpFeature,
+  type RsvpFeatureGroup,
+} from "@/lib/site/rsvp-features";
 
 /**
  * One block's form (spec 23 §5).
@@ -377,6 +385,20 @@ export function BlockInspector({
         </div>
       ) : null}
 
+      {/* ---- the reply form's switches (spec 35) ----
+          Every change spec 35 made to the guest's reply form, each one on its
+          own. Only what is off is stored, so a block that never opened this
+          keeps every one on. */}
+      {block.type === "rsvp" ? (
+        <RsvpSwitches
+          off={resolveRsvpOff(block.style.rsvpOff)}
+          disabled={pending}
+          onToggle={(feature, checked) =>
+            style({ rsvpOff: toggleRsvpFeature(resolveRsvpOff(block.style.rsvpOff), feature, checked) })
+          }
+        />
+      ) : null}
+
       {/* ---- style ---- */}
       {def.styles.length > 0 ? (
         <div className="space-y-2 border-t border-line pt-3">
@@ -564,6 +586,63 @@ export function BlockInspector({
       >
         {message ?? saveStatusLabel(status) ?? "Changes save as you type"}
       </p>
+    </div>
+  );
+}
+
+const RSVP_GROUP_TITLE: Record<RsvpFeatureGroup, string> = {
+  look: "How it looks",
+  fixes: "Readability and phones",
+  behaviour: "What it asks",
+};
+
+/** One tick box per reply-form feature, in three groups. */
+function RsvpSwitches({
+  off,
+  disabled,
+  onToggle,
+}: {
+  off: RsvpFeature[];
+  disabled: boolean;
+  onToggle: (feature: RsvpFeature, checked: boolean) => void;
+}) {
+  return (
+    <div className="space-y-3 border-t border-line pt-3">
+      <h3 className="text-xs uppercase tracking-wide text-muted">Reply form</h3>
+      <p className="text-xs text-muted">
+        Untick anything to put that part of the form back the way it was. The petals and people
+        arriving one by one are under Motion.
+      </p>
+      {(Object.keys(RSVP_GROUP_TITLE) as RsvpFeatureGroup[]).map((group) => (
+        <fieldset key={group} className="space-y-2">
+          <legend className="text-xs font-medium">{RSVP_GROUP_TITLE[group]}</legend>
+          {RSVP_FEATURES.filter((feature) => RSVP_FEATURE_COPY[feature].group === group).map(
+            (feature) => {
+              const copy = RSVP_FEATURE_COPY[feature];
+              const needsOff = copy.needs !== undefined && off.includes(copy.needs);
+              return (
+                <label key={feature} className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={disabled}
+                    checked={!off.includes(feature)}
+                    onChange={(event) => onToggle(feature, event.target.checked)}
+                  />
+                  <span className={needsOff ? "opacity-60" : undefined}>
+                    {copy.label}
+                    <span className="block text-xs text-muted">
+                      Off: {copy.whenOff}
+                      {needsOff
+                        ? ` Has no effect while \u201c${RSVP_FEATURE_COPY[copy.needs!].label}\u201d is off.`
+                        : null}
+                    </span>
+                  </span>
+                </label>
+              );
+            },
+          )}
+        </fieldset>
+      ))}
     </div>
   );
 }

@@ -40,6 +40,7 @@ import { CoachBooking } from "../coach-booking";
 import { GuestUploader } from "../guest-uploader";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
+import { resolveRsvpOff } from "@/lib/site/rsvp-features";
 import { GiftFunds } from "../gift-funds";
 import { SongSection } from "../song-section";
 import { doNotPlayFrom, refusalLine } from "@/lib/site/song-match";
@@ -516,6 +517,7 @@ export function SiteBlockView({
                 icsHref: ctx.preview ? previewWeekendPath(personal.householdId) : undefined,
               }}
               look={resolveLook("rsvp", block.style?.variant)}
+              off={resolveRsvpOff(block.style?.rsvpOff)}
               eventWhen={Object.fromEntries(
                 personal.rsvp.events
                   .filter((event) => event.starts_at)

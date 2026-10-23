@@ -71,7 +71,7 @@ describe("motionAttributes", () => {
   it("emits the level and a space-separated effect list", () => {
     expect(motionAttributes({ level: "gentle", off: ["reading_line"], on: [] })).toEqual({
       "data-motion": "gentle",
-      "data-fx": "section_arrivals nav_condense",
+      "data-fx": "section_arrivals nav_condense reply_arrivals reply_petals",
     });
   });
 
