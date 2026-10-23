@@ -55,7 +55,7 @@ export function ReplyBanner({
   if (state === "error") {
     return (
       <div className="mx-auto mt-8 max-w-2xl px-5">
-        <p className="border border-line bg-paper p-4 text-[0.95rem] text-muted">
+        <p className="site-rsvp-sheet p-4 text-[0.95rem] text-muted">
           {error} You can still answer using the form below.
         </p>
       </div>
@@ -64,7 +64,7 @@ export function ReplyBanner({
 
   return (
     <div className="mx-auto mt-8 max-w-2xl px-5">
-      <div className="border border-accent/40 bg-paper p-5">
+      <div className="site-rsvp-sheet p-5 sm:p-6">
         <p className="text-[1.0625rem] text-ink">
           {state === "applying"
             ? "One moment…"
@@ -85,21 +85,21 @@ export function ReplyBanner({
             }}
           >
             <label className="block">
-              <span className="mb-1 block text-[0.95rem] text-muted">
+              <span className="site-label mb-2 block text-muted">
                 Anything you&rsquo;d like to say? (optional)
               </span>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
-                className="w-full border border-line bg-white p-2 text-[0.95rem]"
+                className="site-rsvp-input resize-y"
               />
             </label>
-            <div className="mt-2 flex items-center gap-3">
+            <div className="mt-3 flex items-center gap-3">
               <button
                 type="submit"
                 disabled={pending || note.trim().length === 0}
-                className="border border-accent px-4 py-1.5 text-[0.8rem] uppercase tracking-[0.12em] text-accent hover:bg-accent hover:text-paper disabled:opacity-50"
+                className="std-button disabled:opacity-50"
               >
                 Send it
               </button>

@@ -33,12 +33,18 @@ export function QuestionField({
   value,
   onChange,
   idPrefix,
+  missing = false,
 }: {
   question: RsvpQuestionRow;
   value: AnswerValue | undefined;
   onChange: (value: AnswerValue) => void;
   /** Namespaces radio groups so one guest's choice does not move another's. */
   idPrefix: string;
+  /**
+   * A required chip question left unanswered at send time (spec 35 §6 item
+   * 7). The form decides; this only says so beside the question.
+   */
+  missing?: boolean;
 }) {
   const options = questionOptions(question);
   const text = typeof value === "string" ? value : "";
@@ -54,9 +60,22 @@ export function QuestionField({
   const legend = (
     <legend className="site-label mb-2 block text-muted">
       {question.label}
-      {question.required ? <span aria-hidden> *</span> : null}
+      {question.required ? (
+        <>
+          <span aria-hidden> *</span>
+          {/* The chips carry no `required` (see below), so say it in words. */}
+          <span className="sr-only"> (required)</span>
+        </>
+      ) : null}
     </legend>
   );
+
+  const groupId = `${idPrefix}-${question.id}`;
+  const missingNote = missing ? (
+    <span id={`${groupId}-missing`} className="site-rsvp-missing mt-2 block text-sm">
+      {question.type === "multi_select" ? "Please pick at least one." : "Please pick one."}
+    </span>
+  ) : null;
 
   const help = question.help_text ? (
     <span className="mt-1.5 block text-sm italic text-muted">{question.help_text}</span>
@@ -65,11 +84,13 @@ export function QuestionField({
   // Radios and checkboxes cannot sit inside a single <label> wrapping the
   // whole group — each input needs its own. So the choice types render a
   // fieldset of chips: a real input, visually hidden, under a label that
-  // looks like a button. Keyboard, screen readers and `required` all keep
-  // working because the input is still there.
+  // looks like a button. Keyboard and screen readers keep working because the
+  // input is still there. `required` is NOT set on them: the browser's bubble
+  // would point at a hidden 1 px box, so the form checks these itself
+  // (`unansweredChips`) and passes `missing` back down.
   if (question.type === "single_select" && options.length > 0) {
     return (
-      <fieldset className="block">
+      <fieldset className="block" data-question={groupId} aria-describedby={missing ? `${groupId}-missing` : undefined}>
         {legend}
         <div className="flex flex-wrap gap-2">
           {options.map((option) => (
@@ -79,7 +100,6 @@ export function QuestionField({
               name={`${idPrefix}-${question.id}`}
               label={option}
               checked={text === option}
-              required={question.required}
               onChange={() => onChange(option)}
             />
           ))}
@@ -98,13 +118,14 @@ export function QuestionField({
           ) : null}
         </div>
         {help}
+        {missingNote}
       </fieldset>
     );
   }
 
   if (question.type === "multi_select" && options.length > 0) {
     return (
-      <fieldset className="block">
+      <fieldset className="block" data-question={groupId} aria-describedby={missing ? `${groupId}-missing` : undefined}>
         {legend}
         <div className="flex flex-wrap gap-2">
           {options.map((option) => (
@@ -126,6 +147,7 @@ export function QuestionField({
           ))}
         </div>
         {help}
+        {missingNote}
       </fieldset>
     );
   }
@@ -148,10 +170,9 @@ export function QuestionField({
 
   if (question.type === "boolean") {
     // Same three values the select stored ("yes", "no", "" for not sure), as
-    // chips. A required question offers no "not sure", exactly as the select's
-    // empty option could never satisfy `required`.
+    // chips. A required question offers no "not sure": "" is no answer.
     return (
-      <fieldset className="block">
+      <fieldset className="block" data-question={groupId} aria-describedby={missing ? `${groupId}-missing` : undefined}>
         {legend}
         <div className="flex flex-wrap gap-2">
           {(
@@ -168,12 +189,12 @@ export function QuestionField({
               label={choice.label}
               quiet={choice.value === ""}
               checked={text === choice.value}
-              required={question.required}
               onChange={() => onChange(choice.value)}
             />
           ))}
         </div>
         {help}
+        {missingNote}
       </fieldset>
     );
   }
@@ -217,7 +238,6 @@ function Chip({
   name,
   label,
   checked,
-  required,
   quiet,
   onChange,
 }: {
@@ -225,7 +245,6 @@ function Chip({
   name?: string;
   label: string;
   checked: boolean;
-  required?: boolean;
   /** "No preference" and friends: present, but not competing with real answers. */
   quiet?: boolean;
   onChange: (checked: boolean) => void;
@@ -237,9 +256,8 @@ function Chip({
         name={name}
         value={label}
         checked={checked}
-        required={required}
         onChange={(event) => onChange(event.target.checked)}
-        className="peer sr-only"
+        className="sr-only"
       />
       <span>{label}</span>
     </label>

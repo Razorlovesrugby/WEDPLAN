@@ -4,7 +4,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
-import { guestFacingStatus, householdReply, replyToAll } from "@/lib/rsvp-household";
+import {
+  guestFacingStatus,
+  householdReply,
+  isNotComing,
+  replyToAll,
+  unansweredChips,
+} from "@/lib/rsvp-household";
 import { replyConfirmation, summariseReply } from "@/lib/site/reply-state";
 import { withViewTransition } from "@/lib/view-transition";
 import { PREVIEW_NOT_SENT } from "@/lib/site/preview-guard";
@@ -49,7 +55,7 @@ export function RsvpForm({
 }: {
   /**
    * The household's credential. **Null only in the editor's preview** (spec 28
-   * §4.3): the form then works in every way except that "Confirm" says nothing
+   * §4.3): the form then works in every way except that "Send" says nothing
    * was sent and calls no action.
    */
   token: string | null;
@@ -143,6 +149,9 @@ export function RsvpForm({
   );
 
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  // Set by a send that stopped on an unanswered required chip question; from
+  // then on each one says so until it is answered (spec 35 §6 item 7).
+  const [showMissing, setShowMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -153,6 +162,18 @@ export function RsvpForm({
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // The browser has already checked the text boxes; the chips are ours.
+    const firstMissing = missingKeys()[0];
+    if (firstMissing) {
+      setShowMissing(true);
+      const group = event.currentTarget.querySelector<HTMLElement>(
+        `[data-question="${firstMissing}"]`,
+      );
+      group?.scrollIntoView({ block: "center", behavior: "smooth" });
+      group?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+      return;
+    }
 
     // No token, nothing to send with (the preview). Show the confirmation a
     // guest would get — it is part of what the planner is designing — and say
@@ -201,6 +222,25 @@ export function RsvpForm({
 
   const guestQuestions = questions.filter((q) => q.scope === "guest");
   const householdQuestions = questions.filter((q) => q.scope === "household");
+
+  /**
+   * Every required chip question nobody has answered, as the `data-question`
+   * key its fieldset carries — `<guest id>-<question id>`, or
+   * `household-<question id>`. Somebody who isn't coming is not asked, so
+   * is not counted.
+   */
+  function missingKeys(): string[] {
+    const forGuests = state
+      .filter((guest) => Object.keys(guest.responses).length > 0 && !isNotComing(guest.responses))
+      .flatMap((guest) =>
+        unansweredChips(guestQuestions, guest.answers).map((id) => `${guest.guestId}-${id}`),
+      );
+    const forHousehold = unansweredChips(householdQuestions, householdAnswers).map(
+      (id) => `household-${id}`,
+    );
+    return [...forGuests, ...forHousehold];
+  }
+  const missing = new Set(showMissing ? missingKeys() : []);
 
   if (locked) {
     return (
@@ -469,41 +509,53 @@ export function RsvpForm({
               ))}
             </ul>
 
-            <div className="space-y-5 pt-5">
-              <label className="block">
-                <span className="site-label mb-1 block text-muted">Dietary requirements</span>
-                <input
-                  value={guestState.dietary}
-                  onChange={(e) => updateGuest(guest.id, { dietary: e.target.value })}
-                  placeholder="Vegetarian, coeliac, allergies — anything the kitchen should know"
-                  className="site-rsvp-input"
-                />
-              </label>
+            {/* Somebody who has said no to everything is not asked for a meal
+                or dietary needs (spec 35 Q2). The fields unmount, so nothing
+                hidden can block the send, but what they typed stays in state
+                and comes back if they switch an event to yes. */}
+            {isNotComing(guestState.responses) ? (
+              <p className="pt-4 text-[0.95rem] italic text-muted">
+                Not coming, so there&rsquo;s nothing more to ask. Switch an event to Yes to
+                change that.
+              </p>
+            ) : (
+              <div className="space-y-5 pt-5">
+                <label className="block">
+                  <span className="site-label mb-1 block text-muted">Dietary requirements</span>
+                  <input
+                    value={guestState.dietary}
+                    onChange={(e) => updateGuest(guest.id, { dietary: e.target.value })}
+                    placeholder="Vegetarian, coeliac, allergies — anything the kitchen should know"
+                    className="site-rsvp-input"
+                  />
+                </label>
 
-              <label className="block">
-                <span className="site-label mb-1 block text-muted">Anything else we should arrange?</span>
-                <input
-                  value={guestState.accessibility}
-                  onChange={(e) => updateGuest(guest.id, { accessibility: e.target.value })}
-                  placeholder="Step-free access, a seat near the front, a high chair…"
-                  className="site-rsvp-input"
-                />
-              </label>
+                <label className="block">
+                  <span className="site-label mb-1 block text-muted">Anything else we should arrange?</span>
+                  <input
+                    value={guestState.accessibility}
+                    onChange={(e) => updateGuest(guest.id, { accessibility: e.target.value })}
+                    placeholder="Step-free access, a seat near the front, a high chair…"
+                    className="site-rsvp-input"
+                  />
+                </label>
 
-              {guestQuestions.map((question) => (
-                <QuestionField
-                  key={question.id}
-                  question={question}
-                  idPrefix={guest.id}
-                  value={guestState.answers[question.id]}
-                  onChange={(value) =>
-                    updateGuest(guest.id, {
-                      answers: { ...guestState.answers, [question.id]: value },
-                    })
-                  }
-                />
-              ))}
-            </div>
+                {guestQuestions.map((question) => (
+                  <QuestionField
+                    key={question.id}
+                    question={question}
+                    idPrefix={guest.id}
+                    missing={missing.has(`${guest.id}-${question.id}`)}
+                    value={guestState.answers[question.id]}
+                    onChange={(value) =>
+                      updateGuest(guest.id, {
+                        answers: { ...guestState.answers, [question.id]: value },
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </fieldset>
         );
       })}
@@ -520,6 +572,7 @@ export function RsvpForm({
                 key={question.id}
                 question={question}
                 idPrefix="household"
+                missing={missing.has(`household-${question.id}`)}
                 value={householdAnswers[question.id]}
                 onChange={(value) =>
                   setHouseholdAnswers((prev) => ({ ...prev, [question.id]: value }))
@@ -539,9 +592,11 @@ export function RsvpForm({
             </svg>
           )}
         </button>
-        {status === "saved" ? (
-          <span className="text-sm text-muted">
-            Saved, thank you. Come back and change it whenever.
+        {missing.size > 0 ? (
+          <span className="site-rsvp-missing text-sm" role="alert">
+            {missing.size === 1
+              ? "One question still needs an answer."
+              : `${missing.size} questions still need an answer.`}
           </span>
         ) : null}
         {status === "error" && error ? (

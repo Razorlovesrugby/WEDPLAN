@@ -1,13 +1,23 @@
 # Feature spec: The RSVP form, in the site's own theme
 
-**Status: round one built (2026-10-15) on branch `claude/rsvp-form-restyle`, no PR
-opened. Round two (§6) is a proposal only — not built, not authorised.**
+**Status: round one built (2026-10-15, merged as PR #73). Round two (§6 items 1–8)
+built (2026-10-23) on branch `claude/rsvp-form-restyle`, no PR opened.** "Can u
+build it" came with none of §7 answered, so **each question took its
+recommendation** (see **Answered**). See **Build status — round two** at the end.
+**Seen only in headless Chromium with sample data. Never run against Supabase,
+never on a real phone, and never with a screen reader.**
 
-Round one was asked for directly as a change, not as a spec, and was built in the
-same session. This spec was written afterwards, at the planner's request, to record
-what was done and to review it honestly. **Seen only in headless Chromium, with sample
-data, through a temporary page that was deleted and never committed. It has never
-run against Supabase and has never been seen on a real household page or a real phone.**
+## Answered — 2026-10-23 (recommendations taken, not chosen)
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | **Keep the new copy.** | §3.2 stands. |
+| 2 | **Don't ask somebody who isn't coming.** | §6 item 5 built. |
+| 3 | **Keep the petals.** | No change. |
+| 4 | **Items 1–8.** | Song requests and guestbook (item 9) not touched. |
+| 5 | No recommendation was given; **left as "15:00"**, the smallest change. | No change. |
+
+Any of these can still be reversed.
 
 ## 1. What was asked
 
@@ -252,8 +262,68 @@ in headless Chromium.
    form), or 1–9 (the other guest forms too)? *Recommendation: 1–8.*
 5. **24-hour times** (§4.5). Leave "15:00", or switch the whole site to "3:00 pm"?
 
-## 8. Pick up here
+## 8. Pick up here (round one)
 
 Open a household's link on a real phone with the branch deployed. Answer "Yes" for
 everyone, pick a meal for each person, send, and watch the confirmation. Then switch
 the palette to Midnight and do it again. Then answer §7.
+
+## Build status — round two (2026-10-23)
+
+Six files: `globals.css`, `rsvp-form.tsx`, `question-field.tsx`, `reply-banner.tsx`,
+`src/lib/rsvp-household.ts` (+ test). No migration, no server change.
+
+| Item | What was done |
+| --- | --- |
+| 1 | Placeholder is full `muted` (4.5:1 or better on every palette, from §4.1's own numbers). |
+| 2 | Every `site-rsvp-*` hover rule is inside `@media (hover: hover)`; the press (`:active`) is not. |
+| 3 | `[data-look="card"] .site-rsvp-sheet`: inside the Card look, a person (and "A few last things") is a section under a rule. |
+| 4 | Chip tick sits in the chip's left padding, so width never changes. The dead "Saved" line, the unused `peer` and the stale "Confirm" comment are gone. |
+| 5 | `isNotComing(responses)` (in `src/lib/rsvp-household.ts`). A person who said no to every invited event sees "Not coming, so there's nothing more to ask. Switch an event to Yes to change that." in place of their fields. The fields **unmount**, so nothing hidden can block the send; what they typed stays in form state and comes back. The plus-one name box still shows. **What is sent is unchanged**: their state, typed text included, still goes to `submitRsvp` as before. |
+| 6 | Field underline is `muted` at 75%: the weakest that clears 3:1 on all eight palettes (lowest 3.21, Dusk). Long-text boxes use the same border. |
+| 7 | Chip questions no longer carry `required`. `unansweredChips()` (`src/lib/rsvp-household.ts`) runs on send, after the browser has checked the text boxes. If any are unanswered: "Please pick one." / "Please pick at least one." under each question, a count beside the button (`role="alert"`), the first one scrolled to the middle and its first chip focused. Each message goes as soon as it is answered. The legend says "(required)" to screen readers, since the inputs no longer do. People who aren't coming are not counted. |
+| 8 | `WeekendCalendar` is rounded **inside the reply panel only** (the Schedule block's copy stays square among square things). `ReplyBanner` uses the sheet, a ruled textarea and the site's `std-button` pill. The reply bar already matched (ink bar, pill action), so it is unchanged. |
+
+**One behaviour change to know about:** a *required* choose-several question was
+never enforced before, because checkboxes carried no `required`. It is now: the
+form asks for at least one. Text, number and yes/no-as-text questions are still
+checked by the browser, as before. `submitRsvp` still checks nothing for required
+answers, so a guest with JavaScript off is unaffected either way.
+
+**Verified:**
+
+- Typecheck is clean.
+- **1090 unit tests**, five of them new: `isNotComing`, `isChipQuestion` and
+  `unansweredChips`.
+- `next build` succeeds, using placeholder environment variables.
+- Headless Chromium, using a temporary page with sample data (deleted, never
+  committed), checked by script rather than by eye:
+  - **Not coming:** a person who said no to everything sees the "Not coming" line
+    instead of their fields.
+  - **Sending with unanswered questions:** shows 3 messages plus the count, stays
+    on the form, and focuses the first one (`a-q1`).
+  - **Answering one:** removes its message.
+  - **On a touch device:** `(hover: hover)` is false, and a tapped card's
+    `transform` is `none`.
+  - **Chip width** is 86.69 px both before and after picking.
+  - **Text kept:** "No nuts" typed, then switched to No (fields hidden), then back
+    to Yes, comes back intact.
+  - **Full send** in Evening + Midnight reaches the confirmation, with the
+    rounded calendar box.
+  - No console errors.
+
+  The script check also caught the item 3 selector matching nothing (the outer
+  sheet *is* the `[data-look]` element); fixed and re-shot.
+
+**Not verified:**
+
+- `ReplyBanner` was never rendered. It needs a real token and calls a server action
+  on mount, so it was checked only by typecheck and build.
+- Supabase.
+- iOS Safari, a real touch screen, VoiceOver. These are the checks §6 called for,
+  and they are still owed.
+- `verify-migrations.sh` was not run, as there is no SQL in this change.
+
+**Pick up here:** §8, plus: on a real phone, leave the main course unanswered and
+press Send, and check that the page scrolls to it and says so. Then answer No for
+one person and check their questions go away.
