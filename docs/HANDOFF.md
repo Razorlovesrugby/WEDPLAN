@@ -3,6 +3,47 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 42 (spec 36):** the gift registry, built end to end on branch
+`claude/spec-36-gift-registry` (**no PR opened**). Asked for as a plan, 14 questions
+put and answered (two against the recommendation: a plain-name link, and its own
+design), "Q7a: b" as a separate turn, then "Okay lets build it" as its own. Read the
+spec's **Build status** (§15); this is the short version.
+
+- **What it is.** A public page at `/registry/<wedding slug>` — one address sent to
+  anyone, separate from every invitation and guest. Its own palettes (6) and type
+  pairings (3), a thank-you section, tag/price/search filters (plain links + a GET
+  form, work without JS). A visitor presses **I'll buy this**, gives a name and an
+  optional message, and the item leaves the page; they then see the delivery
+  address and a private undo link. **No payments**, links out only.
+- **The rule it turns on:** a visitor never sees another visitor's name or message.
+  `registry_claims` is closed to `anon`; `src/server/registry/public.ts` never reads
+  it (or the address) and a source-guard test fails if it ever does. The only thing
+  public is `remaining`, from `v_registry_items` — the one definition of it.
+- **The route trap:** the planner's screens are `/gifts`, **not** `/registry`.
+  `/registry` is a public prefix (whole-segment match), so a planner page there
+  would have been readable by anyone. Nav label is still "Registry".
+- **Claims** are written only by `claim_registry_item()` (service role, locks the
+  item row `FOR UPDATE`, refuses an over-claim, has a 15-per-10-minutes brake for the
+  whole wedding) and released by `release_registry_claim()` (by token hash). The
+  buyer's token is shown once; only its hash is stored. The couple move a claim
+  Claimed → Bought → Arrived → Thanked by hand; nothing expires (Q5).
+- **Autofill** (`previewRegistryLink`, `src/lib/net/fetch-page.ts`, `metadata.ts`) is a
+  convenience that is allowed to fail. Pictures come through the signed-in
+  `/api/registry/import-image` and are re-encoded and uploaded **in the browser**
+  (no image library on the server). Prices are only taken when NZD or unlabelled.
+- **Two migrations: `0038`** (enum value only, the 55P04 rule) **and `0039`**. Run in
+  order. **Not applied to the live project, and neither are `0026`–`0037`.**
+- **Verified:** typecheck, 1184 unit tests, 656 SQL assertions (55 new; a deliberate
+  break of the over-claim check was caught), single-transaction check, bootstrap,
+  `next build` (placeholder env). **Seen:** the public page, sheet, claim form,
+  receipt, and the planner's items/claims components, in headless Chromium on sample
+  data, no database. **Not verified:** anything against Supabase, a real shop, a real
+  phone; two truly concurrent claims; the CSV, QR, Open Graph image, dashboard tile
+  and the `/gifts` pages inside the real planner shell.
+- **Left:** sample items in the seed; a link checker; group gifts; filtering by
+  colour/size; email to the couple on a claim (dashboard tile only, Q9).
+- **Pick up here:** the spec's "Pick up here" (§15), on a phone, with a real shop link.
+
 **Session 41 (spec 35):** the guest RSVP form, restyled in the site's own theme.
 Round one (asked for as a change, built, merged as PR #73) moved the form off the
 planner's admin classes (`.card`/`.field`/`.btn-primary`) onto tokens-only

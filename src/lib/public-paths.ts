@@ -29,6 +29,10 @@ export const PUBLIC_PREFIXES = [
   "/i",
   "/w",
   "/m",
+  // The gift registry's PUBLIC page, /registry/<wedding slug> (spec 36). The
+  // planner's own screens live at /gifts precisely so this prefix can be public:
+  // a planner screen at /registry would have been readable by anyone.
+  "/registry",
   "/privacy",
   "/api/cron",
   "/api/clip",

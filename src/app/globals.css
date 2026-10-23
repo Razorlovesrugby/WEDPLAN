@@ -1764,3 +1764,36 @@ textarea.site-rsvp-input:focus {
     opacity: 0.35;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The gift registry's public page (spec 36)
+   ---------------------------------------------------------------------------
+   Scoped to `[data-registry]` so none of it touches the planner or the site.
+   Colour comes from the --site-* channel variables the page root sets from the
+   registry's own palette; nothing here names a colour. Everything that moves is
+   behind prefers-reduced-motion: no-preference, and hover is gated on a device
+   that can hover (a tap on a phone must not leave a card stuck "hovered"). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-registry] .registry-card {
+    animation: registry-rise 0.55s var(--ease-out) both;
+  }
+  [data-registry] .registry-card img {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+  [data-registry] .registry-sheet[open] {
+    animation: registry-sheet-in 0.32s var(--ease-out);
+  }
+}
+@media (hover: hover) {
+  [data-registry] .registry-card-button:hover img {
+    transform: scale(1.03);
+  }
+}
+@keyframes registry-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes registry-sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}

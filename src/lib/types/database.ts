@@ -340,7 +340,7 @@ export type QuestionScope = "guest" | "household";
  *  the chasing cron never counts it as a question somebody failed to answer. */
 export type TransportKind = "parking" | "taxi" | "train" | "walk" | "other";
 export type CoachDirection = "to_venue" | "from_venue";
-export type SiteAssetKind = "hero" | "gallery" | "story" | "party" | "stay";
+export type SiteAssetKind = "hero" | "gallery" | "story" | "party" | "stay" | "registry";
 
 export type MessageKind =
   | "invitation"
@@ -1688,6 +1688,101 @@ export type MoodboardView = MoodboardRow & {
   last_viewed_at: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Gift registry (0039, spec 36)
+// ---------------------------------------------------------------------------
+export type RegistryClaimStatus = "claimed" | "bought" | "arrived" | "thanked";
+
+export type RegistrySettingsRow = {
+  wedding_id: string;
+  enabled: boolean;
+  open: boolean;
+  title: string | null;
+  intro: string | null;
+  hero_asset_id: string | null;
+  thanks_text: string | null;
+  thanks_asset_id: string | null;
+  no_gifts_line: string | null;
+  show_prices: boolean;
+  show_taken: boolean;
+  show_funds: boolean;
+  disclosure_on: boolean;
+  disclosure_text: string | null;
+  palette: string;
+  type_pairing: string;
+  last_viewed_claims_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RegistryShippingRow = {
+  wedding_id: string;
+  recipient_name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  region: string | null;
+  postcode: string | null;
+  country: string;
+  courier_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RegistryItemRow = {
+  id: string;
+  wedding_id: string;
+  title: string;
+  url: string;
+  store: string | null;
+  image_asset_id: string | null;
+  /** NZD, integer cents. */
+  price_minor: number | null;
+  note: string | null;
+  quantity: number;
+  specs: { label: string; value: string }[];
+  ship_note: string | null;
+  starred: boolean;
+  hidden: boolean;
+  sort_order: number;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RegistryTagRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type RegistryItemTagRow = { item_id: string; tag_id: string; wedding_id: string };
+
+export type RegistryClaimRow = {
+  id: string;
+  wedding_id: string;
+  item_id: string;
+  name: string;
+  message: string | null;
+  quantity: number;
+  status: RegistryClaimStatus;
+  claim_token_hash: string;
+  released_at: string | null;
+  bought_at: string | null;
+  arrived_at: string | null;
+  thanked_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** `v_registry_items`: an item and how many are still wanted. */
+export type RegistryItemView = Omit<RegistryItemRow, never> & {
+  remaining: number;
+  claimed_quantity: number;
+};
+
 type Timestamps = "created_at" | "updated_at";
 
 export type Database = {
@@ -1924,6 +2019,28 @@ export type Database = {
       seat_assignments: Table<SeatAssignmentRow, Timestamps>;
       seating_rules: Table<SeatingRuleRow, "id" | Timestamps>;
       seating_snapshots: Table<SeatingSnapshotRow, "id" | "created_at" | "automatic">;
+      registry_settings: Table<
+        RegistrySettingsRow,
+        | Timestamps
+        | "enabled" | "open" | "title" | "intro" | "hero_asset_id" | "thanks_text" | "thanks_asset_id"
+        | "no_gifts_line" | "show_prices" | "show_taken" | "show_funds" | "disclosure_on"
+        | "disclosure_text" | "palette" | "type_pairing" | "last_viewed_claims_at"
+      >;
+      registry_shipping: Table<
+        RegistryShippingRow,
+        Timestamps | "recipient_name" | "line1" | "line2" | "city" | "region" | "postcode" | "country" | "courier_note"
+      >;
+      registry_items: Table<
+        RegistryItemRow,
+        | "id" | Timestamps | "store" | "image_asset_id" | "price_minor" | "note" | "quantity" | "specs"
+        | "ship_note" | "starred" | "hidden" | "sort_order" | "deleted_at"
+      >;
+      registry_tags: Table<RegistryTagRow, "id" | "created_at" | "sort_order">;
+      registry_item_tags: Table<RegistryItemTagRow, never>;
+      registry_claims: Table<
+        RegistryClaimRow,
+        | "id" | Timestamps | "message" | "quantity" | "status" | "released_at" | "bought_at" | "arrived_at" | "thanked_at"
+      >;
     };
     Views: {
       audit_log: View<AuditLogRow>;
@@ -1941,8 +2058,26 @@ export type Database = {
       v_run_sheet_items: View<RunSheetItemView>;
       v_moodboards: View<MoodboardView>;
       v_coach_runs: View<CoachRunView>;
+      v_registry_items: View<RegistryItemView>;
     };
     Functions: {
+      /** Spec 36: a visitor's claim, settled under a row lock. Service role only. */
+      claim_registry_item: {
+        Args: {
+          p_wedding_id: string;
+          p_item_id: string;
+          p_name: string;
+          p_message: string | null;
+          p_quantity: number;
+          p_token_hash: string;
+        };
+        Returns: { outcome: "ok" | "unavailable" | "sold_out" | "busy"; claim_id: string | null; remaining: number }[];
+      };
+      /** Spec 36: a buyer undoing their own claim, by token hash. Service role only. */
+      release_registry_claim: {
+        Args: { p_token_hash: string };
+        Returns: boolean;
+      };
       /** Spec 33: saves the event's layout under a name; returns the snapshot id. */
       take_seating_snapshot: {
         Args: { p_event_id: string; p_name: string; p_automatic?: boolean; p_created_by?: string | null };

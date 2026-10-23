@@ -3,17 +3,21 @@ import { Stat } from "@/components/stat";
 import { requireWedding, getWeddingStats } from "@/server/queries/wedding";
 import { getTimelineSummary } from "@/server/queries/lists";
 import { getBudgetSummary, getUpcomingPayments } from "@/server/queries/budget";
+import { getRegistrySummary } from "@/server/queries/registry";
 import { daysUntil, formatDate, formatMoney, pluralise } from "@/lib/format";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   const wedding = await requireWedding();
-  const [stats, tasks, budget, payments] = await Promise.all([
+  const [stats, tasks, budget, payments, registry] = await Promise.all([
     getWeddingStats(wedding.id),
     getTimelineSummary(wedding.id, wedding.reminder_window_days),
     getBudgetSummary(wedding.id),
     getUpcomingPayments(wedding.id),
+    // Fails soft: until 0039 is applied the registry tables don't exist, and a
+    // missing optional tile must never take the whole overview down with it.
+    getRegistrySummary(wedding.id).catch(() => null),
   ]);
   const today = new Date().toISOString().slice(0, 10);
   const upcomingPaymentCount = payments.filter((p) => !p.paid_at && p.due_date && p.due_date >= today).length;
@@ -109,6 +113,36 @@ export default async function DashboardPage() {
                 tone={budget.budget_variance !== null && budget.budget_variance > 0 ? "warn" : "good"}
               />
             ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {registry && (registry.enabled || registry.items > 0) ? (
+        <section aria-labelledby="registry">
+          <h2 id="registry" className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+            Registry
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat
+              label="New claims"
+              value={registry.newClaims}
+              href="/gifts/claims"
+              hint={registry.newClaims > 0 ? "since you last looked" : "nothing new"}
+              tone={registry.newClaims > 0 ? "good" : "neutral"}
+            />
+            <Stat
+              label="Waiting to arrive"
+              value={registry.awaiting}
+              href="/gifts/claims"
+              hint="claimed, not here yet"
+            />
+            <Stat
+              label="Need a thank-you"
+              value={registry.toThank}
+              href="/gifts/claims"
+              hint="arrived, not thanked"
+              tone={registry.toThank > 0 ? "warn" : "neutral"}
+            />
           </div>
         </section>
       ) : null}

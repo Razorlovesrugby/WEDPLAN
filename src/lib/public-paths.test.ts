@@ -87,4 +87,22 @@ describe("isPublicPath", () => {
       expect(isPublicPath(path), path).toBe(false);
     }
   });
+
+  /** Spec 36. The public registry is /registry/<slug>; the planner's screens are /gifts. */
+  it("lets anyone open the public registry and a buyer's private claim page", () => {
+    expect(isPublicPath("/registry/ray-and-olivia")).toBe(true);
+    expect(isPublicPath("/registry/claim/aVeryLongBase64UrlTokenGoesHere")).toBe(true);
+  });
+
+  it("keeps the registry's planner screens and its import route behind the login", () => {
+    expect(isPublicPath("/gifts")).toBe(false);
+    expect(isPublicPath("/gifts/claims")).toBe(false);
+    expect(isPublicPath("/gifts/settings")).toBe(false);
+    expect(isPublicPath("/api/registry/import-image")).toBe(false);
+    expect(isPublicPath("/api/export/registry")).toBe(false);
+  });
+
+  it("matches whole segments, so a look-alike planner route isn't exposed", () => {
+    expect(isPublicPath("/registrybook")).toBe(false);
+  });
 });

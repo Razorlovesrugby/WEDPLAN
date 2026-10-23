@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chooseVariant, mayServePublicly, parseWidth, revisionReferences } from "./photo-access";
+import { chooseVariant, mayServePublicly,
+  mayServeRegistryAsset, parseWidth, revisionReferences } from "./photo-access";
 
 const ID = "22222222-2222-4222-8222-222222222222";
 
@@ -62,5 +63,17 @@ describe("parseWidth", () => {
 
   it("marks anything else as invalid rather than guessing", () => {
     for (const bad of ["1200", "abc", "", "480px", "-1"]) expect(parseWidth(bad), bad).toBeUndefined();
+  });
+});
+
+describe("mayServeRegistryAsset", () => {
+  it("serves a registry photograph only while the registry is on", () => {
+    expect(mayServeRegistryAsset("registry", true)).toBe(true);
+    expect(mayServeRegistryAsset("registry", false)).toBe(false);
+  });
+  it("never lets the switch publish any other kind of photograph", () => {
+    for (const kind of ["hero", "gallery", "story", "party", "stay"]) {
+      expect(mayServeRegistryAsset(kind, true), kind).toBe(false);
+    }
   });
 });
