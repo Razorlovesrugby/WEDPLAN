@@ -1,9 +1,9 @@
 # Feature spec: A gift registry, on a page of its own
 
-**Status: proposed, questions answered (2026-10-23), Q7a still open. Not built, no migration written.** Asked for as
-a plan, to be shaped together. Q1-Q14 are answered in the table below; anything else is a
-questions in §12 are answered, and answering them is not "build it" — that is
-a separate word (`CLAUDE.md`, "Spec requests are not build authorization").
+**Status: proposed; Q1–Q14 answered (2026-10-23), Q7a still open. Not built, no
+migration written.** Asked for as a plan, to be shaped together. Answers are in
+the table below; none of them is "build it" — that is a separate word
+(`CLAUDE.md`, "Spec requests are not build authorization").
 
 **Depends on:** spec 14 (the public surface, `weddings.slug`, the theme), spec 21
 (a suffix as the credential), spec 23/27 (site assets and the image pipeline),
