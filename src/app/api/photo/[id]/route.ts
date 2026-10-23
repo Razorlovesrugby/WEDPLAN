@@ -6,6 +6,7 @@ import { SITE_SIGNED_URL_TTL_SECONDS, siteAssetPath } from "@/lib/site/assets";
 import {
   chooseVariant,
   mayServePublicly,
+  mayServeRegistryAsset,
   parseWidth,
   revisionReferences,
 } from "@/lib/site/photo-access";
@@ -48,9 +49,10 @@ type Asset = {
   variants: number[] | null;
   approved_at: string | null;
   uploaded_by_household: string | null;
+  kind: string;
 };
 
-const COLUMNS = "id, wedding_id, storage_path, variants, approved_at, uploaded_by_household";
+const COLUMNS = "id, wedding_id, storage_path, variants, approved_at, uploaded_by_household, kind";
 
 export async function GET(
   request: NextRequest,
@@ -90,7 +92,16 @@ export async function GET(
     // unapproved photograph is refused outright, and a guest's approved upload
     // is public without it.
     let referenced = false;
-    if (row.approved_at && row.uploaded_by_household === null) {
+    if (row.kind === "registry") {
+      // Registry pictures never appear in a site revision; the registry being
+      // switched on is what publishes them (spec 36).
+      const { data: settings } = await admin
+        .from("registry_settings")
+        .select("enabled")
+        .eq("wedding_id", row.wedding_id)
+        .maybeSingle();
+      referenced = mayServeRegistryAsset(row.kind, settings?.enabled === true);
+    } else if (row.approved_at && row.uploaded_by_household === null) {
       const { data: revision } = await admin
         .from("site_revisions")
         .select("blocks")

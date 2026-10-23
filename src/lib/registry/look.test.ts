@@ -32,10 +32,13 @@ describe("registry palettes", () => {
     expect(resolvePairing("toString")).toBe("classic");
   });
 
-  it("emits only closed-list colours as custom properties", () => {
+  it("emits the site's own channel variables, from the closed list only", () => {
     const vars = registryColourVars("blush");
-    expect(Object.keys(vars).sort()).toEqual(["--r-accent", "--r-ink", "--r-line", "--r-muted", "--r-paper"]);
-    for (const value of Object.values(vars)) expect(value).toMatch(/^#[0-9a-f]{6}$/);
+    expect(Object.keys(vars).sort()).toEqual(["--site-accent", "--site-ink", "--site-line", "--site-muted", "--site-paper"]);
+    for (const value of Object.values(vars)) expect(value).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+  });
+  it("gives an unknown palette the default's colours rather than nothing", () => {
+    expect(registryColourVars("neon")).toEqual(registryColourVars("linen"));
   });
 });
 

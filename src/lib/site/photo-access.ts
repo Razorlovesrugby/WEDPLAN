@@ -59,3 +59,13 @@ export function parseWidth(raw: string | null): number | null | undefined {
   const width = Number(raw);
   return isSiteImageWidth(width) ? width : undefined;
 }
+
+/**
+ * A registry photograph (spec 36) is public while its wedding's registry is
+ * switched on, and not otherwise. It never appears in a site revision, so
+ * `revisionReferences` can't vouch for it; the registry being enabled is the
+ * publication. A switched-off registry's pictures 404 like a draft's.
+ */
+export function mayServeRegistryAsset(kind: string, registryEnabled: boolean): boolean {
+  return kind === "registry" && registryEnabled;
+}

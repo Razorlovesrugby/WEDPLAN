@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { awaitingArrival, buyerMayRelease, isClaimStatus, needsThanks, nextStatus, statusColumn } from "./status";
+import { awaitingArrival, claimStatusPatch, buyerMayRelease, isClaimStatus, needsThanks, nextStatus, statusColumn } from "./status";
 
 describe("claim status", () => {
   it("moves claimed → bought → arrived → thanked and stops", () => {
@@ -28,5 +28,18 @@ describe("claim status", () => {
     expect(needsThanks({ status: "arrived", released_at: "x" })).toBe(false);
     expect(awaitingArrival({ status: "bought", released_at: null })).toBe(true);
     expect(awaitingArrival({ status: "arrived", released_at: null })).toBe(false);
+  });
+});
+
+describe("claimStatusPatch", () => {
+  const now = "2026-10-23T00:00:00.000Z";
+  it("stamps its own time and leaves earlier stages alone", () => {
+    expect(claimStatusPatch("arrived", now)).toEqual({ status: "arrived", arrived_at: now, thanked_at: null });
+  });
+  it("clears every later stage when stepping back", () => {
+    expect(claimStatusPatch("claimed", now)).toEqual({ status: "claimed", bought_at: null, arrived_at: null, thanked_at: null });
+  });
+  it("the last stage clears nothing", () => {
+    expect(claimStatusPatch("thanked", now)).toEqual({ status: "thanked", thanked_at: now });
   });
 });

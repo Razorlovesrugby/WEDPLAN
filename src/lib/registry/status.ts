@@ -43,3 +43,28 @@ export const needsThanks = (claim: ClaimLike): boolean => isLive(claim) && claim
 /** Dashboard: claimed but not yet arrived. */
 export const awaitingArrival = (claim: ClaimLike): boolean =>
   isLive(claim) && (claim.status === "claimed" || claim.status === "bought");
+
+export type StatusPatch = {
+  status: ClaimStatus;
+  bought_at?: string | null;
+  arrived_at?: string | null;
+  thanked_at?: string | null;
+};
+
+/**
+ * The columns to write when the couple move a claim to `status`: its own time
+ * stamped, every LATER stage's cleared. So stepping back ("it hasn't actually
+ * arrived") leaves no stale "arrived on" date, and stepping forward past a
+ * stage doesn't invent a time for the one skipped.
+ */
+export function claimStatusPatch(status: ClaimStatus, nowIso: string): StatusPatch {
+  const index = CLAIM_STATUSES.indexOf(status);
+  const patch: StatusPatch = { status };
+  for (const stage of CLAIM_STATUSES) {
+    const column = statusColumn(stage);
+    if (column && CLAIM_STATUSES.indexOf(stage) > index) patch[column] = null;
+  }
+  const own = statusColumn(status);
+  if (own) patch[own] = nowIso;
+  return patch;
+}

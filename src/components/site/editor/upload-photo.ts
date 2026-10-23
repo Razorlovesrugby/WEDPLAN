@@ -13,7 +13,7 @@ import { confirmSitePhotoUpload, requestSitePhotoUpload } from "@/server/actions
  */
 export async function uploadSitePhoto(
   file: File,
-  kind: "hero" | "gallery" | "story" | "party" | "stay",
+  kind: "hero" | "gallery" | "story" | "party" | "stay" | "registry",
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
   if (file.size > MAX_UPLOAD_BYTES * 3) {
     // Checked before decoding: a 200MB video would otherwise be read into

@@ -1,4 +1,4 @@
-import { validatePalette, type PaletteTokens } from "@/lib/theme/contrast";
+import { toRgbChannels, validatePalette, type PaletteTokens } from "@/lib/theme/contrast";
 
 /**
  * The registry's own look (spec 36 Q7a, option b).
@@ -88,14 +88,20 @@ export function resolvePairing(id: string | null | undefined): RegistryPairingId
   return isRegistryPairing(id) ? id : DEFAULT_REGISTRY_PAIRING;
 }
 
-/** The custom properties a registry root needs for colour; fonts are added by the page (they need the loaded faces). */
+/**
+ * The custom properties a registry root needs for colour. The names are the
+ * site's own (`--site-ink` …, as RGB channels) because Tailwind's `ink`,
+ * `paper`, `muted`, `line` and `accent` utilities and the shared
+ * `ContributeDialog` already read them; setting them on the registry's root
+ * element re-colours that whole subtree and nothing outside it. Fonts are added
+ * by the page, which holds the loaded faces.
+ */
 export function registryColourVars(id: string | null | undefined): Record<string, string> {
   const { tokens } = resolvePalette(id);
-  return {
-    "--r-ink": tokens.ink,
-    "--r-paper": tokens.paper,
-    "--r-muted": tokens.muted,
-    "--r-line": tokens.line,
-    "--r-accent": tokens.accent,
-  };
+  const vars: Record<string, string> = {};
+  for (const [name, hex] of Object.entries(tokens)) {
+    const channels = toRgbChannels(hex);
+    if (channels) vars[`--site-${name}`] = channels;
+  }
+  return vars;
 }

@@ -32,7 +32,7 @@ import { fail, ok, type ActionResult } from "./result";
  */
 
 const requestSchema = z.object({
-  kind: z.enum(["hero", "gallery", "story", "party", "stay"]).default("hero"),
+  kind: z.enum(["hero", "gallery", "story", "party", "stay", "registry"]).default("hero"),
   content_type: z.string().trim().max(100),
   byte_size: z.coerce.number().int().min(1),
   // Which narrower copies the browser made (spec 27 D1). Only the widths the
