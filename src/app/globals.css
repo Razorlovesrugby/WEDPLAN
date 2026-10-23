@@ -705,14 +705,21 @@
     color var(--dur-base) var(--ease-out),
     box-shadow var(--dur-base) var(--ease-out);
 }
-.site-rsvp-choice:hover {
-  border-color: rgb(var(--site-ink) / 0.5);
-  box-shadow: 0 10px 30px -18px rgb(var(--site-ink) / 0.45);
+/* Hover only where there is a pointer that hovers. On a phone `:hover` sticks
+   to whatever was last tapped until the next tap somewhere else, which leaves
+   a card lifted or a chip outlined that the guest never chose (spec 35 §4.2). */
+@media (hover: hover) {
+  .site-rsvp-choice:hover {
+    border-color: rgb(var(--site-ink) / 0.5);
+    box-shadow: 0 10px 30px -18px rgb(var(--site-ink) / 0.45);
+  }
 }
-@media (prefers-reduced-motion: no-preference) {
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .site-rsvp-choice:hover {
     transform: translateY(-2px);
   }
+}
+@media (prefers-reduced-motion: no-preference) {
   .site-rsvp-choice:active {
     transform: translateY(0) scale(0.99);
   }
@@ -794,8 +801,10 @@
     background-color var(--dur-base) var(--ease-out),
     color var(--dur-base) var(--ease-out);
 }
-.site-rsvp-toggle > button:hover {
-  color: rgb(var(--site-ink));
+@media (hover: hover) {
+  .site-rsvp-toggle > button:hover {
+    color: rgb(var(--site-ink));
+  }
 }
 .site-rsvp-toggle > button[aria-checked="true"] {
   background-color: rgb(var(--site-ink));
@@ -812,7 +821,10 @@
   width: 100%;
   padding: 0.5rem 0.125rem;
   border: 0;
-  border-bottom: 1px solid rgb(var(--site-line));
+  /* `muted` at 75% is the weakest that clears WCAG 1.4.11's 3:1 for a
+     control's boundary on every palette (lowest: 3.21, Dusk). `line` was
+     about 1.2:1 — a field you could miss (spec 35 §4.1). */
+  border-bottom: 1px solid rgb(var(--site-muted) / 0.75);
   border-radius: 0;
   background: transparent;
   color: rgb(var(--site-ink));
@@ -820,19 +832,23 @@
   outline: none;
   transition: border-color var(--dur-base) var(--ease-out);
 }
+/* Full `muted`, no opacity: at 80% it measured 3.5:1 on the light palettes,
+   under AA's 4.5 (spec 35 §4.1). */
 .site-rsvp-input::placeholder {
-  color: rgb(var(--site-muted) / 0.8);
+  color: rgb(var(--site-muted));
   font-style: italic;
 }
-.site-rsvp-input:hover {
-  border-bottom-color: rgb(var(--site-muted));
+@media (hover: hover) {
+  .site-rsvp-input:hover {
+    border-bottom-color: rgb(var(--site-muted));
+  }
 }
 .site-rsvp-input:focus {
   border-bottom-color: rgb(var(--site-accent));
   box-shadow: 0 1px 0 0 rgb(var(--site-accent));
 }
 textarea.site-rsvp-input {
-  border: 1px solid rgb(var(--site-line));
+  border: 1px solid rgb(var(--site-muted) / 0.75);
   border-radius: 10px;
   padding: 0.625rem 0.75rem;
 }
@@ -847,10 +863,10 @@ textarea.site-rsvp-input:focus {
   cursor: pointer;
 }
 .site-rsvp-chip > span {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 1rem;
+  padding: 0.45rem 1.15rem;
   border: 1px solid rgb(var(--site-line));
   border-radius: 9999px;
   background-color: rgb(var(--site-paper));
@@ -860,8 +876,10 @@ textarea.site-rsvp-input:focus {
     border-color var(--dur-base) var(--ease-out),
     color var(--dur-base) var(--ease-out);
 }
-.site-rsvp-chip:hover > span {
-  border-color: rgb(var(--site-ink) / 0.5);
+@media (hover: hover) {
+  .site-rsvp-chip:hover > span {
+    border-color: rgb(var(--site-ink) / 0.5);
+  }
 }
 .site-rsvp-chip.is-quiet > span {
   border-style: dashed;
@@ -872,9 +890,13 @@ textarea.site-rsvp-input:focus {
   background-color: rgb(var(--site-ink));
   color: rgb(var(--site-paper));
 }
+/* The tick sits in the chip's own left padding, so picking a chip never
+   changes its width and never shoves the chips beside it (spec 35 §4.5). */
 .site-rsvp-chip > input:checked + span::before {
   content: "✓";
-  font-size: 0.8em;
+  position: absolute;
+  left: 0.45rem;
+  font-size: 0.7em;
 }
 .site-rsvp-chip > input:focus-visible + span,
 .site-rsvp-choice:focus-visible,
@@ -902,12 +924,14 @@ textarea.site-rsvp-input:focus {
     box-shadow var(--dur-base) var(--ease-out),
     opacity var(--dur-base) var(--ease-out);
 }
-.site-rsvp-submit:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 28px -16px rgb(var(--site-ink) / 0.7);
-}
-.site-rsvp-submit:hover svg {
-  transform: translateX(3px);
+@media (hover: hover) {
+  .site-rsvp-submit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -16px rgb(var(--site-ink) / 0.7);
+  }
+  .site-rsvp-submit:hover svg {
+    transform: translateX(3px);
+  }
 }
 .site-rsvp-submit svg {
   transition: transform var(--dur-base) var(--ease-out);
@@ -917,15 +941,88 @@ textarea.site-rsvp-input:focus {
   pointer-events: none;
 }
 
-.site-rsvp-error {
+.site-rsvp-error,
+.site-rsvp-missing {
   color: rgb(185 28 28);
 }
-[data-site-tone="dark"] .site-rsvp-error {
+[data-site-tone="dark"] :is(.site-rsvp-error, .site-rsvp-missing) {
   color: rgb(252 165 165);
 }
 
-/* Petals that drift down once behind a "we'll be there". Decorative only;
-   nothing at all under reduced motion. */
+/* The Card look is itself one sheet; a person inside it is a section under a
+   rule, not a second card. Two borders and two paddings left a 390 px phone
+   with clipped placeholders and labels on two lines (spec 35 §4.3). */
+[data-look="card"]:not([data-rsvp-off~="flat_card_look"]) .site-rsvp-sheet {
+  border: 0;
+  border-top: 1px solid rgb(var(--site-line));
+  border-radius: 0;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+/* The calendar offer inside the confirmation (spec 27's WeekendCalendar)
+   takes the same rounded sheet. Scoped to the reply panel: the Schedule block
+   renders the same component square, among square things. */
+.site-rsvp-panel:not([data-rsvp-off~="round_calendar"]) .site-weekend {
+  border-radius: 12px;
+  background-color: rgb(var(--site-paper));
+}
+
+/* What each RSVP-block switch puts back when it is off (spec 35,
+   `rsvp-features.ts`). The form's root carries `data-rsvp-off` with the names
+   of the features switched off; the rules above are the "on" state. */
+
+/* readable_text off: the fainter hints and lines round one shipped with. */
+[data-rsvp-off~="readable_text"] .site-rsvp-input {
+  border-bottom-color: rgb(var(--site-line));
+}
+[data-rsvp-off~="readable_text"] textarea.site-rsvp-input {
+  border-color: rgb(var(--site-line));
+}
+[data-rsvp-off~="readable_text"] .site-rsvp-input::placeholder {
+  color: rgb(var(--site-muted) / 0.8);
+}
+
+/* touch_hover off: hover on every device, phones included. */
+[data-rsvp-off~="touch_hover"] .site-rsvp-choice:hover {
+  border-color: rgb(var(--site-ink) / 0.5);
+  box-shadow: 0 10px 30px -18px rgb(var(--site-ink) / 0.45);
+}
+[data-rsvp-off~="touch_hover"] .site-rsvp-toggle > button:hover {
+  color: rgb(var(--site-ink));
+}
+[data-rsvp-off~="touch_hover"] .site-rsvp-input:hover {
+  border-bottom-color: rgb(var(--site-muted));
+}
+[data-rsvp-off~="touch_hover"] .site-rsvp-chip:hover > span {
+  border-color: rgb(var(--site-ink) / 0.5);
+}
+[data-rsvp-off~="touch_hover"] .site-rsvp-submit:hover {
+  box-shadow: 0 12px 28px -16px rgb(var(--site-ink) / 0.7);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-rsvp-off~="touch_hover"] .site-rsvp-choice:hover {
+    transform: translateY(-2px);
+  }
+  [data-rsvp-off~="touch_hover"] .site-rsvp-submit:hover {
+    transform: translateY(-1px);
+  }
+}
+
+/* steady_chips off: the tick sits in the line and the chip grows to fit it. */
+[data-rsvp-off~="steady_chips"] .site-rsvp-chip > span {
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+}
+[data-rsvp-off~="steady_chips"] .site-rsvp-chip > input:checked + span::before {
+  position: static;
+  font-size: 0.8em;
+}
+
+/* Petals that drift down once behind a "we'll be there". Decorative only:
+   only under the motion effect `reply_petals`, and never under reduced motion. */
 .site-petals {
   position: absolute;
   inset: 0;
@@ -936,7 +1033,7 @@ textarea.site-rsvp-input:focus {
   display: none;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .site-petals > span {
+  [data-fx~="reply_petals"] .site-petals > span {
     display: block;
     position: absolute;
     top: -12px;
@@ -949,18 +1046,18 @@ textarea.site-rsvp-input:focus {
     animation: site-petal-fall 2.6s var(--ease-out) forwards;
     animation-delay: calc(var(--p) * 55ms);
   }
-  .site-petals > span:nth-child(3n) {
+  [data-fx~="reply_petals"] .site-petals > span:nth-child(3n) {
     width: 6px;
     height: 8px;
     background-color: rgb(var(--site-accent) / 0.35);
     animation-duration: 3.2s;
   }
-  .site-petals > span:nth-child(2n) {
+  [data-fx~="reply_petals"] .site-petals > span:nth-child(2n) {
     animation-name: site-petal-fall-alt;
   }
 
-  /* People arrive one after another rather than all at once. */
-  .site-rsvp-guest {
+  /* People arrive one after another rather than all at once (`reply_arrivals`). */
+  [data-fx~="reply_arrivals"] .site-rsvp-guest {
     animation: site-rsvp-in var(--dur-slow) var(--ease-out) both;
     animation-delay: calc(var(--i, 0) * 70ms);
   }

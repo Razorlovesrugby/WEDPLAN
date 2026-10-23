@@ -39,13 +39,18 @@ export const MOTION_EFFECTS = [
   "nav_condense",
   "photo_arrival",
   "stagger",
+  // Spec 35: the reply form's two pieces of movement.
+  "reply_arrivals",
+  "reply_petals",
 ] as const;
 export type MotionEffect = (typeof MOTION_EFFECTS)[number];
 
 /** What each level switches on. `still` is empty on purpose. */
 export const LEVEL_EFFECTS: Record<MotionLevel, readonly MotionEffect[]> = {
   still: [],
-  gentle: ["section_arrivals", "reading_line", "nav_condense"],
+  // The reply form's two were on for every site before they were switches, so
+  // Gentle keeps them; Still, as ever, has nothing.
+  gentle: ["section_arrivals", "reading_line", "nav_condense", "reply_arrivals", "reply_petals"],
   cinematic: [
     "cover_handover",
     "itinerary_draw",
@@ -54,6 +59,8 @@ export const LEVEL_EFFECTS: Record<MotionLevel, readonly MotionEffect[]> = {
     "nav_condense",
     "photo_arrival",
     "stagger",
+    "reply_arrivals",
+    "reply_petals",
   ],
 };
 
@@ -96,6 +103,14 @@ export const MOTION_EFFECT_COPY: Record<MotionEffect, { label: string; help: str
   nav_condense: { label: "Menu settles", help: "The menu is bare at the top and gains its bar once they scroll." },
   photo_arrival: { label: "Photographs arrive", help: "Photos settle into place as they enter." },
   stagger: { label: "Lists stagger in", help: "Rows of a list arrive one after another." },
+  reply_arrivals: {
+    label: "Reply form arrives person by person",
+    help: "Each person's card in the reply form fades up just after the one before.",
+  },
+  reply_petals: {
+    label: "Petals after a yes",
+    help: "A few petals drift down once behind the thank-you, when someone says they're coming.",
+  },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

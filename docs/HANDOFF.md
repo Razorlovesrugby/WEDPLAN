@@ -3,6 +3,42 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 41 (spec 35):** the guest RSVP form, restyled in the site's own theme.
+Round one (asked for as a change, built, merged as PR #73) moved the form off the
+planner's admin classes (`.card`/`.field`/`.btn-primary`) onto tokens-only
+`site-rsvp-*` styles in `globals.css`. Then a spec was written after the fact with a
+self-review. Round two was built on branch `claude/rsvp-form-restyle` (**no PR
+opened**) after "Can u build it"; none of the five questions was answered, so each
+took its recommendation. Read the spec's **Build status — round two**.
+
+- **Contrast:** placeholders now full `muted`; field lines `muted`/75% (3:1 on every
+  palette). **Hover** only under `@media (hover: hover)`. **Card look** no longer
+  nests cards.
+- **People who said no to everything** aren't asked for a meal or dietary needs
+  (`isNotComing`); their fields unmount, and what they typed is kept in state.
+- **Required chip questions** are checked by the form (`unansweredChips`), not the
+  browser: a message under each one, a count by the button, and focus on the first.
+  A required choose-several is now enforced; it never was before.
+- **Event times** come in as `eventWhen`, formatted on the server. **Never format a
+  date inside `RsvpForm`**: Node's and Chromium's `Intl` differ, and it hydrates with
+  a mismatch.
+- **Verified:** typecheck, 1090 unit tests, `next build` (placeholder env), and
+  scripted checks in headless Chromium with sample data. **Not verified:**
+  Supabase, a real phone, a screen reader. `ReplyBanner` was never rendered.
+- **Then every change became a switch** ("make sure that all of the changes are
+  optional and toggleable"; asked, and answered "literally everything", "on the RSVP
+  block"). `BlockStyle.rsvpOff` lists what is off (absent means all on, so no
+  migration): 18 features in `src/lib/site/rsvp-features.ts`. Ticked in a "Reply
+  form" panel on the RSVP block in the site editor, and listed in `switches.ts` as
+  `rsvp.*`. The petals and the arrivals are now motion effects (`reply_petals`,
+  `reply_arrivals`): on in Gentle and Cinematic, **off under Still**, which they
+  used to ignore. With every switch off you get the original form.
+- **Verified:** 1097 tests, `next build`, and each switch on and off by script in
+  Chromium. **Not verified:** the editor panel was never rendered; Supabase. One
+  test run failed once and could not be reproduced (eight clean runs since).
+- **Pick up here:** the spec's "Pick up here", on a real phone. Then, in the
+  editor, untick a few Reply form switches and reload the household page.
+
 **Session 40 (spec 34):** the music section, built end to end on branch
 `claude/spec-31-music-section` (**no PR opened**). Asked for as a spec, the nine
 questions put and answered, then "Yea build plz" as its own turn. Read the spec's

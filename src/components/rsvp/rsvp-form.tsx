@@ -4,12 +4,19 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { submitRsvp } from "@/server/actions/rsvp";
 import { guestName } from "@/lib/format";
-import { guestFacingStatus, householdReply, replyToAll } from "@/lib/rsvp-household";
+import {
+  guestFacingStatus,
+  householdReply,
+  isNotComing,
+  replyToAll,
+  unansweredChips,
+} from "@/lib/rsvp-household";
 import { replyConfirmation, summariseReply } from "@/lib/site/reply-state";
 import { withViewTransition } from "@/lib/view-transition";
 import { PREVIEW_NOT_SENT } from "@/lib/site/preview-guard";
 import { WeekendCalendar } from "@/components/site/weekend-calendar";
 import { QuestionField, type AnswerValue } from "./question-field";
+import { rsvpOffAttribute, type RsvpFeature } from "@/lib/site/rsvp-features";
 import type {
   EventRow,
   GuestRow,
@@ -46,10 +53,11 @@ export function RsvpForm({
   replyBy,
   eventWhen,
   look = "inline",
+  off = [],
 }: {
   /**
    * The household's credential. **Null only in the editor's preview** (spec 28
-   * §4.3): the form then works in every way except that "Confirm" says nothing
+   * §4.3): the form then works in every way except that "Send" says nothing
    * was sent and calls no action.
    */
   token: string | null;
@@ -84,7 +92,14 @@ export function RsvpForm({
   replyBy?: string | null;
   /** `inline` (the form as it always was) or `card` — the block's Look (spec 27 E1). */
   look?: string;
+  /**
+   * The block's switched-off features (spec 35, `rsvp-features.ts`). Each one
+   * off puts back what the form did before that change. Empty: all on.
+   */
+  off?: readonly RsvpFeature[];
 }) {
+  const on = (feature: RsvpFeature) => !off.includes(feature);
+  const offAttr = rsvpOffAttribute(off);
   const router = useRouter();
   // Once they have sent it, the form gives way to a card that says back what
   // they said (spec 27 §7). Both live in this component, so "Change my reply"
@@ -143,6 +158,9 @@ export function RsvpForm({
   );
 
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  // Set by a send that stopped on an unanswered required chip question; from
+  // then on each one says so until it is answered (spec 35 §6 item 7).
+  const [showMissing, setShowMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -153,6 +171,18 @@ export function RsvpForm({
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // The browser has already checked the text boxes; the chips are ours.
+    const firstMissing = missingKeys()[0];
+    if (firstMissing) {
+      setShowMissing(true);
+      const group = event.currentTarget.querySelector<HTMLElement>(
+        `[data-question="${firstMissing}"]`,
+      );
+      group?.scrollIntoView({ block: "center", behavior: "smooth" });
+      group?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+      return;
+    }
 
     // No token, nothing to send with (the preview). Show the confirmation a
     // guest would get — it is part of what the planner is designing — and say
@@ -202,15 +232,59 @@ export function RsvpForm({
   const guestQuestions = questions.filter((q) => q.scope === "guest");
   const householdQuestions = questions.filter((q) => q.scope === "household");
 
+  /**
+   * Every required chip question nobody has answered, as the `data-question`
+   * key its fieldset carries — `<guest id>-<question id>`, or
+   * `household-<question id>`. Somebody who isn't coming is not asked, so
+   * is not counted.
+   */
+  function missingKeys(): string[] {
+    // Off, or without chips: the browser checks `required` itself, as before.
+    if (!on("own_required_check") || !on("chips")) return [];
+    const forGuests = state
+      .filter((guest) => Object.keys(guest.responses).length > 0 && !skipped(guest.responses))
+      .flatMap((guest) =>
+        unansweredChips(guestQuestions, guest.answers).map((id) => `${guest.guestId}-${id}`),
+      );
+    const forHousehold = unansweredChips(householdQuestions, householdAnswers).map(
+      (id) => `household-${id}`,
+    );
+    return [...forGuests, ...forHousehold];
+  }
+  const missing = new Set(showMissing ? missingKeys() : []);
+
+  /** Not asked the rest: has said no to everything, and the switch is on. */
+  function skipped(responses: Record<string, RsvpStatus>): boolean {
+    return on("skip_not_coming") && isNotComing(responses);
+  }
+
+  const wording = on("new_wording");
+  // What every field label looks like: the site's letterspaced label over a
+  // ruled line, or the plain label over a box it had before.
+  const fieldLabel = on("ruled_fields")
+    ? "site-label mb-1 block text-muted"
+    : "mb-1 block text-sm font-medium";
+  const fieldClass = on("ruled_fields") ? "site-rsvp-input" : "field";
+  const error_ = on("readable_text") ? "site-rsvp-error text-sm" : "text-sm text-red-700";
+
   if (locked) {
     return (
-      <div className="site-rsvp-sheet p-6 text-center sm:p-8">
-        <span className="site-label text-muted">Replies are closed</span>
-        <p className="mt-3 text-[1.0625rem] leading-relaxed">
-          RSVPs have closed, so this can no longer be changed. If something has come up, please
-          get in touch with the couple directly.
-        </p>
-      </div>
+      on("soft_panels") ? (
+        <div className="site-rsvp-sheet p-6 text-center sm:p-8" {...offAttr}>
+          <span className="site-label text-muted">Replies are closed</span>
+          <p className="mt-3 text-[1.0625rem] leading-relaxed">
+            RSVPs have closed, so this can no longer be changed. If something has come up, please
+            get in touch with the couple directly.
+          </p>
+        </div>
+      ) : (
+        <div className="card p-5" {...offAttr}>
+          <p className="text-sm">
+            RSVPs have closed, so this can no longer be changed. If something has come up, please
+            get in touch with the couple directly.
+          </p>
+        </div>
+      )
     );
   }
 
@@ -263,9 +337,15 @@ export function RsvpForm({
     const { heading, lines } = replyConfirmation(summary);
 
     return (
-      <div className="site-rsvp-panel site-rsvp-sheet relative overflow-hidden p-8 text-center sm:p-12" role="status">
-        {/* A little celebration for a yes. Pure CSS, decorative, and gone
-            entirely under reduced motion (globals.css). */}
+      <div
+        className={`site-rsvp-panel relative overflow-hidden text-center ${
+          on("soft_panels") ? "site-rsvp-sheet p-8 sm:p-12" : "card p-8"
+        }`}
+        role="status"
+        {...offAttr}
+      >
+        {/* A little celebration for a yes. Pure CSS, decorative, and only
+            under the motion effect `reply_petals` (globals.css). */}
         {summary.coming.length > 0 ? <Petals /> : null}
         <svg
           className="site-check mx-auto h-14 w-14 text-accent"
@@ -322,7 +402,11 @@ export function RsvpForm({
 
         <button
           type="button"
-          className="mt-8 text-sm text-muted underline decoration-line underline-offset-4 transition-colors hover:text-ink hover:decoration-accent"
+          className={
+            on("soft_panels")
+              ? "mt-8 text-sm text-muted underline decoration-line underline-offset-4 transition-colors hover:text-ink hover:decoration-accent"
+              : "mt-6 text-sm text-muted underline underline-offset-2"
+          }
           onClick={() =>
             withViewTransition(() => {
               setStatus("idle");
@@ -342,12 +426,20 @@ export function RsvpForm({
     Object.values(guestState.responses).every((value) => value !== "pending"),
   ).length;
   const card = look === "card";
+  const personCards = on("person_cards");
 
   return (
     <form
       onSubmit={onSubmit}
       data-look={look}
-      className={`site-rsvp-panel space-y-6 ${card ? "site-rsvp-sheet p-5 sm:p-8" : ""}`}
+      {...offAttr}
+      className={`site-rsvp-panel space-y-6 ${
+        card
+          ? on("soft_panels")
+            ? "site-rsvp-sheet p-5 sm:p-8"
+            : "site-rsvp-card border border-line p-5 sm:p-8"
+          : ""
+      }`}
     >
       {card ? (
         <div>
@@ -360,9 +452,20 @@ export function RsvpForm({
           {/* A line that fills as each person is answered for. It carries no
               information the sentence above does not, so it is hidden from
               assistive tech rather than read out twice. */}
-          <div aria-hidden="true" className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-line">
+          <div
+            aria-hidden="true"
+            className={
+              on("soft_panels")
+                ? "mt-3 h-[3px] w-full overflow-hidden rounded-full bg-line"
+                : "mt-2 h-px w-full bg-line"
+            }
+          >
             <div
-              className="h-full rounded-full bg-accent transition-[width] duration-[400ms] ease-out"
+              className={
+                on("soft_panels")
+                  ? "h-full rounded-full bg-accent transition-[width] duration-[400ms] ease-out"
+                  : "h-px bg-accent transition-[width] duration-[400ms]"
+              }
               style={{ width: `${answering.length === 0 ? 0 : (answeredPeople / answering.length) * 100}%` }}
             />
           </div>
@@ -374,11 +477,31 @@ export function RsvpForm({
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
         {(
           [
-            { value: "yes", title: answering.length > 1 ? "Yes, we'll be there" : "Yes, I'll be there", note: "We'll save you a seat" },
-            { value: "no", title: "Sadly, can't make it", note: "We'll miss you" },
+            {
+              value: "yes",
+              title: wording && answering.length === 1 ? "Yes, I'll be there" : "Yes, we'll be there",
+              note: "We'll save you a seat",
+            },
+            { value: "no", title: wording ? "Sadly, can't make it" : "Not able to", note: "We'll miss you" },
           ] as const
         ).map((choice) => {
           const active = collective === choice.value;
+          if (!on("answer_cards")) {
+            return (
+              <button
+                key={choice.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => replyForEveryone(choice.value)}
+                className={`rounded border p-[26px_28px] text-left transition-colors ${
+                  active ? "border-ink bg-ink text-paper" : "border-line bg-white hover:border-ink"
+                }`}
+              >
+                <span className="site-heading block text-2xl">{choice.title}</span>
+                <span className="site-label mt-2 block opacity-70">{choice.note}</span>
+              </button>
+            );
+          }
           return (
             <button
               key={choice.value}
@@ -400,9 +523,11 @@ export function RsvpForm({
         })}
       </div>
 
-      <p className="site-rsvp-divider site-label text-muted" aria-hidden="true">
-        or answer one by one
-      </p>
+      {on("divider") ? (
+        <p className="site-rsvp-divider site-label text-muted" aria-hidden="true">
+          or answer one by one
+        </p>
+      ) : null}
 
       {answering.map((guestState, index) => {
         const guest = guests.find((g) => g.id === guestState.guestId)!;
@@ -410,38 +535,59 @@ export function RsvpForm({
         return (
           <fieldset
             key={guest.id}
-            className="site-rsvp-sheet site-rsvp-guest p-5 sm:p-7"
+            className={
+              personCards ? "site-rsvp-sheet site-rsvp-guest p-5 sm:p-7" : "site-rsvp-guest card p-5"
+            }
             style={{ ["--i" as string]: index }}
           >
-            <legend className="sr-only">{title}</legend>
-            <div className="flex items-center gap-3" aria-hidden="true">
-              <span className="site-rsvp-initial">{initialOf(guestState.name || title)}</span>
-              <span className="site-heading text-2xl leading-tight">{guestState.name || title}</span>
-            </div>
+            {personCards ? (
+              <>
+                <legend className="sr-only">{title}</legend>
+                <div className="flex items-center gap-3" aria-hidden="true">
+                  <span className="site-rsvp-initial">{initialOf(guestState.name || title)}</span>
+                  <span className="site-heading text-2xl leading-tight">{guestState.name || title}</span>
+                </div>
+              </>
+            ) : (
+              <legend className="px-1 font-serif text-lg">{title}</legend>
+            )}
 
             {guest.is_plus_one ? (
-              <label className="mt-5 block">
-                <span className="site-label mb-1 block text-muted">Their name</span>
+              <label className={`${personCards ? "mt-5" : "mt-2"} block`}>
+                <span className={fieldLabel}>Their name</span>
                 <input
                   value={guestState.name}
                   onChange={(e) => updateGuest(guest.id, { name: e.target.value })}
                   placeholder="So we can write their place card"
-                  className="site-rsvp-input"
+                  className={fieldClass}
                 />
               </label>
             ) : null}
 
-            <ul className="mt-5 divide-y divide-line border-y border-line">
+            <ul
+              className={
+                personCards ? "mt-5 divide-y divide-line border-y border-line" : "mt-4 space-y-3"
+              }
+            >
               {eventsFor(guest.id).map((event) => (
-                <li key={event.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3.5">
+                <li
+                  key={event.id}
+                  className={
+                    personCards
+                      ? "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3.5"
+                      : "flex flex-wrap items-center justify-between gap-2"
+                  }
+                >
                   <span className="min-w-0">
-                    <span className="block text-[1.0625rem]">{event.name}</span>
-                    {eventWhen?.[event.id] ? (
+                    <span className={personCards ? "block text-[1.0625rem]" : "block text-sm"}>
+                      {event.name}
+                    </span>
+                    {on("event_times") && eventWhen?.[event.id] ? (
                       <span className="site-label mt-0.5 block text-muted">{eventWhen[event.id]}</span>
                     ) : null}
                   </span>
                   <div
-                    className="site-rsvp-toggle"
+                    className={on("pill_toggles") ? "site-rsvp-toggle" : "flex gap-1"}
                     role="radiogroup"
                     aria-label={`${guestName(guest)} — ${event.name}`}
                     data-value={guestState.responses[event.id]}
@@ -459,6 +605,15 @@ export function RsvpForm({
                               responses: { ...guestState.responses, [event.id]: choice.value },
                             })
                           }
+                          className={
+                            on("pill_toggles")
+                              ? undefined
+                              : `rounded border px-3 py-1.5 text-sm ${
+                                  active
+                                    ? "border-ink bg-ink text-white"
+                                    : "border-line bg-white hover:bg-line/40"
+                                }`
+                          }
                         >
                           {choice.label}
                         </button>
@@ -469,57 +624,82 @@ export function RsvpForm({
               ))}
             </ul>
 
-            <div className="space-y-5 pt-5">
-              <label className="block">
-                <span className="site-label mb-1 block text-muted">Dietary requirements</span>
-                <input
-                  value={guestState.dietary}
-                  onChange={(e) => updateGuest(guest.id, { dietary: e.target.value })}
-                  placeholder="Vegetarian, coeliac, allergies — anything the kitchen should know"
-                  className="site-rsvp-input"
-                />
-              </label>
+            {/* Somebody who has said no to everything is not asked for a meal
+                or dietary needs (spec 35 Q2). The fields unmount, so nothing
+                hidden can block the send, but what they typed stays in state
+                and comes back if they switch an event to yes. */}
+            {skipped(guestState.responses) ? (
+              <p className="pt-4 text-[0.95rem] italic text-muted">
+                Not coming, so there&rsquo;s nothing more to ask. Switch an event to Yes to
+                change that.
+              </p>
+            ) : (
+              <div className={personCards ? "space-y-5 pt-5" : "space-y-3 pt-4"}>
+                <label className="block">
+                  <span className={fieldLabel}>Dietary requirements</span>
+                  <input
+                    value={guestState.dietary}
+                    onChange={(e) => updateGuest(guest.id, { dietary: e.target.value })}
+                    placeholder="Vegetarian, coeliac, allergies — anything the kitchen should know"
+                    className={fieldClass}
+                  />
+                </label>
 
-              <label className="block">
-                <span className="site-label mb-1 block text-muted">Anything else we should arrange?</span>
-                <input
-                  value={guestState.accessibility}
-                  onChange={(e) => updateGuest(guest.id, { accessibility: e.target.value })}
-                  placeholder="Step-free access, a seat near the front, a high chair…"
-                  className="site-rsvp-input"
-                />
-              </label>
+                <label className="block">
+                  <span className={fieldLabel}>Anything else we should arrange?</span>
+                  <input
+                    value={guestState.accessibility}
+                    onChange={(e) => updateGuest(guest.id, { accessibility: e.target.value })}
+                    placeholder="Step-free access, a seat near the front, a high chair…"
+                    className={fieldClass}
+                  />
+                </label>
 
-              {guestQuestions.map((question) => (
-                <QuestionField
-                  key={question.id}
-                  question={question}
-                  idPrefix={guest.id}
-                  value={guestState.answers[question.id]}
-                  onChange={(value) =>
-                    updateGuest(guest.id, {
-                      answers: { ...guestState.answers, [question.id]: value },
-                    })
-                  }
-                />
-              ))}
-            </div>
+                {guestQuestions.map((question) => (
+                  <QuestionField
+                    key={question.id}
+                    question={question}
+                    idPrefix={guest.id}
+                    chips={on("chips")}
+                    ruled={on("ruled_fields")}
+                    ownCheck={on("own_required_check")}
+                    missing={missing.has(`${guest.id}-${question.id}`)}
+                    value={guestState.answers[question.id]}
+                    onChange={(value) =>
+                      updateGuest(guest.id, {
+                        answers: { ...guestState.answers, [question.id]: value },
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </fieldset>
         );
       })}
 
       {householdQuestions.length > 0 ? (
-        <fieldset className="site-rsvp-sheet p-5 sm:p-7">
-          <legend className="sr-only">A few last things</legend>
-          <span className="site-heading block text-2xl leading-tight" aria-hidden="true">
-            A few last things
-          </span>
-          <div className="space-y-5 pt-5">
+        <fieldset className={personCards ? "site-rsvp-sheet p-5 sm:p-7" : "card p-5"}>
+          {personCards ? (
+            <>
+              <legend className="sr-only">A few last things</legend>
+              <span className="site-heading block text-2xl leading-tight" aria-hidden="true">
+                A few last things
+              </span>
+            </>
+          ) : (
+            <legend className="px-1 font-serif text-lg">A few last things</legend>
+          )}
+          <div className={personCards ? "space-y-5 pt-5" : "space-y-3 pt-1"}>
             {householdQuestions.map((question) => (
               <QuestionField
                 key={question.id}
                 question={question}
                 idPrefix="household"
+                chips={on("chips")}
+                ruled={on("ruled_fields")}
+                ownCheck={on("own_required_check")}
+                missing={missing.has(`household-${question.id}`)}
                 value={householdAnswers[question.id]}
                 onChange={(value) =>
                   setHouseholdAnswers((prev) => ({ ...prev, [question.id]: value }))
@@ -530,22 +710,44 @@ export function RsvpForm({
         </fieldset>
       ) : null}
 
-      <div className="flex flex-col items-center gap-3 pt-2 text-center">
-        <button type="submit" className="site-rsvp-submit" disabled={pending}>
-          <span>{pending ? "Sending…" : answering.length > 1 ? "Send our reply" : "Send my reply"}</span>
-          {pending ? null : (
+      <div
+        className={
+          on("pill_button")
+            ? "flex flex-col items-center gap-3 pt-2 text-center"
+            : "flex flex-wrap items-center gap-3"
+        }
+      >
+        <button
+          type="submit"
+          className={on("pill_button") ? "site-rsvp-submit" : "btn-primary"}
+          disabled={pending}
+        >
+          <span>
+            {wording
+              ? pending
+                ? "Sending…"
+                : answering.length > 1
+                  ? "Send our reply"
+                  : "Send my reply"
+              : pending
+                ? "Saving…"
+                : "Confirm our RSVP"}
+          </span>
+          {pending || !on("pill_button") ? null : (
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true" focusable="false">
               <path d="M4 10h11m-4-4.5L15.5 10 11 14.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </button>
-        {status === "saved" ? (
-          <span className="text-sm text-muted">
-            Saved, thank you. Come back and change it whenever.
+        {missing.size > 0 ? (
+          <span className="site-rsvp-missing text-sm" role="alert">
+            {missing.size === 1
+              ? "One question still needs an answer."
+              : `${missing.size} questions still need an answer.`}
           </span>
         ) : null}
         {status === "error" && error ? (
-          <span className="site-rsvp-error text-sm" role="alert">
+          <span className={error_} role="alert">
             {error}
           </span>
         ) : null}

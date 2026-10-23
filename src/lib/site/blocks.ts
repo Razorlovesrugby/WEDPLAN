@@ -22,6 +22,7 @@
  */
 
 import type { FontId } from "@/lib/theme/text-style";
+import type { RsvpFeature } from "./rsvp-features";
 
 export const BLOCK_AUDIENCES = ["everyone", "invited", "public_only"] as const;
 export type BlockAudience = (typeof BLOCK_AUDIENCES)[number];
@@ -95,6 +96,12 @@ export type BlockStyle = {
   mutedColour?: string;
   /** This block's body font — a name from `FONT_IDS`, never a CSS string. */
   bodyFont?: FontId;
+  /**
+   * The RSVP form's features switched off on this block (spec 35), from the
+   * closed list in `rsvp-features.ts`. **Absent means every one on**, so every
+   * existing RSVP block keeps the form it shows today. Ignored by other blocks.
+   */
+  rsvpOff?: RsvpFeature[];
 };
 
 /**
@@ -120,6 +127,7 @@ export const BLOCK_STYLE_KEYS = [
   "textColour",
   "mutedColour",
   "bodyFont",
+  "rsvpOff",
 ] as const satisfies readonly (keyof BlockStyle)[];
 
 // Fails to compile if `BlockStyle` gains a key this list does not name.

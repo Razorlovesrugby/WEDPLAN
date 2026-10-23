@@ -1,5 +1,6 @@
 import type { BlockType } from "./blocks";
 import { MOTION_EFFECTS, MOTION_EFFECT_COPY, type MotionEffect } from "./motion";
+import { RSVP_FEATURES, RSVP_FEATURE_COPY } from "./rsvp-features";
 
 /**
  * Every switch the planner has (spec 27 §4, E9): "everything is a switch."
@@ -21,7 +22,7 @@ import { MOTION_EFFECTS, MOTION_EFFECT_COPY, type MotionEffect } from "./motion"
  * the failure spec 23 §7 named.
  */
 
-export type SwitchGroup = "motion" | "layout" | "cover" | "personal" | "photos";
+export type SwitchGroup = "motion" | "layout" | "cover" | "personal" | "photos" | "rsvp";
 
 export type SwitchDef = {
   /** Stable, dotted. `motion.reading_line`. */
@@ -50,6 +51,8 @@ const MOTION_WHEN_OFF: Record<MotionEffect, string> = {
   nav_condense: "The menu keeps its bar at all times.",
   photo_arrival: "Photographs are plain images.",
   stagger: "A list arrives together.",
+  reply_arrivals: "Everyone in the reply form is simply there.",
+  reply_petals: "The thank-you shows its tick, with nothing falling behind it.",
 };
 
 const motionSwitches: SwitchDef[] = MOTION_EFFECTS.map((effect) => ({
@@ -117,8 +120,24 @@ const personalSwitches: SwitchDef[] = [
   },
 ];
 
+/**
+ * The reply form's switches (spec 35): one per change, stored on the RSVP
+ * block's style as the list of what is off. Some are fixes rather than
+ * decoration, against this file's rule above — the planner asked for them to
+ * be switchable, and each one's `whenOff` says what turning it off costs.
+ */
+const rsvpSwitches: SwitchDef[] = RSVP_FEATURES.map((feature) => ({
+  id: `rsvp.${feature}`,
+  group: "rsvp",
+  label: RSVP_FEATURE_COPY[feature].label,
+  where: "RSVP block → Reply form",
+  defaultOn: true,
+  whenOff: RSVP_FEATURE_COPY[feature].whenOff,
+}));
+
 export const SWITCHES: SwitchDef[] = [
   ...coverSwitches,
+  ...rsvpSwitches,
   ...blockStyleSwitches,
   ...personalSwitches,
   ...motionSwitches,

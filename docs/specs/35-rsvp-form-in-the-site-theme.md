@@ -1,13 +1,36 @@
 # Feature spec: The RSVP form, in the site's own theme
 
-**Status: round one built (2026-10-15) on branch `claude/rsvp-form-restyle`, no PR
-opened. Round two (§6) is a proposal only — not built, not authorised.**
+**Status: round one built (2026-10-15, merged as PR #73). Round two (§6 items 1–8)
+built (2026-10-23) on branch `claude/rsvp-form-restyle`, no PR opened.** "Can u
+build it" came with none of §7 answered, so **each question took its
+recommendation** (see **Answered**). See **Build status — round two** at the end.
+**Seen only in headless Chromium with sample data. Never run against Supabase,
+never on a real phone, and never with a screen reader.**
 
-Round one was asked for directly as a change, not as a spec, and was built in the
-same session. This spec was written afterwards, at the planner's request, to record
-what was done and to review it honestly. **Seen only in headless Chromium, with sample
-data, through a temporary page that was deleted and never committed. It has never
-run against Supabase and has never been seen on a real household page or a real phone.**
+## Answered — 2026-10-23 (recommendations taken, not chosen)
+
+| Q | Answer | What it changed |
+| --- | --- | --- |
+| 1 | **Keep the new copy.** | §3.2 stands. |
+| 2 | **Don't ask somebody who isn't coming.** | §6 item 5 built. |
+| 3 | **Keep the petals.** | No change. |
+| 4 | **Items 1–8.** | Song requests and guestbook (item 9) not touched. |
+| 5 | No recommendation was given; **left as "15:00"**, the smallest change. | No change. |
+
+Any of these can still be reversed.
+
+## Answered — 2026-10-23, later: "Make sure that all of the changes are optional and toggleable"
+
+Two questions were put, and answered:
+
+| Question | Answer |
+| --- | --- |
+| Which changes get a switch? | **Literally everything**, readability and phone fixes included. This was chosen over "design choices only", which was the recommendation. |
+| Where do the switches live? | **On the RSVP block** (recommended). The petals and the person-by-person arrival go in the existing **Motion** list, so the Still level turns them off. |
+
+Built the same session; see **Build status — switches**. This goes against the rule in
+`switches.ts` that correctness is not a switch. The planner asked for it explicitly, so
+each fix's switch says plainly what turning it off costs.
 
 ## 1. What was asked
 
@@ -252,8 +275,153 @@ in headless Chromium.
    form), or 1–9 (the other guest forms too)? *Recommendation: 1–8.*
 5. **24-hour times** (§4.5). Leave "15:00", or switch the whole site to "3:00 pm"?
 
-## 8. Pick up here
+## 8. Pick up here (round one)
 
 Open a household's link on a real phone with the branch deployed. Answer "Yes" for
 everyone, pick a meal for each person, send, and watch the confirmation. Then switch
 the palette to Midnight and do it again. Then answer §7.
+
+## Build status — round two (2026-10-23)
+
+Six files: `globals.css`, `rsvp-form.tsx`, `question-field.tsx`, `reply-banner.tsx`,
+`src/lib/rsvp-household.ts` (+ test). No migration, no server change.
+
+| Item | What was done |
+| --- | --- |
+| 1 | Placeholder is full `muted` (4.5:1 or better on every palette, from §4.1's own numbers). |
+| 2 | Every `site-rsvp-*` hover rule is inside `@media (hover: hover)`; the press (`:active`) is not. |
+| 3 | `[data-look="card"] .site-rsvp-sheet`: inside the Card look, a person (and "A few last things") is a section under a rule. |
+| 4 | Chip tick sits in the chip's left padding, so width never changes. The dead "Saved" line, the unused `peer` and the stale "Confirm" comment are gone. |
+| 5 | `isNotComing(responses)` (in `src/lib/rsvp-household.ts`). A person who said no to every invited event sees "Not coming, so there's nothing more to ask. Switch an event to Yes to change that." in place of their fields. The fields **unmount**, so nothing hidden can block the send; what they typed stays in form state and comes back. The plus-one name box still shows. **What is sent is unchanged**: their state, typed text included, still goes to `submitRsvp` as before. |
+| 6 | Field underline is `muted` at 75%: the weakest that clears 3:1 on all eight palettes (lowest 3.21, Dusk). Long-text boxes use the same border. |
+| 7 | Chip questions no longer carry `required`. `unansweredChips()` (`src/lib/rsvp-household.ts`) runs on send, after the browser has checked the text boxes. If any are unanswered: "Please pick one." / "Please pick at least one." under each question, a count beside the button (`role="alert"`), the first one scrolled to the middle and its first chip focused. Each message goes as soon as it is answered. The legend says "(required)" to screen readers, since the inputs no longer do. People who aren't coming are not counted. |
+| 8 | `WeekendCalendar` is rounded **inside the reply panel only** (the Schedule block's copy stays square among square things). `ReplyBanner` uses the sheet, a ruled textarea and the site's `std-button` pill. The reply bar already matched (ink bar, pill action), so it is unchanged. |
+
+**One behaviour change to know about:** a *required* choose-several question was
+never enforced before, because checkboxes carried no `required`. It is now: the
+form asks for at least one. Text, number and yes/no-as-text questions are still
+checked by the browser, as before. `submitRsvp` still checks nothing for required
+answers, so a guest with JavaScript off is unaffected either way.
+
+**Verified:**
+
+- Typecheck is clean.
+- **1090 unit tests**, five of them new: `isNotComing`, `isChipQuestion` and
+  `unansweredChips`.
+- `next build` succeeds, using placeholder environment variables.
+- Headless Chromium, using a temporary page with sample data (deleted, never
+  committed), checked by script rather than by eye:
+  - **Not coming:** a person who said no to everything sees the "Not coming" line
+    instead of their fields.
+  - **Sending with unanswered questions:** shows 3 messages plus the count, stays
+    on the form, and focuses the first one (`a-q1`).
+  - **Answering one:** removes its message.
+  - **On a touch device:** `(hover: hover)` is false, and a tapped card's
+    `transform` is `none`.
+  - **Chip width** is 86.69 px both before and after picking.
+  - **Text kept:** "No nuts" typed, then switched to No (fields hidden), then back
+    to Yes, comes back intact.
+  - **Full send** in Evening + Midnight reaches the confirmation, with the
+    rounded calendar box.
+  - No console errors.
+
+  The script check also caught the item 3 selector matching nothing (the outer
+  sheet *is* the `[data-look]` element); fixed and re-shot.
+
+**Not verified:**
+
+- `ReplyBanner` was never rendered. It needs a real token and calls a server action
+  on mount, so it was checked only by typecheck and build.
+- Supabase.
+- iOS Safari, a real touch screen, VoiceOver. These are the checks §6 called for,
+  and they are still owed.
+- `verify-migrations.sh` was not run, as there is no SQL in this change.
+
+**Pick up here:** §8, plus: on a real phone, leave the main course unanswered and
+press Send, and check that the page scrolls to it and says so. Then answer No for
+one person and check their questions go away.
+
+## Build status — switches (2026-10-23)
+
+**How it is stored.** It follows `lightbox`: the RSVP block's style gains `rsvpOff`,
+the list of features switched **off** (`src/lib/site/rsvp-features.ts`,
+`RSVP_FEATURES`). When nothing is off the key is absent, so every existing block keeps
+everything on. **There is no migration**, because block style is already JSON. The
+style schema accepts only names from the list. `BLOCK_STYLE_KEYS` gained `rsvpOff`
+(the compile-time guard insisted).
+
+**Where the planner finds it.** In the site editor, on the RSVP block, there is a
+"Reply form" panel with three groups of tick boxes: How it looks, Readability and
+phones, What it asks. Each box says what happens when it is off. A switch that
+depends on another (`steady_chips` and `own_required_check` need `chips`;
+`readable_text` needs `ruled_fields`) dims, and says it has no effect while the one
+it needs is off. All of them are also in the site's switch registry, as `rsvp.<name>`.
+
+| Switch | Off puts back |
+| --- | --- |
+| `answer_cards` | Plain square "all of us" boxes |
+| `person_cards` | A `.card` per person with a serif legend; events as plain rows |
+| `divider` | No "or answer one by one" line |
+| `event_times` | Event name only |
+| `pill_toggles` | Small square Yes/No buttons |
+| `ruled_fields` | Boxed `.field` inputs with plain labels |
+| `chips` | Native radios, tick boxes and the yes/no `<select>`, all with the browser's `required` (`ClassicChoice` in `question-field.tsx`) |
+| `pill_button` | Square `btn-primary` on the left |
+| `soft_panels` | Square confirmation, closed note and Card frame; hairline progress bar |
+| `new_wording` | "Not able to", "Confirm our RSVP", "Saving…" |
+| `readable_text` | Placeholder `muted`/80%, field lines in `line`, red-700 error text |
+| `touch_hover` | Hover everywhere, phones included |
+| `flat_card_look` | Cards inside the Card layout |
+| `steady_chips` | Tick inline; the chip grows when picked |
+| `skip_not_coming` | Everyone is asked everything |
+| `own_required_check` | Chips carry `required`; the browser warns; a required pick-several is not enforced |
+| `round_calendar` | Square calendar box in the confirmation |
+| `banner_style` | The email-reply banner's older square look. Read from the page's RSVP block in `/w/[slug]/[household]/page.tsx` |
+
+The motion effects are `reply_arrivals` and `reply_petals`. They are in Gentle and
+Cinematic, which keeps them on wherever they showed before, and **off under Still,
+which they ignored until now**. Each can also be switched on its own under
+Motion → Customise.
+
+**How the stylesheet reads it.** The form's root carries `data-rsvp-off="…"`. The
+fix-type switches are rules in `globals.css` that apply only when their name is in
+that attribute. The petals and arrivals use `[data-fx~="reply_petals"]` and
+`[data-fx~="reply_arrivals"]`.
+
+**Verified:**
+
+- Typecheck is clean.
+- **1097 unit tests**, seven of them new in `rsvp-features.test.ts`. They check:
+  - an absent or unknown value reads as all on;
+  - only what is off is stored;
+  - the schema accepts the list and rejects unknown names;
+  - every switch says what happens when it is off and is in the registry.
+
+  One existing test (`motion.test.ts`) was changed: Gentle's effect list now
+  includes the two reply effects.
+- `next build` succeeds, using placeholder environment variables.
+- Headless Chromium, using a temporary page with sample data (deleted, never
+  committed). Every switch was checked on and off by script:
+  - **All off** is the original form: 9 native radios, a `<select>`, 10 boxed
+    fields, "Confirm our RSVP", "Not able to", no divider, no times, `.card`
+    fieldsets, Tom asked everything, and the browser blocks the send. A screenshot
+    matches the pre-spec form.
+  - **All on** is unchanged from round two.
+  - `readable_text` changes the placeholder colour.
+  - `touch_hover`: a tapped card on touch is lifted only when the switch is off.
+  - `steady_chips`: chip width stays at 86.69 px when on; it goes from 81.9 to
+    99.0 px when off.
+  - `flat_card_look`: the inner card's border is 0 px when on, 1 px when off.
+  - `round_calendar`: the calendar box's corners are 12 px when on, 0 when off.
+  - Under the Still motion level, the petals don't show.
+  - `own_required_check` off hands the check to the browser.
+  - `skip_not_coming` off asks Tom everything.
+
+**Not verified:**
+
+- **The editor panel itself was never rendered**: it needs a signed-in planner and
+  the database.
+- `setBlockStyle` saving `rsvpOff` has never run against Supabase.
+- The banner switch was checked by typecheck only.
+- **One test run had a single failure that I could not reproduce or identify.** It
+  ran while the dev server was being stopped. Eight runs since have all passed.
