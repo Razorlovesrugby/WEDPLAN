@@ -270,7 +270,7 @@ export function RsvpForm({
   if (locked) {
     return (
       on("soft_panels") ? (
-        <div className="site-rsvp-sheet p-6 text-center sm:p-8" {...offAttr}>
+        <div className="site-own-ground site-rsvp-sheet p-6 text-center sm:p-8" {...offAttr}>
           <span className="site-label text-muted">Replies are closed</span>
           <p className="mt-3 text-[1.0625rem] leading-relaxed">
             RSVPs have closed, so this can no longer be changed. If something has come up, please
@@ -278,7 +278,7 @@ export function RsvpForm({
           </p>
         </div>
       ) : (
-        <div className="card p-5" {...offAttr}>
+        <div className="site-own-ground card p-5" {...offAttr}>
           <p className="text-sm">
             RSVPs have closed, so this can no longer be changed. If something has come up, please
             get in touch with the couple directly.
@@ -338,7 +338,7 @@ export function RsvpForm({
 
     return (
       <div
-        className={`site-rsvp-panel relative overflow-hidden text-center ${
+        className={`site-own-ground site-rsvp-panel relative overflow-hidden text-center ${
           on("soft_panels") ? "site-rsvp-sheet p-8 sm:p-12" : "card p-8"
         }`}
         role="status"
@@ -436,8 +436,8 @@ export function RsvpForm({
       className={`site-rsvp-panel space-y-6 ${
         card
           ? on("soft_panels")
-            ? "site-rsvp-sheet p-5 sm:p-8"
-            : "site-rsvp-card border border-line p-5 sm:p-8"
+            ? "site-own-ground site-rsvp-sheet p-5 sm:p-8"
+            : "site-own-ground site-rsvp-card border border-line p-5 sm:p-8"
           : ""
       }`}
     >

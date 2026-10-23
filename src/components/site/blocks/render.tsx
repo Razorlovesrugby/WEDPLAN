@@ -145,8 +145,8 @@ function Background({
       // be checked against a photograph, so this is the planner's call alone.
       className={`relative isolate ${
         look.photoColour
-          ? "text-[color:var(--block-text)] [&_*]:text-[color:var(--block-text)]"
-          : "text-onphoto [&_*]:text-onphoto"
+          ? "text-[color:var(--block-text)] [&_*:not(.site-own-ground,.site-own-ground_*)]:text-[color:var(--block-text)]"
+          : "text-onphoto [&_*:not(.site-own-ground,.site-own-ground_*)]:text-onphoto"
       } ${look.ownFont ? "font-body" : ""} ${photoText === "shadow" ? "site-text-shadow" : ""}`}
       style={look.style}
     >

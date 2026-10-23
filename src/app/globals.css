@@ -962,6 +962,15 @@ textarea.site-rsvp-input:focus {
   padding-bottom: 0;
 }
 
+/* A surface that paints its own paper-coloured ground (the reply form's card, the
+   weekend's cards look). A photograph block forces one pale colour — or the
+   block's own — onto everything inside it, which on a card of paper is pale on
+   pale. `.site-own-ground` is excluded from that rule (render.tsx) and reads the
+   site's own ink instead. */
+.site-own-ground {
+  color: rgb(var(--site-ink));
+}
+
 /* The calendar offer inside the confirmation (spec 27's WeekendCalendar)
    takes the same rounded sheet. Scoped to the reply panel: the Schedule block
    renders the same component square, among square things. */

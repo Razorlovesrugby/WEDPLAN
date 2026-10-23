@@ -174,7 +174,7 @@ export function Schedule({
                 <li
                   key={event.id}
                   style={stagger(index)}
-                  className="border-t border-line pt-5 first:border-t-0 first:pt-0"
+                  className={`border-t border-line pt-5 first:border-t-0 first:pt-0 ${look === "cards" ? "site-own-ground" : ""}`}
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-xl text-ink">{event.name}</p>
