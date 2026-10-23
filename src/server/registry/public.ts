@@ -39,7 +39,13 @@ export type PublicRegistry = {
   funds: PublicFund[];
   bank: PublicBank | null;
   heroUrl: string | null;
+  /** Where the subject is, as CSS `object-position`; null = centred. */
+  heroPosition: string | null;
+  /** The photograph's average colour, painted behind it until it loads. */
+  heroColour: string | null;
   thanksImageUrl: string | null;
+  /** True only for the signed-in couple previewing their own page: nothing can be claimed. */
+  preview: boolean;
 };
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,80}$/;
@@ -47,8 +53,20 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,80}$/;
 const imageUrl = (id: string | null, width: 480 | 960 = 960): string | null =>
   id ? `/api/photo/${id}?w=${width}` : null;
 
-/** Null for anything that isn't an enabled registry — unknown, off and malformed all look the same. */
-export async function loadPublicRegistry(slug: string): Promise<PublicRegistry | null> {
+/**
+ * Null for anything that isn't an enabled registry — unknown, off and malformed
+ * all look the same.
+ *
+ * `preview` lets the couple see their own page while it is still off. It is a
+ * parameter, not something this function decides: the PAGE must have verified
+ * the caller is a collaborator of exactly this wedding before passing it, and a
+ * preview can never claim (the sheet renders without its button).
+ */
+export async function loadPublicRegistry(
+  slug: string,
+  options: { preview?: boolean } = {},
+): Promise<PublicRegistry | null> {
+  const preview = options.preview === true;
   if (!SLUG.test(slug)) return null;
   const admin = createAdminClient();
 
@@ -60,9 +78,9 @@ export async function loadPublicRegistry(slug: string): Promise<PublicRegistry |
     .select("*")
     .eq("wedding_id", wedding.id)
     .maybeSingle();
-  if (!settings?.enabled) return null;
+  if (!settings || (!settings.enabled && !preview)) return null;
 
-  const [items, links, tags, funds, bank] = await Promise.all([
+  const [items, links, tags, funds, bank, hero] = await Promise.all([
     admin
       .from("v_registry_items")
       .select("*")
@@ -79,6 +97,14 @@ export async function loadPublicRegistry(slug: string): Promise<PublicRegistry |
     settings.show_funds
       ? admin.from("gift_bank_details").select("*").eq("wedding_id", wedding.id).maybeSingle()
       : Promise.resolve({ data: null as GiftBankDetailsRow | null }),
+    settings.hero_asset_id
+      ? admin
+          .from("site_assets")
+          .select("focal_x, focal_y, colour")
+          .eq("wedding_id", wedding.id)
+          .eq("id", settings.hero_asset_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   if (items.error) throw new Error(`Could not load the registry: ${items.error.message}`);
 
@@ -122,6 +148,12 @@ export async function loadPublicRegistry(slug: string): Promise<PublicRegistry |
     funds: ((funds.data ?? []) as GiftFundRow[]).map(toPublicFund),
     bank: toPublicBank(bank.data as GiftBankDetailsRow | null),
     heroUrl: imageUrl(settings.hero_asset_id, 960),
+    heroPosition:
+      hero.data && hero.data.focal_x !== null && hero.data.focal_y !== null
+        ? `${Math.round(hero.data.focal_x * 100)}% ${Math.round(hero.data.focal_y * 100)}%`
+        : null,
+    heroColour: hero.data?.colour ?? null,
     thanksImageUrl: imageUrl(settings.thanks_asset_id, 960),
+    preview,
   };
 }

@@ -24,6 +24,6 @@ describe("public registry loader", () => {
     expect(code).toMatch(/\.eq\("hidden", false\)/);
   });
   it("returns nothing for a registry that is switched off", () => {
-    expect(code).toMatch(/!settings\?\.enabled/);
+    expect(code).toMatch(/!settings\.enabled && !preview/);
   });
 });

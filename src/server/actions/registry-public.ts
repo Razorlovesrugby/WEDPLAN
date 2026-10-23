@@ -98,6 +98,9 @@ export type OwnClaim = {
   released: boolean;
   canRelease: boolean;
   slug: string;
+  weddingName: string;
+  palette: string;
+  pairing: string;
 };
 
 /** Resolve a buyer's private token. Null for anything unknown or malformed — no oracle. */
@@ -111,9 +114,10 @@ export async function loadOwnClaim(token: string): Promise<OwnClaim | null> {
     .maybeSingle();
   if (!claim || !isClaimStatus(claim.status)) return null;
 
-  const [receipt, wedding] = await Promise.all([
+  const [receipt, wedding, look] = await Promise.all([
     buildReceipt(claim.wedding_id, claim.item_id, token),
-    admin.from("weddings").select("slug").eq("id", claim.wedding_id).maybeSingle(),
+    admin.from("weddings").select("slug, name").eq("id", claim.wedding_id).maybeSingle(),
+    admin.from("registry_settings").select("palette, type_pairing").eq("wedding_id", claim.wedding_id).maybeSingle(),
   ]);
   const { token: _token, ...rest } = receipt;
   void _token;
@@ -125,6 +129,9 @@ export async function loadOwnClaim(token: string): Promise<OwnClaim | null> {
     released: claim.released_at !== null,
     canRelease: buyerMayRelease(claim.status, claim.released_at),
     slug: wedding.data?.slug ?? "",
+    weddingName: wedding.data?.name ?? "",
+    palette: look.data?.palette ?? "linen",
+    pairing: look.data?.type_pairing ?? "classic",
   };
 }
 
