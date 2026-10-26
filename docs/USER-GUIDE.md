@@ -1,5 +1,7 @@
 # WEDPLAN — how to use it
 
+> A designed version of this guide, with screenshots, is in [`USER-GUIDE.pdf`](USER-GUIDE.pdf).
+
 A guide for the couple and the close collaborators (partner, family helping
 out). It covers what the app is, how the pieces fit together, where each thing
 lives, and the one idea that trips people up: **there is no single wedding
@@ -45,14 +47,14 @@ isn't. When you add a household (say, "The Okonkwos"), the app immediately
 gives it an address:
 
 ```
-/w/ray-and-olivia/okonkwo-4f7ak
+/w/mia-and-jonah/okonkwo-4f7ak
      └─ wedding ──┘ └─ household ┘
                       name  + 5 random characters
 ```
 
 - **The readable part** (`okonkwo`) is just a label so a link says whose it is. It comes from the household name, with filler like "The" and "family" stripped. You can edit it on the household's screen; old links keep working after an edit.
 - **The 5 random characters** (`4f7ak`) are the actual key. Behind the address sit the household's names, dietary notes, an RSVP form that can answer on their behalf, coach seats and photo uploads. The label alone would be guessable by anyone who knows the couple; the suffix is not. **Treat the full link like a house key — send it to that household only, don't post it publicly.**
-- **There is no shared page.** `/w/ray-and-olivia` on its own is a plain "not found" on purpose. A guest can only ever reach a page that is *theirs*.
+- **There is no shared page.** `/w/mia-and-jonah` on its own is a plain "not found" on purpose. A guest can only ever reach a page that is *theirs*.
 
 ### What "the site is the invitation" means
 
@@ -89,8 +91,8 @@ different jobs. The save-the-date is the household address with
 `/save-the-date` on the end:
 
 ```
-Save the date:  /w/ray-and-olivia/okonkwo-4f7ak/save-the-date
-Invitation:     /w/ray-and-olivia/okonkwo-4f7ak
+Save the date:  /w/mia-and-jonah/okonkwo-4f7ak/save-the-date
+Invitation:     /w/mia-and-jonah/okonkwo-4f7ak
 ```
 
 | | Save the date | Invitation |
@@ -274,7 +276,7 @@ Wedding basics (names, date, timezone), **cut lines and capacity**, collaborator
 
 ## 10. Quick answers
 
-**Why can't I open `/w/ray-and-olivia` myself?** There's no shared page. Use *Preview* in the Site editor, or a household's own address.
+**Why can't I open `/w/mia-and-jonah` myself?** There's no shared page. Use *Preview* in the Site editor, or a household's own address.
 
 **A guest says their link doesn't work.** Likely it was reissued, or mistyped. Use *Copy link* on their row for the current one.
 
