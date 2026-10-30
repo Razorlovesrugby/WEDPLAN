@@ -44,7 +44,11 @@ Notes are always shown in full.
 `SiteExtras.registryEnabled` (an error reads as off), and the renderer builds
 the href from `ctx.wedding.slug`. A gifts block with a registry but no funds and
 no bank details now renders (it used to return nothing). Same button styling as
-Contribute.
+Contribute. **Added after the first push:** the planner found no control for it, so the
+gifts block now has a **"Show a button to our registry"** tick (`show_registry`,
+on by default, registered in `switches.ts`), and `/site/gifts` has a card saying
+whether the button is on or off and linking to Registry settings when the registry
+is off. The button is still a button inside the gifts block, not a block of its own.
 
 **C. "Ask a question".** A button under the FAQ block (`ask-question.tsx`) that
 opens a small form in place: the question (1000 characters), a name (not asked

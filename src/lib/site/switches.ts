@@ -118,6 +118,15 @@ const personalSwitches: SwitchDef[] = [
     defaultOn: true,
     whenOff: "The schedule is the whole of the section; the panel is not drawn.",
   },
+  {
+    id: "personal.show_registry",
+    group: "personal",
+    payload: { block: "gift_funds", key: "show_registry" },
+    label: "Show a button to our registry",
+    where: "The gift block",
+    defaultOn: true,
+    whenOff: "The gift block has no registry button, even with the registry switched on.",
+  },
 ];
 
 /**

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireWedding } from "@/server/queries/wedding";
 import { getGiftBankDetails, getGiftFunds } from "@/server/queries/site-extras";
+import { getRegistrySettings } from "@/server/queries/registry";
 import { GiftFundEditor } from "@/components/site/editor/gift-fund-editor";
 
 export const metadata = { title: "A gift" };
@@ -21,7 +22,11 @@ export const metadata = { title: "A gift" };
  */
 export default async function GiftFundsPage() {
   const wedding = await requireWedding();
-  const [funds, bank] = await Promise.all([getGiftFunds(wedding.id), getGiftBankDetails(wedding.id)]);
+  const [funds, bank, registry] = await Promise.all([
+    getGiftFunds(wedding.id),
+    getGiftBankDetails(wedding.id),
+    getRegistrySettings(wedding.id),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -44,6 +49,28 @@ export default async function GiftFundsPage() {
           Guests see your account details when they press <em>Contribute</em> and type them into
           their own banking app. You tell who sent what by the reference &mdash; each household is
           asked to use its own name.
+        </p>
+      </div>
+
+      <div className="card space-y-1 p-4 text-sm text-muted">
+        <p className="font-medium text-ink">
+          Registry button: {registry.enabled ? "on" : "off"}
+        </p>
+        <p>
+          {registry.enabled ? (
+            <>
+              The <em>A gift</em> block shows a <em>View our registry</em> button. Untick &ldquo;Show a
+              button to our registry&rdquo; on the block to hide it.
+            </>
+          ) : (
+            <>
+              Your registry is switched off, so the button is hidden. Switch it on in{" "}
+              <Link href="/gifts/settings" className="text-accent underline underline-offset-2">
+                Registry settings
+              </Link>{" "}
+              and it appears here.
+            </>
+          )}
         </p>
       </div>
 

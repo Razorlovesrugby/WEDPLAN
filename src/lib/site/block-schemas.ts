@@ -185,7 +185,7 @@ const PAYLOAD_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
     show_tablemates: z.boolean().optional(),
   }),
   // The funds live in `gift_funds`; the block holds only the line above them.
-  gift_funds: z.object({ intro: optionalText }),
+  gift_funds: z.object({ intro: optionalText, show_registry: z.boolean().optional() }),
   // The grey hints in the song box (spec 28 §6.3). Blank means the default.
   // The do-not-play list is one song per line, read by `parseDoNotPlay`
   // (spec 31 §6.1); the line is what a guest sees when they ask for one.
