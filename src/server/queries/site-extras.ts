@@ -67,6 +67,8 @@ export type SiteExtras = {
   giftFunds: PublicFund[];
   /** Where to send a gift. Null until the couple have written it down. */
   giftBank: PublicBank | null;
+  /** Whether `/registry/<slug>` is switched on, so the gifts block may link to it. */
+  registryEnabled: boolean;
 };
 
 type EventLike = { id: string; name: string; dress_code_id?: string | null };
@@ -174,7 +176,7 @@ export async function getPublicSiteExtras(
 ): Promise<SiteExtras> {
   const supabase = createAdminClient();
 
-  const [dressCodes, arrivals, songs, noteRows, fundRows, bankRow] = await Promise.all([
+  const [dressCodes, arrivals, songs, noteRows, fundRows, bankRow, registryRow] = await Promise.all([
     readDressCodes(supabase, weddingId, events),
     supabase.from("arrival_points").select("*").eq("wedding_id", weddingId).order("sort_order"),
     getPublicSongs(weddingId, viewerHouseholdId),
@@ -197,6 +199,8 @@ export async function getPublicSiteExtras(
     // yet, say — reads as "no details", which hides the Contribute button
     // rather than costing a guest their whole page.
     supabase.from("gift_bank_details").select("*").eq("wedding_id", weddingId).maybeSingle(),
+    // An error reads as "off": the registry button just doesn't appear.
+    supabase.from("registry_settings").select("enabled").eq("wedding_id", weddingId).maybeSingle(),
   ]);
 
   const notes: PublicNote[] = (
@@ -215,6 +219,7 @@ export async function getPublicSiteExtras(
     notes,
     giftFunds: ((fundRows.data ?? []) as GiftFundRow[]).map(toPublicFund),
     giftBank: toPublicBank(bankRow.data as GiftBankDetailsRow | null),
+    registryEnabled: registryRow.data?.enabled === true,
   };
 }
 

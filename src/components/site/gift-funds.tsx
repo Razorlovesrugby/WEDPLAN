@@ -18,10 +18,13 @@ import { ContributeDialog } from "./contribute-dialog";
 export function GiftFunds({
   funds,
   bank,
+  registryHref,
   dark,
 }: {
   funds: PublicFund[];
   bank: PublicBank | null;
+  /** The couple's registry page, when it is switched on. */
+  registryHref?: string | null;
   dark?: boolean;
 }) {
   const onlineLinks = funds.flatMap((fund) =>
@@ -41,13 +44,27 @@ export function GiftFunds({
         </ul>
       ) : null}
 
-      {bank || onlineLinks.length > 0 ? (
-        <div className="mt-6 text-center">
-          <ContributeDialog
-            bank={bank}
-            onlineLinks={onlineLinks}
-            dark={dark === true}
-          />
+      {bank || onlineLinks.length > 0 || registryHref ? (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          {registryHref ? (
+            <a
+              href={registryHref}
+              className={`inline-block border px-8 py-3 text-[0.78rem] uppercase tracking-[0.14em] transition-colors ${
+                dark
+                  ? "border-paper hover:bg-paper hover:!text-ink"
+                  : "border-accent text-accent hover:bg-accent hover:text-paper"
+              }`}
+            >
+              View our registry
+            </a>
+          ) : null}
+          {bank || onlineLinks.length > 0 ? (
+            <ContributeDialog
+              bank={bank}
+              onlineLinks={onlineLinks}
+              dark={dark === true}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>
