@@ -317,11 +317,18 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
     fields: [
       INTRO,
       {
+        name: "registry_url",
+        label: "Registry address",
+        kind: "text",
+        placeholder: "https://",
+        help: "Already have a registry somewhere else? Paste its web address and the button takes guests there. Leave empty to use the registry built into this app.",
+      },
+      {
         name: "show_registry",
         label: "Show a button to our registry",
         kind: "checkbox",
         defaultChecked: true,
-        help: "Appears once the registry is switched on (Registry → Settings).",
+        help: "Turn it off to hide the button. The built-in registry also needs switching on (Registry → Settings).",
       },
     ],
   },

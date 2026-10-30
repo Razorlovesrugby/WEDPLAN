@@ -185,7 +185,16 @@ const PAYLOAD_SCHEMAS: Record<BlockType, z.ZodTypeAny> = {
     show_tablemates: z.boolean().optional(),
   }),
   // The funds live in `gift_funds`; the block holds only the line above them.
-  gift_funds: z.object({ intro: optionalText, show_registry: z.boolean().optional() }),
+  gift_funds: z.object({
+    intro: optionalText,
+    show_registry: z.boolean().optional(),
+    // Ends up in an `href` in front of every guest: http(s) only (see `safeContributeUrl`).
+    registry_url: trimmed
+      .max(500)
+      .refine((v) => v === "" || /^https?:\/\//i.test(v), "Use a full web address starting with https://")
+      .optional()
+      .transform((v) => (v ? v : undefined)),
+  }),
   // The grey hints in the song box (spec 28 §6.3). Blank means the default.
   // The do-not-play list is one song per line, read by `parseDoNotPlay`
   // (spec 31 §6.1); the line is what a guest sees when they ask for one.
