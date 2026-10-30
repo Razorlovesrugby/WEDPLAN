@@ -15,6 +15,7 @@ import type {
   GiftBankDetailsRow,
   GiftFundRow,
   GuestNoteRow,
+  GuestQuestionRow,
   SongRequestRow,
 } from "@/lib/types/database";
 
@@ -251,6 +252,8 @@ export const getArrivalPoints = cache(async (weddingId: string): Promise<Arrival
   return (data ?? []) as ArrivalPointRow[];
 });
 
+export type PlannerQuestion = GuestQuestionRow & { householdName: string | null };
+
 export type PlannerNote = GuestNoteRow & { householdName: string | null };
 
 /**
@@ -268,6 +271,20 @@ export const getGuestNotes = cache(async (weddingId: string): Promise<PlannerNot
     .order("created_at", { ascending: false });
 
   return ((data ?? []) as (GuestNoteRow & { households: { display_name: string } | null })[]).map(
+    (row) => ({ ...row, householdName: row.households?.display_name ?? null }),
+  );
+});
+
+/** Questions guests have asked from the FAQ, newest first. */
+export const getGuestQuestions = cache(async (weddingId: string): Promise<PlannerQuestion[]> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("guest_questions")
+    .select("*, households(display_name)")
+    .eq("wedding_id", weddingId)
+    .order("created_at", { ascending: false });
+
+  return ((data ?? []) as (GuestQuestionRow & { households: { display_name: string } | null })[]).map(
     (row) => ({ ...row, householdName: row.households?.display_name ?? null }),
   );
 });

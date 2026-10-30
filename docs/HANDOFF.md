@@ -3,6 +3,26 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 43 (small site changes, no spec):** three asks on the wedding site, branch
+`claude/site-registry-button-and-timeline` (**no PR opened**). Asked for directly as changes;
+"Ask a question" turned out not to exist, so the planner picked "a form that lands in the
+planner" ("2. Plz") before it was built.
+
+- **Timeline More/Less removed.** `EventNote` is a plain paragraph now; no clamp.
+- **"View our registry" button** in the gifts block, beside Contribute, linking to
+  `/registry/<slug>`. Shown only when `registry_settings.enabled` (`SiteExtras.registryEnabled`);
+  a registry-only gifts block (no funds, no bank details) now renders.
+- **"Ask a question"** under the FAQ block: opens an inline form (question, name unless on a
+  household link, optional email/phone). Private to the couple, **never shown to guests**, so
+  no moderation. `askQuestion` in `src/server/actions/questions-inbox.ts` (named so because
+  `questions.ts` is the RSVP questions) reuses the guestbook's throttle and token-to-household
+  lookup. Planner inbox at `/site/questions` (linked under "Elsewhere" in the site editor):
+  waiting / answered / dismissed. **`0040_guest_questions.sql`, not applied to the live
+  project (nor are `0026`-`0039`).** Audited, `contact` redacted.
+- **Verified:** typecheck, 1184 unit tests, 664 SQL assertions (8 new), `next build`
+  (placeholder env). **Not verified:** anything in a browser or against Supabase; the form
+  has never run. No email to the couple on a new question; they see it in the inbox only.
+
 **Session 42 (spec 36):** the gift registry, built end to end on branch
 `claude/spec-36-gift-registry` (**no PR opened**). Asked for as a plan, 14 questions
 put and answered (two against the recommendation: a plain-name link, and its own

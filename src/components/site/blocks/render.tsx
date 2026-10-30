@@ -41,6 +41,7 @@ import { GuestUploader } from "../guest-uploader";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
 import { resolveRsvpOff } from "@/lib/site/rsvp-features";
+import { AskQuestion } from "../ask-question";
 import { GiftFunds } from "../gift-funds";
 import { SongSection } from "../song-section";
 import { doNotPlayFrom, refusalLine } from "@/lib/site/song-match";
@@ -542,6 +543,7 @@ export function SiteBlockView({
       return (
         <Shell block={block} bgImage={bgImage} text={textLook} intro={intro} mark={mark}>
           <Faq payload={payload} />
+          <AskQuestion weddingSlug={ctx.wedding.slug} token={personal?.token ?? null} preview={ctx.preview} />
         </Shell>
       );
 

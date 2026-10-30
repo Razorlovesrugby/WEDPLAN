@@ -831,6 +831,7 @@ export function SiteBuilder({
                 ["/site/gifts", "A gift"],
                 ["/site/songs", "Song requests"],
                 ["/site/guestbook", "Guestbook"],
+                ["/site/questions", "Guest questions"],
                 [previewSrc, "Open the preview"],
               ].map(([href, label]) => (
                 <li key={href}>
