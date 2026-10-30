@@ -122,6 +122,16 @@ type GuestNoteRelationships = [
   >,
 ];
 
+type GuestQuestionRelationships = [
+  Rel<
+    "guest_questions_household_id_wedding_id_fkey",
+    ["household_id", "wedding_id"],
+    "households",
+    ["id", "wedding_id"],
+    true
+  >,
+];
+
 /**
  * Spec 8 §7's named trap: an embed whose relationship is missing from these
  * arrays resolves to `never`, which compiles fine and silently loses all type
@@ -898,6 +908,18 @@ export type SongVoteRow = {
  * came from the shared address — the one rule that made reopening spec 23's
  * cut affordable. No `played`; that rung belongs to a song.
  */
+export type GuestQuestionRow = {
+  id: string;
+  wedding_id: string;
+  household_id: string | null;
+  author_name: string | null;
+  contact: string | null;
+  body: string;
+  status: "new" | "answered" | "dismissed";
+  created_at: string;
+  updated_at: string;
+};
+
 export type GuestNoteRow = {
   id: string;
   wedding_id: string;
@@ -1913,6 +1935,11 @@ export type Database = {
         GuestNoteRow,
         "id" | Timestamps | "status" | "household_id" | "guest_id" | "author_name",
         GuestNoteRelationships
+      >;
+      guest_questions: Table<
+        GuestQuestionRow,
+        "id" | Timestamps | "status" | "household_id" | "author_name" | "contact",
+        GuestQuestionRelationships
       >;
       gift_funds: Table<
         GiftFundRow,

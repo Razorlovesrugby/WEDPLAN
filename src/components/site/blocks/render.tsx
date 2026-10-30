@@ -41,6 +41,7 @@ import { GuestUploader } from "../guest-uploader";
 import { PublicBoardView } from "@/components/moodboards/public-board";
 import { RsvpForm } from "@/components/rsvp/rsvp-form";
 import { resolveRsvpOff } from "@/lib/site/rsvp-features";
+import { AskQuestion } from "../ask-question";
 import { GiftFunds } from "../gift-funds";
 import { SongSection } from "../song-section";
 import { doNotPlayFrom, refusalLine } from "@/lib/site/song-match";
@@ -542,6 +543,7 @@ export function SiteBlockView({
       return (
         <Shell block={block} bgImage={bgImage} text={textLook} intro={intro} mark={mark}>
           <Faq payload={payload} />
+          <AskQuestion weddingSlug={ctx.wedding.slug} token={personal?.token ?? null} preview={ctx.preview} />
         </Shell>
       );
 
@@ -773,13 +775,15 @@ export function SiteBlockView({
     case "gift_funds": {
       // Neither funds nor details means nothing to say. A heading over an empty
       // list reads as "we wanted presents and could not think of any".
-      if (ctx.extras.giftFunds.length === 0 && !ctx.extras.giftBank) return null;
+      const registryHref = ctx.extras.registryEnabled ? `/registry/${ctx.wedding.slug}` : null;
+      if (ctx.extras.giftFunds.length === 0 && !ctx.extras.giftBank && !registryHref) return null;
       const background = block.style?.background;
       return (
         <Shell block={block} bgImage={bgImage} text={textLook} intro={intro} mark={mark}>
           <GiftFunds
             funds={ctx.extras.giftFunds}
             bank={ctx.extras.giftBank}
+            registryHref={registryHref}
             dark={background === "ink" || (background === "photograph" && bgImage !== null)}
           />
         </Shell>

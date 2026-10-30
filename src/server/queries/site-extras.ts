@@ -15,6 +15,7 @@ import type {
   GiftBankDetailsRow,
   GiftFundRow,
   GuestNoteRow,
+  GuestQuestionRow,
   SongRequestRow,
 } from "@/lib/types/database";
 
@@ -67,6 +68,8 @@ export type SiteExtras = {
   giftFunds: PublicFund[];
   /** Where to send a gift. Null until the couple have written it down. */
   giftBank: PublicBank | null;
+  /** Whether `/registry/<slug>` is switched on, so the gifts block may link to it. */
+  registryEnabled: boolean;
 };
 
 type EventLike = { id: string; name: string; dress_code_id?: string | null };
@@ -174,7 +177,7 @@ export async function getPublicSiteExtras(
 ): Promise<SiteExtras> {
   const supabase = createAdminClient();
 
-  const [dressCodes, arrivals, songs, noteRows, fundRows, bankRow] = await Promise.all([
+  const [dressCodes, arrivals, songs, noteRows, fundRows, bankRow, registryRow] = await Promise.all([
     readDressCodes(supabase, weddingId, events),
     supabase.from("arrival_points").select("*").eq("wedding_id", weddingId).order("sort_order"),
     getPublicSongs(weddingId, viewerHouseholdId),
@@ -197,6 +200,8 @@ export async function getPublicSiteExtras(
     // yet, say — reads as "no details", which hides the Contribute button
     // rather than costing a guest their whole page.
     supabase.from("gift_bank_details").select("*").eq("wedding_id", weddingId).maybeSingle(),
+    // An error reads as "off": the registry button just doesn't appear.
+    supabase.from("registry_settings").select("enabled").eq("wedding_id", weddingId).maybeSingle(),
   ]);
 
   const notes: PublicNote[] = (
@@ -215,6 +220,7 @@ export async function getPublicSiteExtras(
     notes,
     giftFunds: ((fundRows.data ?? []) as GiftFundRow[]).map(toPublicFund),
     giftBank: toPublicBank(bankRow.data as GiftBankDetailsRow | null),
+    registryEnabled: registryRow.data?.enabled === true,
   };
 }
 
@@ -246,6 +252,8 @@ export const getArrivalPoints = cache(async (weddingId: string): Promise<Arrival
   return (data ?? []) as ArrivalPointRow[];
 });
 
+export type PlannerQuestion = GuestQuestionRow & { householdName: string | null };
+
 export type PlannerNote = GuestNoteRow & { householdName: string | null };
 
 /**
@@ -263,6 +271,20 @@ export const getGuestNotes = cache(async (weddingId: string): Promise<PlannerNot
     .order("created_at", { ascending: false });
 
   return ((data ?? []) as (GuestNoteRow & { households: { display_name: string } | null })[]).map(
+    (row) => ({ ...row, householdName: row.households?.display_name ?? null }),
+  );
+});
+
+/** Questions guests have asked from the FAQ, newest first. */
+export const getGuestQuestions = cache(async (weddingId: string): Promise<PlannerQuestion[]> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("guest_questions")
+    .select("*, households(display_name)")
+    .eq("wedding_id", weddingId)
+    .order("created_at", { ascending: false });
+
+  return ((data ?? []) as (GuestQuestionRow & { households: { display_name: string } | null })[]).map(
     (row) => ({ ...row, householdName: row.households?.display_name ?? null }),
   );
 });
