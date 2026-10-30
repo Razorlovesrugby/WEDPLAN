@@ -19,12 +19,15 @@ export function GiftFunds({
   funds,
   bank,
   registryHref,
+  registryExternal,
   dark,
 }: {
   funds: PublicFund[];
   bank: PublicBank | null;
   /** The couple's registry page, when it is switched on. */
   registryHref?: string | null;
+  /** True when the address is the couple's own registry elsewhere: opens in a new tab. */
+  registryExternal?: boolean;
   dark?: boolean;
 }) {
   const onlineLinks = funds.flatMap((fund) =>
@@ -49,6 +52,7 @@ export function GiftFunds({
           {registryHref ? (
             <a
               href={registryHref}
+              {...(registryExternal ? { target: "_blank", rel: "noreferrer noopener" } : {})}
               className={`inline-block border px-8 py-3 text-[0.78rem] uppercase tracking-[0.14em] transition-colors ${
                 dark
                   ? "border-paper hover:bg-paper hover:!text-ink"

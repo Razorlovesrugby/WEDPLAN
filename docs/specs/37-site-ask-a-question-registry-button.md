@@ -50,6 +50,15 @@ on by default, registered in `switches.ts`), and `/site/gifts` has a card saying
 whether the button is on or off and linking to Registry settings when the registry
 is off. The button is still a button inside the gifts block, not a block of its own.
 
+**Added after PR #77 — an address of your own.** The first cut only ever linked to this
+app's built-in registry, and only when it was switched on, so a couple with a registry
+elsewhere (or one not yet switched on) saw no button in the preview. The gifts block now
+has a **"Registry address"** field: paste a registry's web address and the button goes
+there (new tab). It wins over the built-in registry and works even when the built-in one
+is off. http(s) only — the address ends up in an `href` in front of every guest, so
+`block-schemas.ts` refuses anything else (`gift-registry-link.test.ts`) and the renderer
+checks again with `safeContributeUrl`. The tick still hides the button either way.
+
 **C. "Ask a question".** A button under the FAQ block (`ask-question.tsx`) that
 opens a small form in place: the question (1000 characters), a name (not asked
 on a household's own link — the household's name is used), and an optional email
