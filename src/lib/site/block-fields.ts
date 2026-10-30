@@ -314,7 +314,16 @@ export const BLOCK_FORMS: Record<BlockType, BlockForm> = {
   gift_funds: {
     blurb: "Two or three things you'd like help with. The funds themselves live on their own screen.",
     managedElsewhere: "/site/gifts",
-    fields: [INTRO],
+    fields: [
+      INTRO,
+      {
+        name: "show_registry",
+        label: "Show a button to our registry",
+        kind: "checkbox",
+        defaultChecked: true,
+        help: "Appears once the registry is switched on (Registry → Settings).",
+      },
+    ],
   },
   song_requests: {
     blurb: "Guests suggest songs; you get a list to hand the DJ.",

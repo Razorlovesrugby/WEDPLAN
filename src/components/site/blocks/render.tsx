@@ -775,7 +775,7 @@ export function SiteBlockView({
     case "gift_funds": {
       // Neither funds nor details means nothing to say. A heading over an empty
       // list reads as "we wanted presents and could not think of any".
-      const registryHref = ctx.extras.registryEnabled ? `/registry/${ctx.wedding.slug}` : null;
+      const registryHref = ctx.extras.registryEnabled && flag(payload, "show_registry", true) ? `/registry/${ctx.wedding.slug}` : null;
       if (ctx.extras.giftFunds.length === 0 && !ctx.extras.giftBank && !registryHref) return null;
       const background = block.style?.background;
       return (
