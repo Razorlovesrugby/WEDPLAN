@@ -18,6 +18,7 @@ const eventSchema = z.object({
   venue: z.string().trim().max(200).optional(),
   address: z.string().trim().max(500).optional(),
   is_public: z.union([z.boolean(), z.literal("on"), z.literal("")]).optional(),
+  is_main: z.union([z.boolean(), z.literal("on"), z.literal("")]).optional(),
   // Spec 21 §5.4. Guest-facing, so it is stitched into the pages of the
   // households invited to this event — and into nobody else's.
   guest_note: z.string().trim().max(2000).optional(),
@@ -41,6 +42,7 @@ export async function saveEvent(
     venue: parsed.data.venue || null,
     address: parsed.data.address || null,
     is_public: parsed.data.is_public === true || parsed.data.is_public === "on",
+    is_main: parsed.data.is_main === true || parsed.data.is_main === "on",
     guest_note: parsed.data.guest_note || null,
     sort_order: parsed.data.sort_order ?? 0,
   };

@@ -621,6 +621,8 @@ export type EventRow = {
   venue: string | null;
   address: string | null;
   is_public: boolean;
+  /** The event that decides "coming": yes here means coming, whatever else they decline. */
+  is_main: boolean;
   sort_order: number;
   /**
    * Guest-facing note for this event (spec 21 §5.4). Shown on a household's
@@ -1821,7 +1823,7 @@ export type Database = {
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
       events: Table<
         EventRow,
-        "id" | Timestamps | "is_public" | "sort_order" | "guest_note" | "dress_code_id"
+        "id" | Timestamps | "is_public" | "is_main" | "sort_order" | "guest_note" | "dress_code_id"
       >;
       households: Table<
         HouseholdRow,

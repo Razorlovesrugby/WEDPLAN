@@ -18,6 +18,7 @@ export function EventsEditor({ events, timeZone }: { events: EventRow[]; timeZon
     const data = new FormData(form);
     const fields = Object.fromEntries([...data.entries()].map(([k, v]) => [k, String(v)]));
     fields["is_public"] = data.get("is_public") === "on" ? "on" : "";
+    fields["is_main"] = data.get("is_main") === "on" ? "on" : "";
 
     startTransition(async () => {
       const result = await saveEvent(eventId, fields);
@@ -183,6 +184,11 @@ function EventFields({
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="is_public" defaultChecked={event?.is_public ?? true} />
         Show on the public site
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="is_main" defaultChecked={event?.is_main ?? false} />
+        Main event — a guest who says yes to this is coming, even if they decline the others
       </label>
 
       <div className="flex gap-2">
