@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parseAddress } from "@/lib/site/household-slug";
 import { resolveTheme, type SiteTheme } from "@/lib/theme/presets";
 import { text } from "@/lib/site/sections";
+import { loadPublishedBlocks } from "@/server/queries/site-blocks";
 
 /**
  * The little that a household's page needs before it can say whose it is:
@@ -49,7 +50,7 @@ export async function resolveCardByAddress(
 
   if (!wedding) return null;
 
-  const [{ data: household }, { data: blocks }] = await Promise.all([
+  const [{ data: household }, { data: blocks }, published] = await Promise.all([
     supabase
       .from("households")
       .select("display_name")
@@ -62,7 +63,8 @@ export async function resolveCardByAddress(
       .from("site_content")
       .select("block_key, payload")
       .eq("wedding_id", wedding.id)
-      .in("block_key", ["theme", "hero"]),
+      .in("block_key", ["theme"]),
+    loadPublishedBlocks(wedding.id),
   ]);
 
   // No household at that address: the caller renders the fallback rather than
@@ -71,7 +73,10 @@ export async function resolveCardByAddress(
   if (!household) return null;
 
   const byKey = new Map((blocks ?? []).map((row) => [row.block_key, row.payload]));
-  const heroPayload = byKey.get("hero") ?? null;
+  // The hero comes from the published revision, the same place the page body
+  // reads it. The old `site_content` "hero" row is retired and goes stale, which
+  // is how a preview once showed a date the page did not.
+  const heroPayload = published.find((block) => block.type === "hero")?.payload ?? null;
 
   return {
     wedding,
