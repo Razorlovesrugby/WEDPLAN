@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { cleanSpecs, dollarsToMinor, itemSchema, storeFromUrl } from "@/lib/registry/items";
+import { isContributePosition } from "@/lib/registry/contribute";
 import { isRegistryPairing, isRegistryPalette } from "@/lib/registry/look";
 import { claimStatusPatch, isClaimStatus } from "@/lib/registry/status";
 import { fail, ok, type ActionResult } from "./result";
@@ -43,7 +44,10 @@ const settingsSchema = z.object({
   no_gifts_line: optionalText(300),
   show_prices: z.boolean(),
   show_taken: z.boolean(),
-  show_funds: z.boolean(),
+  contribute_position: z.string().refine(isContributePosition, "Pick Off, Above or Below"),
+  contribute_heading: optionalText(120),
+  contribute_text: optionalText(600),
+  contribute_button_only: z.boolean(),
   disclosure_on: z.boolean(),
   disclosure_text: optionalText(300),
   palette: z.string().refine(isRegistryPalette, "Pick one of the palettes"),

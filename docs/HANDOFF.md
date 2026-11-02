@@ -3,6 +3,26 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 44 (spec 38):** the registry's live preview and Contribute block, built on branch
+`claude/spec-38-registry-preview-contribute` (**no PR opened**). Asked for as a story, seven
+questions put and answered one at a time (Q5 against the recommendation), then "Let's build".
+Read the spec's **Build status** (§11).
+
+- **Preview.** `/gifts/settings` has the form beside a phone/laptop frame of
+  `/registry/<slug>?preview=1`; it reloads in place after Save and says "unsaved changes"
+  when the form differs. `PreviewFrame` moved from the site builder to
+  `src/components/preview-frame.tsx`; both use it.
+- **Contribute block.** `registry_settings.contribute_position` (`off`/`above`/`below`) replaces
+  `show_funds` (kept, unread). Heading, line and a "just the button" switch. The rule is
+  `src/lib/registry/contribute.ts`. **The registry link has no credential, so the bank details
+  are visible to anyone holding it**; the settings screen says so and a test keeps them out of
+  the link preview and metadata.
+- **`0042` is not applied to the live project, nor are `0026`-`0041`.**
+- **Verified:** typecheck, 1213 unit tests, 671 SQL assertions, `next build` (placeholder env).
+  **Not verified:** any browser, Supabase; the iframe reload after Save has never run.
+- **Housekeeping:** `node_modules` was absent, `npm ci` was run; `vitest.config.ts` now uses the
+  automatic JSX runtime so a component can be rendered in a test.
+
 **Session 43 (small site changes, no spec):** three asks on the wedding site, branch
 `claude/site-registry-button-and-timeline` (**no PR opened**). Asked for directly as changes;
 "Ask a question" turned out not to exist, so the planner picked "a form that lands in the

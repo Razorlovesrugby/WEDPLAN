@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { saveRegistrySettings, saveRegistryShipping } from "@/server/actions/registry";
 import { setSitePhotoFocalPoint } from "@/server/actions/site-photos";
@@ -13,8 +14,18 @@ import {
   resolvePalette,
 } from "@/lib/registry/look";
 import type { RegistrySettingsRow, RegistryShippingRow } from "@/lib/types/database";
+import {
+  CONTRIBUTE_LABELS,
+  CONTRIBUTE_POSITIONS,
+  contributeHint,
+  resolveContributePosition,
+} from "@/lib/registry/contribute";
+import { PreviewFrame, type PreviewDevice } from "@/components/preview-frame";
 import { Field, Toggle } from "./field";
 import { ImageField } from "./image-field";
+
+/** What the couple have set up under Site → A gift, so this screen can say when there is nothing to show. */
+export type GiftSetup = { fundCount: number; hasBank: boolean; hasOnlineLink: boolean };
 
 export type ImageOption = {
   id: string;
@@ -32,20 +43,87 @@ export function SettingsForm({
   settings,
   shipping,
   images,
+  giftSetup,
+  previewHref,
 }: {
   settings: RegistrySettingsRow;
   shipping: RegistryShippingRow | null;
   images: ImageOption[];
+  giftSetup: GiftSetup;
+  /** `/registry/<slug>?preview=1` — the planner-only view of the real public page. */
+  previewHref: string;
 }) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [dirty, setDirty] = useState(false);
+
   return (
-    <div className="space-y-4">
-      <PageCard settings={settings} images={images} />
-      <AddressCard shipping={shipping} />
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,26rem)]">
+      <div className="space-y-4">
+        <PageCard
+          settings={settings}
+          images={images}
+          giftSetup={giftSetup}
+          onDirty={setDirty}
+          // A save reloads the frame in place; it is never remounted, so no `key`.
+          onSaved={() => frame.current?.contentWindow?.location.reload()}
+        />
+        <AddressCard shipping={shipping} />
+      </div>
+      <PreviewPane previewHref={previewHref} frame={frame} dirty={dirty} />
     </div>
   );
 }
 
-function PageCard({ settings, images }: { settings: RegistrySettingsRow; images: ImageOption[] }) {
+function PreviewPane({
+  previewHref,
+  frame,
+  dirty,
+}: {
+  previewHref: string;
+  frame: React.RefObject<HTMLIFrameElement | null>;
+  dirty: boolean;
+}) {
+  const [device, setDevice] = useState<PreviewDevice>("phone");
+
+  return (
+    <aside className="card p-0 lg:sticky lg:top-4" aria-label="Preview">
+      <div className="flex items-center gap-2 px-4 py-3">
+        {(["phone", "desktop"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={device === option}
+            className={`btn px-2.5 py-1 text-xs capitalize ${device === option ? "border-accent bg-[#f6f3ee]" : ""}`}
+            onClick={() => setDevice(option)}
+          >
+            {option}
+          </button>
+        ))}
+        <Link href={previewHref} target="_blank" className="ml-auto text-xs text-muted underline">
+          Open in a tab
+        </Link>
+      </div>
+      <p role="status" className="px-4 pb-3 text-xs text-muted">
+        {dirty ? "You have unsaved changes — press Save the page to see them here." : "Showing what you last saved. Nothing pressed here is saved."}
+      </p>
+      <PreviewFrame device={device} iframeRef={frame} src={previewHref} />
+    </aside>
+  );
+}
+
+function PageCard({
+  settings,
+  images,
+  giftSetup,
+  onDirty,
+  onSaved,
+}: {
+  settings: RegistrySettingsRow;
+  images: ImageOption[];
+  giftSetup: GiftSetup;
+  onDirty: (dirty: boolean) => void;
+  onSaved: () => void;
+}) {
   const router = useRouter();
   const [s, setS] = useState(() => ({
     enabled: settings.enabled,
@@ -58,7 +136,10 @@ function PageCard({ settings, images }: { settings: RegistrySettingsRow; images:
     no_gifts_line: settings.no_gifts_line ?? "",
     show_prices: settings.show_prices,
     show_taken: settings.show_taken,
-    show_funds: settings.show_funds,
+    contribute_position: resolveContributePosition(settings.contribute_position) as string,
+    contribute_heading: settings.contribute_heading ?? "",
+    contribute_text: settings.contribute_text ?? "",
+    contribute_button_only: settings.contribute_button_only,
     disclosure_on: settings.disclosure_on,
     disclosure_text: settings.disclosure_text ?? "",
     palette: resolvePalette(settings.palette).id as string,
@@ -68,9 +149,13 @@ function PageCard({ settings, images }: { settings: RegistrySettingsRow; images:
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const [saved, setSaved] = useState(s);
+
   const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) => {
-    setS((prev) => ({ ...prev, [key]: value }));
+    const next = { ...s, [key]: value };
+    setS(next);
     setStatus(null);
+    onDirty(JSON.stringify(next) !== JSON.stringify(saved));
   };
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -84,9 +169,23 @@ function PageCard({ settings, images }: { settings: RegistrySettingsRow; images:
       }
       setErrors({});
       setStatus("Saved");
+      setSaved(s);
+      onDirty(false);
       router.refresh();
+      onSaved();
     });
   }
+
+  const contributePosition = resolveContributePosition(s.contribute_position);
+  const contributeNote = contributeHint({
+    position: contributePosition,
+    heading: s.contribute_heading,
+    text: s.contribute_text,
+    buttonOnly: s.contribute_button_only,
+    fundCount: giftSetup.fundCount,
+    hasBank: giftSetup.hasBank,
+    hasOnlineLink: giftSetup.hasOnlineLink,
+  });
 
   const hero = images.find((i) => i.id === s.hero_asset_id) ?? null;
   const [focal, setFocal] = useState(hero?.focal ?? null);
@@ -169,12 +268,60 @@ function PageCard({ settings, images }: { settings: RegistrySettingsRow; images:
         <h2 className="font-serif text-lg">What visitors see</h2>
         <Toggle checked={s.show_prices} onChange={(v) => set("show_prices", v)} label="Show prices" hint="Also adds a price filter." />
         <Toggle checked={s.show_taken} onChange={(v) => set("show_taken", v)} label="Keep claimed items on the page, marked “Someone's got this one”" hint="Off: a claimed item simply disappears. Neither shows who." />
-        <Toggle checked={s.show_funds} onChange={(v) => set("show_funds", v)} label="Also show your gift funds at the bottom" hint="Uses what you set up under Site → A gift. Nothing new to type." />
         <Toggle checked={s.disclosure_on} onChange={(v) => set("disclosure_on", v)} label="Say some links may earn you a commission" />
         {s.disclosure_on ? (
           <Field label="Wording" errors={errors["disclosure_text"]} hint="Leave blank for the standard line.">
             <input className="field" value={s.disclosure_text} maxLength={300} onChange={(e) => set("disclosure_text", e.target.value)} />
           </Field>
+        ) : null}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-serif text-lg">Contribute</h2>
+        <p className="text-sm text-muted">
+          For guests who&rsquo;d rather give than buy: your gift funds and a Contribute button with your bank
+          details, the same as on your wedding site. Uses what you set up under{" "}
+          <Link href="/site/gifts" className="underline">Site → A gift</Link>. Nothing is taken here and nobody is recorded.
+        </p>
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">Contribute button</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {CONTRIBUTE_POSITIONS.map((id) => (
+              <label
+                key={id}
+                className={`cursor-pointer rounded border p-2 text-sm ${contributePosition === id ? "border-ink ring-1 ring-ink" : "border-line"}`}
+              >
+                <input type="radio" name="contribute_position" className="sr-only" checked={contributePosition === id} onChange={() => set("contribute_position", id)} />
+                {CONTRIBUTE_LABELS[id]}
+              </label>
+            ))}
+          </div>
+          {errors["contribute_position"] ? <span className="mt-1 block text-sm text-red-700">{errors["contribute_position"].join(" ")}</span> : null}
+        </fieldset>
+        {contributePosition !== "off" ? (
+          <>
+            <p className="rounded border border-line px-3 py-2 text-sm">
+              <strong className="font-medium">Anyone with the registry link can see these details.</strong> Unlike your
+              wedding site, this address isn&rsquo;t private to one household. The page is kept out of search engines.
+            </p>
+            {contributeNote ? (
+              <p role="status" className="text-sm text-muted">
+                {contributeNote}{" "}
+                <Link href="/site/gifts" className="underline">Open Site → A gift</Link>
+              </p>
+            ) : null}
+            <Toggle
+              checked={s.contribute_button_only}
+              onChange={(v) => set("contribute_button_only", v)}
+              label="Show just the button — don't list the funds"
+            />
+            <Field label="Heading (optional)" errors={errors["contribute_heading"]} hint={contributePosition === "above" ? "Defaults to “Prefer to contribute?”" : "Defaults to “Or give towards something bigger”"}>
+              <input className="field" value={s.contribute_heading} maxLength={120} onChange={(e) => set("contribute_heading", e.target.value)} />
+            </Field>
+            <Field label="A line under it (optional)" errors={errors["contribute_text"]} hint="e.g. “No gift needed — but if you’d like to help with the honeymoon…”">
+              <textarea className="field min-h-16" value={s.contribute_text} maxLength={600} onChange={(e) => set("contribute_text", e.target.value)} />
+            </Field>
+          </>
         ) : null}
       </section>
 

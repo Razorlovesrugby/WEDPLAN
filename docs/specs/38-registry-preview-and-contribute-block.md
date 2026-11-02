@@ -1,9 +1,11 @@
 # Feature spec: A live preview on the registry, and a Contribute block you can put above or below the gifts
 
-**Status: proposed, all seven questions answered (2026-11-02) — not built.
+**Status: built (2026-11-02) — all seven questions answered, then "Let's build". See "Build status" at the end.
+
+*(Original status line:* proposed, all seven questions answered (2026-11-02) — not built.
 Asked for as "a story"; this is the spec. Nothing beyond this file is written,
 and nothing is built until the planner says to build it** (`CLAUDE.md`, "Spec
-requests are not build authorization"; answering the questions is not it).
+requests are not build authorization"; answering the questions is not it).)
 
 ## Answered — 2026-11-02
 
@@ -221,3 +223,47 @@ with nothing behind it). The site's own gifts block is unchanged.
 - Add above/below placement anywhere but the registry page.
 - Make the preview editable by clicking in it (the site builder's
   click-to-select) — the registry has no blocks to select.
+
+## 11. Build status (2026-11-02)
+
+Built on branch `claude/spec-38-registry-preview-contribute`, **no PR opened**.
+
+**Built:** `0042_registry_contribute.sql` (`contribute_position`,
+`contribute_heading`, `contribute_text`, `contribute_button_only`; `show_funds`
+kept and no longer read; old `show_funds = true` becomes `below`);
+`src/lib/registry/contribute.ts` (the placement rule and the empty-state hint);
+the public loader reads funds/bank only when Contribute is on; `RegistryView`
+renders the block above or below the gifts; the settings screen has a
+**Contribute** card (Off / Above / Below, the visibility warning, button-only
+tick, heading, line, empty-state hint) and a preview pane beside the form
+(phone / laptop, "Open in a tab", "showing what you last saved" / "unsaved
+changes", reloads in place after Save); `PreviewFrame` moved out of the site
+builder to `src/components/preview-frame.tsx` and both use it.
+
+**Where it departs from the text above**
+
+1. **Button only still reads the funds.** §5.6 said the funds "are not read for
+   the public page". But a fund's optional "give online" link lives on the fund
+   row, so not reading them would drop those links from the popup. The funds are
+   read and the list is simply not drawn (`GiftFunds` gained `hideList`).
+2. **A section with funds but no bank details or link still shows** (the list
+   alone). Only "button only" requires something behind the button.
+3. **Unsaved-changes detection covers the Page form only**, not the address
+   card, and a hero focal-point click saves immediately (it always did), so it
+   does not mark the form unsaved.
+4. `vitest.config.ts` now sets `esbuild.jsx = "automatic"` so a component can be
+   rendered in a test (`registry-view.test.ts`). Existing tests are unaffected.
+5. `supabase/migrations/README.md` and `scripts/check-migrations.sql` were both
+   missing `0041`; added alongside `0042`.
+
+**Verified:** typecheck, 1213 unit tests (29 new: placement rule, a source guard
+that the link-preview image and page metadata never touch bank details, the
+loader guard, and six renders of the real `RegistryView` for off/above/below/
+button-only/closed/empty), `./scripts/verify-migrations.sh` 671 assertions (7
+new), `next build` (placeholder env).
+
+**Not verified:** anything in a browser (the settings page, the preview pane, the
+scaled frame on the registry, the popup on the registry); anything against
+Supabase; `0042` is not applied to the live project, nor are `0026`–`0041`. The
+iframe `location.reload()` after Save has never run. The SQL backfill test
+re-runs the backfill statement rather than running the migration over old rows.

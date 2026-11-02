@@ -1729,7 +1729,12 @@ export type RegistrySettingsRow = {
   no_gifts_line: string | null;
   show_prices: boolean;
   show_taken: boolean;
+  /** Superseded by contribute_position (0042); kept, no longer read. */
   show_funds: boolean;
+  contribute_position: string;
+  contribute_heading: string | null;
+  contribute_text: string | null;
+  contribute_button_only: boolean;
   disclosure_on: boolean;
   disclosure_text: string | null;
   palette: string;
@@ -2053,6 +2058,7 @@ export type Database = {
         | Timestamps
         | "enabled" | "open" | "title" | "intro" | "hero_asset_id" | "thanks_text" | "thanks_asset_id"
         | "no_gifts_line" | "show_prices" | "show_taken" | "show_funds" | "disclosure_on"
+        | "contribute_position" | "contribute_heading" | "contribute_text" | "contribute_button_only"
         | "disclosure_text" | "palette" | "type_pairing" | "last_viewed_claims_at"
       >;
       registry_shipping: Table<

@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { toPublicBank, toPublicFund, type PublicBank, type PublicFund } from "@/lib/site/gift-funds";
 import type { GiftBankDetailsRow, GiftFundRow, RegistryItemView, RegistrySettingsRow } from "@/lib/types/database";
+import { resolveContributePosition } from "@/lib/registry/contribute";
 import { formatPrice } from "@/lib/registry/items";
 import type { BrowseItem } from "@/lib/registry/browse";
 
@@ -80,6 +81,8 @@ export async function loadPublicRegistry(
     .maybeSingle();
   if (!settings || (!settings.enabled && !preview)) return null;
 
+  const contributeOn = resolveContributePosition(settings.contribute_position) !== "off";
+
   const [items, links, tags, funds, bank, hero] = await Promise.all([
     admin
       .from("v_registry_items")
@@ -91,10 +94,10 @@ export async function loadPublicRegistry(
       .order("created_at"),
     admin.from("registry_item_tags").select("item_id, tag_id").eq("wedding_id", wedding.id),
     admin.from("registry_tags").select("id, name, sort_order").eq("wedding_id", wedding.id).order("sort_order").order("name"),
-    settings.show_funds
+    contributeOn
       ? admin.from("gift_funds").select("*").eq("wedding_id", wedding.id).order("sort_order")
       : Promise.resolve({ data: [] as GiftFundRow[] }),
-    settings.show_funds
+    contributeOn
       ? admin.from("gift_bank_details").select("*").eq("wedding_id", wedding.id).maybeSingle()
       : Promise.resolve({ data: null as GiftBankDetailsRow | null }),
     settings.hero_asset_id
