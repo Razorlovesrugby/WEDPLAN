@@ -19,6 +19,12 @@ export type ReplyMember = {
   name: string;
   /** One status per event this person is invited to. */
   responses: RsvpStatus[];
+  /**
+   * The subset of `responses` that are for main events. When there are any,
+   * they decide coming / declining; the other events no longer make someone
+   * "not sure" (a yes to the wedding and a no to the rehearsal is coming).
+   */
+  mainResponses?: RsvpStatus[];
 };
 
 export type ReplyState =
@@ -47,8 +53,9 @@ export type ReplySummary = {
 
 type PersonKind = "coming" | "declining" | "unsure" | "unanswered";
 
-function classify(responses: RsvpStatus[]): PersonKind {
+function classify(responses: RsvpStatus[], mainResponses: RsvpStatus[] = []): PersonKind {
   if (responses.length === 0 || responses.some((status) => status === "pending")) return "unanswered";
+  if (mainResponses.length > 0) responses = mainResponses;
   if (responses.every((status) => status === "yes")) return "coming";
   if (responses.every((status) => status === "no")) return "declining";
   return "unsure";
@@ -60,7 +67,7 @@ export function summariseReply(members: ReplyMember[]): ReplySummary {
   for (const member of members) {
     // Somebody invited to nothing has nothing to answer and no place here.
     if (member.responses.length === 0) continue;
-    summary[classify(member.responses)].push(member.name);
+    summary[classify(member.responses, member.mainResponses)].push(member.name);
   }
 
   const { coming, declining, unsure, unanswered } = summary;
@@ -150,17 +157,20 @@ export function replyMembersFromContext(context: {
   guests: { id: string; first_name: string; preferred_name: string | null }[];
   invites: { guest_id: string; event_id: string }[];
   rsvps: { guest_id: string; event_id: string; status: RsvpStatus }[];
+  events?: { id: string; is_main: boolean }[];
 }): ReplyMember[] {
-  return context.guests.map((guest) => ({
-    name: guest.preferred_name?.trim() || guest.first_name,
-    responses: context.invites
-      .filter((invite) => invite.guest_id === guest.id)
-      .map(
-        (invite) =>
-          context.rsvps.find((row) => row.guest_id === guest.id && row.event_id === invite.event_id)
-            ?.status ?? "pending",
-      ),
-  }));
+  const mainIds = new Set((context.events ?? []).filter((e) => e.is_main).map((e) => e.id));
+  return context.guests.map((guest) => {
+    const invites = context.invites.filter((invite) => invite.guest_id === guest.id);
+    const statusOf = (eventId: string): RsvpStatus =>
+      context.rsvps.find((row) => row.guest_id === guest.id && row.event_id === eventId)?.status ??
+      "pending";
+    return {
+      name: guest.preferred_name?.trim() || guest.first_name,
+      responses: invites.map((invite) => statusOf(invite.event_id)),
+      mainResponses: invites.filter((i) => mainIds.has(i.event_id)).map((i) => statusOf(i.event_id)),
+    };
+  });
 }
 
 /** "1 May", in the wedding's own timezone, or null when there is no lock date. */

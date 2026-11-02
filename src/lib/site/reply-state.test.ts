@@ -107,6 +107,40 @@ describe("replyBarCopy with a custom title (spec 28 §7.2)", () => {
   });
 });
 
+describe("main events", () => {
+  it("counts a yes to the main event as coming, whatever else they decline", () => {
+    const summary = summariseReply([
+      { name: "Joe", responses: ["no", "no", "yes", "yes"], mainResponses: ["yes"] },
+    ]);
+    expect(summary.coming).toEqual(["Joe"]);
+    expect(summary.state).toBe("yes");
+  });
+
+  it("counts a no to the main event as declining, even with other yeses", () => {
+    const summary = summariseReply([{ name: "Joe", responses: ["no", "yes"], mainResponses: ["no"] }]);
+    expect(summary.declining).toEqual(["Joe"]);
+  });
+
+  it("still waits for every event to be answered", () => {
+    const summary = summariseReply([{ name: "Joe", responses: ["yes", "pending"], mainResponses: ["yes"] }]);
+    expect(summary.unanswered).toEqual(["Joe"]);
+  });
+
+  it("falls back to all events when none is marked main", () => {
+    expect(summariseReply([{ name: "Joe", responses: ["yes", "no"], mainResponses: [] }]).unsure).toEqual(["Joe"]);
+  });
+
+  it("builds main responses from the context", () => {
+    const [joe] = replyMembersFromContext({
+      guests: [{ id: "g", first_name: "Joe", preferred_name: null }],
+      invites: [{ guest_id: "g", event_id: "a" }, { guest_id: "g", event_id: "w" }],
+      rsvps: [{ guest_id: "g", event_id: "a", status: "no" }, { guest_id: "g", event_id: "w", status: "yes" }],
+      events: [{ id: "a", is_main: false }, { id: "w", is_main: true }],
+    });
+    expect(joe?.mainResponses).toEqual(["yes"]);
+  });
+});
+
 describe("replyConfirmation", () => {
   it("names each group once", () => {
     const { heading, lines } = replyConfirmation(
@@ -149,8 +183,8 @@ describe("replyMembersFromContext", () => {
       ],
     });
     expect(members).toEqual([
-      { name: "Chidi", responses: ["yes", "pending"] },
-      { name: "Ada", responses: ["no"] },
+      { name: "Chidi", responses: ["yes", "pending"], mainResponses: [] },
+      { name: "Ada", responses: ["no"], mainResponses: [] },
     ]);
   });
 

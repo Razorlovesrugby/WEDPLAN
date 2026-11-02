@@ -331,6 +331,9 @@ export function RsvpForm({
         return {
           name: guest.preferred_name?.trim() || guest.first_name,
           responses: Object.values(guestState.responses),
+          mainResponses: Object.entries(guestState.responses)
+            .filter(([eventId]) => events.some((e) => e.id === eventId && e.is_main))
+            .map(([, status]) => status),
         };
       }),
     );
