@@ -3,6 +3,7 @@ import type { PublicRegistry } from "@/server/registry/public";
 import { applyFilters, parseFilters, usableTags } from "@/lib/registry/browse";
 import { registryColourVars } from "@/lib/registry/look";
 import { registryFonts } from "@/lib/registry/fonts";
+import { contributeSection, resolveContributePosition } from "@/lib/registry/contribute";
 import { GiftFunds } from "@/components/site/gift-funds";
 import { FilterBar } from "./filter-bar";
 import { ItemGrid } from "./item-grid";
@@ -22,7 +23,15 @@ export function RegistryView({ registry, search }: { registry: PublicRegistry; s
   const fonts = registryFonts(settings.type_pairing);
   const open = settings.open && !registry.preview;
   const heading = settings.title || registry.weddingName;
-  const hasFunds = settings.show_funds && (registry.funds.length > 0 || registry.bank !== null);
+  const contribute = contributeSection({
+    position: resolveContributePosition(settings.contribute_position),
+    heading: settings.contribute_heading,
+    text: settings.contribute_text,
+    buttonOnly: settings.contribute_button_only,
+    fundCount: registry.funds.length,
+    hasBank: registry.bank !== null,
+    hasOnlineLink: registry.funds.some((fund) => fund.contributeUrl),
+  });
   const filtered = filters.tags.length > 0 || filters.q !== "" || filters.min !== null || filters.max !== null;
 
   return (
@@ -91,6 +100,8 @@ export function RegistryView({ registry, search }: { registry: PublicRegistry; s
           </p>
         ) : null}
 
+        {contribute?.position === "above" ? <ContributeSection section={contribute} registry={registry} above /> : null}
+
         {/* ---------------------------------------------------------- items */}
         <section aria-labelledby="registry-items" className="mt-14">
           <h2 id="registry-items" className="sr-only">Things we&rsquo;d love</h2>
@@ -118,14 +129,7 @@ export function RegistryView({ registry, search }: { registry: PublicRegistry; s
           )}
         </section>
 
-        {hasFunds ? (
-          <section aria-labelledby="registry-funds" className="mx-auto mt-20 max-w-2xl text-center">
-            <h2 id="registry-funds" className="font-display text-2xl">Or give towards something bigger</h2>
-            <div className="mt-6">
-              <GiftFunds funds={registry.funds} bank={registry.bank} />
-            </div>
-          </section>
-        ) : null}
+        {contribute?.position === "below" ? <ContributeSection section={contribute} registry={registry} /> : null}
 
         {settings.disclosure_on ? (
           <footer className="mx-auto mt-20 max-w-xl text-center text-xs text-muted">
@@ -134,5 +138,30 @@ export function RegistryView({ registry, search }: { registry: PublicRegistry; s
         ) : null}
       </main>
     </div>
+  );
+}
+
+/**
+ * The Contribute block (spec 38): the site's gifts block — funds, then the
+ * Contribute button — under a heading the couple can reword. Shown on a closed
+ * registry too: giving money is not a claim.
+ */
+function ContributeSection({
+  section,
+  registry,
+  above,
+}: {
+  section: NonNullable<ReturnType<typeof contributeSection>>;
+  registry: PublicRegistry;
+  above?: boolean;
+}) {
+  return (
+    <section aria-labelledby="registry-contribute" className={`mx-auto max-w-2xl text-center ${above ? "mt-12" : "mt-20"}`}>
+      <h2 id="registry-contribute" className="font-display text-2xl">{section.heading}</h2>
+      {section.text ? <p className="mx-auto mt-3 max-w-xl whitespace-pre-line leading-relaxed">{section.text}</p> : null}
+      <div className="mt-6">
+        <GiftFunds funds={registry.funds} bank={registry.bank} hideList={!section.listFunds} />
+      </div>
+    </section>
   );
 }

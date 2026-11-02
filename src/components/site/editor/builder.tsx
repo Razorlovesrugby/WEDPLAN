@@ -58,6 +58,7 @@ import {
   type ToPreview,
 } from "@/lib/site/preview-messages";
 import type { SiteTheme } from "@/lib/theme/presets";
+import { PreviewFrame, type PreviewDevice } from "@/components/preview-frame";
 import { BlockInspector } from "./block-inspector";
 import { LookSections, Section } from "./rail";
 import { applyVibe, restoreVibe } from "@/server/actions/site-vibes";
@@ -98,14 +99,6 @@ import type { PreviewHousehold } from "@/lib/site/preview-households";
  * and Move down instead (spec 24 Q3), and the rail and the preview become two
  * panes you switch between, because neither fits beside the other on a phone.
  */
-
-/** Desktop is shown at a readable fraction of 1280px; a phone nearly full size. */
-const DEVICE = {
-  phone: { width: 430, zoom: 0.9 },
-  desktop: { width: 1280, zoom: 0.52 },
-} as const;
-
-type Device = keyof typeof DEVICE;
 
 /** How long a delete can be taken back. */
 const UNDO_MS = 8000;
@@ -165,7 +158,7 @@ export function SiteBuilder({
   // the inspector to put the cursor in that block's Title field (spec 28 §7.2).
   const [titleFocus, setTitleFocus] = useState(0);
   const [order, setOrder] = useState(() => blocks.map((block) => block.id));
-  const [device, setDevice] = useState<Device>("desktop");
+  const [device, setDevice] = useState<PreviewDevice>("desktop");
   const [pane, setPane] = useState<"edit" | "preview">("edit");
   // Who the preview is of (spec 27 E7). Always a household: every page a guest
   // can reach is somebody's own (spec 28 §7a.4), so there is no neutral version
@@ -1071,84 +1064,6 @@ function photoFor(block: SiteBlock, photos: Map<string, PhotoOption>): PhotoOpti
   const payload = (block.payload ?? {}) as Record<string, unknown>;
   const id = typeof payload["image_id"] === "string" ? payload["image_id"] : block.style.bgImage;
   return id ? (photos.get(id) ?? null) : null;
-}
-
-/**
- * The preview, scaled.
- *
- * The iframe is laid out at the real device width and then transformed, so
- * the page inside it genuinely believes it is 430px or 1280px wide. Setting
- * the frame to the *scaled* width instead would show a 1280px layout's media
- * queries resolving at 666px, which is a preview of a page nobody will ever
- * see. The outer box takes the scaled size so the surrounding layout is not
- * pushed around by the untransformed element.
- *
- * The zoom is the device's preferred one, shrunk to fit when the column is
- * narrower than that — which on a phone it always is.
- */
-function PreviewFrame({
-  device,
-  iframeRef,
-  src,
-  onLoaded,
-  children,
-}: {
-  device: Device;
-  iframeRef: React.RefObject<HTMLIFrameElement | null>;
-  src: string;
-  onLoaded?: () => void;
-  /** Laid over the frame — the drop zone, while a block is being dragged in. */
-  children?: React.ReactNode;
-}) {
-  const wrap = useRef<HTMLDivElement>(null);
-  const [available, setAvailable] = useState<number | null>(null);
-
-  useEffect(() => {
-    const element = wrap.current;
-    if (!element) return;
-    const measure = () => setAvailable(element.clientWidth);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  const { width, zoom: preferred } = DEVICE[device];
-  // 40px is the wrapper's `px-5` gutters.
-  const zoom = available && available > 40 ? Math.min(preferred, (available - 40) / width) : preferred;
-
-  return (
-    <div ref={wrap} className="flex justify-center px-5 pb-5">
-      <div
-        // `overflow: clip`, not `hidden`: a hidden box is still a scroll
-        // container, and anything inside the iframe that asks its ancestors
-        // to scroll can move it — which is how the preview used to collapse to
-        // a strip (spec 28 §4.2). A clipped box cannot be scrolled at all.
-        className="relative overflow-clip border border-line bg-white"
-        // The visible box is the scaled size. Heights are viewport units and
-        // a `calc`, not a measurement, so nothing here touches `window` —
-        // this component server-renders as part of the page.
-        style={{ width: width * zoom, height: "78vh" }}
-      >
-        <iframe
-          ref={iframeRef}
-          // No `key`: the frame is never remounted. An edit is a message
-          // asking it to re-render where it stands (`PreviewBridge`).
-          src={src}
-          onLoad={onLoaded}
-          title="Preview"
-          style={{
-            width,
-            height: `calc(78vh / ${zoom})`,
-            transform: `scale(${zoom})`,
-            transformOrigin: "top left",
-            border: 0,
-          }}
-        />
-        {children}
-      </div>
-    </div>
-  );
 }
 
 /**

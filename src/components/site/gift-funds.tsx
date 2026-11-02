@@ -21,6 +21,7 @@ export function GiftFunds({
   registryHref,
   registryExternal,
   dark,
+  hideList,
 }: {
   funds: PublicFund[];
   bank: PublicBank | null;
@@ -29,6 +30,8 @@ export function GiftFunds({
   /** True when the address is the couple's own registry elsewhere: opens in a new tab. */
   registryExternal?: boolean;
   dark?: boolean;
+  /** Registry only (spec 38): the button and nothing above it. */
+  hideList?: boolean;
 }) {
   const onlineLinks = funds.flatMap((fund) =>
     fund.contributeUrl ? [{ name: fund.name, url: fund.contributeUrl }] : [],
@@ -36,7 +39,7 @@ export function GiftFunds({
 
   return (
     <div>
-      {funds.length > 0 ? (
+      {funds.length > 0 && !hideList ? (
         <ul>
           {funds.map((fund) => (
             <li key={fund.id} className="border-b border-ink/[0.18] py-8 first:pt-0 last:border-b-0">
@@ -48,7 +51,7 @@ export function GiftFunds({
       ) : null}
 
       {bank || onlineLinks.length > 0 || registryHref ? (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <div className={`${funds.length > 0 && !hideList ? "mt-6 " : ""}flex flex-wrap items-center justify-center gap-3`}>
           {registryHref ? (
             <a
               href={registryHref}
