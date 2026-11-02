@@ -1,8 +1,21 @@
 # Feature spec: A live preview on the registry, and a Contribute block you can put above or below the gifts
 
-**Status: proposed — not built. Asked for as "a story"; this is the spec. Nothing
-beyond this file is written, and nothing is built until the planner says to
-build it** (`CLAUDE.md`, "Spec requests are not build authorization").
+**Status: proposed, all seven questions answered (2026-11-02) — not built.
+Asked for as "a story"; this is the spec. Nothing beyond this file is written,
+and nothing is built until the planner says to build it** (`CLAUDE.md`, "Spec
+requests are not build authorization"; answering the questions is not it).
+
+## Answered — 2026-11-02
+
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Refresh on Save, or live as you type? | **On Save** (recommended). |
+| 2 | Share the site builder's `PreviewFrame`? | **Share it** (recommended): extract to a shared component. |
+| 3 | Editable heading and line? | **Yes** (recommended): `contribute_heading`, `contribute_text`. |
+| 4 | Bank details visible to anyone with the registry link? | **Yes, with a plain warning** and a guard against the link preview (recommended). |
+| 5 | "Button only, hide the fund list" option? | **Yes, add a switch** — **against the recommendation.** See §5.6. |
+| 6 | Contribute on a closed registry? | **Yes, keep showing** (recommended). |
+| 7 | Preview on the Items tab too? | **Settings tab only** (recommended). |
 
 **Depends on:** spec 36 (the registry page and its settings), spec 28 §6.1 and
 `0033` (the site's gift block, Contribute popup and bank details), spec 37 (the
@@ -130,10 +143,14 @@ details under Site → A gift" with a link, in the same style as the card spec 3
 put on `/site/gifts`. The setting is still saved; the page is simply empty until
 there's something to show.
 
-**5.6 Contribute-only.** The site's block always lists funds by name and line.
-A couple who want **only the button** (no funds listed) can already get that on
-the site by having no funds and only bank details; the registry inherits the
-same behaviour and no extra switch is added. (If wanted: Q5.)
+**5.6 Contribute-only (Q5: yes, a switch).** The site's block lists funds by
+name and line. The registry gets a tick under the position control, **"Show just
+the button — don't list the funds"**, stored as
+`registry_settings.contribute_button_only boolean not null default false` (a
+second column in `0042`). When on, the section renders the heading, the line and
+the Contribute button only; the funds are not read for the public page. It does
+nothing, and says so, when there are no bank details or online links (a button
+with nothing behind it). The site's own gifts block is unchanged.
 
 ## 6. Things worth saying out loud
 
