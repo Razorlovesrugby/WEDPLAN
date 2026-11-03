@@ -39,10 +39,14 @@ someone seeing it for the first time on every task:
 
 - **Read `docs/HANDOFF.md` first**, always — it's a living document,
   rewritten at the end of every work session, and it names what's actually
-  been verified vs. what's only been typechecked. This app has never run
-  against a live Supabase project or opened in a real browser (see its
-  repeated caveat to that effect) — don't imply otherwise in anything you
-  tell the person.
+  been verified vs. what's only been typechecked. **The app is deployed and
+  runs against a live Supabase project, and the planner uses it in a real
+  browser** (confirmed by the planner, session 45). The older "never run /
+  never opened in a browser" caveats in `docs/HANDOFF.md` describe what
+  *that session* could verify from a sandbox with no network to Supabase —
+  not the state of the app. Still say plainly what *you* verified this
+  session (typecheck, tests, build, headless Chromium), and don't assume a
+  given migration is applied to the live project without checking.
 - **Match the conventions already in the code** before introducing your
   own: every write is a server action in `src/server/actions/` returning
   `ActionResult`; every read is in `src/server/queries/`, wrapped in
