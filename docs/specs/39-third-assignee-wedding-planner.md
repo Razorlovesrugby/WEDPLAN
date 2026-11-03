@@ -236,6 +236,45 @@ would be a separate, later decision.
     records it; this is only a question of whether the planner's name shows there
     (recommended: yes).
 
+### 8.8 "Everything but the budget" (asked 2026-11-03)
+
+**Possible, and it is the same mechanism:** the planner policy is additive per
+table, so "no budget" means not granting the budget tables
+(`budget_items`, `budget_categories`, `budget_payments`, `budget_item_sections`,
+`budget_guest_population`'s sources). Guests and the rest would then be granted
+instead of withheld, so this is a *wider* grant than §8.2 (guests, households,
+RSVPs, site, events, tasks, vendors) minus one family. Findings from reading the
+migrations, all places the budget touches something else:
+
+- **Views are `security_invoker`** (`v_vendors`, `v_budget_items`,
+  `v_reminders_due`, `v_budget_item_tasks`), so they obey the viewer's access: a
+  planner without budget access gets no budget rows through them. Good — no
+  second gate to maintain.
+- **But the screens would then show blanks, not "hidden".** `v_vendors` sums
+  paid/spend per vendor from `budget_items`; for the planner those read as $0 or
+  empty, which looks like "we owe nothing". The vendor page, the timeline's
+  budget-link badges, `/lists/[id]`'s reverse badges, the dashboard Budget tile
+  and `/guests/rank`'s per-seat figure must each be **hidden** for this level,
+  not left to render zeros. Payment due-dates drop out of their reminders view
+  (wanted).
+- **A real leak: `weddings.total_budget`** is a column on the `weddings` row, and
+  the planner must be able to read that row (name, date, timezone). RLS is
+  row-level, so granting the row grants the figure. Fix is one of: move
+  `total_budget` to its own budget-gated table (touches `0020`'s views — the
+  larger and cleaner change), or serve the planner a column-limited view of
+  `weddings` and give them no policy on the table itself (smaller;
+  `getCurrentWedding` needs a planner branch).
+- **Guest data comes with the wider grant**, so the `sideLabel`/guest-side logic
+  is unaffected (they're still not a collaborator), but they would see dietary
+  and accessibility notes. Q12 below.
+
+**Q12.** If the planner sees guests, may they see **dietary/accessibility
+notes and contact details**, or only names, households, RSVP status and events?
+Recommended: all of it, since a planner usually needs it for the caterer and
+venue — but it is your guests' data, so your call.
+**Q13.** `total_budget` fix: **move the column** (cleaner, bigger) or **limited
+`weddings` view** (smaller)? Recommended: the limited view.
+
 ## 7. Not in scope
 
 *(Superseded in part by §8: a planner login is now in scope as Option C.)*
