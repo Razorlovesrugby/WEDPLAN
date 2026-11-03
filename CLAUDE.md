@@ -45,8 +45,8 @@ someone seeing it for the first time on every task:
   never opened in a browser" caveats in `docs/HANDOFF.md` describe what
   *that session* could verify from a sandbox with no network to Supabase —
   not the state of the app. Still say plainly what *you* verified this
-  session (typecheck, tests, build, headless Chromium), and don't assume a
-  given migration is applied to the live project without checking.
+  session (typecheck, tests, build, headless Chromium), and don't assume a new
+  migration added *after* `0042` is applied until the planner says so.
 - **Match the conventions already in the code** before introducing your
   own: every write is a server action in `src/server/actions/` returning
   `ActionResult`; every read is in `src/server/queries/`, wrapped in

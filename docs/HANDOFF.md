@@ -6,10 +6,11 @@ needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 **Correction (session 45): the app is live.** The planner confirms WEDPLAN is
 deployed, connected to its Supabase project, and used in a real browser. Every
 "never run against Supabase / never opened in a browser" line below is about
-what *that session's sandbox* could verify, not the state of the app. Which of
-`0026`–`0042` are applied to the live project is **unconfirmed**: the Supabase
-connector in session 45 only reached an unrelated project, so check the live
-`supabase_migrations` table rather than trusting the "not applied" notes below.
+what *that session's sandbox* could verify, not the state of the app. **The
+planner has run the migrations against the live project** (through `0042`), so
+every "not applied to the live project" note below is out of date. (Session
+45's Supabase connector is linked to a different account, so this was
+confirmed by the planner, not checked from the session.)
 
 **Session 44 (spec 38):** the registry's live preview and Contribute block, built on branch
 `claude/spec-38-registry-preview-contribute` (**no PR opened**). Asked for as a story, seven
