@@ -1,7 +1,9 @@
 # Feature spec: A third person to assign tasks to — the wedding planner
 
-**Status: proposed, not built.** Asked for as "see if that's in scope for build"
-(2026-11-03). This file is the scoping. Nothing beyond it is written, and nothing
+**Status: proposed, not built. Round two (2026-11-03): the planner has said a
+planner login that sees the budget and vendors is fine, likes B for its own
+reasons, and asked for C to be scoped — see §8.** Asked for as "see if that's in
+scope for build" (2026-11-03). This file is the scoping. Nothing beyond it is written, and nothing
 is built until the planner says to build it (`CLAUDE.md`, "Spec requests are not
 build authorization"; answering the questions below is not it).
 
@@ -127,10 +129,118 @@ surface. Comparable to spec 37 in size.
 6. **Wording:** the picker currently says *You / Partner*. With names set it says
    their names. Should the person row be labelled "(not on WedPlan)" in the picker?
 
+## 8. Round two — C scoped, and B + C as one "People" list
+
+**Direction given:** a planner who logs in and sees vendors and the budget is
+acceptable; they must not be part of the guest side of things; task- and
+vendor-based. B is still wanted. Asked: *will C break existing things, and can the
+couple grant it from a People section in Settings?*
+
+### 8.1 Will it break anything? Not if it fails closed
+
+Today every tenant policy is `is_collaborator(wedding_id)` — 26 `create policy`
+statements, ~50 mentions across 21 migrations, and every new table copies the
+pattern. **Adding a `planner` value to `collaborator_role` would make
+`is_collaborator()` true for the planner and open every table to them** (guests,
+RSVPs, bank details, the registry). That is the version that breaks things, and
+the failure is silent.
+
+So the design is the opposite: **the planner is not a row in `collaborators`.**
+`is_collaborator()` and all existing policies stay byte-for-byte as they are, so
+the two existing logins behave identically. The planner is a separate grant
+(`people.user_id` + an access level) with a new `can_plan(wedding_id)` predicate,
+and an *extra*, additive policy is added only on the tables the planner is meant
+to see. A table nobody remembers to list is invisible to the planner, not open to
+them. Consequences, all wanted:
+
+- `sideLabel`, the guest side, `CollaboratorNamesEditor`, the audit page's
+  "who" lookup and the weekly digest all read `collaborators` — so none of them
+  see a planner and none need changing for that reason.
+- The planner is never emailed the digest (see §8.5).
+- Revoking access is immediate for data: RLS reads the grant on every query, so
+  deleting it cuts reads and writes at once, not at token expiry.
+
+### 8.2 What the planner could see (proposed default; each is a Q)
+
+| Area | Planner |
+| --- | --- |
+| Tasks: lists, timeline, calendar, board, reminders | yes, read + write |
+| Vendors, contacts, notes, contact sheet | yes |
+| Budget (lines, payments, totals) | yes |
+| Events, run sheet | yes |
+| Guests, households, RSVPs, invitations, questions | **no** |
+| Public site, registry, gifts, bank details, songs, seating | **no** |
+| Settings, activity log, exports | **no** (activity log is a Q) |
+
+"See everything" is also possible: a second level that is just a full partner
+without the guest-side label. That *is* a plain third `collaborators` row (Option
+A) and needs the `sideLabel`/digest fixes in §2 — so the levels are
+**None (B) · Planner · Full**, and Full is the only one that touches
+`is_collaborator`.
+
+### 8.3 One People list, B and C together
+
+Keep §3-B's `people` table, with two extra nullable columns: `user_id` (null = no
+login) and `access` (`none` | `planner` | `full`). The Settings → People screen
+lists the planner, with a button "Give access" that invites them by email.
+Assignment is `list_items.assigned_person_id` for everyone in the list, so a
+person who gets a login later keeps their tasks — no reassigning. The couple's
+own `assigned_to` is unchanged. "Assigned to me" for the planner matches
+`people.user_id`.
+
+### 8.4 What it would take (beyond B)
+
+| Area | Change |
+| --- | --- |
+| Migration | `can_plan()`; additive policies on the planner's tables via one loop (the same shape as `0002`); `people.user_id`/`access`. The planner needs `select` on `weddings` (name, date, timezone — and `total_budget`, which they'd see anyway). |
+| **Views** | Views such as `v_wedding_stats` read guest tables; for a planner they return nothing or error. Each view the planner's pages use must be checked (security-invoker or not). **This is the likeliest source of breakage and cannot be confirmed without running it.** |
+| Auth | **The app has no sign-up and no invite flow** (email + password; login, forgot and reset only). Giving access means a server action using the service-role admin API (`inviteUserByEmail` or `createUser`), then a set-password link. The admin client exists (the cron uses it); this use is new, and **the invite email depends on Supabase email settings that have never been exercised.** |
+| App gating | Nav hides guest/site/registry/settings for a planner; a layout-level guard on those routes. Many queries `throw` on error, so without the guard a planner opening `/guests` by URL gets an error page, not an empty one. The dashboard shows guest and RSVP figures and needs a planner variant. |
+| Labels | One `assigneeLabel()` (already in B). |
+| Tests | SQL with a planner account: reads tasks/vendors/budget; **reads zero guest rows; cannot write to them**; and a test that lists every public table and fails if one has no planner decision — the same trick as `18_audit_log.sql`'s exception list, so a future table can't be forgotten. Unit tests for the guard. |
+| Audit | The planner's edits are logged by `auth.uid()` already; `describe.ts`'s name lookup must also read `people`. |
+
+Rough size: B plus ~15–20 more files and a second migration — **two to three times
+B**, most of it the view check, the route guard and the invite action. It does not
+require touching any existing policy, which is what makes it safe to do after B
+rather than instead of it.
+
+### 8.5 The digest
+
+The weekly digest code exists (`/api/cron/reminders`, spec 2, emailing every row in
+`collaborators`); I can't tell from the repo whether it is switched on for the
+live project. Either way a planner is not in `collaborators`, so under this design
+they are never emailed it. Giving the planner their own digest of *their* tasks
+would be a separate, later decision.
+
+### 8.6 Order
+
+1. **B** — `people`, assignment, the picker. Useful alone, and it makes the planner
+   assignable today.
+2. **C (Planner level)** — the grant, `can_plan()`, policies, guard, invite.
+3. **Full** — only if wanted; it is the one level that needs `is_collaborator`
+   and the side-label fixes.
+
+### 8.7 New open questions
+
+7. **Read-only or read + write** for the planner on tasks, vendors and budget?
+   Recommended: write on tasks and vendor notes; **read-only on the budget**.
+8. Is the §8.2 split right? In particular: **budget — yes**; **activity log — no**;
+   **events/run sheet — yes**.
+9. Do you want a **Full** level at all, or is Planner enough? Recommended: Planner
+   only; add Full if you find yourself wanting it.
+10. **Email delivery:** are you happy for the invite to depend on Supabase's email
+    sending working (never tested here), with a fallback of you copying a one-time
+    link to send them yourself? Recommended: build both.
+11. Should the couple see **what the planner changed**? The audit log already
+    records it; this is only a question of whether the planner's name shows there
+    (recommended: yes).
+
 ## 7. Not in scope
 
-Giving the planner a login or any visibility; changing `guests.side`; a role/
-permission system; emailing or notifying the person.
+*(Superseded in part by §8: a planner login is now in scope as Option C.)*
+Changing `guests.side`; a general role/permission system beyond None / Planner /
+Full; emailing or notifying a person without a login.
 
 **Caveat, as in every spec here:** this has not been built, and the app has never
 been opened in a browser or run against the live project.
