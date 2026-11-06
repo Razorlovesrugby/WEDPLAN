@@ -1,16 +1,18 @@
 # Feature spec: Self-serve onboarding, and account, timezone and currency settings
 
-**Status: proposed (2026-11-06). Spec only — nothing built.** Asked for as a spec
-after an investigation of "how do customers onboard themselves without me running
-a migration". **No payment step**: that is a later spec, and §9 says what this one
-leaves ready for it. Nothing here is built until §10 has answers and the planner
-says to build.
+**Status: questions answered (2026-11-06). Spec only — nothing built.** Asked for as
+a spec after an investigation of "how do customers onboard themselves without me
+running a migration". **No payment step**: that is a later spec, and §9 says what
+this one leaves ready for it. All nine §10 questions are answered (see **Answered**
+under §10). One went against the recommendation (Q3, 8 characters) and one was a
+free answer (Q6). **Not built until the planner says to build.**
 
 **Depends on:** V1 (`weddings`, `collaborators`), spec 3 (Settings), spec 15 §2
 (`collaborators.display_name`), spec 18 (NZD only, GST), spec 25 (`site_blocks`),
 spec 26 (the Today/overdue view), spec 39 (`generateLink` invite pattern,
-`planner_table_access`, `v_wedding_basics`). **`0026`–`0044` are not applied to the
-live project** (`docs/HANDOFF.md`). This would be `0045` and stack on all of them.
+`planner_table_access`, `v_wedding_basics`). **The planner says all migrations
+through `0044` are now applied to the live project (2026-11-06).** This session
+didn't check that independently. This would be `0045`.
 
 ## 1. What was asked
 
@@ -223,7 +225,7 @@ which `CoupleOnly` already guards from planners).
 ## 8. Currency: one currency, a label not a conversion
 
 1. **Schema (`0045`).** `weddings.currency text not null default 'NZD'` with a check
-   against a short list (§10 Q6). Every existing wedding is NZD, so nothing changes
+   `currency ~ '^[A-Z]{3}$'` (§10 Q6). Every existing wedding is NZD, so nothing changes
    for them. `v_wedding_basics` (spec 39's planner view) gets the column, recreated
    with it appended. The planner sees no money, but the view should not silently
    lag the table.
@@ -233,9 +235,15 @@ which `CoupleOnly` already guards from planners).
    sites pass `wedding.currency`; the public site and registry read it from the
    wedding they already load. Mechanical, but it touches many files: it's the
    largest part of this spec by line count.
-3. **Only two-decimal currencies** in the list, so "integer minor units, divide by
-   100" stays true everywhere and no stored number changes meaning. (JPY and
-   friends are §11.)
+3. **Any currency, symbol only (Q6).** The picker offers every code
+   `Intl.supportedValuesOf("currency")` knows, with NZD, AUD, USD, GBP, EUR and CAD
+   pinned to the top. The check constraint is just "three uppercase letters". The
+   app validates against the `Intl` list. **Decimals don't follow the currency:**
+   amounts are stored and shown in hundredths exactly as now, whatever the code.
+   The formatters force their fraction digits (`formatMoney` always 2,
+   `formatMoneyShort` 0 or 2 as today) rather than taking the currency's own
+   convention. So a JPY wedding reads "¥4,600.00", and no stored number changes
+   meaning.
 4. **Changing it converts nothing.** The setting's help text says so in plain words:
    "This changes the symbol only. Amounts are not converted." Changing it is an
    ordinary `updateWeddingSettings` field, audited like the rest of `weddings`.
@@ -283,11 +291,25 @@ here adds a `plans`/`subscriptions` table or a price.
 9. **Changing the login email** from Settings — leave out (§11), or include? It
    needs Supabase's email-change confirmation round trip, so it isn't a one-liner.
 
+### Answered (2026-11-06)
+
+| Q | Answer |
+| --- | --- |
+| 1 | **(a) Anyone**, behind `ONBOARDING_OPEN`, a throttle and a honeypot. |
+| 2 | **(a) Go straight in.** `email_confirm: true` on `createUser`; the welcome email isn't required. |
+| 3 | **(b) 8 characters minimum**, nothing else. *Against the recommendation of 10.* The one rule is shared by `/start`, change password and `/reset-password`. |
+| 4 | **(a) Partner name and email both optional**; the invite is sent if an email is given. |
+| 5 | **(a) Keep wall-clock times** (§7.4, `change_wedding_timezone()`). |
+| 6 | **Free answer: "It's just a sign, no conversion, so decimals don't matter."** Any currency, symbol only, always hundredths (§8.3). |
+| 7 | **(a) Leave GST as is**: same toggle, 15%, whatever the currency. |
+| 8 | **(a) `/start`** on the app's own domain. |
+| 9 | **Leave out** changing the login email. |
+
 ## 11. Not in scope
 
 - Payment, plans, trials, invoices (the next spec, §9).
 - Converting amounts, FX, more than one currency per wedding (spec 18 stands).
-- Zero- or three-decimal currencies.
+- Following a currency's own decimal convention (Q6: always hundredths).
 - Changing the login email, deleting an account or a wedding (the "no destructive
   writes to guest data" rule makes that its own design).
 - One login on several weddings (V4, per `loadWedding`'s own comment).
@@ -320,8 +342,8 @@ here adds a `plans`/`subscriptions` table or a price.
 - **Email has to work** for the partner invite. The sending domain
   (SPF/DKIM/DMARC) is still not set up. The one-time link on the dashboard is the
   fallback.
-- **The live project lacks `0026`–`0044`.** `create_wedding()` writes to tables from
-  those migrations (`site_blocks`, `events.is_main`), so `0045` can't be applied
-  ahead of them.
+- **`0045` assumes the live project has everything through `0044`** (the planner
+  says it does). `create_wedding()` writes to `site_blocks` and `events.is_main`, so
+  run `node scripts/verify-live.mjs` before applying it.
 - **The currency change touches ~58 call sites.** That's mechanical, but it's the
   part most likely to miss a screen. The required parameter is what catches it.

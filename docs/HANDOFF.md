@@ -7,7 +7,9 @@ needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 the planner running anything, then for a spec: self-serve onboarding with **no payment**, plus
 Settings for names, password, timezone and currency. Written as
 `docs/specs/40-self-serve-onboarding-and-account-settings.md`. **Nothing built, no code or
-migration touched.** §10 has nine open questions. Findings worth knowing regardless:
+migration touched.** All nine §10 questions were then answered and folded in (see the spec's
+"Answered" table). **The planner says all migrations through `0044` are now applied to the live
+project.** That was not checked by this session. Findings worth knowing regardless:
 `bootstrap.sql` still writes the starter site to `site_content` (unread since `0025`), so a
 wedding bootstrapped today gets an empty site; and "today" is still the UTC date
 (`todayIso()`).
