@@ -3,6 +3,15 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 46 (spec 40, spec only):** asked how customers could onboard themselves without
+the planner running anything, then for a spec: self-serve onboarding with **no payment**, plus
+Settings for names, password, timezone and currency. Written as
+`docs/specs/40-self-serve-onboarding-and-account-settings.md`. **Nothing built, no code or
+migration touched.** §10 has nine open questions. Findings worth knowing regardless:
+`bootstrap.sql` still writes the starter site to `site_content` (unread since `0025`), so a
+wedding bootstrapped today gets an empty site; and "today" is still the UTC date
+(`todayIso()`).
+
 **Session 45 (spec 39):** a third assignee (part B) and a planner login (part C), built on
 branch `claude/spec-39-third-assignee` (**no PR opened**). Asked for as a scoping question,
 written up as a spec over two rounds, then "Okay let's go defaults and build it all" as its own
