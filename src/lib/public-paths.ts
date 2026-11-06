@@ -34,6 +34,11 @@ export const PUBLIC_PREFIXES = [
   // a planner screen at /registry would have been readable by anyone.
   "/registry",
   "/privacy",
+  // Self-serve onboarding (spec 40). The page scopes itself: a signed-in couple
+  // is sent to their wedding, and the action behind it is gated by
+  // ONBOARDING_OPEN and throttled. /setup (the signed-in "no wedding yet" page)
+  // stays behind the login.
+  "/start",
   "/api/cron",
   "/api/clip",
   "/api/health",

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { applySuggestedAllocations, setTotalBudget } from "@/server/actions/budget";
@@ -24,6 +25,7 @@ export function BudgetHeader({
   /** Categories with no percentage yet — the "Suggest percentages" control is pointless without one. */
   suggestableCategoryCount: number;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(summary.total_budget !== null ? String(summary.total_budget / 100) : "");
@@ -80,7 +82,7 @@ export function BudgetHeader({
       {editing ? (
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs text-muted">
-            Overall budget ($NZD)
+            Overall budget ({currency})
             <input
               autoFocus
               value={value}
@@ -111,7 +113,7 @@ export function BudgetHeader({
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Figure label="Budget" value={formatMoney(summary.total_budget)} />
+            <Figure label="Budget" value={formatMoney(summary.total_budget, currency)} />
             {/* Spec 20 §6: worded to match the per-section line, so the
                 same idea reads the same way at both grains. */}
             <Figure
@@ -119,13 +121,13 @@ export function BudgetHeader({
               value={summary.total_allocated_pct !== null ? `${trimPct(summary.total_allocated_pct)}%` : "—"}
               hint={
                 summary.total_allocated_amount !== null
-                  ? `${formatMoney(summary.total_allocated_amount)} of the budget allocated`
+                  ? `${formatMoney(summary.total_allocated_amount, currency)} of the budget allocated`
                   : "no category has a % yet"
               }
             />
             <Figure
               label={summary.unallocated_amount !== null && summary.unallocated_amount < 0 ? "Over-allocated" : "Left to allocate"}
-              value={summary.unallocated_amount !== null ? formatMoney(Math.abs(summary.unallocated_amount)) : "—"}
+              value={summary.unallocated_amount !== null ? formatMoney(Math.abs(summary.unallocated_amount), currency) : "—"}
               tone={summary.unallocated_amount !== null && summary.unallocated_amount < 0 ? "warn" : undefined}
               hint={
                 summary.unallocated_amount !== null && summary.unallocated_amount < 0
@@ -135,14 +137,14 @@ export function BudgetHeader({
             />
             <Figure
               label="Current"
-              value={formatMoney(summary.total_current)}
+              value={formatMoney(summary.total_current, currency)}
               tone={overBudget ? "warn" : "good"}
               hint={
                 summary.budget_variance === null
                   ? undefined
                   : summary.budget_variance === 0
                     ? "exactly on budget"
-                    : `${formatMoney(Math.abs(summary.budget_variance))} ${overBudget ? "over" : "under"}`
+                    : `${formatMoney(Math.abs(summary.budget_variance), currency)} ${overBudget ? "over" : "under"}`
               }
             />
           </div>

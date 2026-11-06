@@ -2,8 +2,8 @@
 # ---------------------------------------------------------------------------
 # Verify supabase/bootstrap.sql against a clean cluster.
 #
-# Separate from verify-migrations.sh because bootstrap must run on an EMPTY
-# database — the seed creates weddings, and bootstrap refuses when one exists.
+# Separate from verify-migrations.sh so it runs on a database with no seed:
+# what it checks is exactly what one run of bootstrap leaves behind.
 #
 # This is the one script a person runs by hand against their real project, so
 # it is the one most worth testing: a broken bootstrap is the first thing they
@@ -62,7 +62,10 @@ expect "ceremony and reception" "select count(*) from public.events"         2
 # left at 4 in session 27 and has been failing ever since — found in session 29
 # while running the full pass for spec 8.
 expect "standard questions"     "select count(*) from public.rsvp_questions" 5
-expect "site content blocks"    "select count(*) from public.site_content"   4
+# No site rows since spec 40 (0045's create_wedding): the builder's empty
+# state offers the starter layouts instead.
+expect "no site rows"           "select count(*) from public.site_blocks"    0
+expect "the main event"         "select count(*) from public.events where is_main" 1
 
 echo "==> the owner can see their own wedding through RLS"
 # The whole point of bootstrapping in SQL is that the collaborators row exists
@@ -79,7 +82,7 @@ echo "    ok  owner sees exactly their wedding"
 
 echo "==> refuses to run a second time"
 set +e; out="$(run -f "$ROOT/supabase/bootstrap.sql" 2>&1)"; set -e
-grep -q "already exists" <<<"$out" || fail "ran a second time without complaint"
+grep -q "already has a wedding" <<<"$out" || fail "ran a second time without complaint"
 
 echo
 echo "PASS — bootstrap applies cleanly and leaves a usable wedding."

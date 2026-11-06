@@ -100,10 +100,45 @@ export function timeLeftLabel(left: TimeLeft | null): string | null {
   return `${left.value} ${left.value === 1 ? noun : `${noun}s`} to go`;
 }
 
-/** Minor units (cents) to an NZD string — every wedding is NZD only (spec 18), e.g. formatMoney(460000) -> "$4,600.00". */
-export function formatMoney(minorUnits: number | null | undefined): string {
+/**
+ * The currency a wedding prints its money in (spec 40 §8). A SYMBOL ONLY:
+ * every amount is stored as integer hundredths whatever the code, nothing is
+ * ever converted, and the decimals don't follow the currency's own convention
+ * (a JPY wedding reads "¥4,600.00"). An unknown code falls back to NZD rather
+ * than throwing in the middle of a render.
+ */
+function moneyFormat(currency: string, fractionDigits: number): Intl.NumberFormat {
+  try {
+    return new Intl.NumberFormat("en-NZ", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    });
+  } catch {
+    return new Intl.NumberFormat("en-NZ", {
+      style: "currency",
+      currency: "NZD",
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    });
+  }
+}
+
+/**
+ * Minor units (hundredths) to a money string in the wedding's currency, e.g.
+ * formatMoney(460000, "NZD") -> "$4,600.00", formatMoney(460000, "AUD") ->
+ * "A$4,600.00". The currency is required so no screen silently stays on NZD.
+ */
+export function formatMoney(minorUnits: number | null | undefined, currency: string): string {
   if (minorUnits === null || minorUnits === undefined) return "—";
-  return new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(minorUnits / 100);
+  return moneyFormat(currency, 2).format(minorUnits / 100);
+}
+
+/** The currency's symbol on its own, for a field label: "$" for NZD, "A$" for AUD. */
+export function currencySymbol(currency: string): string {
+  const part = moneyFormat(currency, 0).formatToParts(0).find((p) => p.type === "currency");
+  return part?.value ?? currency;
 }
 
 /**
@@ -114,15 +149,10 @@ export function formatMoney(minorUnits: number | null | undefined): string {
  * "$1,200" rather than "$1,200.00" is the same number with less to read, and
  * a fund that genuinely sits at $1,200.50 still says so.
  */
-export function formatMoneyShort(minorUnits: number | null | undefined): string {
+export function formatMoneyShort(minorUnits: number | null | undefined, currency: string): string {
   if (minorUnits === null || minorUnits === undefined) return "—";
   const whole = minorUnits % 100 === 0;
-  return new Intl.NumberFormat("en-NZ", {
-    style: "currency",
-    currency: "NZD",
-    minimumFractionDigits: whole ? 0 : 2,
-    maximumFractionDigits: whole ? 0 : 2,
-  }).format(minorUnits / 100);
+  return moneyFormat(currency, whole ? 0 : 2).format(minorUnits / 100);
 }
 
 export function pluralise(count: number, singular: string, plural = `${singular}s`): string {

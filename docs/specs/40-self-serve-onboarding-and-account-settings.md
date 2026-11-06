@@ -1,6 +1,8 @@
 # Feature spec: Self-serve onboarding, and account, timezone and currency settings
 
-**Status: questions answered (2026-11-06). Spec only — nothing built.** Asked for as
+**Status: built (2026-11-06), branch `claude/confident-fermat-eali50`, no PR.** "Build the
+spec out" as its own turn after the answers. See **Build status** at the end for what departs
+from the text below. Earlier status line, kept for the record: questions answered (2026-11-06). Asked for as
 a spec after an investigation of "how do customers onboard themselves without me
 running a migration". **No payment step**: that is a later spec, and §9 says what
 this one leaves ready for it. All nine §10 questions are answered (see **Answered**
@@ -347,3 +349,83 @@ here adds a `plans`/`subscriptions` table or a price.
   run `node scripts/verify-live.mjs` before applying it.
 - **The currency change touches ~58 call sites.** That's mechanical, but it's the
   part most likely to miss a screen. The required parameter is what catches it.
+
+## Build status (2026-11-06)
+
+Built on `claude/confident-fermat-eali50`, no PR. **`0045` is not applied to the live project.**
+
+**Verified:** `npm run typecheck`; 1263 unit tests (1244 before onboarding's own 18, plus one
+public-path test); `verify-migrations.sh`: 770 SQL assertions (the earlier 740 unchanged, 30 new
+in `26_onboarding.sql`); `verify-migrations-single-tx.sh`; `verify-bootstrap.sh`; `next build`
+(placeholder env). **Seen:** `/start` in headless Chromium against `next start` with placeholder
+env, at 390px and 1100px: no console errors, no horizontal scroll, the wedding name follows the
+two names, Pacific/Auckland is first with its offset, NZD is pre-selected.
+**Not verified:** anything against Supabase. No account has been created, no `create_wedding`
+call has run outside the SQL test cluster, no partner email has been sent, no password changed,
+and no timezone change has run against real data. Settings has never rendered (it needs a
+session).
+
+### What was built
+
+- **`0045_onboarding_timezone_currency.sql`**: `weddings.currency` (check `^[A-Z]{3}$`, default
+  NZD), `v_wedding_basics` recreated with it appended, `create_wedding()`,
+  `change_wedding_timezone()`.
+- **`bootstrap.sql`** calls `create_wedding()`; the "first wedding only" guard is gone (it now
+  refuses when either login already has a wedding). `verify-bootstrap.sh` updated.
+- **`/start`** (`src/app/start/`), public. `startWedding` in `src/server/actions/onboarding.ts`;
+  rules in `src/lib/onboarding.ts`; partner login/link/email in `src/server/partner-invite.ts`.
+  Gated by `ONBOARDING_OPEN` (in `.env.example`), a per-IP throttle (5 an hour, on
+  `rsvp_token_attempts` under a `start:` key so it never touches RSVP lockouts), and a honeypot.
+- **`/setup`** (signed in, no wedding) now links to `/start`; `/login` links to it when open.
+- **Settings → Your account** (`src/components/settings/account-section.tsx`): both names (the
+  existing editor, moved here), change password (`changePassword` in `src/server/actions/auth.ts`,
+  re-checks the current password, 5 wrong tries per 15 minutes), the partner card (invite /
+  re-send / change email until joined; `src/server/actions/partner.ts`,
+  `src/server/queries/partner.ts`). "Joined" is `last_sign_in_at` being set.
+- **Timezone**: a real picker (`src/components/timezone-select.tsx`). `todayIso(timeZone)` is now
+  required everywhere (Today, overdue, calendar, dashboard, payment list/calendar, quick-add's
+  "tomorrow", the countdown generator, the digest cron per wedding). Changing it calls
+  `change_wedding_timezone()` first.
+- **Currency**: a picker (`src/components/currency-select.tsx`) in Wedding basics.
+  `formatMoney`/`formatMoneyShort` take a required currency; client components read it from
+  `CurrencyProvider` (`src/components/currency-context.tsx`, in the planner layout); the public
+  site and registry read it from the wedding they load. Field labels say "(AUD)" etc.
+
+### Where the build departs from the text above
+
+1. **`create_wedding()` makes no site rows**, not the `0025`-backfill set §5.1 described. The
+   site builder already has an empty state offering the starter layouts (`STARTER_LAYOUTS`),
+   which is a better first screen than fixed blocks duplicated into SQL.
+2. **`create_wedding()` is SECURITY INVOKER, executable by `service_role` only**, not SECURITY
+   DEFINER. The service role bypasses RLS, so this matches `claim_registry_item()` and leaves no
+   definer function behind.
+3. **A partner name with no partner email is not stored.** A collaborator row needs a login, so
+   the name only seeds the wedding name; Settings' "Invite your partner" asks for name and email
+   together.
+4. **`seating_plans.reveal_at` is also kept wall-clock** on a timezone change. Step 1's re-grep
+   found it; §7.4's list didn't have it.
+5. **The registry's price autofill follows the wedding's currency** instead of staying NZD-only
+   (§8.6 said leave it). An NZD-only autofill on an AUD wedding would have filled NZD prices in
+   as AUD, which is worse than the small change.
+6. **The partner's one-time link shows on the `/start` success screen** when email isn't set up,
+   not on the dashboard, and in Settings after any invite action.
+7. **Option labels (offsets, currency names) appear after mount.** Server and browser locale data
+   differ, and rendering them on the server broke hydration.
+
+### Known gaps, said plainly
+
+- Nothing here has run against Supabase. The riskiest parts are the admin calls (`createUser`
+  with `email_confirm`, `generateLink`, `updateUserById`, `deleteUser`) and the exact error
+  shapes `isEmailTaken` matches.
+- `daysUntil` (the header countdown) still counts from "now" rather than the wedding's today.
+  Off by at most a day near midnight, and outside this spec.
+- No email to the person who signed up (Q2's optional welcome email was not built).
+- The bank-details account-number check is still NZ-format only.
+
+### Pick up here
+
+Apply `0045` (after `node scripts/verify-live.mjs` confirms `0044`), set `ONBOARDING_OPEN=true`
+in Vercel, then sign up at `/start` with two real addresses and check: the dashboard loads, the
+partner's email arrives and its link sets a password, a second account can't see the first
+wedding, Settings changes the password and the currency, and changing the timezone leaves the
+ceremony time as typed.

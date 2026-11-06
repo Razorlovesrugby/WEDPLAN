@@ -74,6 +74,7 @@ export default async function SitePreviewPage({
       slug: wedding.slug,
       wedding_date: wedding.wedding_date,
       timezone: wedding.timezone,
+      currency: wedding.currency,
     },
     personal,
   );

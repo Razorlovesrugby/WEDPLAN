@@ -1,4 +1,5 @@
 import { formatDate, formatMoney } from "@/lib/format";
+import { todayIso } from "@/lib/lists/generate";
 import type { UpcomingPayment } from "@/server/queries/budget";
 
 /**
@@ -10,8 +11,16 @@ import type { UpcomingPayment } from "@/server/queries/budget";
  * section 6), so this stays a focused schedule of money rather than
  * duplicating that screen.
  */
-export function PaymentCalendar({ payments, timezone }: { payments: UpcomingPayment[]; timezone: string }) {
-  const today = new Date().toISOString().slice(0, 10);
+export function PaymentCalendar({
+  payments,
+  timezone,
+  currency,
+}: {
+  payments: UpcomingPayment[];
+  timezone: string;
+  currency: string;
+}) {
+  const today = todayIso(timezone);
   const dated = payments
     .filter((p) => p.due_date !== null)
     .sort((a, b) => (a.due_date! < b.due_date! ? -1 : 1));
@@ -34,7 +43,7 @@ export function PaymentCalendar({ payments, timezone }: { payments: UpcomingPaym
               — {p.item_vendor_name || p.item_label}
             </span>
             <span className="flex items-center gap-2">
-              <span className="tabular-nums">{formatMoney(p.amount)}</span>
+              <span className="tabular-nums">{formatMoney(p.amount, currency)}</span>
               {p.paid_at ? (
                 <span className="text-xs text-tierA">paid</span>
               ) : overdue ? (

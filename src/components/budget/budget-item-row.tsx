@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -77,6 +78,7 @@ export function BudgetItemRow({
   /** True when this is the `?item=` target navigated to from a linked task/list's reverse badge. */
   autoOpenLinks?: boolean;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [popupOpen, setPopupOpen] = useState(autoOpenLinks);
@@ -149,7 +151,7 @@ export function BudgetItemRow({
           ) : null}
           <div className="mt-0.5 text-xs text-muted">
             {BASIS_LABEL[item.quantity_basis]}
-            {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price)}` : ""}
+            {item.quantity_basis === "manual" ? ` · ${item.quantity ?? 1} × ${formatMoney(item.unit_price, currency)}` : ""}
             {item.gst_treatment === "exclusive" ? " · GST exclusive (+15%)" : ""}
             {item.allocation_pct !== null ? ` · ${trimPct(item.allocation_pct)}% of ${categoryName}` : ""}
             {linkedCount > 0 ? ` · ${linkedCount} linked` : ""}
@@ -174,28 +176,28 @@ export function BudgetItemRow({
             target stays as a note rather than a column (§11, question 5). */}
         <Figure
           label="Estimate"
-          value={formatMoney(item.effective_estimated)}
+          value={formatMoney(item.effective_estimated, currency)}
           muted={item.estimate_source === "allocation"}
           note={
             item.estimate_source === "allocation"
               ? "from allocation"
               : item.allocated_amount !== null
-                ? `allocated ${formatMoney(item.allocated_amount)}${item.gst_treatment === "exclusive" ? " all-in" : ""}`
+                ? `allocated ${formatMoney(item.allocated_amount, currency)}${item.gst_treatment === "exclusive" ? " all-in" : ""}`
                 : undefined
           }
         />
-        <Figure label="Quoted" value={formatMoney(quoted)} />
-        <Figure label="Contracted" value={formatMoney(contracted)} />
-        <Figure label="Current" value={formatMoney(item.computed_current)} strong />
+        <Figure label="Quoted" value={formatMoney(quoted, currency)} />
+        <Figure label="Contracted" value={formatMoney(contracted, currency)} />
+        <Figure label="Current" value={formatMoney(item.computed_current, currency)} strong />
         <Figure
           label="Outstanding"
-          value={formatMoney(item.outstanding)}
+          value={formatMoney(item.outstanding, currency)}
           tone={item.outstanding > 0 ? "warn" : "good"}
         />
       </div>
       {variance !== null && variance !== 0 ? (
         <p className="text-xs text-muted">
-          {variance > 0 ? "Over" : "Under"} quote by {formatMoney(Math.abs(variance))}
+          {variance > 0 ? "Over" : "Under"} quote by {formatMoney(Math.abs(variance), currency)}
         </p>
       ) : null}
       {allocationVariance !== null ? (
@@ -204,7 +206,7 @@ export function BudgetItemRow({
             "Exactly on its allocation"
           ) : (
             <span className={allocationVariance.amount > 0 ? "text-tierB" : "text-tierA"}>
-              {formatMoney(Math.abs(allocationVariance.amount))} {allocationVariance.amount > 0 ? "over" : "under"} its
+              {formatMoney(Math.abs(allocationVariance.amount), currency)} {allocationVariance.amount > 0 ? "over" : "under"} its
               allocation
               {allocationVariance.pct !== null ? ` (${trimPct(Math.abs(allocationVariance.pct))}%)` : ""}
             </span>

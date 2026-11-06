@@ -7,7 +7,7 @@ import type { Database } from "@/lib/types/database";
  * Service-role client. BYPASSES ROW LEVEL SECURITY ENTIRELY.
  *
  * Every call site is responsible for its own scoping, because the database
- * will not do it here. There are exactly five legitimate reasons to reach
+ * will not do it here. There are exactly six legitimate reasons to reach
  * for this:
  *
  *   1. The public RSVP flow. A household arrives holding a token and must
@@ -36,6 +36,13 @@ import type { Database } from "@/lib/types/database";
  *      only way to make an account without sending Supabase's own email, and it
  *      needs this key. The action checks the caller is one of the couple before
  *      it touches it, and it never returns anything but a one-time link.
+ *
+ *   6. Self-serve onboarding (spec 40) — src/server/actions/onboarding.ts and
+ *      src/server/partner-invite.ts. Making a login, calling create_wedding()
+ *      (executable by the service role only) and inviting a partner. /start
+ *      is gated by ONBOARDING_OPEN, throttled per IP, and refuses an address
+ *      that already has a login; Settings' partner invite checks the caller is
+ *      one of the couple and scopes to their own wedding first.
  *
  * Anything a logged-in collaborator does must go through
  * lib/supabase/server.ts instead, so that RLS remains the thing enforcing

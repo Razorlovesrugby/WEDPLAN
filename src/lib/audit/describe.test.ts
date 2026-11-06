@@ -67,6 +67,7 @@ describe("describeEntry", () => {
       }),
       people,
       "Pacific/Auckland",
+      "NZD",
     );
     expect(d.who).toBe("Alex");
     expect(d.verb).toBe("changed");
@@ -78,7 +79,7 @@ describe("describeEntry", () => {
     const d = describeEntry(
       entry({ changed: { display_name: ["A", "B"], updated_at: ["x", "y"], id: ["1", "2"] } }),
       people,
-      "UTC",
+      "UTC", "NZD",
     );
     expect(d.details).toEqual(["Name: A → B"]);
   });
@@ -87,28 +88,28 @@ describe("describeEntry", () => {
     const removed = describeEntry(
       entry({ table_name: "guests", changed: { deleted_at: [null, "2027-01-05T09:00:00+00:00"] } }),
       people,
-      "UTC",
+      "UTC", "NZD",
     );
     expect(removed.verb).toBe("removed");
     expect(removed.details).toEqual([]);
     const restored = describeEntry(
       entry({ table_name: "guests", changed: { deleted_at: ["2027-01-05T09:00:00+00:00", null] } }),
       people,
-      "UTC",
+      "UTC", "NZD",
     );
     expect(restored.verb).toBe("restored");
   });
 
   it("handles inserts, deletes, and rows with no name", () => {
-    expect(describeEntry(entry({ action: "insert" }), people, "UTC")).toMatchObject({
+    expect(describeEntry(entry({ action: "insert" }), people, "UTC", "NZD")).toMatchObject({
       verb: "added",
       subject: "household “Okonkwo”",
     });
     expect(
-      describeEntry(entry({ action: "delete", table_name: "guest_tags", label: null }), people, "UTC"),
+      describeEntry(entry({ action: "delete", table_name: "guest_tags", label: null }), people, "UTC", "NZD"),
     ).toMatchObject({ verb: "deleted", subject: "a guest tag" });
     expect(
-      describeEntry(entry({ action: "insert", table_name: "invitations", label: null }), people, "UTC")
+      describeEntry(entry({ action: "insert", table_name: "invitations", label: null }), people, "UTC", "NZD")
         .subject,
     ).toBe("an invitation");
   });
@@ -117,25 +118,25 @@ describe("describeEntry", () => {
     const d = describeEntry(
       entry({ table_name: "gift_bank_details", label: null, changed: { account_number: "[redacted]" } }),
       people,
-      "UTC",
+      "UTC", "NZD",
     );
     // A redacted update has no [old, new] pair, so there is no line to leak anything.
     expect(d.details).toEqual([]);
-    expect(formatValue("account_number", "[redacted]", "UTC")).toBe("hidden");
+    expect(formatValue("account_number", "[redacted]", "UTC", "NZD")).toBe("hidden");
   });
 });
 
 describe("formatValue / columnLabel", () => {
   it("formats the common shapes", () => {
-    expect(formatValue("x", null, "UTC")).toBe("empty");
-    expect(formatValue("x", "", "UTC")).toBe("empty");
-    expect(formatValue("x", true, "UTC")).toBe("yes");
-    expect(formatValue("x", false, "UTC")).toBe("no");
-    expect(formatValue("x", 3, "UTC")).toBe("3");
-    expect(formatValue("amount_minor", 12345, "UTC")).toBe("$123.45");
-    expect(formatValue("x", "2027-06-12", "UTC")).toBe("12 June 2027");
-    expect(formatValue("x", { a: 1 }, "UTC")).toBe("(updated)");
-    expect(formatValue("x", "a".repeat(80), "UTC")).toHaveLength(58);
+    expect(formatValue("x", null, "UTC", "NZD")).toBe("empty");
+    expect(formatValue("x", "", "UTC", "NZD")).toBe("empty");
+    expect(formatValue("x", true, "UTC", "NZD")).toBe("yes");
+    expect(formatValue("x", false, "UTC", "NZD")).toBe("no");
+    expect(formatValue("x", 3, "UTC", "NZD")).toBe("3");
+    expect(formatValue("amount_minor", 12345, "UTC", "NZD")).toBe("$123.45");
+    expect(formatValue("x", "2027-06-12", "UTC", "NZD")).toBe("12 June 2027");
+    expect(formatValue("x", { a: 1 }, "UTC", "NZD")).toBe("(updated)");
+    expect(formatValue("x", "a".repeat(80), "UTC", "NZD")).toHaveLength(58);
   });
 
   it("names columns for people", () => {

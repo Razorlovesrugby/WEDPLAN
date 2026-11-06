@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -38,6 +39,7 @@ export function VendorList({
   /** False for a planner (spec 39): the figures come from the budget, which they cannot read, and would show as $0. */
   showMoney?: boolean;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -272,8 +274,8 @@ export function VendorList({
                       <span className="ml-auto text-sm tabular-nums">
                         {vendor.budget_line_count > 0 ? (
                           <>
-                            {formatMoney(vendor.committed)}
-                            <span className="text-muted"> · {formatMoney(vendor.paid)} paid</span>
+                            {formatMoney(vendor.committed, currency)}
+                            <span className="text-muted"> · {formatMoney(vendor.paid, currency)} paid</span>
                           </>
                         ) : (
                           <span className="text-muted">No budget line</span>

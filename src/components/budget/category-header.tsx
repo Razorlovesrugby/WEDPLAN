@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteBudgetCategory, renameBudgetCategory, setCategoryAllocation } from "@/server/actions/budget";
@@ -34,6 +35,7 @@ export function CategoryHeader({
   /** False when the wedding has no overall budget yet: a percentage saves fine, it just has no amount to be a percentage of. */
   hasTotalBudget: boolean;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
@@ -130,7 +132,7 @@ export function CategoryHeader({
                 {category.allocation_pct !== null
                   ? `${trimPct(category.allocation_pct)}%${
                       totals?.allocated_amount !== null && totals?.allocated_amount !== undefined
-                        ? ` · ${formatMoney(totals.allocated_amount)}`
+                        ? ` · ${formatMoney(totals.allocated_amount, currency)}`
                         : ""
                     }`
                   : "Set %"}
@@ -187,6 +189,7 @@ function SectionAllocationSummary({
   lines: BudgetItemView[];
   categoryTarget: number | null;
 }) {
+  const currency = useCurrency();
   const section = sectionAllocation(
     lines.map((line) => ({ allocationPct: line.allocation_pct })),
     categoryTarget,
@@ -207,7 +210,7 @@ function SectionAllocationSummary({
           <>
             {" · "}
             <span className="tabular-nums">
-              {formatMoney(section.allocatedAmount)} of {formatMoney(categoryTarget)}
+              {formatMoney(section.allocatedAmount, currency)} of {formatMoney(categoryTarget, currency)}
             </span>
           </>
         ) : null}
@@ -217,7 +220,7 @@ function SectionAllocationSummary({
           <>
             {" · "}
             <span className={over ? "text-tierB" : ""}>
-              {section.remainingAmount !== null ? `${formatMoney(Math.abs(section.remainingAmount))} ` : ""}
+              {section.remainingAmount !== null ? `${formatMoney(Math.abs(section.remainingAmount), currency)} ` : ""}
               {over ? (
                 <>({trimPct(Math.abs(section.remainingPct))}%) over-allocated</>
               ) : (
@@ -243,6 +246,7 @@ function SectionAllocationSummary({
  * the whole budget it's actually taking.
  */
 function CategoryRollup({ totals }: { totals: BudgetCategoryTotalsView }) {
+  const currency = useCurrency();
   const allocated = totals.allocated_amount ?? 0;
   const over = (totals.variance_amount ?? 0) > 0;
   const on = (totals.variance_amount ?? 0) === 0;
@@ -256,15 +260,15 @@ function CategoryRollup({ totals }: { totals: BudgetCategoryTotalsView }) {
         <div className={`h-full ${over ? "bg-tierB" : "bg-tierA"}`} style={{ width: `${filled}%` }} />
       </div>
       <p className="text-xs text-muted">
-        <span className="tabular-nums text-ink">{formatMoney(totals.total_current)}</span> of{" "}
-        <span className="tabular-nums">{formatMoney(allocated)}</span>
+        <span className="tabular-nums text-ink">{formatMoney(totals.total_current, currency)}</span> of{" "}
+        <span className="tabular-nums">{formatMoney(allocated, currency)}</span>
         {on ? (
           " · exactly on target"
         ) : (
           <>
             {" · "}
             <span className={over ? "text-tierB" : "text-tierA"}>
-              {formatMoney(Math.abs(totals.variance_amount ?? 0))} {over ? "over" : "under"}
+              {formatMoney(Math.abs(totals.variance_amount ?? 0), currency)} {over ? "over" : "under"}
               {totals.variance_pct !== null ? ` (${trimPct(Math.abs(totals.variance_pct))}%)` : ""}
             </span>
           </>

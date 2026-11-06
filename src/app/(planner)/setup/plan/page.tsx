@@ -37,7 +37,7 @@ export default async function SetupPlanPage() {
     );
   }
 
-  const preview = await getTimelineTemplatePreview(wedding.wedding_date);
+  const preview = await getTimelineTemplatePreview(wedding.wedding_date, wedding.timezone);
 
   if (!preview.templateFound) {
     return (

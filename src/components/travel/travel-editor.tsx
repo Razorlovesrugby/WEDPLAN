@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
@@ -412,6 +413,7 @@ function TransportEditor({
   pending: boolean;
   run: (fn: () => Promise<Result>, done?: string) => void;
 }) {
+  const currency = useCurrency();
   const [kind, setKind] = useState<TransportOptionRow["kind"]>("parking");
   const [name, setName] = useState("");
   const [detail, setDetail] = useState("");
@@ -447,9 +449,9 @@ function TransportEditor({
                   {formatDuration(option.duration_minutes)}
                 </span>
               ) : null}
-              {formatCostRange(option.cost_low, option.cost_high) ? (
+              {formatCostRange(option.cost_low, option.cost_high, currency) ? (
                 <span className="ml-2 text-xs text-muted">
-                  {formatCostRange(option.cost_low, option.cost_high)}
+                  {formatCostRange(option.cost_low, option.cost_high, currency)}
                 </span>
               ) : null}
             </span>

@@ -21,7 +21,7 @@ export async function PlannerOverview({
   personId: string | null;
 }) {
   const [tasks, events, vendors, mine] = await Promise.all([
-    getTimelineSummary(wedding.id, wedding.reminder_window_days),
+    getTimelineSummary(wedding.id, wedding.timezone, wedding.reminder_window_days),
     getEvents(wedding.id),
     listVendors(wedding.id),
     personId ? getAssignedToPersonItems(wedding.id, personId) : Promise.resolve([]),

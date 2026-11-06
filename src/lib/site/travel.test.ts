@@ -54,27 +54,27 @@ describe("formatDuration", () => {
 
 describe("formatCostRange", () => {
   it("prints a range from integer minor units, in NZD", () => {
-    expect(formatCostRange(4500, 12000)).toBe("$45.00–$120.00");
+    expect(formatCostRange(4500, 12000, "NZD")).toBe("$45.00–$120.00");
   });
 
   it("collapses a range whose ends match", () => {
-    expect(formatCostRange(4500, 4500)).toBe("$45.00");
+    expect(formatCostRange(4500, 4500, "NZD")).toBe("$45.00");
   });
 
   it("says from or up to when only one end is known", () => {
-    expect(formatCostRange(4500, null)).toBe("from $45.00");
-    expect(formatCostRange(null, 12000)).toBe("up to $120.00");
+    expect(formatCostRange(4500, null, "NZD")).toBe("from $45.00");
+    expect(formatCostRange(null, 12000, "NZD")).toBe("up to $120.00");
   });
 
   it("is null when neither end is set", () => {
-    expect(formatCostRange(null, null)).toBeNull();
-    expect(formatCostRange(undefined, undefined)).toBeNull();
+    expect(formatCostRange(null, null, "NZD")).toBeNull();
+    expect(formatCostRange(undefined, undefined, "NZD")).toBeNull();
   });
 
   it("treats zero as a real figure, because free is a price", () => {
     // Deliberately unlike spec 19's budget ladder, where a typed 0 means
     // "unset" — here somebody writing 0 means the bus is free.
-    expect(formatCostRange(0, 0)).toBe("$0.00");
+    expect(formatCostRange(0, 0, "NZD")).toBe("$0.00");
   });
 });
 

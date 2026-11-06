@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isOnboardingOpen } from "@/lib/onboarding";
 
 /**
  * Environment access, validated once at the edge of the process.
@@ -67,6 +68,10 @@ const serverSchema = z.object({
   // them, /settings shows "not configured" instead of a Connect button.
   PINTEREST_APP_ID: z.string().optional(),
   PINTEREST_APP_SECRET: z.string().optional(),
+  // Spec 40: "true" opens /start to the public. Unset keeps it closed, so a
+  // deploy never starts taking sign-ups by accident, and turning it off again
+  // needs no code change.
+  ONBOARDING_OPEN: z.string().optional(),
 });
 
 function explain(error: z.ZodError, scope: string): never {
@@ -177,4 +182,13 @@ export function pinterestEnv(): { appId: string | null; appSecret: string | null
 export function absoluteUrl(path: string): string {
   const base = clientEnv.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/**
+ * Whether /start takes new weddings (spec 40 §5.3). Read straight from the
+ * environment, like the Pinterest pair, so the closed page renders even where
+ * the rest of the server environment isn't configured.
+ */
+export function onboardingOpen(): boolean {
+  return isOnboardingOpen(process.env["ONBOARDING_OPEN"]);
 }

@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email/send";
 import { formatDate } from "@/lib/format";
 import { isAllUnable } from "@/lib/unable-to-attend";
 import { buildDigest, hasAnythingToReport, isoWeek, type DigestItem } from "@/lib/reminders/digest";
+import { todayIso } from "@/lib/lists/generate";
 
 /**
  * Scheduled chasing.
@@ -187,7 +188,7 @@ async function run(request: NextRequest) {
     }
   }
 
-  const digestResult = await sendDigests(supabase, weddings ?? [], today);
+  const digestResult = await sendDigests(supabase, weddings ?? [], now);
   sent += digestResult.sent;
   skipped += digestResult.skipped;
 
@@ -202,14 +203,18 @@ async function run(request: NextRequest) {
  */
 async function sendDigests(
   supabase: ReturnType<typeof createAdminClient>,
-  weddings: { id: string; name: string; reminder_window_days: number }[],
-  today: string,
+  weddings: { id: string; name: string; reminder_window_days: number; timezone: string }[],
+  now: Date,
 ): Promise<{ sent: number; skipped: number }> {
   let sent = 0;
   let skipped = 0;
-  const week = isoWeek(today);
 
   for (const wedding of weddings) {
+    // The wedding's own today, not UTC's (spec 40 §7.2): a Tuesday 10:00 UTC
+    // run is already Tuesday 23:00 in Auckland, and "overdue" must agree with
+    // what the couple see on their Today view.
+    const today = todayIso(wedding.timezone, now);
+    const week = isoWeek(today);
     // v_reminders_due (spec 6) unions in unpaid payments alongside dated
     // list_items, so a deposit shows up in the same digest a checklist item
     // does — see src/server/queries/lists.ts's getTimelineSummary for the

@@ -105,4 +105,12 @@ describe("isPublicPath", () => {
   it("matches whole segments, so a look-alike planner route isn't exposed", () => {
     expect(isPublicPath("/registrybook")).toBe(false);
   });
+
+  /** Spec 40. Anyone can reach the sign-up page; /setup stays signed-in only. */
+  it("opens /start to strangers but not /setup or a look-alike", () => {
+    expect(isPublicPath("/start")).toBe(true);
+    expect(isPublicPath("/setup")).toBe(false);
+    expect(isPublicPath("/setup/plan")).toBe(false);
+    expect(isPublicPath("/starting")).toBe(false);
+  });
 });

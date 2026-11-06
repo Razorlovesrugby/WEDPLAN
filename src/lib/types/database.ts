@@ -415,6 +415,8 @@ export type WeddingRow = {
   reminder_window_days: number;
   /** The overall wedding budget in minor units, NZD (spec 19). Null means none set — every allocation-derived figure is then null and every budget line behaves as it did before spec 19. */
   total_budget: number | null;
+  /** ISO 4217 code, three uppercase letters (0045, spec 40). A symbol only: amounts never convert and are always hundredths. */
+  currency: string;
   created_at: string;
   updated_at: string;
 }
@@ -2128,6 +2130,26 @@ export type Database = {
           p_token_hash: string;
         };
         Returns: { outcome: "ok" | "unavailable" | "sold_out" | "busy"; claim_id: string | null; remaining: number }[];
+      };
+      /** Spec 40: makes a wedding, its collaborators and defaults in one transaction. Service role only. */
+      create_wedding: {
+        Args: {
+          p_owner: string;
+          p_partner: string | null;
+          p_name: string;
+          p_date: string | null;
+          p_timezone: string;
+          p_currency: string;
+          p_capacity: number | null;
+          p_owner_name: string | null;
+          p_partner_name: string | null;
+        };
+        Returns: string;
+      };
+      /** Spec 40: changes the timezone, keeping planner-entered wall-clock times as typed. Caller's RLS. */
+      change_wedding_timezone: {
+        Args: { p_wedding_id: string; p_timezone: string };
+        Returns: undefined;
       };
       /** Spec 36: a buyer undoing their own claim, by token hash. Service role only. */
       release_registry_claim: {

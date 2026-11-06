@@ -69,3 +69,30 @@ export function utcToZonedInput(iso: string | null, timeZone: string): string {
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
   return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
 }
+
+/**
+ * The calendar date ("YYYY-MM-DD") it is right now in a named zone (spec 40
+ * §7.2). "Today" for a wedding in Auckland is Auckland's today, not UTC's,
+ * which was wrong by a whole day for about half of every NZ day.
+ */
+export function todayInZone(timeZone: string, now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** True when `tz` is a zone this runtime knows. */
+export function isValidTimeZone(tz: string): boolean {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}

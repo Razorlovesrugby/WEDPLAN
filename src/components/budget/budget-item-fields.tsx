@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useState } from "react";
 import { allocationEstimate, itemAllocation } from "@/lib/budget";
 import { trimPct } from "./budget-header";
@@ -65,6 +66,7 @@ export function BudgetItemFields({
   onSubmit: (value: BudgetItemFormValue) => void;
   onCancel: () => void;
 }) {
+  const currency = useCurrency();
   const [label, setLabel] = useState(initial?.label ?? "");
   const [vendorName, setVendorName] = useState(initial?.vendor_name ?? "");
   const [vendorId, setVendorId] = useState<string | null>(initial?.vendor_id ?? null);
@@ -197,7 +199,7 @@ export function BudgetItemFields({
             </label>
           ) : null}
           <label className="block text-xs text-muted">
-            Unit price ($NZD)
+            Unit price ({currency})
             <input
               value={unitPrice}
               onChange={(e) => setUnitPrice(e.target.value)}
@@ -219,9 +221,9 @@ export function BudgetItemFields({
         </label>
         {pctNumber !== null && allocated !== null && derivedEstimate !== null ? (
           <p className="text-xs text-muted">
-            {allocationPct.trim()}% of {categoryName} ({formatMoney(categoryAllocatedAmount)}) ={" "}
-            <strong className="text-ink">{formatMoney(allocated)}</strong>
-            {gstTreatment === "exclusive" ? ` — ${formatMoney(derivedEstimate)} excl. GST` : ""}
+            {allocationPct.trim()}% of {categoryName} ({formatMoney(categoryAllocatedAmount, currency)}) ={" "}
+            <strong className="text-ink">{formatMoney(allocated, currency)}</strong>
+            {gstTreatment === "exclusive" ? ` — ${formatMoney(derivedEstimate, currency)} excl. GST` : ""}
             {estimated.trim() === ""
               ? " · used as this line's estimate until you type one"
               : " · your typed estimate wins; clear it to fall back to this"}
@@ -246,15 +248,15 @@ export function BudgetItemFields({
 
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="text-xs text-muted">
-          Estimated ($NZD)
+          Estimated ({currency})
           <input value={estimated} onChange={(e) => setEstimated(e.target.value)} className="field mt-0.5 block w-full text-sm" />
         </label>
         <label className="text-xs text-muted">
-          Quoted ($NZD)
+          Quoted ({currency})
           <input value={quoted} onChange={(e) => setQuoted(e.target.value)} className="field mt-0.5 block w-full text-sm" />
         </label>
         <label className="text-xs text-muted">
-          Contracted ($NZD)
+          Contracted ({currency})
           <input value={contracted} onChange={(e) => setContracted(e.target.value)} className="field mt-0.5 block w-full text-sm" />
         </label>
       </div>

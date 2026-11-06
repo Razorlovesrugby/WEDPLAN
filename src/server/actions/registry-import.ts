@@ -10,7 +10,7 @@ export type LinkPreview = {
   title: string | null;
   description: string | null;
   store: string | null;
-  /** NZD cents, only when the page said NZD (or didn't say). */
+  /** Cents, only when the page used the wedding's currency (or didn't say). */
   priceMinor: number | null;
   /** Candidate hero images, absolute https URLs. Suggestions only; nothing is stored. */
   images: string[];
@@ -27,14 +27,14 @@ export type LinkPreview = {
  * — the feature is allowed to fail, and nothing depends on it.
  */
 export async function previewRegistryLink(rawUrl: string): Promise<ActionResult<LinkPreview>> {
-  await requireWedding();
+  const wedding = await requireWedding();
   const url = typeof rawUrl === "string" ? rawUrl.trim() : "";
   if (!isWebUrl(url)) return fail("That doesn't look like a web address.");
 
   const page = await fetchPage(url);
   if (!page.ok) return fail(`${page.reason} You can type the details in instead.`);
 
-  const meta = extractMetadata(page.html, page.finalUrl);
+  const meta = extractMetadata(page.html, page.finalUrl, wedding.currency);
   if (!meta.title && meta.images.length === 0 && meta.priceMinor === null) {
     return fail("That shop didn't tell us anything about the item. You can type the details in instead.");
   }

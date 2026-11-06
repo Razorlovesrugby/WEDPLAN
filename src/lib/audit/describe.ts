@@ -228,12 +228,12 @@ export function columnLabel(column: string): string {
 const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function formatValue(column: string, value: unknown, timeZone: string): string {
+export function formatValue(column: string, value: unknown, timeZone: string, currency: string): string {
   if (value === null || value === undefined || value === "") return "empty";
   if (value === "[redacted]") return "hidden";
   if (typeof value === "boolean") return value ? "yes" : "no";
   if (typeof value === "number") {
-    return column.endsWith("_minor") ? formatMoney(value) : String(value);
+    return column.endsWith("_minor") ? formatMoney(value, currency) : String(value);
   }
   if (typeof value === "string") {
     if (ISO_DATETIME.test(value)) {
@@ -283,6 +283,7 @@ export function describeEntry(
   entry: AuditLogRow,
   collaborators: readonly CollaboratorName[],
   timeZone: string,
+  currency: string,
 ): Described {
   const noun = nounFor(entry.table_name);
   const subject = entry.label ? `${noun} “${entry.label}”` : `${article(noun)} ${noun}`;
@@ -314,7 +315,7 @@ export function describeEntry(
       .filter(([column]) => column !== "deleted_at")
       .map(
         ([column, [from, to]]) =>
-          `${columnLabel(column)}: ${formatValue(column, from, timeZone)} → ${formatValue(column, to, timeZone)}`,
+          `${columnLabel(column)}: ${formatValue(column, from, timeZone, currency)} → ${formatValue(column, to, timeZone, currency)}`,
       ),
   };
 }

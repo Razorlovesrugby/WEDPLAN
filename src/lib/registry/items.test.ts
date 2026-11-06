@@ -72,9 +72,9 @@ describe("price handling is integer minor units, never a float", () => {
     expect(minorToDollars(null)).toBe("");
   });
   it("shows whole dollars without cents on a card", () => {
-    expect(formatPrice(12000)).toBe("$120");
-    expect(formatPrice(11950)).toBe("$119.50");
-    expect(formatPrice(null)).toBeNull();
+    expect(formatPrice(12000, "NZD")).toBe("$120");
+    expect(formatPrice(11950, "NZD")).toBe("$119.50");
+    expect(formatPrice(null, "NZD")).toBeNull();
   });
 });
 

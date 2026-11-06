@@ -13,7 +13,7 @@ describe("extractMetadata", () => {
       <meta property="product:price:amount" content="119.50">
       <meta property="product:price:currency" content="NZD">
     </head></html>`;
-    const m = extractMetadata(html, PAGE);
+    const m = extractMetadata(html, PAGE, "NZD");
     expect(m.title).toBe("Wine & Co. Glasses (set of 4)");
     expect(m.siteName).toBe("Shop");
     expect(m.images).toEqual(["https://shop.test/img/a.jpg"]);
@@ -25,7 +25,7 @@ describe("extractMetadata", () => {
       "@context": "https://schema.org",
       "@graph": [{ "@type": "Product", name: "Stand mixer", image: ["https://cdn.test/1.jpg", "https://cdn.test/2.jpg"], offers: { "@type": "Offer", price: "899.00", priceCurrency: "NZD" } }],
     })}</script>`;
-    const m = extractMetadata(html, PAGE);
+    const m = extractMetadata(html, PAGE, "NZD");
     expect(m.title).toBe("Stand mixer");
     expect(m.images).toEqual(["https://cdn.test/1.jpg", "https://cdn.test/2.jpg"]);
     expect(m.priceMinor).toBe(89900);
@@ -33,29 +33,36 @@ describe("extractMetadata", () => {
 
   it("will not present a foreign-currency price as dollars", () => {
     const html = `<meta property="product:price:amount" content="50"><meta property="product:price:currency" content="USD">`;
-    expect(extractMetadata(html, PAGE).priceMinor).toBeNull();
+    expect(extractMetadata(html, PAGE, "NZD").priceMinor).toBeNull();
     const ld = `<script type="application/ld+json">{"@type":"Product","offers":{"price":"50","priceCurrency":"AUD"}}</script>`;
-    expect(extractMetadata(ld, PAGE).priceMinor).toBeNull();
+    expect(extractMetadata(ld, PAGE, "NZD").priceMinor).toBeNull();
+  });
+
+  it("takes the price in the wedding's own currency (spec 40)", () => {
+    const ld = `<script type="application/ld+json">{"@type":"Product","offers":{"price":"50","priceCurrency":"AUD"}}</script>`;
+    expect(extractMetadata(ld, PAGE, "AUD").priceMinor).toBe(5000);
+    const nz = `<meta property="product:price:amount" content="50"><meta property="product:price:currency" content="NZD">`;
+    expect(extractMetadata(nz, PAGE, "AUD").priceMinor).toBeNull();
   });
 
   it("only offers https images, de-duplicated, capped", () => {
     const tags = Array.from({ length: 12 }, (_, i) => `<link rel="image_src" href="https://c.test/${i}.jpg">`).join("");
     const html = `<meta property="og:image" content="http://insecure.test/x.jpg"><meta name="twitter:image" content="https://c.test/0.jpg">${tags}`;
-    const m = extractMetadata(html, PAGE);
+    const m = extractMetadata(html, PAGE, "NZD");
     expect(m.images.every((u) => u.startsWith("https://"))).toBe(true);
     expect(new Set(m.images).size).toBe(m.images.length);
     expect(m.images.length).toBe(8);
   });
 
   it("never throws on rubbish, and strips tags out of titles", () => {
-    expect(extractMetadata("", PAGE)).toEqual({ title: null, description: null, siteName: null, images: [], priceMinor: null });
-    expect(extractMetadata("<script type=\"application/ld+json\">{broken</script>", PAGE).title).toBeNull();
-    expect(extractMetadata("<title>Hi <script>x</script> there</title>", PAGE).title).toBe("Hi x there");
+    expect(extractMetadata("", PAGE, "NZD")).toEqual({ title: null, description: null, siteName: null, images: [], priceMinor: null });
+    expect(extractMetadata("<script type=\"application/ld+json\">{broken</script>", PAGE, "NZD").title).toBeNull();
+    expect(extractMetadata("<title>Hi <script>x</script> there</title>", PAGE, "NZD").title).toBe("Hi x there");
   });
 
   it("refuses javascript: and data: images", () => {
     const html = `<meta property="og:image" content="javascript:alert(1)"><meta name="twitter:image" content="data:image/png;base64,AAAA">`;
-    expect(extractMetadata(html, PAGE).images).toEqual([]);
+    expect(extractMetadata(html, PAGE, "NZD").images).toEqual([]);
   });
 });
 

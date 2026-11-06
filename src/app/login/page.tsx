@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { onboardingOpen } from "@/lib/env";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -24,6 +26,15 @@ export default async function LoginPage({
       ) : null}
 
       <LoginForm next={next} />
+
+      {onboardingOpen() ? (
+        <p className="mt-6 text-sm text-muted">
+          New here?{" "}
+          <Link className="underline hover:text-accent" href="/start">
+            Set up your wedding
+          </Link>
+        </p>
+      ) : null}
 
       <p className="mt-10 text-xs text-muted">
         Guests don&rsquo;t sign in. They use the link in their invitation.

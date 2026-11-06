@@ -8,6 +8,7 @@ import {
   addDays,
   generateTimelineItems,
   parseQuickAdd,
+  todayIso,
   spawnNextOccurrence,
   type RepeatRule,
   type TemplateSection,
@@ -288,7 +289,7 @@ export async function generateTimelineTemplate(): Promise<ActionResult<{ listId:
     sectionIdByTitle.set(title, created.id);
   }
 
-  const generated = generateTimelineItems("timeline", wedding.wedding_date, sections);
+  const generated = generateTimelineItems("timeline", wedding.wedding_date, sections, todayIso(wedding.timezone));
   const rows = generated.map((item) => ({
     wedding_id: wedding.id,
     list_id: listId,
@@ -473,7 +474,8 @@ export async function quickAddItem(
   sectionId: string | null,
   rawTitle: string,
 ): Promise<ActionResult<{ id: string; due_date: string | null }>> {
-  const parsed = parseQuickAdd(rawTitle);
+  const wedding = await requireWedding();
+  const parsed = parseQuickAdd(rawTitle, wedding.timezone);
   if (!parsed.title) return fail("Type something first");
 
   const result = await addItem(listId, {
@@ -654,7 +656,7 @@ async function completeItemRow(
 
   if (status === "done" && item.repeat_rule) {
     const spawned = spawnNextOccurrence({
-      due_date: item.due_date ?? new Date().toISOString().slice(0, 10),
+      due_date: item.due_date ?? todayIso((await requireWedding()).timezone),
       repeat_rule: item.repeat_rule as unknown as RepeatRule,
     });
     if (spawned) {

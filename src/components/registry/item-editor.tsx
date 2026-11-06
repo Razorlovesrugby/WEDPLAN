@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -63,6 +64,7 @@ function toDraft(item: PlannerRegistryItem): Draft {
 }
 
 export function ItemEditor({ items, tags }: { items: PlannerRegistryItem[]; tags: RegistryTagRow[] }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export function ItemEditor({ items, tags }: { items: PlannerRegistryItem[]; tags
                     {item.title}
                   </p>
                   <p className="truncate text-xs text-muted">
-                    {[item.store, formatPrice(item.price_minor)].filter(Boolean).join(" · ") || "No price"}
+                    {[item.store, formatPrice(item.price_minor, currency)].filter(Boolean).join(" · ") || "No price"}
                     {item.tag_ids.length ? ` · ${item.tag_ids.map((t) => tagName.get(t)).filter(Boolean).join(", ")}` : ""}
                   </p>
                   <p className="mt-0.5 text-xs">
@@ -177,6 +179,7 @@ function ItemForm({
   isNew?: boolean;
   onDone: () => void;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(initial);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -262,7 +265,7 @@ function ItemForm({
         <Field label="Name" errors={errors["title"]}>
           <input className="field" value={draft.title} maxLength={160} onChange={(e) => set("title", e.target.value)} required />
         </Field>
-        <Field label="Price (NZD)" errors={errors["price"]}>
+        <Field label={`Price (${currency})`} errors={errors["price"]}>
           <input className="field tabular-nums" inputMode="decimal" placeholder="120" value={draft.price} onChange={(e) => set("price", e.target.value)} />
         </Field>
         <Field label="How many" errors={errors["quantity"]}>
