@@ -1,10 +1,9 @@
 # Feature spec: People — a third assignee (B) and a planner login (C)
 
-**Status: proposed, not built.** Asked for as a spec (2026-11-03) after two rounds
-of scoping. This file replaces the earlier scoping draft (it is in the git
-history). Nothing beyond this file is written, and **nothing is built until the
-planner says to build it** (`CLAUDE.md`, "Spec requests are not build
-authorization"; answering the questions below is not it).
+**Status: built (2026-11-06), branch `claude/spec-39-third-assignee`, no PR.** Asked
+for as a spec (2026-11-03) after two rounds of scoping, then "Okay let's go
+defaults and build it all" as its own turn: **every §10 question took its default.**
+See **Build status** at the end for what departs from the text below.
 
 **Depends on:** spec 1 (list items), spec 8 (vendors), spec 15 §2
 (`collaborators.display_name`), spec 20b (`sideLabel`), spec 32 (audit log).
@@ -248,3 +247,82 @@ it**. A digest of the planner's own tasks is a separate, later decision.
 Changing `guests.side` or `sideLabel`; a general permissions system beyond
 None / Planner; notifying a person who has no login; the planner's own digest; any
 payment or budget visibility for the planner; a "Full" third login (Q7).
+
+## Build status (2026-11-06)
+
+Built as specified in §7, in four commits: `0043` + its SQL test; the people
+library, actions, picker and Settings → People; `0044` + its SQL test; the planner
+login's app side. **Verified:** `npm run typecheck`, `npm test` (1236, up from
+1213), `./scripts/verify-migrations.sh` (**740 assertions**, up from 671: 18 for
+`0043`, 51 for `0044`; every earlier suite passes unchanged, which is the proof
+the couple's access did not move), `./scripts/verify-bootstrap.sh`, and
+`npm run build` with placeholder env. Two deliberate breaks of the planner policies
+(a `*_planner_*` policy and a differently-named one on `budget_items`) were both
+caught by the SQL test. **Not verified: any of it in a browser, against Supabase,
+or with a real second login.** The invite email, the set-password link, the
+planner's overview, every guarded redirect and every page a planner can open have
+never rendered.
+
+### Where the build departs from the text above
+
+1. **`collaborators` IS readable by the planner** (read-only), against §6.1's
+   "not granted". The assign picker and the row labels need the couple's names;
+   `user_id`, `role` and `display_name` are not secrets (emails live in Auth).
+2. **`invitations` is denied**, against §6.1's "read-only". The table holds the
+   household links' token columns (credentials). `v_household_rsvp`,
+   `v_households` and `v_guest_event_invites` still return every row for a planner
+   (tested), so the guest list works; invitation-only details are blank for them.
+3. **Also denied, not in the §6.1 table:** `guest_questions` (private to the
+   couple), `registry_claims`, `moodboard_shares`/`moodboard_clip_tokens`/
+   `pinterest_accounts`, `message_log`, `saved_views`, and the registry itself
+   (`planner_table_access` is the full list and a test pins it to `pg_tables`).
+4. **The site, travel, gallery and registry *editors* are couple-only**, not
+   "read-only": they are write screens, so a read-only grant would have shown
+   controls that fail. The planner's tables for them are still readable (RLS) but
+   no planner screen opens them. Nav for a planner: Overview, Guests, Vendors,
+   Events, Tasks, Moodboards. `/guests/rank` and `/guests/import` are also
+   couple-only.
+5. **No view was extended with `assigned_person_id`** (§5 listed
+   `v_timeline_items`, `v_budget_item_tasks`). Nothing reads an assignee from a
+   view, so it would have been dead weight.
+6. **The invite does not use Supabase's email.** The link is generated with the
+   admin API (`generateLink`) and sent through the app's own Resend sender
+   (`sendEmail`), and `/auth/callback` gained a `token_hash` + `type` path
+   (`invite`/`recovery` only). If `RESEND_API_KEY` is unset it logs instead of
+   sending and the screen says so; the link is always shown for copying.
+7. **An existing account's set-password link is withheld** unless that person is
+   already on this wedding. Returning it would hand the couple a takeover link for
+   someone else's login. Found while building; not in the spec.
+8. **`v_wedding_stats` is empty for a planner** (it reads `weddings`, which they
+   have no policy on). The planner gets their own overview
+   (`PlannerOverview`) instead of tiles that would read zero.
+9. **The admin client has a fifth legitimate use** (`people-access.ts`); its header
+   comment says so.
+10. **`removePerson` refuses while a person has a login**: take access away first.
+
+### Known gaps, said plainly
+
+- A planner opening a guest or household screen sees the couple's edit controls;
+  a save fails with the database's message. Nothing is leaked, but it is not
+  polished. `/households/[id]` reads `invitations` (denied) and will show no
+  invitation/link for a planner.
+- The invite link is one-time and consumed on GET, so a mail scanner that
+  prefetches it can burn it; "Send a new link" issues another.
+- Revoking cuts data access at once (RLS reads the grant per query) but does not
+  sign the planner out or disable their Auth account. A revoked planner who signs
+  in lands on `/setup`.
+- Budget badges on tasks and the timeline vanish for a planner because the rows
+  are invisible, not because anything checks `viewer.kind`; vendor money, the
+  dashboard and `/guests/rank` are explicitly hidden or guarded.
+- No test renders the Settings → People UI or any planner page.
+- `0026`–`0044` are not applied to the live project; `0043` and `0044` stack on
+  them.
+
+### Pick up here
+
+Apply `0026`–`0044` in order. Then, with a second email address: Settings →
+People → add the planner → "Let them sign in" → open the link in a private window
+and set a password. As the planner: open the overview, a list, a vendor (no money),
+the guest list, then type `/budget`, `/settings`, `/gifts` into the address bar
+(each should land on the overview). Assign a task to the planner and check
+"Assigned to you". As the couple: take access away and reload the planner's tab.

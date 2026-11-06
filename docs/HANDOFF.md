@@ -3,6 +3,29 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 45 (spec 39):** a third assignee (part B) and a planner login (part C), built on
+branch `claude/spec-39-third-assignee` (**no PR opened**). Asked for as a scoping question,
+written up as a spec over two rounds, then "Okay let's go defaults and build it all" as its own
+turn. Read the spec's **Build status**; the short version:
+
+- **B (`0043`).** `people` (a name; optional `user_id` + `access`), `list_items.assigned_person_id`
+  with a check that a task has at most one of that and `assigned_to`. The assign picker speaks
+  one string (`u:<id>` / `p:<id>`; `src/lib/people.ts`). Settings → People adds/renames/removes.
+- **C (`0044`). The planner is NOT a `collaborators` row**, so `is_collaborator()` and every
+  existing policy are untouched. `can_plan()` + `planner_table_access` (one row per table:
+  write/read/denied/global) generate additive policies. **A new table must be added to
+  `planner_table_access`** or `25_planner_access.sql` fails; a new route directory must be added
+  to `src/lib/planner-routes.ts` or its test fails. `weddings.total_budget` is kept out of reach
+  by giving the planner no policy on `weddings` and a view, `v_wedding_basics`.
+- **Where a planner lands:** nav Overview/Guests/Vendors/Events/Tasks/Moodboards; the couple-only
+  sections redirect them (`CoupleOnly`, per-segment `layout.tsx`); vendor money is hidden
+  (`showMoney`); `PlannerOverview` replaces the dashboard.
+- **Verified:** typecheck, 1236 unit tests, 740 SQL assertions (671 earlier ones unchanged),
+  `verify-bootstrap.sh`, `next build` (placeholder env). Two deliberate policy breaks were caught.
+  **Not verified:** any browser, Supabase, a second login, the invite email, the set-password
+  link. **`0043`/`0044` are not applied to the live project, nor are `0026`-`0042`.**
+- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
+
 **Session 44 (spec 38):** the registry's live preview and Contribute block, built on branch
 `claude/spec-38-registry-preview-contribute` (**no PR opened**). Asked for as a story, seven
 questions put and answered one at a time (Q5 against the recommendation), then "Let's build".
