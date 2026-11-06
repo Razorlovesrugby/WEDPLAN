@@ -21,7 +21,7 @@ export type PageMetadata = {
   siteName: string | null;
   /** Candidate hero images, best first, absolute https URLs, de-duplicated. */
   images: string[];
-  /** NZD minor units; null if absent or in another currency. */
+  /** Minor units in the wedding's currency; null if absent or in another currency. */
   priceMinor: number | null;
 };
 
@@ -139,7 +139,7 @@ function absoluteHttps(raw: string, base: string): string | null {
   }
 }
 
-export function extractMetadata(html: string, pageUrl: string): PageMetadata {
+export function extractMetadata(html: string, pageUrl: string, currency: string): PageMetadata {
   // Only the head and the first part of the body matter; this also bounds the
   // regex work on an enormous page.
   const text = html.slice(0, 400_000);
@@ -170,16 +170,18 @@ export function extractMetadata(html: string, pageUrl: string): PageMetadata {
   for (const product of products) for (const img of toStrings(product.image)) add(img);
   for (const link of text.matchAll(/<link\b[^>]*rel\s*=\s*["']image_src["'][^>]*href\s*=\s*["']([^"']+)["']/gi)) add(link[1]);
 
-  // Price: only NZD, or unlabelled. A USD price shown as NZD is worse than none.
+  // Price: only in the wedding's own currency (spec 40), or unlabelled. A USD
+  // price shown as NZD is worse than none.
+  const wanted = currency.toUpperCase();
   let priceMinor: number | null = null;
   const metaCurrency = (metaValue(tags, "product:price:currency", "og:price:currency", "pricecurrency") ?? "").toUpperCase();
   const metaPrice = metaValue(tags, "product:price:amount", "og:price:amount", "price");
-  if (metaPrice && (metaCurrency === "" || metaCurrency === "NZD")) priceMinor = parsePriceToMinor(metaPrice);
+  if (metaPrice && (metaCurrency === "" || metaCurrency === wanted)) priceMinor = parsePriceToMinor(metaPrice);
   if (priceMinor === null) {
     for (const product of products) {
       for (const offer of [...walk(product.offers)]) {
-        const currency = typeof offer.priceCurrency === "string" ? offer.priceCurrency.toUpperCase() : "";
-        if (currency !== "" && currency !== "NZD") continue;
+        const offerCurrency = typeof offer.priceCurrency === "string" ? offer.priceCurrency.toUpperCase() : "";
+        if (offerCurrency !== "" && offerCurrency !== wanted) continue;
         const price = parsePriceToMinor(offer.price ?? offer.lowPrice);
         if (price !== null) {
           priceMinor = price;

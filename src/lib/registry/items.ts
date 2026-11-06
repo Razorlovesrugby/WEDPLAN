@@ -76,9 +76,9 @@ export function minorToDollars(minor: number | null | undefined): string {
 }
 
 /** "$120" — whole dollars lose their ".00" on a card. */
-export function formatPrice(minor: number | null | undefined): string | null {
+export function formatPrice(minor: number | null | undefined, currency: string): string | null {
   if (!minor) return null;
-  return formatMoneyShort(minor);
+  return formatMoneyShort(minor, currency);
 }
 
 /** What a card says about how many are wanted. Nothing for a single item. */

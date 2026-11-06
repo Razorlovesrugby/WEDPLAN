@@ -131,7 +131,7 @@ export default async function ActivityPage({
             <h2 className="text-sm font-medium uppercase tracking-wide text-muted">{day}</h2>
             <ul className="card divide-y divide-line">
               {rows.map((entry) => {
-                const d = describeEntry(entry, collaborators, wedding.timezone);
+                const d = describeEntry(entry, collaborators, wedding.timezone, wedding.currency);
                 return (
                   <li key={entry.id} className="space-y-1 p-3 text-sm">
                     <p>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import { PASSWORD_MIN, passwordProblem } from "@/lib/onboarding";
 
 type State = { status: "idle" | "saving" | "error"; message?: string };
 
@@ -14,6 +15,12 @@ export function ResetPasswordForm() {
 
   async function onSubmit(formEvent: React.FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
+
+    const problem = passwordProblem(password);
+    if (problem) {
+      setState({ status: "error", message: `${problem}.` });
+      return;
+    }
 
     if (password !== confirm) {
       setState({ status: "error", message: "Passwords don't match." });
@@ -41,7 +48,7 @@ export function ResetPasswordForm() {
         <input
           type="password"
           required
-          minLength={8}
+          minLength={PASSWORD_MIN}
           autoFocus
           autoComplete="new-password"
           value={password}
@@ -55,7 +62,7 @@ export function ResetPasswordForm() {
         <input
           type="password"
           required
-          minLength={8}
+          minLength={PASSWORD_MIN}
           autoComplete="new-password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}

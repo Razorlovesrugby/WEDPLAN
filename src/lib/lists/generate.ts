@@ -14,6 +14,8 @@
  * so it produces the same answer no matter which timezone the server runs in.
  */
 
+import { todayInZone } from "@/lib/timezone";
+
 // ---------------------------------------------------------------------------
 // Calendar date helpers
 // ---------------------------------------------------------------------------
@@ -27,9 +29,13 @@ function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Today's calendar date, UTC, as `YYYY-MM-DD`. Accepts a clock for tests. */
-export function todayIso(now: Date = new Date()): string {
-  return toIsoDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())));
+/**
+ * Today's calendar date in the wedding's timezone, as `YYYY-MM-DD` (spec 40
+ * §7.2). The zone is required on purpose, so no caller can quietly fall back
+ * to UTC. Accepts a clock for tests.
+ */
+export function todayIso(timeZone: string, now: Date = new Date()): string {
+  return todayInZone(timeZone, now);
 }
 
 export function addDays(dateIso: string, days: number): string {
@@ -99,7 +105,7 @@ export function generateTimelineItems(
   templateKey: string,
   weddingDate: string | null,
   sections: TemplateSection[],
-  today: string = todayIso(),
+  today: string,
 ): GeneratedListItem[] {
   if (!weddingDate) return [];
   return sections.flatMap((section) =>
@@ -250,8 +256,8 @@ export type QuickAddResult = { title: string; due_date: string | null };
  * into a real due_date, the same way Apple Reminders does — or falls back to
  * no date for anything it doesn't recognise, rather than guessing.
  */
-export function parseQuickAdd(input: string, today: Date = new Date()): QuickAddResult {
-  const todayIsoDate = todayIso(today);
+export function parseQuickAdd(input: string, timeZone: string, now: Date = new Date()): QuickAddResult {
+  const todayIsoDate = todayIso(timeZone, now);
   const trimmedInput = input.trim();
 
   for (const { pattern, resolve } of MATCHERS) {

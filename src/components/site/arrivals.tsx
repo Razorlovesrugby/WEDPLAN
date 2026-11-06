@@ -19,9 +19,11 @@ import {
 export function Arrivals({
   points,
   legs,
+  currency,
 }: {
   points: ArrivalPoint[];
   legs: TransportLeg[];
+  currency: string;
 }) {
   const { grouped, loose } = groupByArrival(points, legs);
   if (grouped.length === 0 && loose.length === 0) return null;
@@ -42,7 +44,7 @@ export function Arrivals({
               </p>
             ) : null}
             <p className="mt-2 font-serif text-xl text-ink">{rest}</p>
-            <Legs legs={pointLegs} />
+            <Legs legs={pointLegs} currency={currency} />
           </section>
         );
       })}
@@ -51,21 +53,21 @@ export function Arrivals({
           you arrive, so it hangs off no arrival point and renders plainly. */}
       {loose.length > 0 ? (
         <section>
-          <Legs legs={loose} />
+          <Legs legs={loose} currency={currency} />
         </section>
       ) : null}
     </div>
   );
 }
 
-function Legs({ legs }: { legs: TransportLeg[] }) {
+function Legs({ legs, currency }: { legs: TransportLeg[]; currency: string }) {
   if (legs.length === 0) return null;
 
   return (
     <ul className="mt-5 divide-y divide-line border-t border-line">
       {legs.map((leg) => {
         const duration = formatDuration(leg.duration_minutes);
-        const cost = formatCostRange(leg.cost_low, leg.cost_high);
+        const cost = formatCostRange(leg.cost_low, leg.cost_high, currency);
         return (
           <li key={leg.id} className="grid gap-x-5 gap-y-1 py-4 sm:grid-cols-[6rem_1fr_auto]">
             <div>

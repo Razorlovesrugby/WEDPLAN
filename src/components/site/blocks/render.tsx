@@ -683,7 +683,7 @@ export function SiteBlockView({
             {prose ? <Prose body={prose} /> : null}
             <CoachSection runs={ctx.travel.runs} timeZone={ctx.wedding.timezone} bookable={false} />
             {hasArrivals ? (
-              <Arrivals points={ctx.extras.arrivals} legs={ctx.travel.transport} />
+              <Arrivals points={ctx.extras.arrivals} legs={ctx.travel.transport} currency={ctx.wedding.currency} />
             ) : (
               <TransportList options={ctx.travel.transport} />
             )}

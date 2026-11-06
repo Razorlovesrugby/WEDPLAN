@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -52,6 +53,7 @@ export function VendorDetail({
   /** False for a planner (spec 39): the budget lines and totals are the budget's, which they cannot read. */
   showMoney?: boolean;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -315,8 +317,8 @@ export function VendorDetail({
           <h2 className="font-medium">Budget lines</h2>
           {lines.length > 0 ? (
             <p className="text-sm tabular-nums">
-              {formatMoney(committed)} committed · {formatMoney(paid)} paid ·{" "}
-              {formatMoney(committed - paid)} outstanding
+              {formatMoney(committed, currency)} committed · {formatMoney(paid, currency)} paid ·{" "}
+              {formatMoney(committed - paid, currency)} outstanding
             </p>
           ) : null}
         </div>
@@ -334,8 +336,8 @@ export function VendorDetail({
                   {line.label}
                 </Link>
                 <span className="text-sm tabular-nums">
-                  {formatMoney(line.computed_current)}
-                  <span className="text-muted"> · {formatMoney(line.paid)} paid</span>
+                  {formatMoney(line.computed_current, currency)}
+                  <span className="text-muted"> · {formatMoney(line.paid, currency)} paid</span>
                 </span>
                 <button
                   type="button"

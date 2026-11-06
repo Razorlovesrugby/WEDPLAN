@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoneyShort, sideLabel, timeLeft, timeLeftLabel } from "./format";
+import { currencySymbol, formatMoney, formatMoneyShort, sideLabel, timeLeft, timeLeftLabel } from "./format";
 
 describe("sideLabel", () => {
   const owner = { role: "owner" as const, display_name: "Ray" };
@@ -67,16 +67,41 @@ describe("timeLeft", () => {
 
 describe("formatMoneyShort", () => {
   it("drops the cents when there are none", () => {
-    expect(formatMoneyShort(120_000)).toBe("$1,200");
-    expect(formatMoneyShort(0)).toBe("$0");
+    expect(formatMoneyShort(120_000, "NZD")).toBe("$1,200");
+    expect(formatMoneyShort(0, "NZD")).toBe("$0");
   });
 
   it("keeps them when the figure actually has them", () => {
-    expect(formatMoneyShort(120_050)).toBe("$1,200.50");
+    expect(formatMoneyShort(120_050, "NZD")).toBe("$1,200.50");
   });
 
   it("has an answer for nothing at all", () => {
-    expect(formatMoneyShort(null)).toBe("—");
-    expect(formatMoneyShort(undefined)).toBe("—");
+    expect(formatMoneyShort(null, "NZD")).toBe("—");
+    expect(formatMoneyShort(undefined, "NZD")).toBe("—");
+  });
+});
+
+describe("formatMoney with a currency (spec 40)", () => {
+  it("prints the wedding's symbol and never converts", () => {
+    expect(formatMoney(460_000, "NZD")).toBe("$4,600.00");
+    expect(formatMoney(460_000, "AUD")).toBe("A$4,600.00");
+    expect(formatMoney(460_000, "GBP")).toBe("£4,600.00");
+  });
+
+  it("always shows hundredths, whatever the currency's own convention", () => {
+    // en-NZ prints yen as "JP¥", unambiguous beside NZ's own "$".
+    expect(formatMoney(460_000, "JPY")).toBe("JP¥4,600.00");
+    expect(formatMoneyShort(460_050, "JPY")).toBe("JP¥4,600.50");
+  });
+
+  it("never throws mid-render on a bad code", () => {
+    // A well-formed unknown code prints as the code; a malformed one falls back to NZD.
+    expect(formatMoney(100, "ZZZ")).toContain("1.00");
+    expect(formatMoney(100, "not-a-code")).toBe("$1.00");
+  });
+
+  it("gives a symbol for a field label", () => {
+    expect(currencySymbol("NZD")).toBe("$");
+    expect(currencySymbol("AUD")).toBe("A$");
   });
 });

@@ -27,6 +27,7 @@ export function SmartView({
   collaborators,
   people = [],
   currentUserId,
+  timezone,
 }: {
   view: "today" | "scheduled" | "flagged" | "all" | "mine";
   items: ItemWithList[];
@@ -35,6 +36,8 @@ export function SmartView({
   collaborators: CollaboratorRow[];
   people?: PersonRow[];
   currentUserId?: string;
+  /** The wedding's timezone, so "today" and "overdue" are its own (spec 40 §7.2). */
+  timezone: string;
 }) {
   const [hideCompleted, setHideCompleted] = useHideCompleted(`view:${view}`);
 
@@ -47,7 +50,7 @@ export function SmartView({
   const orderedItems = sortCompletedLast(items, (item) => item.status === "done");
   const visibleItems = hideCompleted ? orderedItems.filter((item) => item.status !== "done") : orderedItems;
 
-  const today = todayIso();
+  const today = todayIso(timezone);
 
   return (
     <div className="space-y-2">

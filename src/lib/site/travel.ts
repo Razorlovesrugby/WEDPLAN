@@ -67,15 +67,16 @@ export function formatDuration(minutes: number | null | undefined): string | nul
 export function formatCostRange(
   low: number | null | undefined,
   high: number | null | undefined,
+  currency: string,
 ): string | null {
   const l = typeof low === "number" && Number.isFinite(low) ? low : null;
   const h = typeof high === "number" && Number.isFinite(high) ? high : null;
 
   if (l === null && h === null) return null;
-  if (l !== null && h === null) return `from ${formatMoney(l)}`;
-  if (l === null && h !== null) return `up to ${formatMoney(h)}`;
-  if (l === h) return formatMoney(l);
-  return `${formatMoney(l)}–${formatMoney(h)}`;
+  if (l !== null && h === null) return `from ${formatMoney(l, currency)}`;
+  if (l === null && h !== null) return `up to ${formatMoney(h, currency)}`;
+  if (l === h) return formatMoney(l, currency);
+  return `${formatMoney(l, currency)}–${formatMoney(h, currency)}`;
 }
 
 export type ArrivalGroup = {

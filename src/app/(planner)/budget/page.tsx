@@ -99,13 +99,13 @@ export default async function BudgetPage({
 
       {summary ? (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <SummaryFigure label="Estimated" value={formatMoney(summary.total_estimated)} />
-          <SummaryFigure label="Quoted" value={formatMoney(summary.total_quoted)} />
-          <SummaryFigure label="Contracted" value={formatMoney(summary.total_contracted)} />
-          <SummaryFigure label="Paid" value={formatMoney(summary.total_paid)} tone="good" />
+          <SummaryFigure label="Estimated" value={formatMoney(summary.total_estimated, wedding.currency)} />
+          <SummaryFigure label="Quoted" value={formatMoney(summary.total_quoted, wedding.currency)} />
+          <SummaryFigure label="Contracted" value={formatMoney(summary.total_contracted, wedding.currency)} />
+          <SummaryFigure label="Paid" value={formatMoney(summary.total_paid, wedding.currency)} tone="good" />
           <SummaryFigure
             label="Outstanding"
-            value={formatMoney(summary.total_outstanding)}
+            value={formatMoney(summary.total_outstanding, wedding.currency)}
             tone={summary.total_outstanding > 0 ? "warn" : "good"}
           />
         </section>
@@ -114,9 +114,9 @@ export default async function BudgetPage({
       {summary && (summary.per_head_adult !== null || summary.per_head_seat !== null) ? (
         <p className="text-sm text-muted">
           Per head, from every per-unit and consumption line:{" "}
-          {summary.per_head_adult !== null ? <strong>{formatMoney(summary.per_head_adult)}/adult</strong> : null}
+          {summary.per_head_adult !== null ? <strong>{formatMoney(summary.per_head_adult, wedding.currency)}/adult</strong> : null}
           {summary.per_head_adult !== null && summary.per_head_seat !== null ? " · " : null}
-          {summary.per_head_seat !== null ? <strong>{formatMoney(summary.per_head_seat)}/seat</strong> : null}
+          {summary.per_head_seat !== null ? <strong>{formatMoney(summary.per_head_seat, wedding.currency)}/seat</strong> : null}
           {/* Spec 29 §4.6: these figures follow the headcount, which leaves out
               a guest who has said they can't come. Say so beside them. */}
           {leftOutNote(leftOut) ? <span className="ml-2 text-xs">{leftOutNote(leftOut)}</span> : null}
@@ -194,7 +194,7 @@ export default async function BudgetPage({
         <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
           Payments · {pluralise(payments.filter((p) => !p.paid_at && p.due_date).length, "upcoming")}
         </h2>
-        <PaymentCalendar payments={payments} timezone={wedding.timezone} />
+        <PaymentCalendar payments={payments} timezone={wedding.timezone} currency={wedding.currency} />
       </section>
     </div>
   );

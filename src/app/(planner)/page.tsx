@@ -6,6 +6,7 @@ import { getTimelineSummary } from "@/server/queries/lists";
 import { getBudgetSummary, getUpcomingPayments } from "@/server/queries/budget";
 import { getRegistrySummary } from "@/server/queries/registry";
 import { daysUntil, formatDate, formatMoney, pluralise } from "@/lib/format";
+import { todayIso } from "@/lib/lists/generate";
 
 export const metadata = { title: "Overview" };
 
@@ -18,14 +19,14 @@ export default async function DashboardPage() {
   }
   const [stats, tasks, budget, payments, registry] = await Promise.all([
     getWeddingStats(wedding.id),
-    getTimelineSummary(wedding.id, wedding.reminder_window_days),
+    getTimelineSummary(wedding.id, wedding.timezone, wedding.reminder_window_days),
     getBudgetSummary(wedding.id),
     getUpcomingPayments(wedding.id),
     // Fails soft: until 0039 is applied the registry tables don't exist, and a
     // missing optional tile must never take the whole overview down with it.
     getRegistrySummary(wedding.id).catch(() => null),
   ]);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso(wedding.timezone);
   const upcomingPaymentCount = payments.filter((p) => !p.paid_at && p.due_date && p.due_date >= today).length;
 
   if (!stats) {
@@ -79,15 +80,15 @@ export default async function DashboardPage() {
           <div className={`grid gap-3 sm:grid-cols-2 ${budget.total_budget !== null ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
             <Stat
               label="Committed"
-              value={formatMoney(budget.total_contracted)}
+              value={formatMoney(budget.total_contracted, wedding.currency)}
               href="/budget"
               hint="contracted across every line"
             />
             <Stat
               label="Paid"
-              value={formatMoney(budget.total_paid)}
+              value={formatMoney(budget.total_paid, wedding.currency)}
               href="/budget"
-              hint={`${formatMoney(budget.total_outstanding)} outstanding`}
+              hint={`${formatMoney(budget.total_outstanding, wedding.currency)} outstanding`}
               tone={budget.total_outstanding > 0 ? "warn" : "good"}
             />
             <Stat
@@ -98,7 +99,7 @@ export default async function DashboardPage() {
             />
             <Stat
               label="Per seat"
-              value={budget.per_head_seat !== null ? formatMoney(budget.per_head_seat) : "—"}
+              value={budget.per_head_seat !== null ? formatMoney(budget.per_head_seat, wedding.currency) : "—"}
               href="/guests/rank"
               hint="from every per-unit and consumption line"
             />
@@ -107,12 +108,12 @@ export default async function DashboardPage() {
             {budget.total_budget !== null ? (
               <Stat
                 label="Against budget"
-                value={formatMoney(budget.total_current)}
+                value={formatMoney(budget.total_current, wedding.currency)}
                 href="/budget"
                 hint={
                   budget.budget_variance === null || budget.budget_variance === 0
-                    ? `of ${formatMoney(budget.total_budget)} — exactly on budget`
-                    : `of ${formatMoney(budget.total_budget)} — ${formatMoney(Math.abs(budget.budget_variance))} ${
+                    ? `of ${formatMoney(budget.total_budget, wedding.currency)} — exactly on budget`
+                    : `of ${formatMoney(budget.total_budget, wedding.currency)} — ${formatMoney(Math.abs(budget.budget_variance), wedding.currency)} ${
                         budget.budget_variance > 0 ? "over" : "under"
                       }`
                 }

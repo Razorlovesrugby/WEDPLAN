@@ -326,3 +326,29 @@ export function plannerInviteEmail(options: { weddingName: string; url: string }
 
   return { subject: `You've been invited to help plan ${weddingName}`, text, html };
 }
+
+/** Spec 40: the partner's invite, sent when the couple sign up or from Settings. */
+export function partnerInviteEmail(options: { weddingName: string; inviterName: string | null; url: string }) {
+  const { weddingName, inviterName, url } = options;
+  const who = inviterName ? `${inviterName} has` : "You've been";
+  const whoHtml = inviterName ? `${escapeHtml(inviterName)} has` : "You&rsquo;ve been";
+  const text = [
+    `${who} set up ${weddingName} on WedPlan and added you as their partner.`,
+    "",
+    "You'll see and edit everything they can: guests, tasks, the budget and the website.",
+    "",
+    "Choose a password to get started (the link works once):",
+    url,
+    "",
+    "If you weren't expecting this, you can ignore this message.",
+  ].join("\n");
+
+  const html = layout(`
+    <p style="font-size:18px;margin:0 0 12px">${whoHtml} set up ${escapeHtml(weddingName)} on WedPlan.</p>
+    <p>You&rsquo;ve been added as their partner, so you&rsquo;ll see and edit everything they can: guests,
+    tasks, the budget and the website.</p>
+    ${button(url, "Choose a password")}
+    <p style="font-size:13px;color:#6b6560">The link works once. If you weren&rsquo;t expecting this, you can ignore this message.</p>`);
+
+  return { subject: `You've been added to ${weddingName} on WedPlan`, text, html };
+}

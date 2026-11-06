@@ -4,20 +4,24 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { updateWeddingSettings } from "@/server/actions/settings";
 import { utcToZonedInput } from "@/lib/timezone";
+import { TimeZoneSelect } from "@/components/timezone-select";
+import { CurrencySelect } from "@/components/currency-select";
 import type { WeddingRow } from "@/lib/types/database";
 
 /**
- * One form, one save: name, date, timezone, invite send date, RSVP lock,
- * and the reminder digest's urgency window. All six are columns that
+ * One form, one save: name, date, timezone, currency (spec 40), invite send
+ * date, RSVP lock, and the reminder digest's urgency window. All six are columns that
  * already existed except reminder_window_days (0007_settings.sql) — see
  * docs/specs/03-settings-calendar-mobile.md.
  */
 export function WeddingBasicsForm({
   wedding,
   timeZones,
+  currencies,
 }: {
   wedding: WeddingRow;
   timeZones: string[];
+  currencies: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -73,21 +77,23 @@ export function WeddingBasicsForm({
 
         <label>
           <span className="mb-1 block text-sm font-medium">Timezone</span>
-          <input
-            name="timezone"
-            list="timezone-options"
-            defaultValue={wedding.timezone}
-            required
-            className="field"
-            placeholder="Europe/London"
-          />
-          <datalist id="timezone-options">
-            {timeZones.map((tz) => (
-              <option key={tz} value={tz} />
-            ))}
-          </datalist>
+          <TimeZoneSelect name="timezone" timeZones={timeZones} defaultValue={wedding.timezone} />
+          <span className="mt-1 block text-xs text-muted">
+            Every task, date and time uses this. Changing it keeps your times as typed (2:00 pm stays 2:00 pm).
+          </span>
           {fieldErrors.timezone ? (
             <p className="mt-1 text-xs text-red-700">{fieldErrors.timezone[0]}</p>
+          ) : null}
+        </label>
+
+        <label>
+          <span className="mb-1 block text-sm font-medium">Currency</span>
+          <CurrencySelect name="currency" currencies={currencies} defaultValue={wedding.currency} />
+          <span className="mt-1 block text-xs text-muted">
+            This changes the symbol only. Amounts are not converted.
+          </span>
+          {fieldErrors.currency ? (
+            <p className="mt-1 text-xs text-red-700">{fieldErrors.currency[0]}</p>
           ) : null}
         </label>
 

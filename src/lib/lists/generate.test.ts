@@ -58,7 +58,7 @@ describe("generateTimelineItems", () => {
   });
 
   it("returns an empty array for a null wedding date, rather than throwing", () => {
-    expect(generateTimelineItems("timeline", null, sections)).toEqual([]);
+    expect(generateTimelineItems("timeline", null, sections, "2026-01-01")).toEqual([]);
   });
 
   it("does not clamp a short-engagement date into the future — it flags it instead", () => {
@@ -103,7 +103,24 @@ describe("generateTimelineItems", () => {
 
 describe("todayIso", () => {
   it("formats as a plain calendar date, ignoring the time of day", () => {
-    expect(todayIso(new Date("2027-06-12T23:59:59Z"))).toBe("2027-06-12");
+    expect(todayIso("UTC", new Date("2027-06-12T23:59:59Z"))).toBe("2027-06-12");
+  });
+
+  it("is the wedding's own today, not UTC's", () => {
+    // 11:30 UTC on 12 June is 23:30 in Auckland (NZST, UTC+12) and still the 12th.
+    expect(todayIso("Pacific/Auckland", new Date("2027-06-12T11:30:00Z"))).toBe("2027-06-12");
+    // 12:30 UTC is 00:30 on the 13th in Auckland, while UTC is still on the 12th.
+    expect(todayIso("Pacific/Auckland", new Date("2027-06-12T12:30:00Z"))).toBe("2027-06-13");
+  });
+
+  it("follows daylight saving at the NZ edges", () => {
+    // NZDT is UTC+13: 10:30 UTC on 9 Jan is 23:30 the same day; 11:30 UTC is 00:30 the 10th.
+    expect(todayIso("Pacific/Auckland", new Date("2027-01-09T10:30:00Z"))).toBe("2027-01-09");
+    expect(todayIso("Pacific/Auckland", new Date("2027-01-09T11:30:00Z"))).toBe("2027-01-10");
+  });
+
+  it("works west of UTC too", () => {
+    expect(todayIso("America/Los_Angeles", new Date("2027-06-13T03:00:00Z"))).toBe("2027-06-12");
   });
 });
 
@@ -193,63 +210,63 @@ describe("parseQuickAdd", () => {
   const today = new Date("2027-06-09T12:00:00Z"); // a Wednesday
 
   it("parses 'tomorrow'", () => {
-    expect(parseQuickAdd("Book the florist tomorrow", today)).toEqual({
+    expect(parseQuickAdd("Book the florist tomorrow", "UTC", today)).toEqual({
       title: "Book the florist",
       due_date: "2027-06-10",
     });
   });
 
   it("parses 'today'", () => {
-    expect(parseQuickAdd("Call the venue today", today)).toEqual({
+    expect(parseQuickAdd("Call the venue today", "UTC", today)).toEqual({
       title: "Call the venue",
       due_date: "2027-06-09",
     });
   });
 
   it("parses 'next Friday' as the upcoming Friday, not this week's if already past", () => {
-    expect(parseQuickAdd("Cake tasting next friday", today)).toEqual({
+    expect(parseQuickAdd("Cake tasting next friday", "UTC", today)).toEqual({
       title: "Cake tasting",
       due_date: "2027-06-11",
     });
   });
 
   it("parses a bare weekday the same way as 'next <weekday>'", () => {
-    expect(parseQuickAdd("Dress fitting friday", today)).toEqual({
+    expect(parseQuickAdd("Dress fitting friday", "UTC", today)).toEqual({
       title: "Dress fitting",
       due_date: "2027-06-11",
     });
   });
 
   it("parses 'in 2 weeks'", () => {
-    expect(parseQuickAdd("Order invitations in 2 weeks", today)).toEqual({
+    expect(parseQuickAdd("Order invitations in 2 weeks", "UTC", today)).toEqual({
       title: "Order invitations",
       due_date: "2027-06-23",
     });
   });
 
   it("parses 'in 3 days'", () => {
-    expect(parseQuickAdd("Confirm headcount in 3 days", today)).toEqual({
+    expect(parseQuickAdd("Confirm headcount in 3 days", "UTC", today)).toEqual({
       title: "Confirm headcount",
       due_date: "2027-06-12",
     });
   });
 
   it("parses 'next month'", () => {
-    expect(parseQuickAdd("Dress rehearsal next month", today)).toEqual({
+    expect(parseQuickAdd("Dress rehearsal next month", "UTC", today)).toEqual({
       title: "Dress rehearsal",
       due_date: "2027-07-09",
     });
   });
 
   it("falls back to no date for anything it doesn't recognise", () => {
-    expect(parseQuickAdd("Pick a cake flavour", today)).toEqual({
+    expect(parseQuickAdd("Pick a cake flavour", "UTC", today)).toEqual({
       title: "Pick a cake flavour",
       due_date: null,
     });
   });
 
   it("leaves the title intact and trimmed when nothing matches", () => {
-    expect(parseQuickAdd("  Choose the band  ", today)).toEqual({
+    expect(parseQuickAdd("  Choose the band  ", "UTC", today)).toEqual({
       title: "Choose the band",
       due_date: null,
     });

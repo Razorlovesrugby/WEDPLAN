@@ -151,7 +151,7 @@ export const getListTemplates = cache(async (): Promise<ListTemplateRow[]> => {
  * actually does.
  */
 export const getTimelineTemplatePreview = cache(
-  async (weddingDate: string | null): Promise<{ items: GeneratedListItem[]; templateFound: boolean }> => {
+  async (weddingDate: string | null, timeZone: string): Promise<{ items: GeneratedListItem[]; templateFound: boolean }> => {
     const supabase = await createClient();
     const { data: template, error } = await supabase
       .from("list_templates")
@@ -162,7 +162,7 @@ export const getTimelineTemplatePreview = cache(
     if (!template) return { items: [], templateFound: false };
 
     const payload = template.payload as { sections?: TemplateSection[] };
-    return { items: generateTimelineItems("timeline", weddingDate, payload.sections ?? []), templateFound: true };
+    return { items: generateTimelineItems("timeline", weddingDate, payload.sections ?? [], todayIso(timeZone)), templateFound: true };
   },
 );
 
@@ -175,7 +175,7 @@ export const getTimelineTemplatePreview = cache(
 // views and can share ItemRow. v_timeline_items itself still backs
 // getTimelineItems below, for /timeline.
 
-export const getTodayItems = cache(async (weddingId: string): Promise<ListItemWithList[]> => {
+export const getTodayItems = cache(async (weddingId: string, timeZone: string): Promise<ListItemWithList[]> => {
   const supabase = await createClient();
   const activeListIds = await getActiveListIds(weddingId);
   if (activeListIds.length === 0) return [];
@@ -183,7 +183,7 @@ export const getTodayItems = cache(async (weddingId: string): Promise<ListItemWi
     .from("list_items")
     .select("*, lists(title, color, icon, kind)")
     .eq("wedding_id", weddingId)
-    .eq("due_date", todayIso())
+    .eq("due_date", todayIso(timeZone))
     .neq("status", "done")
     .in("list_id", activeListIds)
     .order("priority", { ascending: false });
@@ -196,11 +196,11 @@ export const getTodayItems = cache(async (weddingId: string): Promise<ListItemWi
  * Today (spec 26). Snoozed-past-today items are dropped by the same
  * `isOverdue` rule the digest uses, so the three places agree.
  */
-export const getOverdueItems = cache(async (weddingId: string): Promise<ListItemWithList[]> => {
+export const getOverdueItems = cache(async (weddingId: string, timeZone: string): Promise<ListItemWithList[]> => {
   const supabase = await createClient();
   const activeListIds = await getActiveListIds(weddingId);
   if (activeListIds.length === 0) return [];
-  const today = todayIso();
+  const today = todayIso(timeZone);
   const { data, error } = await supabase
     .from("list_items")
     .select("*, lists(title, color, icon, kind)")
@@ -323,7 +323,7 @@ export const getTimelineItems = cache(async (weddingId: string): Promise<Timelin
  * unaffected: it still reads `getTimelineItems` above, list-items-only.
  */
 export const getTimelineSummary = cache(
-  async (weddingId: string, windowDays = 7): Promise<DigestContent> => {
+  async (weddingId: string, timeZone: string, windowDays = 7): Promise<DigestContent> => {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("v_reminders_due")
@@ -341,7 +341,7 @@ export const getTimelineSummary = cache(
       done: item.status === "done",
       source: item.source,
     }));
-    return buildDigest(digestItems, undefined, windowDays);
+    return buildDigest(digestItems, todayIso(timeZone), windowDays);
   },
 );
 

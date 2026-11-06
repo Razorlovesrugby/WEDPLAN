@@ -1,9 +1,11 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deletePayment, markPaymentPaid, recordPayment } from "@/server/actions/budget";
 import { formatDate, formatMoney } from "@/lib/format";
+import { todayIso } from "@/lib/lists/generate";
 import type { PaymentRow } from "@/lib/types/database";
 
 /** A line item's payment schedule — spec 6, section 2. Overdue (unpaid, past due) is highlighted the way /timeline highlights overdue items. */
@@ -16,11 +18,12 @@ export function PaymentList({
   payments: PaymentRow[];
   timezone: string;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso(timezone);
 
   function onMarkPaid(id: string, alreadyPaid: boolean) {
     startTransition(async () => {
@@ -55,7 +58,7 @@ export function PaymentList({
                 className={`flex flex-wrap items-center justify-between gap-2 rounded px-2 py-1 ${overdue ? "bg-red-50" : ""}`}
               >
                 <span>
-                  {formatMoney(p.amount)}
+                  {formatMoney(p.amount, currency)}
                   {p.due_date ? (
                     <span className={`ml-2 text-xs ${overdue ? "text-red-700" : "text-muted"}`}>
                       due {formatDate(p.due_date, timezone)}

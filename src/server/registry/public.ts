@@ -71,7 +71,7 @@ export async function loadPublicRegistry(
   if (!SLUG.test(slug)) return null;
   const admin = createAdminClient();
 
-  const { data: wedding } = await admin.from("weddings").select("id, name, slug").eq("slug", slug).maybeSingle();
+  const { data: wedding } = await admin.from("weddings").select("id, name, slug, currency").eq("slug", slug).maybeSingle();
   if (!wedding) return null;
 
   const { data: settings } = await admin
@@ -134,7 +134,7 @@ export async function loadPublicRegistry(
       tag_ids: tagsByItem.get(row.id) ?? [],
       url: row.url,
       imageUrl: imageUrl(row.image_asset_id, 960),
-      priceText: settings.show_prices ? formatPrice(row.price_minor) : null,
+      priceText: settings.show_prices ? formatPrice(row.price_minor, wedding.currency) : null,
       quantity: row.quantity,
       remaining: row.remaining,
       specs: taken ? [] : row.specs,

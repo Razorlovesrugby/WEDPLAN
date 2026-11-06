@@ -9,7 +9,7 @@
  * fixture) without this module needing to know the database's types at all.
  */
 
-import { addDays, todayIso } from "@/lib/lists/generate";
+import { addDays } from "@/lib/lists/generate";
 
 export type DigestItem = {
   id: string;
@@ -51,7 +51,7 @@ export type DigestContent = {
  * bucketed — a snoozed item "simply drops out of the digest" (spec 02,
  * section 2), it doesn't show up as a third kind of entry.
  */
-export function buildDigest(items: DigestItem[], today: string = todayIso(), windowDays = 7): DigestContent {
+export function buildDigest(items: DigestItem[], today: string, windowDays = 7): DigestContent {
   const windowEnd = addDays(today, windowDays - 1);
   const groupsByList = new Map<string, DigestListGroup>();
 

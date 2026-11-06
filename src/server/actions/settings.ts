@@ -5,7 +5,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { addDays } from "@/lib/lists/generate";
-import { zonedInputToUtc } from "@/lib/timezone";
+import { isValidTimeZone, zonedInputToUtc } from "@/lib/timezone";
+import { isKnownCurrency } from "@/lib/onboarding";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -23,14 +24,6 @@ import { fail, ok, type ActionResult } from "./result";
  * reuses them rather than re-implementing the same validation twice.
  */
 
-function isValidTimeZone(tz: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Give the wedding a name").max(120),
@@ -50,6 +43,8 @@ const settingsSchema = z.object({
     .optional()
     .transform((v) => (v ? v : null)),
   reminder_window_days: z.coerce.number().int().min(1).max(90),
+  // Spec 40 §8: a symbol only. Changing it converts nothing.
+  currency: z.string().trim().toUpperCase().refine(isKnownCurrency, "Pick a currency from the list"),
 });
 
 export async function updateWeddingSettings(fields: Record<string, unknown>): Promise<ActionResult> {
@@ -65,12 +60,25 @@ export async function updateWeddingSettings(fields: Record<string, unknown>): Pr
   }
 
   const supabase = await createClient();
+
+  // Spec 40 §7.4: a new timezone keeps every wall-clock time as typed (the
+  // ceremony at 2:00 pm stays 2:00 pm). One function, one transaction, under
+  // the caller's RLS. The RSVP lock below is then written from the form, read
+  // in the new zone, which keeps its wall-clock time too.
+  if (parsed.data.timezone !== wedding.timezone) {
+    const { error: tzError } = await supabase.rpc("change_wedding_timezone", {
+      p_wedding_id: wedding.id,
+      p_timezone: parsed.data.timezone,
+    });
+    if (tzError) return fail(tzError.message, { timezone: ["Couldn't change the timezone"] });
+  }
+
   const { error } = await supabase
     .from("weddings")
     .update({
       name: parsed.data.name,
       wedding_date: parsed.data.wedding_date,
-      timezone: parsed.data.timezone,
+      currency: parsed.data.currency,
       rsvp_lock_at: rsvpLockAt,
       invite_send_on: parsed.data.invite_send_on,
       reminder_window_days: parsed.data.reminder_window_days,
@@ -112,6 +120,9 @@ export async function updateWeddingSettings(fields: Record<string, unknown>): Pr
   revalidatePath("/lists");
   revalidatePath("/board");
   revalidatePath("/rsvp", "layout");
+  revalidatePath("/budget");
+  revalidatePath("/vendors");
+  revalidatePath("/events", "layout");
   return ok(undefined);
 }
 

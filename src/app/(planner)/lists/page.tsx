@@ -52,7 +52,7 @@ export default async function ListsPage({
   const itemsPromise: Promise<ListItemWithList[] | null> = (() => {
     switch (view) {
       case "today":
-        return getTodayItems(wedding.id);
+        return getTodayItems(wedding.id, wedding.timezone);
       case "scheduled":
         return getScheduledItems(wedding.id);
       case "flagged":
@@ -69,7 +69,7 @@ export default async function ListsPage({
     }
   })();
 
-  const overduePromise: Promise<ListItemWithList[]> = view === "today" ? getOverdueItems(wedding.id) : Promise.resolve([]);
+  const overduePromise: Promise<ListItemWithList[]> = view === "today" ? getOverdueItems(wedding.id, wedding.timezone) : Promise.resolve([]);
 
   const [lists, templates, collaborators, people, openCounts, user, items, overdueItems] = await Promise.all([
     getLists(wedding.id),
@@ -101,7 +101,7 @@ export default async function ListsPage({
               <NewListForm templates={templates} />
             </div>
           </div>
-          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} people={people} currentUserId={user?.id} />
+          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} people={people} currentUserId={user?.id} timezone={wedding.timezone} />
         </div>
       </div>
     </div>

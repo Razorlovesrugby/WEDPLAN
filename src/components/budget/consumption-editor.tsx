@@ -1,5 +1,6 @@
 "use client";
 
+import { useCurrency } from "@/components/currency-context";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +29,7 @@ export function ConsumptionEditor({
   components: ConsumptionComponentRow[];
   counts: { adult: number; child: number; seat: number };
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -92,7 +94,7 @@ export function ConsumptionEditor({
         </table>
       )}
       <p className="text-sm">
-        Component total: <strong>{formatMoney(total)}</strong>
+        Component total: <strong>{formatMoney(total, currency)}</strong>
       </p>
       {adding ? (
         <AddComponentForm
@@ -122,6 +124,7 @@ function ComponentRow({
   onRemove: () => void;
   onError: (error: string | null) => void;
 }) {
+  const currency = useCurrency();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, startTransition] = useTransition();
@@ -158,9 +161,9 @@ function ComponentRow({
       <td className="py-1 pr-2">{component.guest_basis === "per_adult" ? "Per adult" : "Per seat"}</td>
       <td className="py-1 pr-2">{component.servings_per_guest_per_hour}</td>
       <td className="py-1 pr-2">{component.duration_hours}</td>
-      <td className="py-1 pr-2">{formatMoney(component.price_per_serving)}</td>
+      <td className="py-1 pr-2">{formatMoney(component.price_per_serving, currency)}</td>
       <td className="py-1 pr-2">{Math.round(component.wastage_buffer_pct * 100)}%</td>
-      <td className="py-1 pr-2 text-right tabular-nums">{formatMoney(total)}</td>
+      <td className="py-1 pr-2 text-right tabular-nums">{formatMoney(total, currency)}</td>
       <td className="py-1 text-right">
         <button type="button" className="text-xs text-accent hover:underline" onClick={() => setEditing(true)}>
           Edit

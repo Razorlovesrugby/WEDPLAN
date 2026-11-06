@@ -3,6 +3,28 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 46 (spec 40):** self-serve onboarding plus account, timezone and currency
+settings, built on branch `claude/confident-fermat-eali50` (**no PR opened**). Asked for as an
+investigation, then a spec, nine questions put and answered (Q3 against the recommendation:
+8-character passwords; Q6 a free answer: currency is a symbol only), then "Build the spec out"
+as its own turn. The planner says every migration through `0044` is applied to the live project;
+not checked by this session. Read the spec's **Build status**; the short version:
+
+- **`0045`.** `weddings.currency` (a label, never converts, always hundredths),
+  `create_wedding()` (service role only; the one way a wedding is made, by `/start` and by
+  `bootstrap.sql`), `change_wedding_timezone()` (keeps planner-entered wall-clock times). No new
+  table, so `planner_table_access` is unchanged.
+- **`/start`** is public and gated by **`ONBOARDING_OPEN`** (unset = closed). Public sign-up stays
+  off in Supabase; the action makes the login with the admin API, already confirmed (Q2).
+- **`todayIso(timeZone)` is now required.** "Today" was the UTC date; every caller now passes the
+  wedding's timezone. A new caller has to as well.
+- **`formatMoney(minor, currency)` is now required.** Client components get it from
+  `useCurrency()` (`CurrencyProvider` in the planner layout), which throws outside the provider.
+- **Verified:** typecheck, 1263 unit tests, 770 SQL assertions (740 earlier unchanged), single-tx,
+  `verify-bootstrap.sh`, `next build` (placeholder env), `/start` in headless Chromium.
+  **Not verified:** anything against Supabase: no sign-up, partner email, password change or
+  timezone change has run. **`0045` is not applied to the live project.**
+
 **Session 45 (spec 39):** a third assignee (part B) and a planner login (part C), built on
 branch `claude/spec-39-third-assignee` (**no PR opened**). Asked for as a scoping question,
 written up as a spec over two rounds, then "Okay let's go defaults and build it all" as its own

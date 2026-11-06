@@ -24,6 +24,8 @@ export type SiteWedding = {
   slug: string;
   wedding_date: string | null;
   timezone: string;
+  /** A symbol only (spec 40 §8). */
+  currency: string;
 };
 
 /** The wedding a public URL points at, or null. Never throws on a bad slug. */
@@ -31,7 +33,7 @@ export async function findWeddingBySlug(slug: string): Promise<SiteWedding | nul
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("weddings")
-    .select("id, name, slug, wedding_date, timezone")
+    .select("id, name, slug, wedding_date, timezone, currency")
     .eq("slug", slug)
     .maybeSingle();
   return (data as SiteWedding | null) ?? null;

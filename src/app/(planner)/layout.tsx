@@ -3,6 +3,7 @@ import { Nav } from "@/components/nav";
 import { signOut } from "@/server/actions/auth";
 import { getCurrentWedding, getSessionUser, getViewerKind } from "@/server/queries/wedding";
 import { daysUntil, formatDate } from "@/lib/format";
+import { CurrencyProvider } from "@/components/currency-context";
 
 export default async function PlannerLayout({ children }: { children: React.ReactNode }) {
   const [user, wedding, viewer] = await Promise.all([getSessionUser(), getCurrentWedding(), getViewerKind()]);
@@ -36,7 +37,9 @@ export default async function PlannerLayout({ children }: { children: React.Reac
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <CurrencyProvider currency={wedding?.currency ?? "NZD"}>{children}</CurrencyProvider>
+      </main>
     </div>
   );
 }

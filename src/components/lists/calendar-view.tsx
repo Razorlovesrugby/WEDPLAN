@@ -51,13 +51,13 @@ export function CalendarView({
   timezone: string;
 }) {
   const router = useRouter();
-  const [month, setMonth] = useState(() => monthStart(todayIso()));
+  const [month, setMonth] = useState(() => monthStart(todayIso(timezone)));
   const [error, setError] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<TimelineItemView | null>(null);
   const [, startTransition] = useTransition();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const today = todayIso();
+  const today = todayIso(timezone);
   const weeks = useMemo(() => monthWeeks(month), [month]);
 
   const itemsByDay = useMemo(() => {

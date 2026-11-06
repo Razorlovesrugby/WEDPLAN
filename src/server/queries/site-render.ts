@@ -65,6 +65,8 @@ export type RenderContext = {
     slug: string;
     wedding_date: string | null;
     timezone: string;
+    /** A symbol only (spec 40 §8). */
+    currency: string;
   };
   theme: SiteTheme;
   events: PublicEvent[];
