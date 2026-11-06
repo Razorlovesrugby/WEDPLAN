@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireWedding, getSessionUser } from "@/server/queries/wedding";
+import { requireWedding, getSessionUser, getPlannerPersonId } from "@/server/queries/wedding";
 import {
   addDays,
   generateTimelineItems,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/lists/generate";
 import type { ListItemStatus, ListItemRow, ListKind } from "@/lib/types/database";
 import { LIST_COLOR_PALETTE } from "@/lib/list-colors";
+import { assigneeColumns, parseAssignee } from "@/lib/people";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -441,13 +442,17 @@ export async function addItem(
   // (quick-add, the full item form, a budget line's linked task) goes
   // through this one function, so this is the single place that needs it.
   // Still freely reassignable afterward via assignItem.
+  // A planner is not a collaborator: they are handed tasks through their
+  // `people` row (spec 39), so a task they create is assigned there instead.
+  const plannerPersonId = await getPlannerPersonId();
   const { data, error } = await supabase
     .from("list_items")
     .insert({
       ...parsed.data,
       wedding_id: wedding.id,
       list_id: listId,
-      assigned_to: user?.id ?? null,
+      assigned_to: plannerPersonId ? null : (user?.id ?? null),
+      assigned_person_id: plannerPersonId,
       sort_order: (last?.sort_order ?? 0) + 1,
     })
     .select("id")
@@ -580,12 +585,41 @@ export async function setDueDateOffset(
   return ok({ due_date: dueDate });
 }
 
-export async function assignItem(itemId: string, userId: string | null): Promise<ActionResult> {
+/**
+ * `value` is the assign picker's string (src/lib/people.ts): "" for nobody,
+ * `u:<user id>` for a collaborator, `p:<person id>` for a person (spec 39).
+ * Exactly one of the two columns is written, the other is cleared — the
+ * database refuses both being set (0043), and this keeps a re-assign from
+ * tripping it.
+ */
+export async function assignItem(itemId: string, value: string): Promise<ActionResult> {
   const wedding = await requireWedding();
+  const assignee = parseAssignee(value);
   const supabase = await createClient();
+
+  if (assignee.kind === "user") {
+    const { data: collaborator, error: lookupError } = await supabase
+      .from("collaborators")
+      .select("user_id")
+      .eq("wedding_id", wedding.id)
+      .eq("user_id", assignee.id)
+      .maybeSingle();
+    if (lookupError) return fail(lookupError.message);
+    if (!collaborator) return fail("That person isn't on this wedding");
+  } else if (assignee.kind === "person") {
+    const { data: person, error: lookupError } = await supabase
+      .from("people")
+      .select("id, deleted_at")
+      .eq("wedding_id", wedding.id)
+      .eq("id", assignee.id)
+      .maybeSingle();
+    if (lookupError) return fail(lookupError.message);
+    if (!person || person.deleted_at) return fail("That person has been removed");
+  }
+
   const { error } = await supabase
     .from("list_items")
-    .update({ assigned_to: userId })
+    .update(assigneeColumns(assignee))
     .eq("id", itemId)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
@@ -635,6 +669,7 @@ async function completeItemRow(
         url: item.url,
         priority: item.priority,
         assigned_to: item.assigned_to,
+        assigned_person_id: item.assigned_person_id,
         due_date: spawned.due_date,
         repeat_rule: spawned.repeat_rule,
         recurrence_parent_id: item.recurrence_parent_id ?? item.id,

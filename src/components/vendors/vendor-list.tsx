@@ -29,11 +29,14 @@ export function VendorList({
   categories,
   unlinked,
   params,
+  showMoney = true,
 }: {
   vendors: VendorView[];
   categories: VendorCategoryRow[];
   unlinked: UnlinkedVendorName[];
   params: Record<string, string | undefined>;
+  /** False for a planner (spec 39): the figures come from the budget, which they cannot read, and would show as $0. */
+  showMoney?: boolean;
 }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -47,7 +50,7 @@ export function VendorList({
     () => sortVendors(vendors.filter((vendor) => matchesVendorFilter(vendor, filter))),
     [vendors, filter],
   );
-  const unbudgeted = useMemo(() => committedWithoutBudget(vendors), [vendors]);
+  const unbudgeted = useMemo(() => (showMoney ? committedWithoutBudget(vendors) : []), [vendors, showMoney]);
 
   function setParam(key: string, value: string | null) {
     const next = new URLSearchParams(search.toString());
@@ -264,21 +267,25 @@ export function VendorList({
                     </span>
                   ) : null}
 
-                  <span className="ml-auto text-sm tabular-nums">
-                    {vendor.budget_line_count > 0 ? (
-                      <>
-                        {formatMoney(vendor.committed)}
-                        <span className="text-muted"> · {formatMoney(vendor.paid)} paid</span>
-                      </>
-                    ) : (
-                      <span className="text-muted">No budget line</span>
-                    )}
-                  </span>
+                  {showMoney ? (
+                    <>
+                      <span className="ml-auto text-sm tabular-nums">
+                        {vendor.budget_line_count > 0 ? (
+                          <>
+                            {formatMoney(vendor.committed)}
+                            <span className="text-muted"> · {formatMoney(vendor.paid)} paid</span>
+                          </>
+                        ) : (
+                          <span className="text-muted">No budget line</span>
+                        )}
+                      </span>
 
-                  {vendor.next_payment_due ? (
-                    <span className="text-xs text-muted">
-                      next {formatRelative(vendor.next_payment_due)}
-                    </span>
+                      {vendor.next_payment_due ? (
+                        <span className="text-xs text-muted">
+                          next {formatRelative(vendor.next_payment_due)}
+                        </span>
+                      ) : null}
+                    </>
                   ) : null}
                   {vendor.note_count > 0 ? (
                     <span className="text-xs text-muted">

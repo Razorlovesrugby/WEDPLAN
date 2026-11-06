@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireWedding } from "@/server/queries/wedding";
+import { getViewerKind, requireWedding } from "@/server/queries/wedding";
 import {
   getVendor,
   listVendorBudgetLines,
@@ -17,6 +17,7 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const wedding = await requireWedding();
 
+  const showMoney = (await getViewerKind()) !== "planner";
   const vendor = await getVendor(wedding.id, id);
   if (!vendor) notFound();
 
@@ -40,6 +41,7 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
         notes={notes}
         lines={lines}
         tasks={tasks}
+        showMoney={showMoney}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import { getPeople } from "@/server/queries/people";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ListsSidebar } from "@/components/lists/lists-sidebar";
@@ -8,6 +9,7 @@ import { TASKS_TABS } from "@/lib/nav-tabs";
 import {
   getAllItems,
   getAssignedToMeItems,
+  getAssignedToPersonItems,
   getFlaggedItems,
   getListTemplates,
   getLists,
@@ -17,7 +19,7 @@ import {
   getTodayItems,
   type ListItemWithList,
 } from "@/server/queries/lists";
-import { getCollaborators, getSessionUser, requireWedding } from "@/server/queries/wedding";
+import { getCollaborators, getPlannerPersonId, getSessionUser, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Tasks" };
 
@@ -58,16 +60,22 @@ export default async function ListsPage({
       case "all":
         return getAllItems(wedding.id);
       case "mine":
-        return userPromise.then((u) => (u ? getAssignedToMeItems(wedding.id, u.id) : null));
+        return userPromise.then(async (u) => {
+          if (!u) return null;
+          // A planner's tasks are handed to their `people` row, not to a login (spec 39).
+          const personId = await getPlannerPersonId();
+          return personId ? getAssignedToPersonItems(wedding.id, personId) : getAssignedToMeItems(wedding.id, u.id);
+        });
     }
   })();
 
   const overduePromise: Promise<ListItemWithList[]> = view === "today" ? getOverdueItems(wedding.id) : Promise.resolve([]);
 
-  const [lists, templates, collaborators, openCounts, user, items, overdueItems] = await Promise.all([
+  const [lists, templates, collaborators, people, openCounts, user, items, overdueItems] = await Promise.all([
     getLists(wedding.id),
     getListTemplates(),
     getCollaborators(wedding.id),
+    getPeople(wedding.id),
     getOpenItemCounts(wedding.id),
     userPromise,
     itemsPromise,
@@ -93,7 +101,7 @@ export default async function ListsPage({
               <NewListForm templates={templates} />
             </div>
           </div>
-          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} currentUserId={user?.id} />
+          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} people={people} currentUserId={user?.id} />
         </div>
       </div>
     </div>

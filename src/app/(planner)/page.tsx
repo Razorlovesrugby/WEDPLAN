@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Stat } from "@/components/stat";
-import { requireWedding, getWeddingStats } from "@/server/queries/wedding";
+import { requireWedding, getWeddingStats, getViewerKind, getPlannerPersonId } from "@/server/queries/wedding";
+import { PlannerOverview } from "@/components/dashboard/planner-overview";
 import { getTimelineSummary } from "@/server/queries/lists";
 import { getBudgetSummary, getUpcomingPayments } from "@/server/queries/budget";
 import { getRegistrySummary } from "@/server/queries/registry";
@@ -10,6 +11,11 @@ export const metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   const wedding = await requireWedding();
+  // A planner reads none of the figures below (guest stats, budget, registry),
+  // so they get their own, smaller overview rather than tiles that read zero.
+  if ((await getViewerKind()) === "planner") {
+    return <PlannerOverview wedding={wedding} personId={await getPlannerPersonId()} />;
+  }
   const [stats, tasks, budget, payments, registry] = await Promise.all([
     getWeddingStats(wedding.id),
     getTimelineSummary(wedding.id, wedding.reminder_window_days),

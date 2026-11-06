@@ -419,6 +419,9 @@ export type WeddingRow = {
   updated_at: string;
 }
 
+/** The wedding row without the money (0044) — what a planner reads instead of `weddings`. */
+export type WeddingBasicsView = Omit<WeddingRow, "total_budget">;
+
 export type TransportOptionRow = {
   id: string;
   wedding_id: string;
@@ -611,6 +614,20 @@ export type CollaboratorRow = {
   display_name: string | null;
   created_at: string;
 }
+
+/** Spec 39 — someone a task can be handed to. With a login and access "planner" they are the planner login (0044). */
+export type PersonAccess = "none" | "planner";
+export type PersonRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  sort_order: number;
+  user_id: string | null;
+  access: PersonAccess;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type EventRow = {
   id: string;
@@ -1057,6 +1074,8 @@ export type ListItemRow = {
   repeat_rule: Json;
   recurrence_parent_id: string | null;
   assigned_to: string | null;
+  /** Spec 39 — a person with no login (the planner). At most one of this and `assigned_to` is set (0043). */
+  assigned_person_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1826,6 +1845,7 @@ export type Database = {
         "id" | Timestamps | "timezone" | "reminder_window_days" | "slug"
       >;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
+      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access">;
       events: Table<
         EventRow,
         "id" | Timestamps | "is_public" | "is_main" | "sort_order" | "guest_note" | "dress_code_id"
@@ -2083,6 +2103,7 @@ export type Database = {
       v_household_rsvp: View<HouseholdRsvpView>;
       v_guest_event_invites: View<GuestEventInviteView>;
       v_wedding_stats: View<WeddingStatsView>;
+      v_wedding_basics: View<WeddingBasicsView>;
       v_timeline_items: View<TimelineItemView>;
       v_budget_items: View<BudgetItemView>;
       v_vendors: View<VendorView>;

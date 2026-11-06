@@ -35,7 +35,7 @@ import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow } from "./item-row";
 import { QuickAdd } from "./quick-add";
 import { SectionNotes } from "./section-notes";
-import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow } from "@/lib/types/database";
+import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow, PersonRow } from "@/lib/types/database";
 
 /** A section's own droppable/container id, and back — dnd-kit ids are opaque strings, so a
  * "no section" bucket (which has no `list_sections` row) needs a stand-in of its own. */
@@ -62,6 +62,7 @@ export function ListDetail({
   sections,
   items,
   collaborators,
+  people = [],
   currentUserId,
   budgetLinksByItem = {},
   budgetLinksBySection = {},
@@ -70,6 +71,7 @@ export function ListDetail({
   sections: ListSectionRow[];
   items: ListItemRow[];
   collaborators: CollaboratorRow[];
+  people?: PersonRow[];
   currentUserId?: string;
   /** Budget lines linked to each item, keyed by list_item_id — spec 6, section 7's reverse badge. */
   budgetLinksByItem?: Record<string, { id: string; label: string }[]>;
@@ -352,7 +354,7 @@ export function ListDetail({
                 itemsById={itemsById}
                 allSections={orderedSections}
                 subItemsByParent={subItemsByParent}
-                collaborators={collaborators}
+                collaborators={collaborators} people={people}
                 currentUserId={currentUserId}
                 budgetLinksByItem={budgetLinksByItem}
                 budgetLinks={section ? (budgetLinksBySection[section.id] ?? []) : []}
@@ -411,6 +413,7 @@ function SectionGroup({
   allSections,
   subItemsByParent,
   collaborators,
+  people = [],
   currentUserId,
   budgetLinksByItem,
   budgetLinks,
@@ -432,6 +435,7 @@ function SectionGroup({
   allSections: ListSectionRow[];
   subItemsByParent: Map<string, ListItemRow[]>;
   collaborators: CollaboratorRow[];
+  people?: PersonRow[];
   currentUserId?: string;
   budgetLinksByItem: Record<string, { id: string; label: string }[]>;
   /** Budget lines linked to this section directly — spec 16 §3's section-heading badge. */
@@ -522,7 +526,7 @@ function SectionGroup({
                 key={id}
                 item={item}
                 subItems={subItemsByParent.get(id) ?? []}
-                collaborators={collaborators}
+                collaborators={collaborators} people={people}
                 currentUserId={currentUserId}
                 budgetLinks={budgetLinksByItem[id] ?? []}
                 highlighted={id === highlightId}
@@ -556,6 +560,7 @@ function SortableItem({
   item,
   subItems,
   collaborators,
+  people = [],
   currentUserId,
   budgetLinks,
   highlighted,
@@ -568,6 +573,7 @@ function SortableItem({
   item: ListItemRow;
   subItems: ListItemRow[];
   collaborators: CollaboratorRow[];
+  people?: PersonRow[];
   currentUserId?: string;
   budgetLinks: { id: string; label: string }[];
   highlighted: boolean;
@@ -588,7 +594,7 @@ function SortableItem({
       <ItemRow
         item={item}
         subItems={subItems}
-        collaborators={collaborators}
+        collaborators={collaborators} people={people}
         currentUserId={currentUserId}
         budgetLinks={budgetLinks}
         highlighted={highlighted}

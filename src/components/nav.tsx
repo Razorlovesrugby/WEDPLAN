@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PLANNER_NAV_HREFS } from "@/lib/planner-routes";
 
 /**
  * Nine destinations — spec 13's eight, plus "Site" for the public wedding
@@ -43,7 +44,7 @@ function isActive(pathname: string, link: { href: string; matchPrefixes?: readon
  * panel instead (spec 03, section 7, decision 5). `sm:` and up keeps a
  * plain wrapping link row.
  */
-export function Nav() {
+export function Nav({ viewer = "couple" }: { viewer?: "couple" | "planner" }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -67,7 +68,7 @@ export function Nav() {
         id="main-nav-panel"
         className={`${open ? "flex" : "hidden"} flex-col gap-1 pb-2 sm:flex sm:flex-row sm:flex-wrap sm:pb-0`}
       >
-        {LINKS.map((link) => {
+        {LINKS.filter((link) => viewer === "couple" || PLANNER_NAV_HREFS.has(link.href)).map((link) => {
           const active = isActive(pathname, link);
           return (
             <Link

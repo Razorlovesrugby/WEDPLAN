@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { signOut } from "@/server/actions/auth";
-import { getCurrentWedding, getSessionUser } from "@/server/queries/wedding";
+import { getCurrentWedding, getSessionUser, getViewerKind } from "@/server/queries/wedding";
 import { daysUntil, formatDate } from "@/lib/format";
 
 export default async function PlannerLayout({ children }: { children: React.ReactNode }) {
-  const [user, wedding] = await Promise.all([getSessionUser(), getCurrentWedding()]);
+  const [user, wedding, viewer] = await Promise.all([getSessionUser(), getCurrentWedding(), getViewerKind()]);
   const countdown = daysUntil(wedding?.wedding_date);
 
   return (
@@ -32,7 +32,7 @@ export default async function PlannerLayout({ children }: { children: React.Reac
         </div>
 
         <div className="mx-auto max-w-6xl px-4 pb-2">
-          <Nav />
+          <Nav viewer={viewer === "planner" ? "planner" : "couple"} />
         </div>
       </header>
 

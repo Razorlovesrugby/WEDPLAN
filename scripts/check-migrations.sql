@@ -78,7 +78,9 @@ with expected(version, files) as (
     ('0039', 'registry.sql'),
     ('0040', 'guest_questions.sql'),
     ('0041', 'events_is_main.sql'),
-    ('0042', 'registry_contribute.sql')
+    ('0042', 'registry_contribute.sql'),
+    ('0043', 'people.sql'),
+    ('0044', 'planner_access.sql')
 ),
 applied as (
   select version from supabase_migrations.schema_migrations

@@ -277,6 +277,25 @@ export const getAssignedToMeItems = cache(
   },
 );
 
+/** "Assigned to me" for a planner (spec 39): tasks handed to their `people` row, not to a collaborator login. */
+export const getAssignedToPersonItems = cache(
+  async (weddingId: string, personId: string): Promise<ListItemWithList[]> => {
+    const supabase = await createClient();
+    const activeListIds = await getActiveListIds(weddingId);
+    if (activeListIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from("list_items")
+      .select("*, lists(title, color, icon, kind)")
+      .eq("wedding_id", weddingId)
+      .eq("assigned_person_id", personId)
+      .neq("status", "done")
+      .in("list_id", activeListIds)
+      .order("due_date", { ascending: true, nullsFirst: false });
+    if (error) throw new Error(`Could not load your items: ${error.message}`);
+    return (data ?? []) as ListItemWithList[];
+  },
+);
+
 // ---------------------------------------------------------------------------
 // /timeline and /board
 // ---------------------------------------------------------------------------

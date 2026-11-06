@@ -5,7 +5,7 @@ import { todayIso } from "@/lib/lists/generate";
 import { sortCompletedLast } from "@/lib/lists/sort";
 import { HideCompletedToggle, useHideCompleted } from "./hide-completed-toggle";
 import { ItemRow, type ItemWithList } from "./item-row";
-import type { CollaboratorRow } from "@/lib/types/database";
+import type { CollaboratorRow, PersonRow } from "@/lib/types/database";
 
 const EMPTY_COPY: Record<string, string> = {
   today: "Nothing due today.",
@@ -25,6 +25,7 @@ export function SmartView({
   items,
   overdueItems = [],
   collaborators,
+  people = [],
   currentUserId,
 }: {
   view: "today" | "scheduled" | "flagged" | "all" | "mine";
@@ -32,6 +33,7 @@ export function SmartView({
   /** Today only (spec 26): not-done items due before today, oldest first. */
   overdueItems?: ItemWithList[];
   collaborators: CollaboratorRow[];
+  people?: PersonRow[];
   currentUserId?: string;
 }) {
   const [hideCompleted, setHideCompleted] = useHideCompleted(`view:${view}`);
@@ -57,7 +59,7 @@ export function SmartView({
               <ItemRow
                 key={item.id}
                 item={item}
-                collaborators={collaborators}
+                collaborators={collaborators} people={people}
                 currentUserId={currentUserId}
                 showListLabel
                 overdueDays={item.due_date ? daysOverdue(item.due_date, today) : 0}
@@ -80,7 +82,7 @@ export function SmartView({
               <ItemRow
                 key={item.id}
                 item={item}
-                collaborators={collaborators}
+                collaborators={collaborators} people={people}
                 currentUserId={currentUserId}
                 showListLabel
               />
