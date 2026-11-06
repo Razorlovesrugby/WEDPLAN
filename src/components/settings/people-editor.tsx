@@ -4,21 +4,25 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addPerson, removePerson, renamePerson, restorePerson } from "@/server/actions/people";
 import { InlineText } from "@/components/guests/inline-text";
+import { PlannerAccess } from "@/components/settings/planner-access";
 import type { PersonRow } from "@/lib/types/database";
 
 /**
  * People you can hand a task to who aren't one of the two collaborators — the
  * wedding planner, a florist, a parent helping out (spec 39). A name is all
  * they need; they appear in the assign picker after the collaborators. Whether
- * a person can also sign in is the "Access" block beside each name.
+ * a person can also sign in is the block under each name (spec 39 part C).
  */
 export function PeopleEditor({
   people,
-  accessSlot,
+  emails = {},
+  canGrantAccess = false,
 }: {
   people: PersonRow[];
-  /** Part C — renders the sign-in controls for one person. */
-  accessSlot?: (person: PersonRow) => React.ReactNode;
+  /** Email of each person who has a login, keyed by person id. */
+  emails?: Record<string, string>;
+  /** Only the couple may give or take away a login. */
+  canGrantAccess?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -87,7 +91,7 @@ export function PeopleEditor({
                   </button>
                 ) : null}
               </div>
-              {accessSlot ? accessSlot(p) : null}
+              {canGrantAccess ? <PlannerAccess person={p} email={emails[p.id] ?? null} /> : null}
             </li>
           ))}
         </ul>

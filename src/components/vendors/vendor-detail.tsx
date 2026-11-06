@@ -41,6 +41,7 @@ export function VendorDetail({
   notes,
   lines,
   tasks,
+  showMoney = true,
 }: {
   vendor: VendorView;
   categories: VendorCategoryRow[];
@@ -48,6 +49,8 @@ export function VendorDetail({
   notes: VendorNote[];
   lines: BudgetItemView[];
   tasks: VendorTask[];
+  /** False for a planner (spec 39): the budget lines and totals are the budget's, which they cannot read. */
+  showMoney?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -304,6 +307,8 @@ export function VendorDetail({
         )}
       </section>
 
+      {showMoney ? (
+        <>
       {/* ---- money ---- */}
       <section className="card space-y-3 p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -375,6 +380,8 @@ export function VendorDetail({
           </div>
         ) : null}
       </section>
+        </>
+      ) : null}
     </div>
   );
 }

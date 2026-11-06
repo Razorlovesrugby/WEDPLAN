@@ -7,7 +7,7 @@ import type { Database } from "@/lib/types/database";
  * Service-role client. BYPASSES ROW LEVEL SECURITY ENTIRELY.
  *
  * Every call site is responsible for its own scoping, because the database
- * will not do it here. There are exactly four legitimate reasons to reach
+ * will not do it here. There are exactly five legitimate reasons to reach
  * for this:
  *
  *   1. The public RSVP flow. A household arrives holding a token and must
@@ -30,6 +30,12 @@ import type { Database } from "@/lib/types/database";
  *      unauthenticated caller arrives holding a token, and scoping comes from
  *      resolving that token to exactly one board or one wedding and
  *      constraining every subsequent query to it.
+ *
+ *   5. Creating a planner's login (spec 39 part C) —
+ *      src/server/actions/people-access.ts. `auth.admin.generateLink` is the
+ *      only way to make an account without sending Supabase's own email, and it
+ *      needs this key. The action checks the caller is one of the couple before
+ *      it touches it, and it never returns anything but a one-time link.
  *
  * Anything a logged-in collaborator does must go through
  * lib/supabase/server.ts instead, so that RLS remains the thing enforcing

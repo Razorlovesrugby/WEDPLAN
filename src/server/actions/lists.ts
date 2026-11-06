@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireWedding, getSessionUser } from "@/server/queries/wedding";
+import { requireWedding, getSessionUser, getPlannerPersonId } from "@/server/queries/wedding";
 import {
   addDays,
   generateTimelineItems,
@@ -442,13 +442,17 @@ export async function addItem(
   // (quick-add, the full item form, a budget line's linked task) goes
   // through this one function, so this is the single place that needs it.
   // Still freely reassignable afterward via assignItem.
+  // A planner is not a collaborator: they are handed tasks through their
+  // `people` row (spec 39), so a task they create is assigned there instead.
+  const plannerPersonId = await getPlannerPersonId();
   const { data, error } = await supabase
     .from("list_items")
     .insert({
       ...parsed.data,
       wedding_id: wedding.id,
       list_id: listId,
-      assigned_to: user?.id ?? null,
+      assigned_to: plannerPersonId ? null : (user?.id ?? null),
+      assigned_person_id: plannerPersonId,
       sort_order: (last?.sort_order ?? 0) + 1,
     })
     .select("id")

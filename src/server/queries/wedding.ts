@@ -24,13 +24,13 @@ export const getSessionUser = cache(async (): Promise<{ id: string; email: strin
 });
 
 /**
- * The wedding this user is planning.
- *
- * V1 is one wedding per couple, so this takes the first — but it selects
- * through RLS rather than assuming, which means the multi-wedding case in V4
- * is a UI change rather than a security review.
+ * Who is looking (spec 39 part C). "couple" is a collaborator; "planner" is a
+ * person with a login and `access = 'planner'` (0044), who is deliberately not a
+ * collaborator and so cannot read the `weddings` table at all.
  */
-export const getCurrentWedding = cache(async (): Promise<WeddingRow | null> => {
+export type ViewerKind = "couple" | "planner";
+
+const loadWedding = cache(async (): Promise<{ wedding: WeddingRow | null; kind: ViewerKind | null }> => {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("weddings")
@@ -40,7 +40,65 @@ export const getCurrentWedding = cache(async (): Promise<WeddingRow | null> => {
     .maybeSingle();
 
   if (error) throw new Error(`Could not load wedding: ${error.message}`);
-  return data;
+  if (data) return { wedding: data, kind: "couple" };
+
+  // No row through the table: either there is no wedding, or this is a planner,
+  // who reads the same row through a view that leaves out `total_budget`. The
+  // couple never pay for this second query.
+  const { data: basics, error: basicsError } = await supabase
+    .from("v_wedding_basics")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (basicsError) throw new Error(`Could not load wedding: ${basicsError.message}`);
+  if (basics) return { wedding: { ...basics, total_budget: null }, kind: "planner" };
+
+  return { wedding: null, kind: null };
+});
+
+/**
+ * The wedding this user is planning.
+ *
+ * V1 is one wedding per couple, so this takes the first — but it selects
+ * through RLS rather than assuming, which means the multi-wedding case in V4
+ * is a UI change rather than a security review.
+ *
+ * For a planner `total_budget` is always null: they cannot read it.
+ */
+export const getCurrentWedding = cache(async (): Promise<WeddingRow | null> => (await loadWedding()).wedding);
+
+/** "couple", "planner", or null when this user has no wedding. Costs nothing extra: it shares `getCurrentWedding`'s query. */
+export const getViewerKind = cache(async (): Promise<ViewerKind | null> => (await loadWedding()).kind);
+
+/**
+ * For the pages a planner must not open (budget, settings, the site editor,
+ * the registry...). A redirect, not a security boundary: RLS is what actually
+ * keeps a planner out of the data, and a planner who reached these by URL
+ * would only see errors. This is so they land somewhere that works.
+ */
+export async function requireCouple(): Promise<WeddingRow> {
+  const { wedding, kind } = await loadWedding();
+  if (!wedding) redirect("/setup");
+  if (kind === "planner") redirect("/");
+  return wedding;
+}
+
+/** The signed-in planner's own `people` row id, for "Assigned to me". Null for the couple. */
+export const getPlannerPersonId = cache(async (): Promise<string | null> => {
+  if ((await getViewerKind()) !== "planner") return null;
+  const user = await getSessionUser();
+  if (!user) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("people")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("access", "planner")
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
 });
 
 /** For pages that are meaningless without a wedding. Redirects rather than throwing. */

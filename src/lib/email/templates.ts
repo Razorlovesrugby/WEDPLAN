@@ -297,3 +297,32 @@ export function digestEmail(options: { weddingName: string; url: string; digest:
 // The WhatsApp message lives in templates-client.ts: the planner copies it in
 // the browser, so it must not sit behind the server-only guard.
 export { whatsappMessage } from "./templates-client";
+
+/**
+ * The planner's invite (spec 39). One link, once: it signs them in and asks them
+ * to choose a password. Says who invited them and what they will and won't see,
+ * because "someone shared a wedding with you" with no detail reads as phishing.
+ */
+export function plannerInviteEmail(options: { weddingName: string; url: string }) {
+  const { weddingName, url } = options;
+  const text = [
+    `You've been invited to help plan ${weddingName} on WedPlan.`,
+    "",
+    "You'll be able to see and update the tasks, vendors and the day's schedule, and look at the guest list.",
+    "The budget isn't shared with you.",
+    "",
+    "Choose a password to get started (the link works once):",
+    url,
+    "",
+    "If you weren't expecting this, you can ignore this message.",
+  ].join("\n");
+
+  const html = layout(`
+    <p style="font-size:18px;margin:0 0 12px">You&rsquo;ve been invited to help plan ${escapeHtml(weddingName)}.</p>
+    <p>You&rsquo;ll be able to see and update the tasks, vendors and the day&rsquo;s schedule, and look at the
+    guest list. The budget isn&rsquo;t shared with you.</p>
+    ${button(url, "Choose a password")}
+    <p style="font-size:13px;color:#6b6560">The link works once. If you weren&rsquo;t expecting this, you can ignore this message.</p>`);
+
+  return { subject: `You've been invited to help plan ${weddingName}`, text, html };
+}

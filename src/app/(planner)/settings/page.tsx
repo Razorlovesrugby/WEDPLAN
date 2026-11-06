@@ -2,7 +2,7 @@ import Link from "next/link";
 import { WeddingBasicsForm } from "@/components/settings/wedding-basics-form";
 import { CutLinePicker } from "@/components/settings/cut-line-picker";
 import { PeopleEditor } from "@/components/settings/people-editor";
-import { getPeople } from "@/server/queries/people";
+import { getPeople, getPersonEmails } from "@/server/queries/people";
 import { CollaboratorNamesEditor } from "@/components/settings/collaborator-names-editor";
 import { ListAppearanceEditor } from "@/components/settings/list-appearance-editor";
 import { CapacityControl } from "@/components/rank/capacity-control";
@@ -32,6 +32,8 @@ export default async function SettingsPage() {
       getPinterestAccount(wedding.id),
       listMoodboards(wedding.id),
     ]);
+
+  const personEmails = await getPersonEmails(people).catch(() => ({}) as Record<string, string>);
 
   const timeZones =
     typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
@@ -80,9 +82,11 @@ export default async function SettingsPage() {
         </h2>
         <p className="text-sm text-muted">
           Others you can hand a task to, such as your wedding planner. They don&rsquo;t need a WedPlan
-          account to appear in the assign picker.
+          account to appear in the assign picker. You can also let someone sign in: a planner sees the
+          tasks, vendors and the day, and can look at the guest list &mdash; not the budget, and not
+          your registry, site settings or this page.
         </p>
-        <PeopleEditor people={people} />
+        <PeopleEditor people={people} emails={personEmails} canGrantAccess />
       </section>
 
       <section aria-labelledby="list-appearance" className="card space-y-4 p-4">

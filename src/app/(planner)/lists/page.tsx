@@ -9,6 +9,7 @@ import { TASKS_TABS } from "@/lib/nav-tabs";
 import {
   getAllItems,
   getAssignedToMeItems,
+  getAssignedToPersonItems,
   getFlaggedItems,
   getListTemplates,
   getLists,
@@ -18,7 +19,7 @@ import {
   getTodayItems,
   type ListItemWithList,
 } from "@/server/queries/lists";
-import { getCollaborators, getSessionUser, requireWedding } from "@/server/queries/wedding";
+import { getCollaborators, getPlannerPersonId, getSessionUser, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Tasks" };
 
@@ -59,7 +60,12 @@ export default async function ListsPage({
       case "all":
         return getAllItems(wedding.id);
       case "mine":
-        return userPromise.then((u) => (u ? getAssignedToMeItems(wedding.id, u.id) : null));
+        return userPromise.then(async (u) => {
+          if (!u) return null;
+          // A planner's tasks are handed to their `people` row, not to a login (spec 39).
+          const personId = await getPlannerPersonId();
+          return personId ? getAssignedToPersonItems(wedding.id, personId) : getAssignedToMeItems(wedding.id, u.id);
+        });
     }
   })();
 

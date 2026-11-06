@@ -419,6 +419,9 @@ export type WeddingRow = {
   updated_at: string;
 }
 
+/** The wedding row without the money (0044) — what a planner reads instead of `weddings`. */
+export type WeddingBasicsView = Omit<WeddingRow, "total_budget">;
+
 export type TransportOptionRow = {
   id: string;
   wedding_id: string;
@@ -2100,6 +2103,7 @@ export type Database = {
       v_household_rsvp: View<HouseholdRsvpView>;
       v_guest_event_invites: View<GuestEventInviteView>;
       v_wedding_stats: View<WeddingStatsView>;
+      v_wedding_basics: View<WeddingBasicsView>;
       v_timeline_items: View<TimelineItemView>;
       v_budget_items: View<BudgetItemView>;
       v_vendors: View<VendorView>;

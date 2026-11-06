@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireWedding } from "@/server/queries/wedding";
+import { getViewerKind, requireWedding } from "@/server/queries/wedding";
 import {
   listUnlinkedVendorNames,
   listVendorCategories,
@@ -23,6 +23,7 @@ export default async function VendorsPage({
   const params = await searchParams;
   const wedding = await requireWedding();
 
+  const showMoney = (await getViewerKind()) !== "planner";
   const [vendors, categories, unlinked] = await Promise.all([
     listVendors(wedding.id),
     listVendorCategories(wedding.id),
@@ -35,9 +36,9 @@ export default async function VendorsPage({
         <div>
           <h1 className="font-serif text-2xl">Vendors</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
-            Who they are, how to reach them, what was said, and which budget lines they are
-            responsible for. Every figure here is read from the budget — nothing about money is
-            stored twice.
+            {showMoney
+              ? "Who they are, how to reach them, what was said, and which budget lines they are responsible for. Every figure here is read from the budget — nothing about money is stored twice."
+              : "Who they are, how to reach them, and what was said."}
           </p>
         </div>
         <Link href="/vendors/contact-sheet" className="btn">
@@ -50,6 +51,7 @@ export default async function VendorsPage({
         categories={categories}
         unlinked={unlinked}
         params={params}
+        showMoney={showMoney}
       />
     </div>
   );

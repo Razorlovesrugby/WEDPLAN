@@ -1,3 +1,4 @@
+import { getPeople } from "@/server/queries/people";
 import Link from "next/link";
 import { AUDIT_AREAS, actorLabel, describeEntry, parseAuditFilters } from "@/lib/audit/describe";
 import { formatDate } from "@/lib/format";
@@ -20,7 +21,7 @@ export default async function ActivityPage({
 }) {
   const filters = parseAuditFilters(await searchParams);
   const wedding = await requireWedding();
-  const [page, collaborators] = await Promise.all([
+  const [page, collaboratorRows, people] = await Promise.all([
     listAuditEntries(
       wedding.id,
       wedding.timezone,
@@ -31,7 +32,16 @@ export default async function ActivityPage({
       filters.before,
     ),
     getCollaborators(wedding.id),
+    getPeople(wedding.id),
   ]);
+  // A planner's edits are logged under their login like anyone's (spec 39); name them
+  // by their People entry, so "Who" and every row can say "Pat" rather than "a former collaborator".
+  const collaborators = [
+    ...collaboratorRows,
+    ...people
+      .filter((p) => p.user_id)
+      .map((p) => ({ user_id: p.user_id as string, role: "planner", display_name: p.name })),
+  ];
 
   const dayOf = (at: string) =>
     formatDate(at, wedding.timezone, { weekday: "long", day: "numeric", month: "long", year: "numeric" });

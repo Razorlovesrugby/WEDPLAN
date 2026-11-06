@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireWedding } from "@/server/queries/wedding";
+import { requireCouple } from "@/server/queries/wedding";
 import { getRegistrySettings } from "@/server/queries/registry";
 import { absoluteUrl } from "@/lib/env";
 import { SubTabs } from "@/components/sub-tabs";
@@ -14,7 +14,7 @@ export const metadata = { title: "Registry" };
  * `/registry` would have been publicly reachable.
  */
 export default async function GiftsLayout({ children }: { children: ReactNode }) {
-  const wedding = await requireWedding();
+  const wedding = await requireCouple();
   const settings = await getRegistrySettings(wedding.id);
 
   return (
