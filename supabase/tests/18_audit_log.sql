@@ -294,7 +294,8 @@ declare
     'pinterest_accounts',    -- a credential
     'list_templates',        -- shared across weddings, no wedding_id
     'household_slug_aliases', -- derived from a household's name
-    'seating_snapshots'      -- itself a saved copy; auditing it would duplicate the payload
+    'seating_snapshots',     -- itself a saved copy; auditing it would duplicate the payload
+    'planner_table_access'   -- static registry written only by migration; closed to every session
   ];
 begin
   select string_agg(c.relname, ', ' order by c.relname) into v_missing
