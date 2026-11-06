@@ -1,431 +1,302 @@
 # Feature spec: Self-serve onboarding, and account, timezone and currency settings
 
-**Status: built (2026-11-06), branch `claude/confident-fermat-eali50`, no PR.** "Build the
-spec out" as its own turn after the answers. See **Build status** at the end for what departs
-from the text below. Earlier status line, kept for the record: questions answered (2026-11-06). Asked for as
-a spec after an investigation of "how do customers onboard themselves without me
-running a migration". **No payment step**: that is a later spec, and §9 says what
-this one leaves ready for it. All nine §10 questions are answered (see **Answered**
-under §10). One went against the recommendation (Q3, 8 characters) and one was a
-free answer (Q6). **Not built until the planner says to build.**
+**Status: built (2026-11-06), branch `claude/confident-fermat-eali50`, no PR. `0045` is not
+applied to the live project.** This document describes **what was built**, so it can be checked
+against the code. History: asked for as an investigation, then as a spec; nine questions were put
+and answered (§10); then "Build the spec out". The planner later said that turn meant "finish
+the spec", not "build it", but chose to keep the build and asked for this document to match it
+exactly. **§12 lists the parts that go beyond the bare minimum asked for**, so they can be cut.
 
 **Depends on:** V1 (`weddings`, `collaborators`), spec 3 (Settings), spec 15 §2
-(`collaborators.display_name`), spec 18 (NZD only, GST), spec 25 (`site_blocks`),
-spec 26 (the Today/overdue view), spec 39 (`generateLink` invite pattern,
-`planner_table_access`, `v_wedding_basics`). **The planner says all migrations
-through `0044` are now applied to the live project (2026-11-06).** This session
-didn't check that independently. This would be `0045`.
+(`collaborators.display_name`), spec 18 (budget, GST), spec 26 (Today/overdue), spec 39
+(`generateLink` invite pattern, `v_wedding_basics`). The planner says every migration through
+`0044` is applied to the live project; this session didn't check that.
 
 ## 1. What was asked
 
-1. **A custom onboarding flow.** A new couple answers a short questionnaire, **sets
-   a password, and goes**, with no involvement from the planner (the person who runs
-   WedPlan) and no SQL editor, dashboard or migration.
+1. **Onboarding without the planner.** A couple answers a short questionnaire, **sets a
+   password, and goes**. No SQL editor, dashboard step or migration per customer.
 2. **No payment** in this version.
-3. **Settings: change names**, and **change password**.
-4. **Settings: change timezone**, and every task, date and time in the app follows
-   that one timezone.
-5. **Settings: change currency**. Every budget is in **one** currency. No cross-currency
-   support: changing it is "a simple change more than anything".
+3. **Settings: change names** and **change password**.
+4. **Settings: change timezone.** Every task, date and time follows the one timezone.
+5. **Settings: change currency.** One currency per wedding, a simple change. No conversion,
+   no cross-currency.
 
 ## 2. Story
 
-Sam finds WedPlan and goes to `/start`. One page asks for their name, email and a
-password, their partner's name (and optionally the partner's email), the wedding's
-name, date if they know it, where it is (timezone, pre-filled from the browser) and
-the currency. They press **Create our wedding** and land on the dashboard, signed
-in. Their partner gets an email with a link to choose a password. Later, in
-Settings, Sam fixes a misspelt name, changes their password, sees that the timezone
-was wrong, corrects it (the ceremony still reads 2:00 pm), and switches the budget
-from NZD to AUD. The numbers stay as they are: only the symbol changes.
+Sam goes to `/start`, fills in one page (their name, email, password, partner's name and email,
+wedding name, date, guest count, timezone, currency) and presses **Create our wedding**. They
+land on the dashboard, signed in. Alex, their partner, gets an email with a link to choose a
+password. Later, in Settings, Sam fixes a name, changes their password, corrects the timezone
+(the ceremony still reads 2:00 pm) and switches the budget from NZD to AUD. The numbers stay the
+same; only the symbol changes.
 
-## 3. How it works today (checked against the source)
+## 3. Why no migration is needed per customer
 
-- **No migration is needed per customer, even now.** The schema is multi-tenant:
-  `wedding_id` and RLS on every table (`0001`/`0002`), and `seed.sql` already holds
-  two weddings. A new couple is **rows**: two `auth.users`, one `weddings`, one or
-  two `collaborators`, and defaults.
-- **Today those rows are made by hand.** Users are added in the Supabase dashboard
-  (`enable_signup = false` in `supabase/config.toml`), then `supabase/bootstrap.sql`
-  is edited and pasted into the SQL editor.
-- **`bootstrap.sql` only handles the first wedding.** It raises if any wedding
-  exists. It also still writes the starter website to `site_content`, which the app
-  has not read since `0025` (`site_blocks` replaced it; the backfill was one-time).
-  **So a wedding bootstrapped today starts with an empty site.** This spec fixes
-  that in passing (§5.1).
-- **`weddings` has no INSERT policy, deliberately** (bootstrap.sql's header says
-  why: a collaborator inserting a bare row would lose sight of it immediately). So
-  creation has to run with elevated rights. That is §5.1's function.
-- **Settings already has** (`src/server/actions/settings.ts`): the wedding's name,
-  date, timezone (free text with a datalist), RSVP lock, invite date and reminder
-  window (`updateWeddingSettings`), and **either collaborator's display name**
-  (`updateCollaboratorName`).
-- **Password:** only the forgot-password email flow. `/reset-password` calls
-  `supabase.auth.updateUser({ password })` after a recovery link. There is no
-  "change password while signed in".
-- **Timezone:** `weddings.timezone`, `not null default 'Europe/London'`. Timestamps
-  are shown in it. **But "today" is the UTC date**: `todayIso()` in
-  `src/lib/lists/generate.ts` is used by the Today view, overdue, the calendar and
-  the digest (nine call sites). HANDOFF session 32 already flags it as "wrong for NZ
-  for ~12h a day". Planner-entered wall-clock times are `timestamptz`:
-  `events.starts_at`/`ends_at`, `run_sheet_items.pinned_at`,
-  `coach_runs.departs_at`, `coach_stops.pickup_at`, and `weddings.rsvp_lock_at`.
-- **Currency:** none. Spec 18 removed it (`0019` dropped `weddings.base_currency`
-  and every FX column). `formatMoney`/`formatMoneyShort` in `src/lib/format.ts`
-  hardcode `en-NZ`/`NZD` (58 call sites). `GST_RATE = 0.15` in `src/lib/budget.ts`.
-  Money is integer minor units throughout.
+The schema is already multi-tenant: `wedding_id` and RLS on every table. A new couple is
+**rows**, not schema: logins, one `weddings` row, `collaborators` rows, defaults. Before this
+spec those rows were made by hand (Supabase dashboard, then pasting `supabase/bootstrap.sql`
+into the SQL editor, which only worked for the first wedding). `weddings` has no INSERT policy
+on purpose, so creating one needs elevated rights. That's what `create_wedding()` provides.
 
-## 4. The design in one paragraph
+## 4. The database: migration `0045_onboarding_timezone_currency.sql`
 
-A public `/start` page posts to one server action. It creates the login with the
-Supabase **admin API** (public sign-up stays off, so the server controls who and how
-fast), then calls one new database function, `create_wedding()`, which makes the
-wedding, its collaborator rows and its defaults **in one transaction**, and then
-signs the person in. If the partner's email was given, they get the same
-set-password invite link spec 39 already sends planners. Settings gains a
-**Your account** section (your name, partner's name, change password, re-send the
-partner invite). Timezone becomes a proper picker, "today" is computed in the
-wedding's timezone everywhere, and changing it keeps wall-clock times where they
-were. Currency becomes one column on `weddings`, used by the money formatters and
-nothing else: changing it never converts a number.
+One migration, applied once. No new table.
 
-## 5. Onboarding
+### 4.1 `weddings.currency`
 
-### 5.1 `create_wedding()` (in `0045`)
+`text not null default 'NZD'`, check `currency ~ '^[A-Z]{3}$'`. Existing weddings become NZD,
+which is what they already showed. `v_wedding_basics` (spec 39's planner view) is recreated with
+the column appended.
 
-`public.create_wedding(p_owner uuid, p_partner uuid, p_name text, p_date date,
-p_timezone text, p_currency text, p_capacity int, p_owner_name text,
-p_partner_name text) returns uuid`.
+### 4.2 `create_wedding()`
 
-- `security definer`, `set search_path = public`. `execute` is **revoked from
-  public/anon/authenticated and granted to `service_role` only**, so the app can call
-  it only from the server with the admin client.
-- Does exactly what `bootstrap.sql` does: `weddings` row, an `owner` collaborator,
-  a `partner` collaborator if `p_partner` is set (both with `display_name`),
-  Ceremony and Reception events (Ceremony `is_main`), the four standard RSVP
-  questions. **Starter website as `site_blocks`**, the same set the `0025` backfill
-  produces, not `site_content`. The slug comes from the existing
-  `weddings_default_slug` trigger.
-- Raises if `p_owner` is already a collaborator on any wedding (one wedding per
-  login in V1; `loadWedding` takes the first).
-- **`bootstrap.sql` is rewritten to call it**, and its "first wedding only" guard
-  goes. The rewrite is an edit to a script, not to a landed migration.
-- SQL tests: the function makes a complete wedding that a second account can't see,
-  `authenticated` can't execute it, a second call for the same owner raises, and
-  the new wedding has site blocks.
+`create_wedding(p_owner, p_partner, p_name, p_date, p_timezone, p_currency, p_capacity,
+p_owner_name, p_partner_name) returns uuid`.
 
-### 5.2 The `/start` page
+- **SECURITY INVOKER, executable by `service_role` only** (revoked from public, anon,
+  authenticated). The service role bypasses RLS, so it can insert the wedding row. Same shape
+  as `claim_registry_item()`.
+- In one transaction it makes:
+  - the `weddings` row (the slug comes from the existing trigger);
+  - an `owner` collaborator, and a `partner` collaborator if `p_partner` is given, each with a
+    display name;
+  - Ceremony (marked `is_main`) and Reception events;
+  - the four standard RSVP questions (the built-in decline note comes from `0023`'s trigger).
+- **No website rows.** The site builder's empty state already offers the starter layouts.
+- It refuses:
+  - a login that already has a wedding (one wedding per login, since `loadWedding` takes the
+    first);
+  - the same login as owner and partner;
+  - an unknown timezone.
+- **`bootstrap.sql` now calls it.** The "first wedding only" guard is gone, so the SQL route
+  works for any couple.
 
-- Public (added to `PUBLIC_PREFIXES` in `src/lib/public-paths.ts`, plus its test).
-  A signed-in user with a wedding is redirected to `/`. A signed-in user **without**
-  one (an orphaned login) can finish here, with the account fields hidden.
-- **Fields.** Only what can't sensibly be defaulted. Everything is editable later in
-  Settings.
+### 4.3 `change_wedding_timezone(p_wedding_id, p_timezone)`
 
-  | Field | Required | Default / note |
+- SECURITY INVOKER, so it runs under the caller's RLS. Executable by `authenticated`.
+- In one transaction it rewrites every planner-entered wall-clock time so it reads the same in
+  the new zone (`(col at time zone old) at time zone new`), then sets `weddings.timezone`. The
+  columns are:
+  - `weddings.rsvp_lock_at`
+  - `events.starts_at` and `ends_at`
+  - `run_sheet_items.pinned_at`
+  - `coach_runs.departs_at`
+  - `coach_stops.pickup_at`
+  - `seating_plans.reveal_at`
+- System timestamps (`created_at`, `done_at`, `sent_at`, `paid_at`, and so on) are real instants
+  and don't move. Dates (`due_date`, `wedding_date`) don't move either.
+
+### 4.4 SQL tests (`supabase/tests/26_onboarding.sql`, 30 assertions)
+
+- Currency: the default, and bad codes refused.
+- `create_wedding`:
+  - signed-in and anon users can't call it;
+  - it makes everything listed in §4.2;
+  - it refuses a second wedding and an unknown timezone;
+  - the new couple see only their wedding, and another couple and a stranger see none of it.
+- `change_wedding_timezone`:
+  - a stranger can't call it on someone else's wedding;
+  - ceremony, RSVP lock, coach and stop keep their typed times;
+  - a `done_at` doesn't move.
+
+## 5. Onboarding: `/start`
+
+### 5.1 The page (`src/app/start/`)
+
+- **Public** (`/start` added to `PUBLIC_PREFIXES`).
+  - A signed-in person who already has a wedding is redirected to `/`.
+  - A signed-in person **without** one fills in the same page with the account fields hidden.
+- **Closed unless `ONBOARDING_OPEN=true`** (environment variable; in `.env.example`). When
+  closed, the page says "Not taking new weddings right now" and links to sign in.
+- **One page, these fields:**
+
+  | Field | Required | Note |
   | --- | --- | --- |
-  | Your name | yes | becomes your `display_name` |
-  | Your email | yes | the login |
-  | Password, and again | yes | §10 Q3 for the rule |
-  | Partner's name | no | their `display_name`, so the assign picker reads right before they join |
-  | Partner's email | no | gets an invite (§5.4) |
-  | Wedding name | yes | pre-filled "Sam & Alex" from the two names |
-  | Wedding date | no | the countdown waits for it, as now |
-  | Timezone | yes | pre-filled from the browser's `Intl…timeZone`, picker as §7 |
-  | Currency | yes | NZD, picker as §8 |
+  | Your name | yes | your display name |
+  | Email | yes | the login |
+  | Password, and again | yes | at least 8 characters |
+  | Partner's name | no | their display name (only stored if an email is given too) |
+  | Partner's email | no | they get a set-password invite |
+  | Wedding name | yes | fills itself as "Sam & Alex" from the two names until typed over |
+  | Date | no | |
   | Rough guest count | no | `capacity` |
+  | Timezone | yes | dropdown, defaults to the browser's own zone (Pacific/Auckland if unknown) |
+  | Currency | yes | dropdown, NZD selected |
 
-- One page, no wizard. A short line under the button: "You can change all of this
-  later in Settings."
-- A hidden honeypot field. A bot that fills it gets a fake success and nothing is
-  created.
+- A hidden "website" field (honeypot): if it's filled in, the action reports success and
+  creates nothing.
+- Links: `/login` shows "New here? Set up your wedding" when sign-ups are open, and `/setup`
+  (signed in, no wedding) links to `/start`.
 
-### 5.3 The action: `startWedding` in `src/server/actions/onboarding.ts`
+### 5.2 The action: `startWedding` (`src/server/actions/onboarding.ts`)
 
-Returns `ActionResult`, like every other write. Validation lives in
-`src/lib/onboarding.ts` as a zod schema with unit tests, not inline.
+Validation rules are in `src/lib/onboarding.ts` (zod, unit-tested). Steps:
 
-1. **Gates.** `ONBOARDING_OPEN` env var (unset means `/start` says "not taking new
-   weddings right now"), a kill switch that needs no deploy. A per-IP throttle,
-   reusing the guestbook/questions throttle pattern.
-2. **Make the login.** `admin.auth.admin.createUser({ email, password,
-   email_confirm })` (§10 Q2 sets `email_confirm`). **If the email already has an
-   account, stop** with "That email already has a WedPlan login. Sign in instead."
-   Never attach a new wedding to an existing account from a public form. That is
-   the same takeover worry spec 39's planner invite guards against.
-3. **Make the wedding.** If a partner email is given, create the partner's account
-   first the same way spec 39 does (`generateLink({ type: "invite" })`). If that
-   address already has an account, refuse the partner email with a message and let
-   them continue without it. Then `admin.rpc("create_wedding", …)`.
-4. **Undo on failure.** Auth and SQL can't share a transaction, so if step 3 fails
-   the action deletes the auth user(s) it just made (`admin.auth.admin.deleteUser`)
-   before returning the error. A unit-testable sequencing helper keeps that order
-   explicit.
-5. **Sign in.** `signInWithPassword` through the server client sets the session
-   cookie, then redirect to `/`. The dashboard's existing empty state takes over.
-6. **Partner email.** Sent with `sendEmail` (Resend), worded like the planner invite.
-   Without email configured, the invite link is shown once on the dashboard
-   (spec 39's fallback).
-
-### 5.4 Partner invite, after the fact
-
-Settings → Your account shows the partner as **Invited, not joined yet**, with
-**Re-send invite** and **Change email** (until they've set a password). A partner
-with no email gets **Invite your partner** (email field). Every path goes through
-the same helper as §5.3 step 3. Granting a collaborator row to an account that
-already existed is refused, as there.
+1. **Gate.** If `ONBOARDING_OPEN` isn't on, refuse. If the honeypot is filled, report success
+   and stop. If the person is signed in and already has a wedding, refuse.
+2. **Throttle.** At most 5 attempts per IP address an hour. It counts in the existing
+   `rsvp_token_attempts` table under a separate `start:` key, so it never affects guests' RSVPs.
+3. **Validate** the fields. Errors show next to each field.
+4. **Owner login.** `auth.admin.createUser` with the password and `email_confirm: true`, so
+   there's no confirmation email to click (Q2). **If the email already has a login, stop** with
+   "That email already has a WedPlan login. Sign in instead." It never attaches a wedding to an
+   existing account from a public form. Supabase public sign-up stays off.
+5. **Partner login**, if an email was given: `generateLink({ type: "invite" })`, the same way
+   spec 39 makes a planner's login. If that address already has a login, stop with a message
+   telling them to leave it blank and invite their partner later from Settings.
+6. **Wedding.** `create_wedding()` via the service role.
+7. **Undo on failure.** If step 5 or 6 fails, delete the logins this call made.
+8. **Sign in** with the new password, which sets the session cookie, and go to `/`.
+9. **Partner email** via the existing Resend sender. If email isn't configured, the one-time
+   link is shown on the `/start` screen before continuing, so it isn't lost.
 
 ## 6. Settings → Your account
 
-A new section at the top of `/settings`, couple-only (it's under `/settings`,
-which `CoupleOnly` already guards from planners).
+A new section at the top of `/settings` (couple-only, like the rest of Settings).
 
-- **Names.** Your name and your partner's name, inline-editable, using the existing
-  `updateCollaboratorName`. The wedding's name stays in "Wedding basics", where it
-  is now. Nothing new underneath; it moves to where people will look.
-- **Change password.** Current password, new password, new again. New
-  `changePassword` in `src/server/actions/auth.ts`: re-check the current password
-  with `signInWithPassword` against the session's own email (so a borrowed unlocked
-  laptop can't take the account), then `updateUser({ password })`. The rule from
-  §10 Q3, shared with `/start` and `/reset-password` via `src/lib/onboarding.ts`.
-  Wrong current password returns a field error. Too many wrong attempts are
-  throttled. "Forgot it?" links to `/forgot-password`.
-- **Your email** is shown, not editable (§11).
-- **Partner invite** as §5.4.
+- **Names:** both collaborators' names, inline-editable. This is the existing editor, moved here
+  from its own "Names" section. The wedding's name stays in Wedding basics.
+- **Your login:** your email is shown, not editable (Q9).
+- **Change password** (`changePassword` in `src/server/actions/auth.ts`):
+  - fields for current, new, and new again;
+  - the current password is checked first, so someone at an unlocked laptop can't take the
+    account;
+  - 5 wrong tries per 15 minutes, then a wait;
+  - the new password must be at least 8 characters, the same rule as `/start` and
+    `/reset-password`;
+  - a "Forgot it?" link goes to `/forgot-password`.
+- **Your partner** (`src/server/actions/partner.ts`):
+  - **No partner yet:** an "Invite your partner" form (name and email). It makes their login,
+    adds them as the partner, and emails the link.
+  - **Invited, not joined yet:** buttons for **Re-send invite** and **Change email** (fixes a
+    typo, then sends to the new address).
+  - **Joined:** shows that, with no buttons. "Joined" means they've signed in at least once.
+  - If email isn't set up, the one-time link is shown so you can send it yourself.
 
 ## 7. Timezone: one timezone for everything
 
-1. **Picker.** The free-text field becomes a `<select>` of IANA zones
-   (`Intl.supportedValuesOf("timeZone")`), with Pacific/Auckland and the browser's
-   own zone pinned to the top, and each option labelled with its current offset
-   ("Pacific/Auckland (UTC+13)").
-2. **"Today" is the wedding's today.** `todayIso()` gains a required `timeZone`
-   argument (`todayIso(tz, now?)`), computed with the existing
-   `src/lib/timezone.ts` helpers. All nine call sites pass `wedding.timezone`. Client
-   components receive it as a prop. The digest cron computes today **per wedding**.
-   Making it required, not optional, is the point: TypeScript finds every caller
-   and nothing silently stays on UTC. Unit tests at the NZ edges (23:30 and 00:30
-   Auckland, both sides of DST).
-3. **Default for new weddings** comes from `/start` (§5.2). The column default
-   `'Europe/London'` is left alone. Nothing inserts without a value any more.
-4. **Changing it keeps wall-clock times** (§10 Q5, recommended). A ceremony entered
-   as 2:00 pm under the wrong zone stays 2:00 pm under the right one. `0045` adds
-   `change_wedding_timezone(p_wedding uuid, p_tz text)`. It is `security invoker`
-   (so it runs under the caller's RLS), validates the zone against
-   `pg_timezone_names`, and in one transaction rewrites every planner-entered
-   wall-clock `timestamptz` (`events.starts_at`/`ends_at`, `run_sheet_items.pinned_at`,
-   `coach_runs.departs_at`, `coach_stops.pickup_at`, `weddings.rsvp_lock_at`) as `(col at time zone
-   old) at time zone new`, then sets `weddings.timezone`. `updateWeddingSettings`
-   calls it only when the zone actually changed. **System timestamps**
-   (`created_at`, `sent_at`, `viewed_at`, `done_at`, and so on) are real instants and
-   are not touched. They simply display in the new zone. Dates (`due_date`,
-   `wedding_date`) are dates and don't move. A SQL test pins all three.
-   Build step 1 re-greps the schema for any other planner-entered `timestamptz`.
-5. The field gets one line of help: "Changing this keeps your times as typed
-   (2:00 pm stays 2:00 pm)."
+1. **Picker.** Settings' free-text field became a dropdown of every timezone, with
+   Pacific/Auckland first, then your browser's zone and the current one. Each shows its offset,
+   e.g. "Pacific/Auckland (UTC+13)". The offset text appears just after the page loads, because
+   server and browser timezone data can differ. The same dropdown is used on `/start`.
+2. **"Today" is the wedding's today.** It used to be the UTC date, which was wrong for about
+   half of every NZ day. `todayIso(timeZone)` now requires the timezone, and every caller passes
+   the wedding's:
+   - the Today view and overdue tasks;
+   - the calendar and the dashboard;
+   - the budget's payment list and payment calendar;
+   - quick-add's "tomorrow" / "next Friday";
+   - the countdown generator;
+   - the weekly digest email, which works out each wedding's own today.
+3. **Changing it keeps times as typed** (Q5) via `change_wedding_timezone()` (§4.3). The help
+   text says: "Changing this keeps your times as typed (2:00 pm stays 2:00 pm)."
 
-## 8. Currency: one currency, a label not a conversion
+## 8. Currency: a symbol, not a conversion
 
-1. **Schema (`0045`).** `weddings.currency text not null default 'NZD'` with a check
-   `currency ~ '^[A-Z]{3}$'` (§10 Q6). Every existing wedding is NZD, so nothing changes
-   for them. `v_wedding_basics` (spec 39's planner view) gets the column, recreated
-   with it appended. The planner sees no money, but the view should not silently
-   lag the table.
-2. **Formatting.** `formatMoney(minor, currency)` and `formatMoneyShort(minor,
-   currency)` take a **required** currency, for the same reason as `todayIso`. The
-   locale stays `en-NZ` (so USD prints "US$1,200.00", unambiguous). The 58 call
-   sites pass `wedding.currency`; the public site and registry read it from the
-   wedding they already load. Mechanical, but it touches many files: it's the
-   largest part of this spec by line count.
-3. **Any currency, symbol only (Q6).** The picker offers every code
-   `Intl.supportedValuesOf("currency")` knows, with NZD, AUD, USD, GBP, EUR and CAD
-   pinned to the top. The check constraint is just "three uppercase letters". The
-   app validates against the `Intl` list. **Decimals don't follow the currency:**
-   amounts are stored and shown in hundredths exactly as now, whatever the code.
-   The formatters force their fraction digits (`formatMoney` always 2,
-   `formatMoneyShort` 0 or 2 as today) rather than taking the currency's own
-   convention. So a JPY wedding reads "¥4,600.00", and no stored number changes
-   meaning.
-4. **Changing it converts nothing.** The setting's help text says so in plain words:
-   "This changes the symbol only. Amounts are not converted." Changing it is an
-   ordinary `updateWeddingSettings` field, audited like the rest of `weddings`.
-5. **GST.** Unchanged, recommended (§10 Q7): the inclusive/exclusive toggle and its
-   15% stay as spec 18 built them, whatever the currency. Simplest, and it is a tax
-   rule, not a currency.
-6. **Known NZ-only corners left as they are** (§11): the bank-details account-number
-   check (15–16 digit NZ format, `0033`) and the registry's paste-a-link price
-   autofill (reads NZD prices only, so with another currency it just leaves the
-   price blank to type).
+1. **Picker** in Settings → Wedding basics, and on `/start`:
+   - NZD, AUD, USD, GBP, EUR and CAD first, then every other code;
+   - names like "New Zealand Dollar" appear just after the page loads, for the same reason as
+     the timezone offsets.
+2. **It changes the symbol only.** Help text: "This changes the symbol only. Amounts are not
+   converted." Stored amounts never change.
+3. **Always two decimals**, whatever the currency (Q6): a yen wedding reads "JP¥4,600.00".
+4. **Where it shows.** `formatMoney(amount, currency)` now requires the currency, so no screen
+   can quietly stay on NZD. It covers:
+   - the budget and vendors screens, which read it from a `CurrencyProvider` in the planner
+     layout;
+   - the dashboard;
+   - the activity log;
+   - the travel costs on the public site;
+   - the registry.
 
-## 9. Ready for payment later (not built here)
+   Budget field labels say "(AUD)" and so on instead of "($NZD)".
+5. **Registry "paste a link" autofill** takes a price only when the shop's currency matches the
+   wedding's (it used to be NZD only).
+6. **GST is unchanged** (Q7): same toggle, 15%, whatever the currency.
+7. **Left as is:** the bank-details account-number check is still NZ format.
 
-The later payment spec puts a Stripe Checkout step between §5.3's validation and
-step 2, and moves steps 2–6 into the webhook. This spec keeps that a small change:
-`create_wedding()` is already the one server-only entry point, sign-up is already
-server-controlled, and `ONBOARDING_OPEN` already gates the public door. Nothing
-here adds a `plans`/`subscriptions` table or a price.
+## 9. Ready for payment later (not built)
 
-## 10. Open questions — none answered; the first option is the recommendation
+A later payment spec would put a Stripe Checkout step after `/start`'s validation and run the
+rest of §5.2 from Stripe's confirmation. `create_wedding()` is already the one server-only entry
+point, and `ONBOARDING_OPEN` already gates the door. No plans, prices or subscriptions here.
 
-1. **Who may sign up?** (a) Anyone, behind `ONBOARDING_OPEN`, a throttle and a
-   honeypot. (b) Only with an invite code you hand out. (c) Anyone, but new
-   weddings wait for your approval. *(a) matches "without any interaction"; (b) is
-   a cheap middle ground while it's unproven in a browser.*
-2. **Email confirmation?** (a) Go straight in ("set a password and go"), and send a
-   welcome email that isn't required to click. (b) Must click a link before first
-   sign-in. *(a) is what was asked. The cost is that a mistyped email means no
-   password reset later, and someone could register an address that isn't theirs.*
-3. **Password rule.** (a) At least 10 characters, nothing else. (b) 8 characters.
-   (c) Supabase's own policy plus leaked-password check (a dashboard setting).
-4. **Partner at signup.** (a) Name optional, email optional, invite sent if given.
-   (b) Name and email both required. (c) Leave the partner entirely to Settings.
-5. **Timezone change and existing times.** (a) Keep wall-clock times, so 2 pm stays
-   2 pm (§7.4). (b) Keep the instants, so 2 pm London becomes 1 am Auckland, with
-   just a warning. *(a) is almost always what a correction means; (b) needs no new
-   function.*
-6. **Which currencies?** (a) NZD, AUD, USD, GBP, EUR, CAD. (b) Every ISO currency
-   with two decimals. (c) Add FJD/WST/TOP for Pacific weddings to (a).
-7. **GST when the currency isn't NZD.** (a) Leave it: same toggle, 15%. (b) Hide
-   the toggle unless NZD (existing "exclusive" lines keep their uplift). (c) A
-   per-wedding tax rate and label — a bigger change.
-8. **Where does `/start` live?** (a) `/start` on the app's own domain. (b) A marketing
-   site that links to it (separate work, not this spec).
-9. **Changing the login email** from Settings — leave out (§11), or include? It
-   needs Supabase's email-change confirmation round trip, so it isn't a one-liner.
+## 10. Questions and answers (2026-11-06)
 
-### Answered (2026-11-06)
-
-| Q | Answer |
-| --- | --- |
-| 1 | **(a) Anyone**, behind `ONBOARDING_OPEN`, a throttle and a honeypot. |
-| 2 | **(a) Go straight in.** `email_confirm: true` on `createUser`; the welcome email isn't required. |
-| 3 | **(b) 8 characters minimum**, nothing else. *Against the recommendation of 10.* The one rule is shared by `/start`, change password and `/reset-password`. |
-| 4 | **(a) Partner name and email both optional**; the invite is sent if an email is given. |
-| 5 | **(a) Keep wall-clock times** (§7.4, `change_wedding_timezone()`). |
-| 6 | **Free answer: "It's just a sign, no conversion, so decimals don't matter."** Any currency, symbol only, always hundredths (§8.3). |
-| 7 | **(a) Leave GST as is**: same toggle, 15%, whatever the currency. |
-| 8 | **(a) `/start`** on the app's own domain. |
-| 9 | **Leave out** changing the login email. |
+| Q | Question | Answer |
+| --- | --- | --- |
+| 1 | Who may sign up? | **Anyone**, behind `ONBOARDING_OPEN`, a throttle and a honeypot. |
+| 2 | Email confirmation before first sign-in? | **No. Go straight in.** (The optional welcome email was not built.) |
+| 3 | Password rule? | **At least 8 characters**, nothing else. (Recommendation was 10.) |
+| 4 | Partner at sign-up? | **Name and email both optional**; invite sent if an email is given. |
+| 5 | Timezone change and existing times? | **Keep times as typed.** |
+| 6 | Which currencies? | **"It's just a sign, no conversion, so decimals don't matter."** Any currency, always two decimals. |
+| 7 | GST when not NZD? | **Leave it as is.** |
+| 8 | Where does sign-up live? | **`/start`** on the app's own domain. |
+| 9 | Change login email in Settings? | **Leave out.** |
 
 ## 11. Not in scope
 
-- Payment, plans, trials, invoices (the next spec, §9).
-- Converting amounts, FX, more than one currency per wedding (spec 18 stands).
-- Following a currency's own decimal convention (Q6: always hundredths).
-- Changing the login email, deleting an account or a wedding (the "no destructive
-  writes to guest data" rule makes that its own design).
-- One login on several weddings (V4, per `loadWedding`'s own comment).
+- Payment, plans, trials (§9).
+- Converting amounts, or more than one currency per wedding.
+- Changing the login email, or deleting an account or wedding.
+- One login on several weddings.
 - Social sign-in, magic links, two-factor.
-- Making the bank-details check or the registry price autofill currency-aware.
-- A marketing/landing site.
+- A welcome email to the person who signed up.
+- A marketing site.
 
-## 12. Build order (once §10 is answered and building is asked for)
+## 12. Beyond the bare minimum (candidates to cut)
 
-1. Re-grep the schema for planner-entered `timestamptz` columns; confirm §7.4's list.
-2. `0045`: `weddings.currency`, `create_wedding()`, `change_wedding_timezone()`,
-   `v_wedding_basics` recreated. SQL tests. Rewrite `bootstrap.sql` to call
-   `create_wedding()`. `supabase/migrations/README.md` row. No new table, so
-   `planner_table_access` is unchanged, but its pinning test is run.
-3. `src/lib/onboarding.ts` (schema, password rule, undo sequencing) with tests.
-4. `todayIso(tz)` and its nine callers, plus the digest's per-wedding today. Tests.
-5. `formatMoney(minor, currency)` and its callers.
-6. `startWedding` action, `/start` page, public path, `ONBOARDING_OPEN` in
-   `src/lib/env.ts`.
-7. Settings: Your account (names, change password, partner invite), timezone
-   picker, currency picker.
-8. Typecheck, unit tests, `verify-migrations.sh`, `verify-bootstrap.sh`, `next build`.
+The core ask is: §5's sign-up, §6's names and change password, §7's timezone, and §8's currency
+symbol. These parts were built on top of that and could be removed if you want the smallest
+version:
 
-## 13. Risks
+| Part | Why it's there | Cost of cutting |
+| --- | --- | --- |
+| Partner **Re-send** and **Change email** buttons (§6) | Recover from a lost email or a typo | Without them, a typo'd partner email can only be fixed in the Supabase dashboard |
+| Change-password throttle (§6) | Stops guessing the current password | Small; Supabase has its own rate limits |
+| Registry autofill following the currency (§8.5) | An AUD wedding would otherwise take NZD prices as AUD | Low; prices can be typed by hand |
+| Timezone offsets and currency names in the dropdowns (§7.1, §8.1) | Easier to pick the right one | Plain codes only |
+| "Keep times as typed" on timezone change (§4.3) | Q5's answer | Times would shift when the timezone is corrected |
 
-- **Open sign-up is a public write path that creates accounts.** The throttle, the
-  honeypot and the kill switch are the whole defence in (a). Turn it on only after
-  the cross-wedding isolation has been seen to hold with two real accounts in a
-  browser, which has never happened (`docs/HANDOFF.md`).
-- **Email has to work** for the partner invite. The sending domain
-  (SPF/DKIM/DMARC) is still not set up. The one-time link on the dashboard is the
-  fallback.
-- **`0045` assumes the live project has everything through `0044`** (the planner
-  says it does). `create_wedding()` writes to `site_blocks` and `events.is_main`, so
-  run `node scripts/verify-live.mjs` before applying it.
-- **The currency change touches ~58 call sites.** That's mechanical, but it's the
-  part most likely to miss a screen. The required parameter is what catches it.
+The throttle, honeypot and on/off switch on `/start` are Q1's answer, not extras.
 
-## Build status (2026-11-06)
+## 13. Files
 
-Built on `claude/confident-fermat-eali50`, no PR. **`0045` is not applied to the live project.**
+| Area | Files |
+| --- | --- |
+| Database | `supabase/migrations/0045_onboarding_timezone_currency.sql`, `supabase/tests/26_onboarding.sql`, `supabase/bootstrap.sql`, `scripts/verify-bootstrap.sh` |
+| Sign-up | `src/app/start/page.tsx`, `src/app/start/start-form.tsx`, `src/server/actions/onboarding.ts`, `src/server/partner-invite.ts`, `src/lib/onboarding.ts` (+ test), `src/lib/public-paths.ts`, `src/lib/env.ts`, `src/lib/email/templates.ts` (`partnerInviteEmail`) |
+| Settings | `src/components/settings/account-section.tsx`, `src/server/actions/auth.ts`, `src/server/actions/partner.ts`, `src/server/queries/partner.ts`, `src/server/actions/settings.ts`, `src/components/settings/wedding-basics-form.tsx` |
+| Timezone | `src/components/timezone-select.tsx`, `src/lib/timezone.ts` (`todayInZone`), `src/lib/lists/generate.ts` (`todayIso`) and its callers |
+| Currency | `src/components/currency-select.tsx`, `src/components/currency-context.tsx`, `src/lib/format.ts` (`formatMoney`, `currencySymbol`) and its callers |
 
-**Verified:** `npm run typecheck`; 1263 unit tests (1244 before onboarding's own 18, plus one
-public-path test); `verify-migrations.sh`: 770 SQL assertions (the earlier 740 unchanged, 30 new
-in `26_onboarding.sql`); `verify-migrations-single-tx.sh`; `verify-bootstrap.sh`; `next build`
-(placeholder env). **Seen:** `/start` in headless Chromium against `next start` with placeholder
-env, at 390px and 1100px: no console errors, no horizontal scroll, the wedding name follows the
-two names, Pacific/Auckland is first with its offset, NZD is pre-selected.
-**Not verified:** anything against Supabase. No account has been created, no `create_wedding`
-call has run outside the SQL test cluster, no partner email has been sent, no password changed,
-and no timezone change has run against real data. Settings has never rendered (it needs a
-session).
+## 14. Verification
 
-### What was built
+- **Passed:**
+  - `npm run typecheck`;
+  - 1263 unit tests (19 new);
+  - `verify-migrations.sh`: 770 SQL assertions, the earlier 740 unchanged plus 30 new;
+  - `verify-migrations-single-tx.sh` and `verify-bootstrap.sh`;
+  - `next build` (placeholder env).
+- **Seen:** `/start` in headless Chromium, placeholder env, at 390px and 1100px wide. No console
+  errors, no sideways scroll, the wedding name fills itself, Auckland and NZD are pre-selected.
+- **Not verified:**
+  - anything against Supabase: no real sign-up, partner email, password change or timezone
+    change has run;
+  - Settings has never rendered, because it needs a signed-in session;
+  - the riskiest untested parts are the Supabase admin calls and the exact "email already
+    taken" error they return.
 
-- **`0045_onboarding_timezone_currency.sql`**: `weddings.currency` (check `^[A-Z]{3}$`, default
-  NZD), `v_wedding_basics` recreated with it appended, `create_wedding()`,
-  `change_wedding_timezone()`.
-- **`bootstrap.sql`** calls `create_wedding()`; the "first wedding only" guard is gone (it now
-  refuses when either login already has a wedding). `verify-bootstrap.sh` updated.
-- **`/start`** (`src/app/start/`), public. `startWedding` in `src/server/actions/onboarding.ts`;
-  rules in `src/lib/onboarding.ts`; partner login/link/email in `src/server/partner-invite.ts`.
-  Gated by `ONBOARDING_OPEN` (in `.env.example`), a per-IP throttle (5 an hour, on
-  `rsvp_token_attempts` under a `start:` key so it never touches RSVP lockouts), and a honeypot.
-- **`/setup`** (signed in, no wedding) now links to `/start`; `/login` links to it when open.
-- **Settings → Your account** (`src/components/settings/account-section.tsx`): both names (the
-  existing editor, moved here), change password (`changePassword` in `src/server/actions/auth.ts`,
-  re-checks the current password, 5 wrong tries per 15 minutes), the partner card (invite /
-  re-send / change email until joined; `src/server/actions/partner.ts`,
-  `src/server/queries/partner.ts`). "Joined" is `last_sign_in_at` being set.
-- **Timezone**: a real picker (`src/components/timezone-select.tsx`). `todayIso(timeZone)` is now
-  required everywhere (Today, overdue, calendar, dashboard, payment list/calendar, quick-add's
-  "tomorrow", the countdown generator, the digest cron per wedding). Changing it calls
-  `change_wedding_timezone()` first.
-- **Currency**: a picker (`src/components/currency-select.tsx`) in Wedding basics.
-  `formatMoney`/`formatMoneyShort` take a required currency; client components read it from
-  `CurrencyProvider` (`src/components/currency-context.tsx`, in the planner layout); the public
-  site and registry read it from the wedding they load. Field labels say "(AUD)" etc.
+**To check it for real:**
 
-### Where the build departs from the text above
-
-1. **`create_wedding()` makes no site rows**, not the `0025`-backfill set §5.1 described. The
-   site builder already has an empty state offering the starter layouts (`STARTER_LAYOUTS`),
-   which is a better first screen than fixed blocks duplicated into SQL.
-2. **`create_wedding()` is SECURITY INVOKER, executable by `service_role` only**, not SECURITY
-   DEFINER. The service role bypasses RLS, so this matches `claim_registry_item()` and leaves no
-   definer function behind.
-3. **A partner name with no partner email is not stored.** A collaborator row needs a login, so
-   the name only seeds the wedding name; Settings' "Invite your partner" asks for name and email
-   together.
-4. **`seating_plans.reveal_at` is also kept wall-clock** on a timezone change. Step 1's re-grep
-   found it; §7.4's list didn't have it.
-5. **The registry's price autofill follows the wedding's currency** instead of staying NZD-only
-   (§8.6 said leave it). An NZD-only autofill on an AUD wedding would have filled NZD prices in
-   as AUD, which is worse than the small change.
-6. **The partner's one-time link shows on the `/start` success screen** when email isn't set up,
-   not on the dashboard, and in Settings after any invite action.
-7. **Option labels (offsets, currency names) appear after mount.** Server and browser locale data
-   differ, and rendering them on the server broke hydration.
-
-### Known gaps, said plainly
-
-- Nothing here has run against Supabase. The riskiest parts are the admin calls (`createUser`
-  with `email_confirm`, `generateLink`, `updateUserById`, `deleteUser`) and the exact error
-  shapes `isEmailTaken` matches.
-- `daysUntil` (the header countdown) still counts from "now" rather than the wedding's today.
-  Off by at most a day near midnight, and outside this spec.
-- No email to the person who signed up (Q2's optional welcome email was not built).
-- The bank-details account-number check is still NZ-format only.
-
-### Pick up here
-
-Apply `0045` (after `node scripts/verify-live.mjs` confirms `0044`), set `ONBOARDING_OPEN=true`
-in Vercel, then sign up at `/start` with two real addresses and check: the dashboard loads, the
-partner's email arrives and its link sets a password, a second account can't see the first
-wedding, Settings changes the password and the currency, and changing the timezone leaves the
-ceremony time as typed.
+1. Run `node scripts/verify-live.mjs`.
+2. Apply `0045`.
+3. Set `ONBOARDING_OPEN=true` in Vercel.
+4. Sign up at `/start` with two real addresses.
+5. Confirm:
+   - the partner's email arrives and its link sets a password;
+   - a second account can't see the first wedding;
+   - Settings changes the password and the currency;
+   - a timezone change leaves the ceremony time as typed.
