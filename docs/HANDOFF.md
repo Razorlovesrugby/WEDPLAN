@@ -3,6 +3,15 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 47 (specs 41–46, spec only):** a discovery pass on the customer journey ("where
+everything lives… feel like an Apple native app"), then "Write all the specs now". **Six
+proposals, nothing built, no code or migration touched**, branch `claude/nice-mccarthy-x93m9s`.
+One decision taken before writing: laptop first, but easy on a phone and for an AI assistant.
+41 (shell, sidebar, tab bar, Settings tidy; no URL changes) goes first; 42–46 sit inside it.
+Every spec ends with open questions and recommendations; none answered yet. The facts in them
+come from reading the code (no browser, no live data); spec 45's drag table is a text count,
+not a test.
+
 **Session 46 (spec 40):** self-serve onboarding plus account, timezone and currency
 settings, built on branch `claude/confident-fermat-eali50` (**no PR opened**). Asked for as an
 investigation, then a spec, nine questions put and answered (Q3 against the recommendation:
