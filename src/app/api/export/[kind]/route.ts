@@ -1,3 +1,4 @@
+import { getPeople } from "@/server/queries/people";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCollaborators, getCurrentWedding, getEvents } from "@/server/queries/wedding";
@@ -132,7 +133,12 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
      * same role label the assign picker itself falls back to
      * (item-row.tsx) until spec 15 gives collaborators a real display name.
      */
-    const [items, collaborators] = await Promise.all([getItemsForExport(wedding.id), getCollaborators(wedding.id)]);
+    const [items, collaborators, people] = await Promise.all([
+      getItemsForExport(wedding.id),
+      getCollaborators(wedding.id),
+      getPeople(wedding.id),
+    ]);
+    const personName = new Map(people.map((p) => [p.id, p.name]));
     const roleLabel = new Map(collaborators.map((c) => [c.user_id, c.role === "owner" ? "Owner" : "Partner"]));
     const statusLabel: Record<ListItemStatus, string> = {
       not_started: "Not started",
@@ -148,7 +154,11 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
         item.title,
         statusLabel[item.status],
         item.due_date ?? "",
-        item.assigned_to ? (roleLabel.get(item.assigned_to) ?? "") : "",
+        item.assigned_to
+          ? (roleLabel.get(item.assigned_to) ?? "")
+          : item.assigned_person_id
+            ? (personName.get(item.assigned_person_id) ?? "")
+            : "",
         item.flagged ? "yes" : "no",
         item.priority > 0 ? item.priority : "",
         item.notes ?? "",

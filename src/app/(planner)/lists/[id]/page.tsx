@@ -1,3 +1,4 @@
+import { getPeople } from "@/server/queries/people";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ListsSidebar } from "@/components/lists/lists-sidebar";
@@ -15,10 +16,11 @@ export default async function ListDetailPage({ params }: { params: Promise<{ id:
   // The budget badges are scoped by list, and the list id is already in the
   // URL — so they join this batch instead of costing a second serial round
   // trip once `detail.items` has come back.
-  const [lists, detail, collaborators, openCounts, user, budgetLinksMap] = await Promise.all([
+  const [lists, detail, collaborators, people, openCounts, user, budgetLinksMap] = await Promise.all([
     getLists(wedding.id),
     getListDetail(wedding.id, id),
     getCollaborators(wedding.id),
+    getPeople(wedding.id),
     getOpenItemCounts(wedding.id),
     getSessionUser(),
     getBudgetLinksForLists(wedding.id, [id]),
@@ -50,6 +52,7 @@ export default async function ListDetailPage({ params }: { params: Promise<{ id:
               sections={detail.sections}
               items={detail.items}
               collaborators={collaborators}
+              people={people}
               currentUserId={user?.id}
               budgetLinksByItem={budgetLinksByItem}
               budgetLinksBySection={budgetLinksBySection}

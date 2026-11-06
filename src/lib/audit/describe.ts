@@ -111,6 +111,7 @@ export const AUDIT_AREAS: readonly Area[] = [
 const NOUNS: Record<string, string> = {
   weddings: "wedding details",
   collaborators: "collaborator",
+  people: "person",
   events: "event",
   households: "household",
   guests: "guest",

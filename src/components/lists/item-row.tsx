@@ -16,16 +16,12 @@ import {
 } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import { InlineText } from "@/components/guests/inline-text";
-import type { CollaboratorRow, ListItemRow, ListSectionRow } from "@/lib/types/database";
+import { assigneeOptions, itemAssigneeValue } from "@/lib/people";
+import type { CollaboratorRow, ListItemRow, ListSectionRow, PersonRow } from "@/lib/types/database";
 
 export type ItemWithList = ListItemRow & {
   lists?: { title: string; color: string | null; icon: string | null; kind: string } | null;
 };
-
-/** A collaborator's label for the assign picker: their own typed name (spec 15 §2) if they've set one, else the existing role fallback. */
-function collaboratorLabel(c: CollaboratorRow, currentUserId?: string): string {
-  return c.display_name || (c.user_id === currentUserId ? "You" : c.role === "owner" ? "Owner" : "Partner");
-}
 
 /**
  * One list item, everywhere it shows up: a section on /lists/[id], a smart
@@ -38,6 +34,7 @@ export function ItemRow({
   item,
   subItems = [],
   collaborators = [],
+  people = [],
   currentUserId,
   showListLabel = false,
   allowSubItems = false,
@@ -54,6 +51,8 @@ export function ItemRow({
   overdueDays?: number;
   subItems?: ListItemRow[];
   collaborators?: CollaboratorRow[];
+  /** Spec 39 — people with no login (the planner); offered in the assign picker after the collaborators. */
+  people?: PersonRow[];
   currentUserId?: string;
   showListLabel?: boolean;
   allowSubItems?: boolean;
@@ -73,10 +72,11 @@ export function ItemRow({
   const [flagged, setFlagged] = useState(item.flagged);
   const [priority, setPriority] = useState(item.priority);
   const [dueDate, setDueDate] = useState(item.due_date);
-  const [assignedTo, setAssignedTo] = useState(item.assigned_to);
+  const [assignedValue, setAssignedValue] = useState(itemAssigneeValue(item));
   const [addingSub, setAddingSub] = useState(false);
   const [subTitle, setSubTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const assignOptions = assigneeOptions(collaborators, people, currentUserId, assignedValue);
 
   // A sub-item can be closed by its parent's own checkbox (spec 11 §1D)
   // rather than this row's, so `checked` has to track the server value
@@ -175,14 +175,13 @@ export function ItemRow({
     });
   }
 
-  function onAssign(userId: string) {
-    const next = userId || null;
-    const previous = assignedTo;
-    setAssignedTo(next); // optimistic — reflects instantly, confirmed below
+  function onAssign(value: string) {
+    const previous = assignedValue;
+    setAssignedValue(value); // optimistic — reflects instantly, confirmed below
     startTransition(async () => {
-      const result = await assignItem(item.id, next);
+      const result = await assignItem(item.id, value);
       if (!result.ok) {
-        setAssignedTo(previous);
+        setAssignedValue(previous);
         setError(result.error);
       } else {
         setError(null);
@@ -349,17 +348,17 @@ export function ItemRow({
             >
               !
             </button>
-            {collaborators.length > 0 ? (
+            {assignOptions.length > 0 ? (
               <select
-                value={assignedTo ?? ""}
+                value={assignedValue}
                 onChange={(e) => onAssign(e.target.value)}
                 aria-label={`Assign "${item.title}"`}
                 className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
               >
                 <option value="">Unassigned</option>
-                {collaborators.map((c) => (
-                  <option key={c.user_id} value={c.user_id}>
-                    {collaboratorLabel(c, currentUserId)}
+                {assignOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
@@ -415,6 +414,7 @@ export function ItemRow({
                   key={sub.id}
                   item={sub}
                   collaborators={collaborators}
+                  people={people}
                   currentUserId={currentUserId}
                 />
               ))}

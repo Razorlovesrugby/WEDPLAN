@@ -1,3 +1,4 @@
+import { getPeople } from "@/server/queries/people";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ListsSidebar } from "@/components/lists/lists-sidebar";
@@ -64,10 +65,11 @@ export default async function ListsPage({
 
   const overduePromise: Promise<ListItemWithList[]> = view === "today" ? getOverdueItems(wedding.id) : Promise.resolve([]);
 
-  const [lists, templates, collaborators, openCounts, user, items, overdueItems] = await Promise.all([
+  const [lists, templates, collaborators, people, openCounts, user, items, overdueItems] = await Promise.all([
     getLists(wedding.id),
     getListTemplates(),
     getCollaborators(wedding.id),
+    getPeople(wedding.id),
     getOpenItemCounts(wedding.id),
     userPromise,
     itemsPromise,
@@ -93,7 +95,7 @@ export default async function ListsPage({
               <NewListForm templates={templates} />
             </div>
           </div>
-          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} currentUserId={user?.id} />
+          <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} people={people} currentUserId={user?.id} />
         </div>
       </div>
     </div>
