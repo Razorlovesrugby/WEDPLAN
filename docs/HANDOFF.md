@@ -3,6 +3,25 @@
 **Living document.** Rewritten at the end of each work chunk. It holds the current state and the three most recent sessions. Older sessions are in [`history/sessions.md`](history/sessions.md). A new session needs this file and `docs/wedding-platform-spec.md`.
 
 
+## Start here (read this first)
+
+**What this is.** WEDPLAN: a wedding planning platform for a couple and their collaborators. Next.js App Router on Vercel, Supabase (Postgres, Auth, RLS keyed to `wedding_id`), TypeScript, Vitest. `README.md` is the overview; `docs/wedding-platform-spec.md` is the technical spec; `docs/specs/README.md` is the index of per-feature specs and how the spec process works.
+
+**Where it stands.** Specs 1–40 are built or in progress, with per-spec status in `docs/specs/README.md` (lists and timeline, reminders, guests and households, budget, moodboards, public site builder, invitations and RSVP, registry, seating, audit log and backups, self-serve onboarding). Specs 41–46 (app shell, guest journey, inbox, inspector, no-drag pass, command palette) are proposals only; nothing is built and their open questions are unanswered. Migrations run `0001`–`0045`; the planner says `0044` and earlier are applied to the live project and `0045` is not (not checked by any session).
+
+**What has and hasn't been verified.** Typecheck, unit tests, the SQL suite (`./scripts/verify-migrations.sh`) and `npm run build` pass. Some screens were rendered in headless Chromium with sample data. Nothing has been checked against live Supabase data, on a real phone, or by a real user unless a session below says so. Do not imply otherwise to the planner.
+
+**How to work here.**
+- Rules and conventions are in `CLAUDE.md`; section 8 below has the full convention list. A spec request is not a build request.
+- Verify with `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh` (non-root user) and `npm run build`, and say which you ran.
+- At the end of a work chunk, rewrite the "Recent sessions" block below (keep about three), and move older entries to [`history/sessions.md`](history/sessions.md).
+
+**Map of this file.** Recent sessions (next) → Active work → 0 Live project → 1 What exists → 2 What has NOT been verified → 3 Where this veered off the spec → 4 What is left → 5 Things worth knowing before changing anything → 6 Traps → 7 Deliberate exceptions → 8 Conventions → 9 Open questions.
+
+---
+
+## Recent sessions
+
 **Session 47 (specs 41–46, spec only):** a discovery pass on the customer journey ("where
 everything lives… feel like an Apple native app"), then "Write all the specs now". **Six
 proposals, nothing built, no code or migration touched**, branch `claude/nice-mccarthy-x93m9s`.
