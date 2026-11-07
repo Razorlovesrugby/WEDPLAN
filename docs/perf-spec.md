@@ -141,7 +141,7 @@ Five causes, in descending order of how much they cost:
 
 ### 1. Every query crossed the Atlantic, twice
 
-The Supabase project — `lsgbwxisqqazahgkibmj`, the one in section 0 of the
+The Supabase project — `<project-ref>`, the one in section 0 of the
 handoff — is in **eu-west-1** (Ireland). `vercel.json` set no `regions`, so
 Vercel put the serverless functions in its default, **iad1** (Washington
 DC). Every single Supabase round trip therefore went Ireland ↔ Virginia:
@@ -151,14 +151,14 @@ roughly 75–90ms each, before Postgres did any work at all.
 > Asking a Supabase connector to `list_projects` is *not* how to check
 > this. The handoff (section 0) warns that a session's connector is
 > typically scoped to the wrong organisation and returns only
-> `arm15lite_PROD` (`dgpplqzsukifcvddoxcd`) — an unrelated rugby-club
+> an unrelated production project (`<other-project-ref>`) — an unrelated rugby-club
 > database that must not be touched. It was read that mistaken way here
 > first, and it happens to *also* sit in eu-west-1, so the wrong lookup
 > produced the right answer and very nearly went unnoticed.
 >
 > What actually settles it, without depending on connector scope: resolve
 > `db.<ref>.supabase.co` and match the address against AWS's published
-> ranges. `db.lsgbwxisqqazahgkibmj.supabase.co` resolves to
+> ranges. `db.<project-ref>.supabase.co` resolves to
 > `2a05:d018:65a:e202:…`, whose longest prefix match in
 > `https://ip-ranges.amazonaws.com/ip-ranges.json` is `2a05:d018::/35` →
 > `eu-west-1`. Re-run that if the database ever moves; do not re-derive it
