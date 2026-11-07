@@ -9,6 +9,19 @@ chats.
 
 **Stack:** Next.js 15 (App Router) · Supabase (Postgres, Auth, RLS) · TypeScript · Tailwind · Vitest · deployed on Vercel
 
+## Screenshots
+
+The public wedding site as a guest sees it, rendered with placeholder data. The site is assembled from blocks in a builder, and each theme and layout is configurable.
+
+<p>
+  <img src="docs/images/site-hero.png" alt="Wedding site cover with names, date and countdown" width="48%">
+  <img src="docs/images/site-story.png" alt="Our story section with milestones" width="48%">
+</p>
+<p>
+  <img src="docs/images/site-schedule.png" alt="Weekend schedule with events, venues and add-to-calendar links" width="48%">
+  <img src="docs/images/site-mobile.png" alt="The same site at phone width" width="22%">
+</p>
+
 ## What it covers
 
 - **Guests and households.** Households are the invite unit, guests the
