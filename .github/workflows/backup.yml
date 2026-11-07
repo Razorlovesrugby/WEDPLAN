@@ -17,11 +17,11 @@ name: backup
 # Actions notifications. Nothing here swallows an error.
 
 on:
-  schedule:
-    # 14:17 UTC is 03:17 in New Zealand. Monday–Saturday: database only.
-    - cron: "17 14 * * 1-6"
-    # Sunday: database and images.
-    - cron: "17 14 * * 0"
+  # Manual only while the repository is public (the job refuses to run in a
+  # public repo). When it is private again, restore the schedule:
+  #   schedule:
+  #     - cron: "17 14 * * 1-6"   # 03:17 NZ, database only
+  #     - cron: "17 14 * * 0"     # Sunday, database and images
   workflow_dispatch:
     inputs:
       include_storage:
