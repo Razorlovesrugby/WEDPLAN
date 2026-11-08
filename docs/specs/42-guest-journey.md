@@ -1,8 +1,9 @@
 # Feature spec: Design and Invitations — making what guests see, and sending it
 
-**Status: proposal, not built.** Written 2026-11-06. Revised 2026-11-08 twice with the planner's
-answers (§11): first "the invite is the website", then "invite and invite design are different
-concepts" and "add registry design in a similar location". **The planner said "update spec
+**Status: proposal, not built.** Written 2026-11-06. Revised 2026-11-08 three times with the planner's
+answers (§11): "the invite is the website"; "invite and invite design are different concepts";
+then keep all eight Design tabs, make them work alike, and keep the registry's page settings in
+one place, under Registry. **The planner said "update spec
 only"**, so nothing here is authorised to build until they say so in a later turn.
 
 **Depends on:** spec 41 (the shell, built; this changes its "Website" entry), specs 14, 21, 22,
@@ -36,9 +37,11 @@ there's **one registry page** for anyone (`/registry/<slug>`).
 
 ## 3. Story
 
-Sam opens **For guests → Design** and switches between **Invitation · Save the date · Registry ·
-RSVP questions** with the segmented control: changing a photo on the invitation page, the wording
-on the save the date, the registry's colours. Every one has a live preview.
+Sam opens **For guests → Design** and switches between **Invitation · Save the date · RSVP
+questions · Theme** with the segmented control: changing a photo on the invitation page, the
+wording on the save the date. Every tab looks and works the same way: controls on one side, a live
+preview on the other, saved the same way. The **Registry** tab opens the registry's own **Page &
+address** screen, which already works like that.
 
 Later Sam opens **For guests → Invitations**. At the top are two stages in order: **Save the date →
 Invitation**, each with a progress bar ("82 of 94 sent"). Under each are the same three steps:
@@ -98,7 +101,6 @@ work without moving a route:
 | `/site`, `/site/*` (but not `/site/questions`), `/travel`, `/gallery` | Design |
 | `/invitations/save-the-date` | Design (longer than `/invitations`) |
 | `/questions` | Design |
-| `/gifts/design` (new, §5.4) | Design (longer than `/gifts`) |
 | `/invitations` | Invitations |
 | `/gifts`, `/gifts/claims`, `/gifts/settings` | Registry |
 
@@ -112,15 +114,40 @@ One segmented control across every Design screen:
 | --- | --- | --- |
 | Invitation | `/site` | The page editor, previewed as a chosen household. Printed stationery's design lives here too. |
 | Save the date | `/invitations/save-the-date` | Today's `SaveTheDateEditor`, minus the sending text. |
-| Registry | `/gifts/design` **(new)** | The registry page's design half (§5.4), with spec 38's live preview. |
+| Registry | `/gifts/settings` (**a link out**, §5.5) | Opens Registry → Page & address, the registry's one settings screen. The sidebar then lights Registry. |
 | RSVP questions | `/questions` | Today's editor. The questions are part of what guests see on the invitation. |
 | Theme | `/site/theme` | Today's screen. |
 | Travel, Photos, Extras | `/travel`, `/gallery`, `/site/extras` | As spec 41. Content shown on the invitation page. |
 
-Eight tabs wrap onto two rows on a phone. That's acceptable for a section opened mostly on a
-laptop (spec 41's decision). See Q7 for a shorter alternative.
+**All eight are kept** (§11 Q7). They wrap onto two rows on a phone, which is acceptable for a
+section opened mostly on a laptop (spec 41's decision).
 
-### 5.3 Invitations: two stages, three steps
+### 5.3 Every Design tab works the same way
+
+"The design UI process should be similar" (§11 Q7). Every Design screen uses one frame,
+`DesignFrame`:
+
+- **The page title and the Design tabs at the top**, then **controls** on the left (or on top below
+  `lg:`) and a **live preview** on the right in `PreviewFrame` (`src/components/preview-frame.tsx`,
+  already shared by the site builder and the registry, spec 38). The preview has the same
+  phone/laptop switch, and **"view as" a household** wherever the page is personal.
+- **One save behaviour, the same everywhere.** Today the screens differ. The build audits each one
+  and applies the rule from Q9 (recommended: **a Save button with an "unsaved changes" note**, as
+  on the registry, spec 38). The preview reloads after a save.
+- **What each tab previews:**
+
+  | Tab | Preview |
+  | --- | --- |
+  | Invitation | The household's page (already) |
+  | Save the date | The household's save the date (it has its own preview today, which moves into `PreviewFrame`) |
+  | RSVP questions | The invitation page scrolled to its RSVP form |
+  | Theme | The invitation page |
+  | Travel, Photos, Extras | The invitation page scrolled to that block (or a note that the block isn't on the page yet, with "Add it") |
+  | Registry | Its own screen, which already has a preview (spec 38) |
+
+- Nothing guests see changes; this only changes the planner's editing screens.
+
+### 5.4 Invitations: two stages, three steps
 
 `/invitations` becomes the journey screen. The stage and step are in the URL, e.g.
 `/invitations?stage=invitation&step=who`. With no parameters it opens on **the first stage with
@@ -129,7 +156,7 @@ work left**, falling back to Invitation.
 | Stage | Who | Send | Track |
 | --- | --- | --- | --- |
 | **Save the date** | Every household (a filter for *sending*, e.g. "not sent yet"; nothing stored) | Copy link / email / mark sent / download links CSV | Sent, opened, not opened |
-| **Invitation** | **Households × events grid** (§5.5) | Copy link / email / mark sent / print stationery; RSVP reminder settings | Sent, opened, silent, replied (attending / declined / maybe), can't come |
+| **Invitation** | **Households × events grid** (§5.6) | Copy link / email / mark sent / print stationery; RSVP reminder settings | Sent, opened, silent, replied (attending / declined / maybe), can't come |
 
 Each stage header has **Edit design →** linking to its Design tab. The stages are a segmented
 control of links (spec 41 §4.3), each with a progress bar; the steps are a second, smaller one.
@@ -143,22 +170,15 @@ is larger and carries its actions. Rows can be filtered by the existing `?status
 links**, **Email**, **Download CSV**, **Mark as sent without sending**). It's the same sheet for
 both stages.
 
-### 5.4 Registry: the design half moves to Design
+### 5.5 Registry stays in one place
 
-The Page & address form is split into two forms over the same `registry_settings` row:
+All of the registry stays under **Registry** (§11 Q8): **Items · Claims · Page & address**, as
+today. The Page & address form isn't split. **Design → Registry** is a tab that links to
+`/gifts/settings`, so it can be found from both places with one copy. Page & address already has the
+controls-plus-preview layout (spec 38); it adopts `DesignFrame` (§5.3) only if that doesn't change
+its form.
 
-- **`/gifts/design` (new, under Design → Registry):** title, intro, pictures, saying thank you,
-  what visitors see, Contribute, the look, **with spec 38's live preview beside it**. It's rendered
-  outside the Registry header and tabs: `/gifts/layout.tsx` gets a sibling route group, or the
-  header moves into the three Registry pages. The build picks whichever keeps `requireCouple()` on
-  both.
-- **`/gifts/settings` (stays, renamed "Delivery & sharing"):** switched on, open to claims, the
-  registry link bar and QR, and where gifts should go. It gets a "Design the registry page →" link.
-- **Registry's tabs** become **Items · Claims · Delivery & sharing**.
-- Each half saves only its own fields. Today's single `saveRegistrySettings` action either takes a
-  `part` argument or becomes two actions. The fields, the table and the preview don't change.
-
-### 5.5 Who's invited to what: a grid
+### 5.6 Who's invited to what: a grid
 
 Invitation → Who is a **grid**: households as rows, events as columns, a tick in each cell. It has
 a header checkbox per event ("everyone above the cut"), and the same filters as the guest list.
@@ -173,36 +193,34 @@ screens and the sidebar data:
 
 - `/w/<slug>/<household>`, `/w/<slug>/<household>/save-the-date`, `/rsvp/<token>`, `/i/<token>`,
   `/m/<token>` and `/registry/<slug>` keep their code, tokens and behaviour. The registry's public
-  page reads the same `registry_settings` columns as today.
+  page is untouched.
 - `submitRsvp`, the reminder rules, open tracking, and everything guests see.
-- `src/middleware.ts` and `src/lib/public-paths.ts` are untouched. `/gifts/design` is under
-  `/gifts`, not `/registry`, so the public-prefix trap from spec 36 doesn't apply.
+- `src/middleware.ts` and `src/lib/public-paths.ts` are untouched. No new route under `/registry`.
 - `?status=` filters, so every dashboard number still clicks through.
 - **Planner URLs keep working.** `/invitations/save-the-date` and `/questions` stay where they are,
   now lit as Design tabs, so no redirects are needed.
 
 **Re-run the import-reach check** from 2026-11-08: trace every import from the public link pages
-and confirm none reaches a file this build changes. The registry's public page is the one to
-watch, because it shares `src/lib/registry/*` with the settings form. Keep the check as a unit test
-(§9).
+and confirm none reaches a file this build changes. `PreviewFrame`, and anything the
+save-the-date preview shares with the public save-the-date page, are the ones to watch. Keep the
+check as a unit test (§9).
 
 ## 7. Data
 
-**No migration.** The save the date goes to every household (§11 Q3); the registry split reuses
-the existing columns.
+**No migration.** The save the date goes to every household (§11 Q3); the registry isn't touched.
 
 ## 8. Files (expected)
 
 - `src/lib/nav-groups.ts`: "Website" → "Design" with the extra `matchPrefixes`; `nav-groups.test.ts`
   cases for each row of §5.1's table.
 - `src/lib/nav-tabs.ts`: `DESIGN_TABS` replaces `WEBSITE_TABS`; `INVITATIONS_TABS` removed (the
-  stages replace it); `REGISTRY_TABS` → Items · Claims · Delivery & sharing.
+  stages replace it); `REGISTRY_TABS` unchanged.
 - `src/app/(planner)/invitations/page.tsx`: the stage/step router.
 - `src/lib/invitations/journey.ts` (new, pure): stage progress, "first stage with work left", a
   household's strip state. Unit-tested.
 - `src/components/invitations/journey-strip.tsx`, `send-sheet.tsx`, `stage-header.tsx`, `event-grid.tsx`.
-- `src/app/(planner)/gifts/design/page.tsx` (new); `src/components/registry/settings-form.tsx`
-  split into `design-form.tsx` and `delivery-form.tsx`; `src/server/actions/registry*` save by part.
+- `src/components/design/design-frame.tsx` (new): the shared Design layout (§5.3), used by `/site`,
+  `/invitations/save-the-date`, `/questions`, `/site/theme`, `/travel`, `/gallery`, `/site/extras`.
 - `src/app/(planner)/events/page.tsx`: invited counts and links.
 
 ## 9. Test plan
@@ -211,13 +229,13 @@ the existing columns.
   "first stage with work left"; strip state for each combination of sent/opened/replied/unable.
 - Unit: each `?status=` filter still returns the same households as today.
 - Unit: `nav-groups.test.ts`: every path in §5.1's table lights the entry shown.
-- Unit: each registry form saves **only** its own fields (a design save leaves the address alone,
-  and the reverse).
+- Unit: every Design route renders inside `DesignFrame` (a source guard, like spec 36's), so a new
+  Design tab can't drift from the shared layout.
 - Unit (new, kept): **guest links are out of reach.** It walks the imports from every public entry
   point and fails if one reaches `src/app/(planner)/**`, `src/components/invitations/**`,
-  `src/components/shell/**` or the registry's planner forms.
+  `src/components/shell/**` or `src/components/design/**`.
 - Headless Chromium: every Design tab, both Invitations stages × three steps, and Registry's three
-  tabs render at 1280 and 390; the registry preview still reloads after a design save.
+  tabs render at 1280 and 390; each Design tab's preview reloads after a save.
 - typecheck, test, build.
 
 ## 10. Not in scope
@@ -234,13 +252,14 @@ the existing columns.
 | 2 | A "Website" stage? | **No such thing.** "The invite is the website… custom to each household" (§2). |
 | 3 | Can a save the date go to only some households? | **Not needed** ("Who cares"). Every household; no migration. |
 | 4 | Printed stationery? | Its design is under Design → Invitation; printing is under Invitations → Send. |
-| 5 | Households × events grid under Invitation → Who? | **Yes**, with Events linking to it (§5.5). |
+| 5 | Households × events grid under Invitation → Who? | **Yes**, with Events linking to it (§5.6). |
 | 6 | Merge spec 41's "Website" entry into Invitations? | **No: "invite and invite design are different concepts."** Two entries, **Design** and **Invitations** (§2, §5.1). |
-| 6a | Where does the registry's design go? | **"Add registry design in a similar location"**: Design → Registry, split from delivery and sharing (§5.4). |
+| 6a | Where does the registry's design go? | First "add registry design in a similar location", then **not split: "all registry in the same place"**, under **Registry** (picked from two options). Design → Registry links to it (§5.5). |
+| 7 | Keep all eight Design tabs? | **Keep all.** And **"the design UI process should be similar"**: one shared layout and save behaviour across every Design tab (§5.3). |
+| 8 | Split the registry's Page & address? | **No** (see 6a). |
 
 ## 12. Still open
 
 | Q | Question | Recommendation |
 | --- | --- | --- |
-| 7 | Design has eight tabs. Keep all eight, or show **Invitation · Save the date · Registry · RSVP questions · Theme** and put Travel, Photos and Extras behind a "More" tab? | **Keep all eight.** Every screen is one click away, and it's laptop-first. |
-| 8 | Should the registry's "Page & address" become **Design → Registry** plus **Registry → Delivery & sharing**, as in §5.4? | **Yes.** |
+| 9 | The one save behaviour for every Design tab: a **Save button with an "unsaved changes" note** (like the registry), or **autosave**? | **Save button.** It's what the registry already does, and a couple editing what guests will see should choose when it changes. |
