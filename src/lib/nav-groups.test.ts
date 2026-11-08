@@ -1,8 +1,8 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NAV_GROUPS, activeHref, activeTabId, navGroupsFor, tabsFor } from "./nav-groups";
-import { GUESTS_TABS, INVITATIONS_TABS, REGISTRY_TABS, TASKS_TABS, WEBSITE_TABS } from "./nav-tabs";
+import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, TASKS_TABS } from "./nav-tabs";
 import { PLANNER_NAV_HREFS } from "./planner-routes";
 
 const PLANNER_DIR = join(process.cwd(), "src/app/(planner)");
@@ -57,12 +57,14 @@ describe("which entry a path lights", () => {
     ["/guests/rank", "/guests"],
     ["/seating", "/events"],
     ["/events/x/run-sheet", "/events"],
-    ["/questions", "/invitations"],
-    ["/invitations/save-the-date", "/invitations"],
+    ["/questions", "/site"],
+    ["/invitations/save-the-date", "/site"],
+    ["/invitations", "/invitations"],
     ["/travel", "/site"],
     ["/site/attire", "/site"],
     ["/site/questions", "/site/questions"],
     ["/gifts/claims", "/gifts"],
+    ["/gifts/settings", "/gifts"],
     ["/settings/activity", "/settings"],
   ])("%s → %s", (path, expected) => {
     expect(activeHref(path)).toBe(expected);
@@ -113,13 +115,24 @@ describe("section views", () => {
   it.each([
     ["guests", GUESTS_TABS],
     ["tasks", TASKS_TABS],
-    ["invitations", INVITATIONS_TABS],
-    ["website", WEBSITE_TABS],
+    ["design", DESIGN_TABS],
     ["registry", REGISTRY_TABS],
   ] as const)("every %s view is a real page", (_name, tabs) => {
     for (const tab of tabs) {
       expect(routes, tab.href).toContain(tab.href);
       for (const prefix of tab.matchPrefixes ?? []) expect(routes, prefix).toContain(prefix);
     }
+  });
+});
+
+describe("every Design tab uses the shared Design frame (spec 42 §5.3)", () => {
+  // Registry links out to the registry's own Page & address screen, which stays under Registry (Q8).
+  const LINKS_OUT = new Set(["/gifts/settings"]);
+  const routes = DESIGN_TABS.flatMap((tab) => [tab.href, ...(tab.matchPrefixes ?? [])]).filter(
+    (href) => !LINKS_OUT.has(href) && href !== "/site/history",
+  );
+  it.each(routes)("%s", (href) => {
+    const file = join(PLANNER_DIR, href, "page.tsx");
+    expect(readFileSync(file, "utf8"), `${href} must render inside <DesignFrame>`).toMatch(/<DesignFrame[\s>]/);
   });
 });

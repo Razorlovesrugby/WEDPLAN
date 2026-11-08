@@ -1,5 +1,5 @@
-import { SubTabs } from "@/components/sub-tabs";
-import { WEBSITE_TABS } from "@/lib/nav-tabs";
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { requireWedding } from "@/server/queries/wedding";
 import { SongList } from "@/components/site/editor/song-list";
@@ -16,11 +16,11 @@ export const metadata = { title: "Song requests" };
  */
 export default async function SongRequestsPage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const rows = await getPlannerSongs(wedding.id);
 
   return (
-    <div className="space-y-5">
-      <SubTabs tabs={WEBSITE_TABS} />
+    <DesignFrame preview={{ households, anchor: "song_requests" }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-2xl">Song requests</h1>
@@ -30,12 +30,9 @@ export default async function SongRequestsPage() {
               : `${rows.length} ${rows.length === 1 ? "request" : "requests"}, ranked the way your guests see them. The do-not-play list lives on the Song requests block.`}
           </p>
         </div>
-        <Link href="/site" className="btn">
-          Back to the site
-        </Link>
       </div>
 
       <SongList rows={rows} timeZone={wedding.timezone} />
-    </div>
+    </DesignFrame>
   );
 }

@@ -57,8 +57,17 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     id: "guests",
     label: "For guests",
     entries: [
-      { href: "/invitations", label: "Invitations", matchPrefixes: ["/invitations", "/questions"] },
-      { href: "/site", label: "Website", matchPrefixes: ["/site", "/travel", "/gallery"] },
+      // Design and Invitations are different jobs (spec 42 §2): making what
+      // guests see, and deciding who gets it. The invitation IS the website —
+      // one page per household — so there is no separate "Website" entry.
+      // Save the date and RSVP questions keep their URLs under other sections;
+      // the longest prefix wins, so they light Design.
+      {
+        href: "/site",
+        label: "Design",
+        matchPrefixes: ["/site", "/travel", "/gallery", "/invitations/save-the-date", "/questions"],
+      },
+      { href: "/invitations", label: "Invitations", matchPrefixes: ["/invitations"] },
       // The route is /gifts, not /registry: /registry/<slug> is the PUBLIC page (spec 36 §5).
       { href: "/gifts", label: "Registry", matchPrefixes: ["/gifts"] },
       // Spec 43 makes this a real inbox. Until then it is the guest questions inbox.

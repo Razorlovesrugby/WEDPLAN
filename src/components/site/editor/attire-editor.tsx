@@ -93,14 +93,10 @@ export function AttireEditor({
       {codes.map((code) => (
         <section key={code.id} className="card space-y-4 p-4">
           <div className="flex flex-wrap items-center gap-3">
-            <input
-              className="field flex-1 font-medium"
-              defaultValue={code.name}
-              maxLength={120}
-              onBlur={(event) => {
-                const next = event.target.value.trim();
-                if (next && next !== code.name) act(() => renameDressCode(code.id, next));
-              }}
+            <RenameField
+              name={code.name}
+              pending={pending}
+              onSave={(next) => act(() => renameDressCode(code.id, next))}
             />
             <button
               type="button"
@@ -203,6 +199,32 @@ export function AttireEditor({
   );
 }
 
+/** A dress code's name, saved with a button rather than on blur (spec 42 §5.3). */
+function RenameField({ name, pending, onSave }: { name: string; pending: boolean; onSave: (next: string) => void }) {
+  const [value, setValue] = useState(name);
+  const next = value.trim();
+  const dirty = next !== name;
+  return (
+    <div className="flex flex-1 flex-wrap items-center gap-2">
+      <input
+        className="field flex-1 font-medium"
+        aria-label="Dress code name"
+        value={value}
+        maxLength={120}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      {dirty ? (
+        <>
+          <button type="button" className="btn-primary" disabled={pending || !next} onClick={() => onSave(next)}>
+            Save
+          </button>
+          <span className="text-xs text-muted">Unsaved changes</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function NoteRow({
   note,
   boards,
@@ -218,6 +240,9 @@ function NoteRow({
   const [body, setBody] = useState(note.body ?? "");
   const [boardId, setBoardId] = useState(note.board_id ?? "");
 
+  // Spec 42 §5.3 (Q9): words wait for Save, with a note while they differ.
+  const dirty = label !== note.label || body !== (note.body ?? "");
+
   function save() {
     act(() => saveNote(note.id, { label, body, boardId: boardId || null }));
   }
@@ -229,8 +254,8 @@ function NoteRow({
           className="field w-48"
           value={label}
           maxLength={80}
+          aria-label="Who this note is for"
           onChange={(event) => setLabel(event.target.value)}
-          onBlur={save}
         />
         <button
           type="button"
@@ -247,9 +272,17 @@ function NoteRow({
         value={body}
         maxLength={4000}
         placeholder="We'll be outdoors, so a block heel will serve you better than a stiletto."
+        aria-label="What to wear"
         onChange={(event) => setBody(event.target.value)}
-        onBlur={save}
       />
+      {dirty ? (
+        <div className="flex items-center gap-2 text-xs">
+          <button type="button" className="btn-primary" disabled={pending || !label.trim()} onClick={save}>
+            Save
+          </button>
+          <span className="text-muted">Unsaved changes</span>
+        </div>
+      ) : null}
       {boards.length > 0 ? (
         <select
           className="field"

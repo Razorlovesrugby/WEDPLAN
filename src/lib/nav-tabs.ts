@@ -17,16 +17,16 @@ export const TASKS_TABS: readonly SubTab[] = [
   { href: "/timeline", label: "Timeline" },
 ];
 
-/** Spec 41: Invitations left the Guests hub for "For guests", and RSVP questions joined it. */
-export const INVITATIONS_TABS: readonly SubTab[] = [
-  { href: "/invitations", label: "Invitations" },
+/**
+ * Design (spec 42 §5.2): everything guests see, eight tabs, all kept (Q7).
+ * Registry links out to the registry's own Page & address screen, which stays
+ * under Registry with the rest of the registry (Q8).
+ */
+export const DESIGN_TABS: readonly SubTab[] = [
+  { href: "/site", label: "Invitation", matchPrefixes: ["/site/history"] },
   { href: "/invitations/save-the-date", label: "Save the date" },
+  { href: "/gifts/settings", label: "Registry" },
   { href: "/questions", label: "RSVP questions" },
-];
-
-/** Spec 41 §4.5: so Travel and Photos are reachable without first adding their block. */
-export const WEBSITE_TABS: readonly SubTab[] = [
-  { href: "/site", label: "Page", matchPrefixes: ["/site/history"] },
   { href: "/site/theme", label: "Theme" },
   { href: "/travel", label: "Travel" },
   { href: "/gallery", label: "Photos" },

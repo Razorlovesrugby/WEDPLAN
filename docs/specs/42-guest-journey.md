@@ -1,10 +1,10 @@
 # Feature spec: Design and Invitations — making what guests see, and sending it
 
-**Status: proposal, not built.** Written 2026-11-06. Revised 2026-11-08 three times with the planner's
-answers (§11): "the invite is the website"; "invite and invite design are different concepts";
-then keep all eight Design tabs, make them work alike, and keep the registry's page settings in
-one place, under Registry. **The planner said "update spec
-only"**, so nothing here is authorised to build until they say so in a later turn.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration.
+Revised three times with the planner's answers (§11). The last open question (Q9) was answered
+"Yes go with recommended and build 42", which is the build authorisation. **§13 says what was
+built and where it departs from §5.** No guest link, token, public route or guest-facing file was
+changed.
 
 **Depends on:** spec 41 (the shell, built; this changes its "Website" entry), specs 14, 21, 22,
 27–30 (the household's page, addresses, per-event status, the invitation experience,
@@ -258,8 +258,83 @@ check as a unit test (§9).
 | 7 | Keep all eight Design tabs? | **Keep all.** And **"the design UI process should be similar"**: one shared layout and save behaviour across every Design tab (§5.3). |
 | 8 | Split the registry's Page & address? | **No** (see 6a). |
 
-## 12. Still open
+## 12. Answered last (2026-11-08)
 
-| Q | Question | Recommendation |
-| --- | --- | --- |
-| 9 | The one save behaviour for every Design tab: a **Save button with an "unsaved changes" note** (like the registry), or **autosave**? | **Save button.** It's what the registry already does, and a couple editing what guests will see should choose when it changes. |
+| Q | Answer |
+| --- | --- |
+| 9 | **Save button with an "unsaved changes" note** (recommended), then "build 42". |
+
+## 13. Build status (2026-11-08)
+
+**What was built:**
+
+- **Sidebar** (`src/lib/nav-groups.ts`): "Website" → **Design** (href `/site`), with
+  `/invitations/save-the-date` and `/questions` in its prefixes, so they light Design. Invitations
+  now only claims `/invitations`. Every row of §5.1's table is a test case.
+- **Design tabs** (`DESIGN_TABS` in `src/lib/nav-tabs.ts`): Invitation · Save the date · Registry
+  · RSVP questions · Theme · Travel · Photos · Extras. `WEBSITE_TABS` and `INVITATIONS_TABS` are
+  gone. Registry is a link to `/gifts/settings`, which stays under Registry, unsplit (Q8).
+- **`DesignFrame`** (`src/components/design/design-frame.tsx`): the Design tabs, then the controls
+  beside a shared live preview (`design-preview.tsx`, on spec 38's `PreviewFrame`).
+  - The preview has a phone/laptop switch and a "view as" household, and opens at the tab's block
+    (`#rsvp`, `#travel`, `#gallery`, `#dress_code`, `#gift_funds`, `#song_requests`,
+    `#guestbook`).
+  - It reloads after a save: a save's `router.refresh()` gives the server-rendered frame a new
+    `renderedAt`.
+  - Used by all seven Design routes; a source-guard test fails if one stops using it.
+  - Households for "view as" come from `src/server/queries/design.ts`, a new file kept apart from
+    `site.ts`, which guest pages read.
+- **Save rule (Q9).**
+  - **Theme** already had a Save button; it gets the "Unsaved changes" note.
+  - **Photos** settings saved on every click; they now wait for Save.
+  - **What to wear** saved names and notes when you clicked away; they now wait for Save.
+  - RSVP questions, Travel, A gift, Save the date and Registry already saved with a button.
+- **Invitations** (`/invitations`, `src/lib/invitations/journey.ts`, pure, 15 tests): two stages ×
+  Who · Send · Track, in the URL.
+  - With no parameters it opens on the first stage with work left (Save the date while any is
+    unsent). It opens on Who while a household has no invitation, Send while something is unsent,
+    then Track.
+  - Each stage shows its progress; "Edit design →" goes to that stage's Design tab.
+  - **Who (Invitation):** `EventGrid`, households × events, ticks written through
+    `setHouseholdEventInvite`. Households with no invitation are picked and made with
+    `createInvitations`.
+  - **Who (Save the date):** every household gets one; nothing stored.
+  - **Send:** guidance, Download every link (CSV), Print invitations, the stationery panel, and
+    `InvitationsTable` with its per-row copy, email and Sent ticks as before.
+  - **Track:** `JourneyTable`, one row per household with both stages' state in words as well as
+    marks, plus filter chips.
+- **`?status=`** filters moved verbatim into `journey.ts` and are tested against the old truth
+  table. A dashboard link (`/invitations?status=silent`) opens Track on the right stage, filtered.
+- **Events** shows "Who's invited: N households → Edit" per event (couple only; a planner login
+  can't open Invitations), replacing the instruction text.
+- **Guest links:** `src/lib/guest-links-isolated.test.ts` walks every import from `src/app/w`,
+  `rsvp`, `i`, `m`, `registry`, `privacy`, the root layout and the middleware. It fails if any
+  reaches planner-only code: `(planner)`, `components/shell|design|invitations`, `lib/nav-*`,
+  `lib/invitations`, `server/queries/design.ts`. It was proven to fail when a shared file was
+  listed deliberately.
+
+**Departures from §5:**
+
+1. **The two editors with their own live preview keep it.** The invitation builder and the save
+   the date are tied to their unsaved draft. They sit inside `DesignFrame` without the shared pane.
+   The other tabs keep their heading inside the controls column rather than as a `title` prop.
+2. **The save rule applies to words and settings.** List actions (add, remove, tick an event,
+   approve, upload, pick a moodboard) still happen when you do them, as Mac lists do. The
+   invitation builder keeps saving to its draft; **Publish** stays the step that changes what
+   guests see.
+3. **No new bulk "Send sheet".** Send reuses the table's per-row actions, the CSV and printing. No
+   bulk email or "mark all sent" was added, because that would be new sending behaviour.
+4. **No per-event "tick everyone" header** in the grid. Several households are invited at once by
+   making their invitations with the events chosen.
+5. **Theme's "See the preview →" link** is removed, since the preview is beside it now.
+
+**Verified:** `npm run typecheck`; `npm test`, 1342 tests, including `journey.test.ts`, the Design
+cases in `nav-groups.test.ts` and `guest-links-isolated.test.ts`; `next build` (placeholder env).
+
+**Seen** in headless Chromium at 1280 and 390 wide, on a temporary page with sample data (deleted,
+never committed): the stage cards, step control, Track table, event grid and the Design frame with
+its preview. No horizontal scroll, no errors. The preview showed the sign-in page there, since the
+sample page has no session.
+
+**Not verified:** anything with real data or Supabase; the preview reloading after a real save;
+making invitations or ticking events from the grid; a real phone.

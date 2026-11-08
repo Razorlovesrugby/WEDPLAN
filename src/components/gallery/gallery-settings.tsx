@@ -24,11 +24,12 @@ export function GallerySettings({
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function save(next: { uploads_open: boolean; moderation: "review" | "auto" }) {
-    setOpen(next.uploads_open);
-    setMode(next.moderation);
+  // Spec 42 §5.3 (Q9): changes wait for Save, with a note while they differ.
+  const dirty = open !== uploadsOpen || mode !== moderation;
+
+  function save() {
     startTransition(async () => {
-      const result = await setGallerySettings(next);
+      const result = await setGallerySettings({ uploads_open: open, moderation: mode });
       setMessage(result.ok ? "Saved" : result.error);
       router.refresh();
     });
@@ -43,7 +44,10 @@ export function GallerySettings({
           type="checkbox"
           checked={open}
           disabled={pending}
-          onChange={(event) => save({ uploads_open: event.target.checked, moderation: mode })}
+          onChange={(event) => {
+            setOpen(event.target.checked);
+            setMessage(null);
+          }}
         />
         <span>
           Let guests add photos
@@ -60,16 +64,23 @@ export function GallerySettings({
           className="field"
           value={mode}
           disabled={pending}
-          onChange={(event) =>
-            save({ uploads_open: open, moderation: event.target.value as "review" | "auto" })
-          }
+          onChange={(event) => {
+            setMode(event.target.value as "review" | "auto");
+            setMessage(null);
+          }}
         >
           <option value="review">Wait for my approval</option>
           <option value="auto">Put it straight on the site</option>
         </select>
       </label>
 
-      {message ? <p className="text-xs text-muted">{message}</p> : null}
+      <div className="flex items-center gap-3">
+        <button type="button" className="btn-primary" disabled={pending || !dirty} onClick={save}>
+          {pending ? "Saving…" : "Save"}
+        </button>
+        {dirty ? <span className="text-xs text-muted">Unsaved changes</span> : null}
+        {!dirty && message ? <span className="text-xs text-muted">{message}</span> : null}
+      </div>
     </section>
   );
 }

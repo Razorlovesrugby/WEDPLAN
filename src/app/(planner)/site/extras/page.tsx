@@ -1,6 +1,6 @@
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
-import { SubTabs } from "@/components/sub-tabs";
-import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import { requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Extras · Website" };
@@ -18,10 +18,10 @@ const EXTRAS = [
 ] as const;
 
 export default async function SiteExtrasPage() {
-  await requireWedding();
+  const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   return (
-    <div className="space-y-5">
-      <SubTabs tabs={WEBSITE_TABS} />
+    <DesignFrame preview={{ households }}>
       <h1 className="font-serif text-2xl">Extras</h1>
       <ul className="card max-w-2xl divide-y divide-line">
         {EXTRAS.map((extra) => (
@@ -38,6 +38,6 @@ export default async function SiteExtrasPage() {
           </li>
         ))}
       </ul>
-    </div>
+    </DesignFrame>
   );
 }

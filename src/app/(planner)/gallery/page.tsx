@@ -1,5 +1,5 @@
-import { SubTabs } from "@/components/sub-tabs";
-import { WEBSITE_TABS } from "@/lib/nav-tabs";
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import { GalleryModeration } from "@/components/gallery/gallery-moderation";
 import { GallerySettings } from "@/components/gallery/gallery-settings";
 import { getGalleryForPlanner, getGallerySettings } from "@/server/queries/gallery";
@@ -10,14 +10,14 @@ export const metadata = { title: "Photos" };
 
 export default async function GalleryPage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const [{ pending, approved }, settings] = await Promise.all([
     getGalleryForPlanner(wedding.id),
     getGallerySettings(wedding.id),
   ]);
 
   return (
-    <div className="space-y-5">
-      <SubTabs tabs={WEBSITE_TABS} />
+    <DesignFrame preview={{ households, anchor: "gallery" }}>
       <div>
         <h1 className="font-serif text-2xl">Photos</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
@@ -32,6 +32,6 @@ export default async function GalleryPage() {
       />
 
       <GalleryModeration pending={pending} approved={approved} />
-    </div>
+    </DesignFrame>
   );
 }

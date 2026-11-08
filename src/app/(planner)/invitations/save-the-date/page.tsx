@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { SubTabs } from "@/components/sub-tabs";
+import { DesignFrame } from "@/components/design/design-frame";
 import { SaveTheDateEditor } from "@/components/save-the-date/editor";
-import { INVITATIONS_TABS } from "@/lib/nav-tabs";
 import { saveTheDatePath } from "@/lib/site/save-the-date";
 import { listHouseholds } from "@/server/queries/guests";
 import { getSaveTheDateEditor, listSaveTheDateOpens } from "@/server/queries/save-the-date";
 import { requireWedding } from "@/server/queries/wedding";
 
-export const metadata = { title: "Save the date" };
+export const metadata = { title: "Save the date · Design" };
 
 /**
  * `/invitations/save-the-date` — designing the save-the-date.
@@ -41,24 +40,21 @@ export default async function SaveTheDateEditorPage() {
   const opened = households.filter((household) => (opens[household.id]?.viewCount ?? 0) > 0).length;
 
   return (
-    <div className="space-y-5">
-      <SubTabs tabs={INVITATIONS_TABS} />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl">Save the date</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted">
-            One link per household, nothing for them to fill in. Design it here; copy each
-            household&rsquo;s link from Guests, where you can also see who&rsquo;s opened it — or
-            email it to everyone from Invitations.
-          </p>
-        </div>
-        {/* Every household's link in one file, for a mail merge or a
-            spreadsheet of who-sends-what. */}
-        <Link href="/api/export/households" className="btn" prefetch={false}>
-          Download every link (CSV)
-        </Link>
-      </div>
-
+    // The editor has its own live preview, tied to unsaved changes and its
+    // Save button, so it takes the Design frame without the shared one.
+    <DesignFrame
+      title="Save the date"
+      description={
+        <>
+          One page per household, nothing for them to fill in. Design it here. Who gets it and
+          sending it are under{" "}
+          <Link href="/invitations?stage=save-the-date" className="underline">
+            Invitations → Save the date
+          </Link>
+          .
+        </>
+      }
+    >
       <SaveTheDateEditor
         initial={editor.content}
         siteTheme={editor.siteTheme}
@@ -72,6 +68,6 @@ export default async function SaveTheDateEditorPage() {
         sample={sample}
         opens={{ opened, households: households.length }}
       />
-    </div>
+    </DesignFrame>
   );
 }

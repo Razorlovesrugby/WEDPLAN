@@ -1,5 +1,5 @@
-import { SubTabs } from "@/components/sub-tabs";
-import { WEBSITE_TABS } from "@/lib/nav-tabs";
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { requireWedding } from "@/server/queries/wedding";
 import { getGiftBankDetails, getGiftFunds } from "@/server/queries/site-extras";
@@ -24,6 +24,7 @@ export const metadata = { title: "A gift" };
  */
 export default async function GiftFundsPage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const [funds, bank, registry] = await Promise.all([
     getGiftFunds(wedding.id),
     getGiftBankDetails(wedding.id),
@@ -31,8 +32,7 @@ export default async function GiftFundsPage() {
   ]);
 
   return (
-    <div className="space-y-5">
-      <SubTabs tabs={WEBSITE_TABS} />
+    <DesignFrame preview={{ households, anchor: "gift_funds" }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-2xl">A gift</h1>
@@ -41,9 +41,6 @@ export default async function GiftFundsPage() {
             site and these appear on it.
           </p>
         </div>
-        <Link href="/site" className="btn">
-          Back to the site
-        </Link>
       </div>
 
       <div className="card space-y-1 p-4 text-sm text-muted">
@@ -78,6 +75,6 @@ export default async function GiftFundsPage() {
       </div>
 
       <GiftFundEditor funds={funds} bank={bank} />
-    </div>
+    </DesignFrame>
   );
 }

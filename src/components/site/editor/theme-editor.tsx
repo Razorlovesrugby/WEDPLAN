@@ -50,6 +50,14 @@ export function ThemeEditor({ theme }: { theme: SiteTheme }) {
   );
 
   const customIsHex = Object.values(custom).every(isHexColor);
+  // Spec 42 §5.3 (Q9): the same "unsaved changes" note as every Design tab.
+  const initialCustom = theme.customTokens ?? themeTokens(theme);
+  const dirty =
+    preset !== theme.preset ||
+    palette !== theme.palette ||
+    heroStyle !== theme.heroStyle ||
+    monogram !== theme.monogram ||
+    (palette === "custom" && JSON.stringify(custom) !== JSON.stringify(initialCustom));
   const blocked = palette === "custom" && (!customIsHex || !validation.ok);
 
   const submit = () =>
@@ -238,9 +246,7 @@ export function ThemeEditor({ theme }: { theme: SiteTheme }) {
         <button type="button" className="btn-primary" disabled={pending || blocked} onClick={submit}>
           Save theme
         </button>
-        <a className="text-sm text-muted underline" href="/site/preview" target="_blank" rel="noreferrer">
-          See the preview →
-        </a>
+        {dirty ? <span className="text-xs text-muted">Unsaved changes</span> : null}
       </div>
 
       <PreviewStrip tokens={preview} />

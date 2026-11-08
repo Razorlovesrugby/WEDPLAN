@@ -3,6 +3,24 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 49 (spec 42):** Design and Invitations, built on branch `claude/nice-mccarthy-x93m9s`
+(**no PR opened**). The spec was rewritten over four rounds of answers (the invitation is the
+website; designing and sending are different jobs; all eight Design tabs, alike; the registry stays
+whole), then "Yes go with recommended and build 42". No migration. Read the spec's §13; the short
+version:
+
+- **Sidebar "Website" is now "Design"**, eight tabs, all in `DesignFrame`
+  (`src/components/design/`). **A new Design tab must render inside `<DesignFrame>`** or
+  `nav-groups.test.ts` fails.
+- **Invitations is stages × steps** (`?stage=save-the-date|invitation&step=who|send|track`). The
+  logic is in `src/lib/invitations/journey.ts`; the `?status=` filters moved there verbatim.
+- **Guest links:** `src/lib/guest-links-isolated.test.ts` fails if a guest-facing page (`/w`,
+  `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`, the middleware, the root layout) imports
+  planner-only code. Nothing guest-facing was edited this session.
+- **Verified:** typecheck, 1342 unit tests, `next build` (placeholder env), sample-data screens
+  in headless Chromium (temporary page, deleted). **Not verified:** Supabase, real data, the
+  preview reloading after a real save, a phone.
+
 **Session 48 (spec 41):** the app shell, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
 opened**). "Can you build the first spec, ask me the questions": six questions put and answered
 (Q3 against the recommendation: seating stays inside Events), then built. No migration. Read the
