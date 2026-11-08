@@ -9,7 +9,7 @@ jobs:
   database:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The runner ships PostgreSQL but does not start it; verify-migrations.sh
       # builds its own throwaway cluster, so no service container is needed.
       - name: Apply migrations and run the SQL suite
@@ -27,7 +27,7 @@ jobs:
   app:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22

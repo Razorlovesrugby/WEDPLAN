@@ -72,7 +72,7 @@ jobs:
           case "$BACKUP_AGE_PUBLIC_KEY" in age1*) ;; *) echo "::error::BACKUP_AGE_PUBLIC_KEY must be an age public key (starts age1)"; missing=1;; esac
           exit "$missing"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install a pg_dump that matches the server
         # pg_dump refuses to dump a server newer than itself, and the runner's
