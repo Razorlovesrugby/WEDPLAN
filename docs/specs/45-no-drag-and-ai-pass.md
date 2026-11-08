@@ -1,6 +1,6 @@
 # Feature spec: Everything works without dragging, and every control can be found by name
 
-**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration. Two answers
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, PR #89.** No migration. Two answers
 ("make iPad friendly", report-only check); spec 46 was done first at the planner's choice; then "Build
 45 and 46" (46 was already built). **§10 is what was built.**
 

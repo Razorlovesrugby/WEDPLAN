@@ -1,6 +1,6 @@
 # Feature spec: ⌘K to go anywhere or make anything, and Mac keyboard shortcuts
 
-**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration. The
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, PR #89.** No migration. The
 planner chose to do this before spec 45. Four questions were put, everything offered was picked, then
 "Build it" (§10). **§11 is what was built.**
 

@@ -1,6 +1,6 @@
 # Feature spec: Inbox and Today — one place for what guests send you, and a home screen that says what's next
 
-**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration. Asked as
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, PR #89.** No migration. Asked as
 "build next spec… any qs". The four questions were put and all took the recommendation (§10), then
 it was built. **§11 says what was built and where it departs from §4.** No guest-facing file
 changed.
