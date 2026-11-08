@@ -2,29 +2,34 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { SubTab } from "@/lib/nav-tabs";
 
 /**
- * The second-level tab strip inside a hub `Nav` collapsed several routes
- * into (spec 13) — the Guests hub's Guests/Ranking/Invitations, and the
- * Tasks hub's Tasks/Calendar/Board/Timeline. Styled like `Nav` itself, one
- * level down (spec 13 §5 answer 4), rather than `ListsSidebar`'s vertical
- * list: same active/inactive pill and `aria-current`, so a planner reads
- * "this is how tabs work here" without a second visual language to learn.
+ * The one way to switch between a section's views (spec 41 §4.3): a Mac-style
+ * segmented control at the top of the content, the same in every section
+ * (Tasks, Guest list, Invitations, Website, Registry).
  *
- * Each tab is a plain link to that screen's own already-existing route —
- * not a client-side tab panel — since every one of them is its own server
- * page with its own data fetching (spec 13 §1B).
+ * Each segment is a plain link to that view's own route, not a client-side tab
+ * panel, so Back, bookmarks and an AI assistant all land on the same view
+ * (spec 13 §1B). It wraps rather than scrolls on a narrow phone.
  */
-export function SubTabs({ tabs }: { tabs: { href: string; label: string }[] }) {
+export function SubTabs({ tabs }: { tabs: readonly SubTab[] }) {
   const pathname = usePathname();
   // The most specific match wins, so /invitations/save-the-date lights its
   // own tab and not /invitations as well.
   const activeHref = tabs
-    .filter((tab) => pathname === tab.href || pathname.startsWith(`${tab.href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+    .flatMap((tab) =>
+      [tab.href, ...(tab.matchPrefixes ?? [])]
+        .filter((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+        .map((prefix) => ({ href: tab.href, length: prefix.length })),
+    )
+    .sort((a, b) => b.length - a.length)[0]?.href;
 
   return (
-    <nav aria-label="Section" className="mb-4 flex flex-wrap gap-1">
+    <nav
+      aria-label="Views"
+      className="mb-4 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg border border-line bg-line/30 p-0.5"
+    >
       {tabs.map((tab) => {
         const active = tab.href === activeHref;
         return (
@@ -32,8 +37,8 @@ export function SubTabs({ tabs }: { tabs: { href: string; label: string }[] }) {
             key={tab.href}
             href={tab.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded px-3 py-1.5 text-sm transition-colors ${
-              active ? "bg-ink text-white" : "text-muted hover:bg-line/50 hover:text-ink"
+            className={`rounded-md px-3 py-1 text-sm transition-colors ${
+              active ? "bg-white font-medium text-ink shadow-sm" : "text-muted hover:text-ink"
             }`}
           >
             {tab.label}

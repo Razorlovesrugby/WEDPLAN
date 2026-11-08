@@ -25,7 +25,8 @@ function back(message: string, ok = false): NextResponse {
   // absoluteUrl, not a raw env read: it completes a bare hostname and falls
   // back to Vercel's own URLs, which is the difference between this working
   // on a preview deployment and redirecting to localhost.
-  const url = new URL(absoluteUrl("/settings"));
+  // Pinterest lives under Moodboards → ⋯ → Pinterest & clipper since spec 41.
+  const url = new URL(absoluteUrl("/moodboards?panel=import"));
   url.searchParams.set(ok ? "pinterest" : "pinterest_error", message);
   return NextResponse.redirect(url);
 }

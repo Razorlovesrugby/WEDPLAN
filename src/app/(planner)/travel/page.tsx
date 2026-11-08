@@ -1,3 +1,5 @@
+import { SubTabs } from "@/components/sub-tabs";
+import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import Link from "next/link";
 import { TravelEditor } from "@/components/travel/travel-editor";
 import { getTravel } from "@/server/queries/travel";
@@ -23,6 +25,7 @@ export default async function TravelPage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={WEBSITE_TABS} />
       <div>
         <h1 className="font-serif text-2xl">Getting there</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">

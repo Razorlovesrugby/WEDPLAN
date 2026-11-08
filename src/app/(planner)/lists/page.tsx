@@ -6,6 +6,8 @@ import { NewListForm } from "@/components/lists/new-list-form";
 import { SmartView } from "@/components/lists/smart-view";
 import { SubTabs } from "@/components/sub-tabs";
 import { TASKS_TABS } from "@/lib/nav-tabs";
+import { MoreMenu, SectionPanel } from "@/components/shell/more-menu";
+import { ListAppearanceEditor } from "@/components/settings/list-appearance-editor";
 import {
   getAllItems,
   getAssignedToMeItems,
@@ -19,7 +21,7 @@ import {
   getTodayItems,
   type ListItemWithList,
 } from "@/server/queries/lists";
-import { getCollaborators, getPlannerPersonId, getSessionUser, requireWedding } from "@/server/queries/wedding";
+import { getCollaborators, getPlannerPersonId, getSessionUser, getViewerKind, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Tasks" };
 
@@ -37,9 +39,9 @@ const TITLES: Record<View, string> = {
 export default async function ListsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; panel?: string }>;
 }) {
-  const { view: rawView } = await searchParams;
+  const { view: rawView, panel } = await searchParams;
   const view: View = (VIEWS as readonly string[]).includes(rawView ?? "") ? (rawView as View) : "today";
 
   const wedding = await requireWedding();
@@ -86,9 +88,20 @@ export default async function ListsPage({
   // already resolved to a real (possibly empty) list by here.
   if (items === null) notFound();
 
+  // List appearance moved here from Settings (spec 41 §4.4), still couple-only as it was there.
+  const isCouple = (await getViewerKind()) !== "planner";
+  const viewHref = view === "today" ? "/lists" : `/lists?view=${view}`;
+  const panelHref = `${viewHref}${viewHref.includes("?") ? "&" : "?"}panel=appearance`;
+  const showAppearance = isCouple && panel === "appearance";
+
   return (
     <div className="space-y-4">
       <SubTabs tabs={TASKS_TABS} />
+      {showAppearance ? (
+        <SectionPanel id="list-appearance" title="List appearance" doneHref={viewHref}>
+          <ListAppearanceEditor lists={lists} />
+        </SectionPanel>
+      ) : null}
       <div className="flex flex-col gap-6 sm:flex-row">
         <ListsSidebar lists={lists} openCounts={openCounts} />
         <div className="min-w-0 flex-1 space-y-4">
@@ -99,6 +112,10 @@ export default async function ListsPage({
                 Export CSV
               </Link>
               <NewListForm templates={templates} />
+              <MoreMenu
+                label="More for Tasks"
+                items={isCouple ? [{ href: panelHref, label: "List appearance" }] : []}
+              />
             </div>
           </div>
           <SmartView view={view} items={items} overdueItems={overdueItems} collaborators={collaborators} people={people} currentUserId={user?.id} timezone={wedding.timezone} />

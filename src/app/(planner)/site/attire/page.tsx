@@ -1,3 +1,5 @@
+import { SubTabs } from "@/components/sub-tabs";
+import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
@@ -38,6 +40,7 @@ export default async function AttirePage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={WEBSITE_TABS} />
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-2xl">What to wear</h1>

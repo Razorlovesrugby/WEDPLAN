@@ -1,3 +1,5 @@
+import { SubTabs } from "@/components/sub-tabs";
+import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import { GalleryModeration } from "@/components/gallery/gallery-moderation";
 import { GallerySettings } from "@/components/gallery/gallery-settings";
 import { getGalleryForPlanner, getGallerySettings } from "@/server/queries/gallery";
@@ -15,6 +17,7 @@ export default async function GalleryPage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={WEBSITE_TABS} />
       <div>
         <h1 className="font-serif text-2xl">Photos</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">

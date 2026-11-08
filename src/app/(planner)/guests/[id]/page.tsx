@@ -10,6 +10,14 @@ import { getCollaborators, getEvents, requireWedding } from "@/server/queries/we
 import { formatRelative, guestName } from "@/lib/format";
 import type { RsvpStatus } from "@/lib/types/database";
 
+/** Spec 41 §4.6: the most specific part first, so the tab says which guest. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const wedding = await requireWedding();
+  const guest = await getGuest(wedding.id, id);
+  return { title: guest ? `${guestName(guest)} · Guests` : "Guest" };
+}
+
 export default async function GuestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();

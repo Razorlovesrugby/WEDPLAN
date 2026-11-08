@@ -129,8 +129,8 @@ export default function MoodboardHelpPage() {
       <Section title="Clipping from anywhere on the web">
         <ol className="list-decimal space-y-1 pl-5 text-sm">
           <li>
-            <Link href="/settings" className="underline">
-              Settings
+            <Link href="/moodboards?panel=import" className="underline">
+              Moodboards → ⋯ → Pinterest &amp; clipper
             </Link>{" "}
             → <strong>Clipper</strong> → name the browser, pick a default board,{" "}
             <strong>Create token</strong>. Copy it — it&rsquo;s shown once.
@@ -157,8 +157,8 @@ export default function MoodboardHelpPage() {
 
       <Section title="Importing a Pinterest board">
         <p className="text-sm">
-          <Link href="/settings" className="underline">
-            Settings
+          <Link href="/moodboards?panel=import" className="underline">
+            Moodboards → ⋯ → Pinterest &amp; clipper
           </Link>{" "}
           → <strong>Connect Pinterest</strong>, then on any board press{" "}
           <strong>Import from Pinterest</strong>, choose a board, tick the pins you want and press

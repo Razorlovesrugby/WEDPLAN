@@ -3,6 +3,7 @@ import { requireCouple } from "@/server/queries/wedding";
 import { getRegistrySettings } from "@/server/queries/registry";
 import { absoluteUrl } from "@/lib/env";
 import { SubTabs } from "@/components/sub-tabs";
+import { REGISTRY_TABS } from "@/lib/nav-tabs";
 import { RegistryLinkBar } from "@/components/registry/link-bar";
 
 export const metadata = { title: "Registry" };
@@ -35,13 +36,7 @@ export default async function GiftsLayout({ children }: { children: ReactNode })
         open={settings.open}
       />
 
-      <SubTabs
-        tabs={[
-          { href: "/gifts", label: "Items" },
-          { href: "/gifts/claims", label: "Claims" },
-          { href: "/gifts/settings", label: "Page & address" },
-        ]}
-      />
+      <SubTabs tabs={REGISTRY_TABS} />
       {children}
     </div>
   );

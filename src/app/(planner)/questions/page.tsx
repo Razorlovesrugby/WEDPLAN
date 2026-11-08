@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SubTabs } from "@/components/sub-tabs";
+import { INVITATIONS_TABS } from "@/lib/nav-tabs";
 import { QuestionsEditor } from "@/components/questions/questions-editor";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
@@ -24,6 +26,7 @@ export default async function QuestionsPage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={INVITATIONS_TABS} />
       <div>
         <h1 className="font-serif text-2xl">RSVP questions</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">

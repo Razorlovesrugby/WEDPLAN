@@ -17,6 +17,7 @@ export const PLANNER_ROUTES = [
   "guests",
   "households",
   "lists",
+  "menu",
   "moodboards",
   "run-sheet",
   "seating",

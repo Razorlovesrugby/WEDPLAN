@@ -48,8 +48,8 @@ export default async function ImportPage({ params }: { params: Promise<{ id: str
       ) : (
         <p className="card p-6 text-sm">
           No Pinterest account is connected yet.{" "}
-          <Link href="/settings" className="underline">
-            Connect one in Settings
+          <Link href="/moodboards?panel=import" className="underline">
+            Connect one under Moodboards → Pinterest &amp; clipper
           </Link>
           .
         </p>

@@ -1,8 +1,11 @@
 # Feature spec: The app shell — a grouped sidebar, a phone tab bar, and Settings that only holds what's global
 
-**Status: proposal, not built.** Written 2026-11-06 from a discovery pass over the code (no
-browser, no live data). Nothing here is authorised to build until §9's questions are answered
-and the planner says to build it.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration.
+Written as a proposal on 2026-11-06. On 2026-11-08 the planner said "Can you build the first spec,
+ask me the questions"; the six questions were put and answered (§10, Q3 against the
+recommendation), then it was built. **§11 says what was built and where it departs from §4.**
+Checked by typecheck, unit tests, `next build` and headless Chromium on a sample page. **Never
+opened against Supabase or with real data.**
 
 **Depends on:** spec 13 (the current hub layout), spec 39 (planner login, `planner-routes.ts`),
 spec 40 (Settings → Your account). **First of a set of six (41–46)** that reorganise the app
@@ -168,13 +171,95 @@ per-browser convenience (`localStorage`, wrapped in try/catch).
   no horizontal scroll, and the tab bar clears the safe area.
 - `npm run typecheck`, `npm test`, `npm run build`.
 
-## 9. Open questions
+## 9. Open questions (as put)
 
 | Q | Question | Recommendation |
 | --- | --- | --- |
 | 1 | Keep "Today" as the first entry's label now, even though the Today screen itself is spec 43? | **Yes.** Label it "Today" now so it doesn't change twice. |
 | 2 | Group names: Planning / People / The day / For guests? | **Yes**, or give your own. |
-| 3 | Seating as its own sidebar entry, or keep it inside Events? | **Its own entry.** You plan it from the guest list, not the event. |
+| 3 | Seating as its own sidebar entry, or keep it inside Events? | **Its own entry.** You plan it from the guest list, not the event. *(Answered: inside Events.)* |
 | 4 | Tab bar's five tabs: Today · Planning · Guests · For guests · More? | **Yes.** |
 | 5 | How long do the "this has moved" pointers stay in Settings? | **Until spec 44 ships**, then remove them. |
 | 6 | Should the sidebar be collapsible on laptop? | **Yes**, remembered per browser. |
+
+## 10. Answered (2026-11-08)
+
+| Q | Answer |
+| --- | --- |
+| 1 | **"Today"** as the first entry's label now. |
+| 2 | **Planning / People / The day / For guests**, as written. |
+| 3 | **Seating stays inside Events** (against the recommendation). No sidebar entry; `/seating` lights "Events & run sheet". |
+| 4 | **Today · Planning · Guests · For guests · More.** |
+| 5 | **Pointers in Settings**, until spec 44 ships. |
+| 6 | **The sidebar can be hidden**, remembered per browser. |
+
+## 11. Build status (2026-11-08)
+
+**What was built:**
+
+- **`src/lib/nav-groups.ts`**: the one list of groups and entries. The sidebar, the tab bar and
+  `/menu` all read it. The lit entry is the **longest matching prefix**, so `/site/questions`
+  lights Inbox and `/site/attire` lights Website.
+- **Shell** (`src/components/shell/`): `Sidebar` (from `md:`), `TabBar` (below `md:`, fixed,
+  safe-area padded), `ShellFrame` (the two columns and the Hide/Show sidebar button,
+  `localStorage` key `wedplan.sidebar.collapsed`, every access guarded), `AccountMenu` (a
+  `<details>` menu with Account settings and Sign out; a planner gets only Sign out), and
+  `MoreMenu`/`SectionPanel` for a section's ⋯ menu. `src/components/nav.tsx` is deleted.
+- **`/menu?group=<tab>`**: what a phone tab opens when it holds more than one place. It's a real
+  page, so Back and links work. A tab with one place links straight to it (for example a planner's
+  More is just Events). Added to `PLANNER_ROUTES`; it filters itself by viewer.
+- **Segmented control.** `SubTabs` is restyled and accepts `matchPrefixes`. The tab lists live in
+  `src/lib/nav-tabs.ts`:
+  - Guest list: **Households · Ranking**. Invitations and Save the date left Guests.
+  - Tasks: **List · Calendar · Board · Timeline**.
+  - Invitations: **Invitations · Save the date · RSVP questions**. `/questions` now shows these
+    tabs.
+  - Website: **Page · Theme · Travel · Photos · Extras**, on `/site`, `/site/theme`, `/travel`,
+    `/gallery`, `/site/extras` and the four extras pages.
+  - Registry: **Items · Claims · Page & address**, moved from an inline array.
+- **Settings** keeps Your account, Wedding basics, People, Download, Activity and Privacy
+  notice, plus a "Moved to their own sections" box with three links.
+  - **List appearance** → Tasks → ⋯ → `/lists?panel=appearance`.
+  - **Pinterest & clipper** → Moodboards → ⋯ → `/moodboards?panel=import`. The Pinterest OAuth
+    callback now returns there, the help and import pages link there, and the Pinterest/clipper
+    actions revalidate `/moodboards` instead of `/settings`.
+  - Both are **couple-only**, as they were in Settings. A planner gets no ⋯ items.
+- **Page titles** on `guests/[id]`, `households/[id]`, `lists/[id]` and `moodboards/[id]` (for
+  example "Smith family · Guests").
+
+**Departures from §4:**
+
+1. **Cut lines & capacity got no new panel.** `/guests/rank` already had `CapacityControl` and
+   `CutLinePicker`, so the Settings copy was a duplicate. It's removed, and the pointer goes to
+   Guest list → Ranking.
+2. **Seating** stays inside Events (Q3).
+3. **Extras is a page** (`/site/extras`) listing What to wear, A gift, Song requests and
+   Guestbook. §4.5 described it as a segmented-control pane. The builder rail's "Elsewhere" list
+   stays.
+4. **Panels open as a card at the top of the section**, with a Done link, not as a sliding
+   sheet. They're still addressed by `?panel=`. Spec 44's inspector replaces them.
+5. **Inbox** links to `/site/questions` until spec 43.
+6. The old wrapping link row on laptop and the "☰ Menu" dropdown on phone are both gone.
+
+**Verified:** `npm run typecheck`; `npm test`, 1299 tests including the new
+`nav-groups.test.ts` (36). That test checks:
+- every planner page lights exactly one entry, except `/setup` and `/menu`;
+- no two entries share a prefix;
+- the planner's sidebar equals `PLANNER_NAV_HREFS`;
+- the tab bar lists the same places as the sidebar;
+- every section view is a real page.
+
+`next build` passes with a placeholder env.
+
+**Seen** in headless Chromium at 1280 and 390 wide, through a temporary page with sample content
+that was deleted and never committed: the sidebar, tab bar, segmented control, ⋯ menu and account
+menu render; no horizontal scroll; no console errors; the hidden sidebar stays hidden after
+reload; the planner's sidebar and tabs are filtered.
+
+**Not verified:** any real planner page inside the new shell (they need Supabase); the active
+highlight in a browser (it's covered by unit tests only); a real phone; a screen reader; the
+Pinterest callback round trip.
+
+**Pick up here:** open the app against the live project and walk every sidebar entry on a laptop
+and a phone. Check the site builder's sticky rail (`lg:top-[62px]` in `builder.tsx`) now that the
+header is shorter.

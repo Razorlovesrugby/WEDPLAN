@@ -3,6 +3,23 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 48 (spec 41):** the app shell, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
+opened**). "Can you build the first spec, ask me the questions": six questions put and answered
+(Q3 against the recommendation: seating stays inside Events), then built. No migration. Read the
+spec's §11; the short version:
+
+- **`src/lib/nav-groups.ts` is now the only list of places.** The sidebar, the phone tab bar and
+  `/menu` read it. **A new planner page must sit under an entry's `matchPrefixes`** or
+  `nav-groups.test.ts` fails (exempt: `/setup`, `/menu`). Longest prefix wins.
+- **`src/components/nav.tsx` is gone**; the shell is `src/components/shell/`. `SubTabs` is the
+  segmented control; tab lists are in `src/lib/nav-tabs.ts`.
+- **Settings is global only.** List appearance → `/lists?panel=appearance`; Pinterest & clipper →
+  `/moodboards?panel=import` (the OAuth callback returns there); cut lines were already on Ranking.
+- **Verified:** typecheck, 1299 unit tests, `next build` (placeholder env), the shell on a
+  temporary sample page in headless Chromium at 1280/390 (deleted). **Not verified:** any real
+  page in the new shell, Supabase, a phone. Check the site builder's sticky rail offset.
+- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
+
 **Session 47 (specs 41–46, spec only):** a discovery pass on the customer journey ("where
 everything lives… feel like an Apple native app"), then "Write all the specs now". **Six
 proposals, nothing built, no code or migration touched**, branch `claude/nice-mccarthy-x93m9s`.

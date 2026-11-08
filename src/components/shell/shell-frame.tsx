@@ -1,0 +1,63 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+
+const STORAGE_KEY = "wedplan.sidebar.collapsed";
+
+/**
+ * The two-column frame from `md:` up: sidebar, then everything else. The
+ * sidebar can be hidden (spec 41 Q6), remembered per browser. Storage can
+ * throw or come back empty (private windows, blocked site data), so every
+ * read and write is guarded and the default is "shown".
+ */
+export function ShellFrame({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(STORAGE_KEY) === "1");
+    } catch {
+      // Keep the default.
+    }
+  }, []);
+
+  function toggle() {
+    setCollapsed((was) => {
+      const next = !was;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // A per-browser convenience; fine to lose.
+      }
+      return next;
+    });
+  }
+
+  return (
+    <div className="min-h-dvh md:flex">
+      <aside
+        id="sidebar"
+        aria-label="Sidebar"
+        className={`hidden shrink-0 border-r border-line bg-line/20 ${
+          collapsed ? "" : "md:sticky md:top-0 md:block md:h-dvh md:w-56 md:overflow-y-auto"
+        }`}
+      >
+        {sidebar}
+      </aside>
+      <div className="min-w-0 flex-1">
+        <div className="hidden bg-white px-4 pt-2 md:block">
+          <button
+            type="button"
+            className="rounded px-2 py-1 text-xs text-muted hover:bg-line/50 hover:text-ink"
+            aria-controls="sidebar"
+            aria-expanded={!collapsed}
+            onClick={toggle}
+          >
+            {collapsed ? "Show sidebar" : "Hide sidebar"}
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}

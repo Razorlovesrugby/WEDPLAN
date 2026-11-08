@@ -1,3 +1,5 @@
+import { SubTabs } from "@/components/sub-tabs";
+import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import Link from "next/link";
 import { requireWedding } from "@/server/queries/wedding";
 import { getGuestNotes } from "@/server/queries/site-extras";
@@ -25,6 +27,7 @@ export default async function GuestbookPage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={WEBSITE_TABS} />
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-2xl">The guestbook</h1>

@@ -11,6 +11,14 @@ import {
 } from "@/server/queries/moodboards";
 import { requireWedding } from "@/server/queries/wedding";
 
+/** Spec 41 §4.6: the most specific part first, so the tab says which board. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const wedding = await requireWedding();
+  const board = await getMoodboard(wedding.id, id);
+  return { title: board ? `${board.title} · Moodboards` : "Moodboard" };
+}
+
 export default async function MoodboardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();

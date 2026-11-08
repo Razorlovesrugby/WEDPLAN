@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SubTabs } from "@/components/sub-tabs";
 import { SaveTheDateEditor } from "@/components/save-the-date/editor";
-import { GUESTS_TABS } from "@/lib/nav-tabs";
+import { INVITATIONS_TABS } from "@/lib/nav-tabs";
 import { saveTheDatePath } from "@/lib/site/save-the-date";
 import { listHouseholds } from "@/server/queries/guests";
 import { getSaveTheDateEditor, listSaveTheDateOpens } from "@/server/queries/save-the-date";
@@ -42,7 +42,7 @@ export default async function SaveTheDateEditorPage() {
 
   return (
     <div className="space-y-5">
-      <SubTabs tabs={GUESTS_TABS} />
+      <SubTabs tabs={INVITATIONS_TABS} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl">Save the date</h1>

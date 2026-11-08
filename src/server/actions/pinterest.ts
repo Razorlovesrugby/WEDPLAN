@@ -49,7 +49,7 @@ export async function disconnectPinterest(): Promise<ActionResult> {
 
   // Imported items are untouched: they are images on a board now, not a view
   // of somebody's Pinterest account.
-  revalidatePath("/settings");
+  revalidatePath("/moodboards");
   return ok(undefined);
 }
 

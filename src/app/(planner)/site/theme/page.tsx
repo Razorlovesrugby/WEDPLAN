@@ -1,3 +1,5 @@
+import { SubTabs } from "@/components/sub-tabs";
+import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import Link from "next/link";
 import { ThemeEditor } from "@/components/site/editor/theme-editor";
 import { requireWedding } from "@/server/queries/wedding";
@@ -21,6 +23,7 @@ export default async function SiteThemePage() {
 
   return (
     <div className="space-y-5">
+      <SubTabs tabs={WEBSITE_TABS} />
       <div>
         <h1 className="font-serif text-2xl">How the site looks</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">

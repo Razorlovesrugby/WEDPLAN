@@ -1,39 +1,17 @@
+import { getCollaborators, getSessionUser, requireWedding } from "@/server/queries/wedding";
 import Link from "next/link";
 import { WeddingBasicsForm } from "@/components/settings/wedding-basics-form";
-import { CutLinePicker } from "@/components/settings/cut-line-picker";
 import { PeopleEditor } from "@/components/settings/people-editor";
 import { getPeople, getPersonEmails } from "@/server/queries/people";
 import { AccountSection } from "@/components/settings/account-section";
 import { getPartnerAccount } from "@/server/queries/partner";
 import { currencyOptions } from "@/lib/onboarding";
-import { ListAppearanceEditor } from "@/components/settings/list-appearance-editor";
-import { CapacityControl } from "@/components/rank/capacity-control";
-import { listHouseholds } from "@/server/queries/guests";
-import { getLists } from "@/server/queries/lists";
-import { getCollaborators, getCutLines, getSessionUser, getWeddingStats, requireWedding } from "@/server/queries/wedding";
-import { ranksNeedRebalance } from "@/server/actions/rank";
-import { ClipTokensCard } from "@/components/moodboards/clip-tokens-card";
-import { PinterestCard } from "@/components/moodboards/pinterest-card";
-import { getPinterestAccount, listClipTokens, listMoodboards } from "@/server/queries/moodboards";
-import { pinterestConfig } from "@/server/pinterest/client";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const wedding = await requireWedding();
-  const [households, stats, rebalanceOffered, lists, collaborators, people, cutLines, clipTokens, pinterest, moodboards] =
-    await Promise.all([
-      listHouseholds(wedding.id),
-      getWeddingStats(wedding.id),
-      ranksNeedRebalance(),
-      getLists(wedding.id),
-      getCollaborators(wedding.id),
-      getPeople(wedding.id),
-      getCutLines(wedding.id),
-      listClipTokens(wedding.id),
-      getPinterestAccount(wedding.id),
-      listMoodboards(wedding.id),
-    ]);
+  const [collaborators, people] = await Promise.all([getCollaborators(wedding.id), getPeople(wedding.id)]);
 
   const personEmails = await getPersonEmails(people).catch(() => ({}) as Record<string, string>);
   const user = await getSessionUser();
@@ -44,7 +22,38 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="font-serif text-2xl">Settings</h1>
+      <div className="space-y-1">
+        <h1 className="font-serif text-2xl">Settings</h1>
+        <p className="text-sm text-muted">What applies to the whole wedding. Each section&rsquo;s own settings are in that section.</p>
+      </div>
+
+      {/* Spec 41 §4.4: three blocks left this page for the sections they
+          belong to. A pointer stays until spec 44 ships (Q5). */}
+      <section aria-labelledby="moved" className="rounded border border-line bg-white px-4 py-3 text-sm">
+        <h2 id="moved" className="font-medium">
+          Moved to their own sections
+        </h2>
+        <ul className="mt-1 space-y-0.5 text-muted">
+          <li>
+            Cut lines &amp; capacity →{" "}
+            <Link className="underline hover:text-accent" href="/guests/rank">
+              Guest list → Ranking
+            </Link>
+          </li>
+          <li>
+            List appearance →{" "}
+            <Link className="underline hover:text-accent" href="/lists?panel=appearance">
+              Tasks → ⋯ → List appearance
+            </Link>
+          </li>
+          <li>
+            Pinterest and the web clipper →{" "}
+            <Link className="underline hover:text-accent" href="/moodboards?panel=import">
+              Moodboards → ⋯ → Pinterest &amp; clipper
+            </Link>
+          </li>
+        </ul>
+      </section>
 
       <section aria-labelledby="account" className="card space-y-4 p-4">
         <h2 id="account" className="text-sm font-medium uppercase tracking-wide text-muted">
@@ -60,22 +69,6 @@ export default async function SettingsPage() {
         <WeddingBasicsForm wedding={wedding} timeZones={timeZones} currencies={currencyOptions()} />
       </section>
 
-      <section aria-labelledby="cut-lines" className="card space-y-4 p-4">
-        <h2 id="cut-lines" className="text-sm font-medium uppercase tracking-wide text-muted">
-          Cut lines &amp; capacity
-        </h2>
-        <CapacityControl
-          capacity={wedding.capacity}
-          aboveCutSeats={stats?.above_cut_seats ?? 0}
-          rebalanceOffered={rebalanceOffered}
-        />
-        {households.length === 0 ? (
-          <p className="text-sm text-muted">No households yet — nothing to set a cut line on.</p>
-        ) : (
-          <CutLinePicker households={households} cutLines={cutLines} />
-        )}
-      </section>
-
       <section aria-labelledby="people" className="card space-y-4 p-4">
         <h2 id="people" className="text-sm font-medium uppercase tracking-wide text-muted">
           People
@@ -87,13 +80,6 @@ export default async function SettingsPage() {
           your registry, site settings or this page.
         </p>
         <PeopleEditor people={people} emails={personEmails} canGrantAccess />
-      </section>
-
-      <section aria-labelledby="list-appearance" className="card space-y-4 p-4">
-        <h2 id="list-appearance" className="text-sm font-medium uppercase tracking-wide text-muted">
-          List appearance
-        </h2>
-        <ListAppearanceEditor lists={lists} />
       </section>
 
       <section aria-labelledby="download" className="card space-y-2 p-4">
@@ -127,12 +113,6 @@ export default async function SettingsPage() {
         </p>
       </section>
 
-      <PinterestCard account={pinterest} configured={pinterestConfig() !== null} />
-
-      <ClipTokensCard
-        tokens={clipTokens}
-        boards={moodboards.boards.map((board) => ({ id: board.id, title: board.title }))}
-      />
       {/* Not a setting — there is nothing here to change. It is here because
           the privacy notice is a promise made in your name to your guests,
           and the only other way to read it is to open an RSVP link. A new

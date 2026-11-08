@@ -1,3 +1,5 @@
+import { SubTabs } from "@/components/sub-tabs";
+import { WEBSITE_TABS } from "@/lib/nav-tabs";
 import { SiteBuilder } from "@/components/site/editor/builder";
 import { createClient } from "@/lib/supabase/server";
 import { signPaths } from "@/lib/supabase/storage";
@@ -75,13 +77,16 @@ export default async function SitePage() {
   });
 
   return (
-    <SiteBuilder
+    <>
+      <SubTabs tabs={WEBSITE_TABS} />
+      <SiteBuilder
       blocks={blocks}
       photos={photos}
       theme={theme}
       publishedAt={publishState.publishedAt}
       unpublished={publishState.unpublished}
       households={previewHouseholds(households ?? [], invitations ?? [])}
-    />
+      />
+    </>
   );
 }
