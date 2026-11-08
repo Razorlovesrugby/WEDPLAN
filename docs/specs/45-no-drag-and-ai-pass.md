@@ -1,8 +1,7 @@
 # Feature spec: Everything works without dragging, and every control can be found by name
 
-**Status: proposal, not built.** Written 2026-11-06 from a discovery pass over the code.
-Nothing here is authorised to build until §8's questions are answered and the planner says to
-build it.
+**Status: proposal, answers partly in (2026-11-08); not built.** Two questions answered (§9); the
+planner then chose to do spec 46 first. Nothing here is authorised to build until they say so.
 
 **Depends on:** spec 41 (the shell). Independent of 42–44 and 46; could be built alongside any of
 them.
@@ -106,3 +105,21 @@ Controls revealed on hover are **always visible on touch devices** (`@media (hov
 | 1 | Add `axe-core` (and `@axe-core/playwright`) as dev dependencies? | **Yes.** Dev only, nothing ships to users. |
 | 2 | Should the axe check fail the build, or just report? | **Report only at first**, then fail once the backlog is cleared. |
 | 3 | Move menus on every reorderable row, or only where drag is the only way today? | **Every row**, so all lists behave the same. |
+
+## 9. Answered (2026-11-08)
+
+| Q | Question | Answer |
+| --- | --- | --- |
+| 3 | Move menus on every reorderable row, or only where drag is the only way? | **"Make iPad friendly."** Read as: every reorderable row gets the menu, and the pass is aimed at a touch tablet. That means: |
+| 2 | Should the axe check fail the build? | **Report only for now.** |
+
+What "iPad friendly" adds to §3, to confirm before building:
+
+- **Touch targets of at least 44×44 pt** on every row action, the ⋯ menu, tick boxes and the side
+  panel's Done button (Apple's minimum).
+- **The ⋯ menu is a button, not a long-press**, and drag gets a short press-and-hold delay on touch
+  (dnd-kit `TouchSensor`, ~200 ms), so scrolling a list never starts a drag.
+- **No hover-only controls** (§3.2 already), checked at iPad widths (768 and 1024, both
+  orientations), plus **the side panel as a sheet in portrait and on the right in landscape**.
+- Q1 (add `axe-core` as a dev dependency) wasn't asked separately. "Report only" implies yes; to
+  confirm when this is built.
