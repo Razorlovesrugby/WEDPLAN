@@ -120,7 +120,7 @@ come from reading the code (no browser, no live data); spec 45's drag table is a
 not a test.
 
 **Session 46 (spec 40):** self-serve onboarding plus account, timezone and currency
-settings, built on branch `claude/confident-fermat-eali50` (**no PR opened**). Asked for as an
+settings, built on branch `claude/confident-fermat-eali50` (**merged as PR #83**). Asked for as an
 investigation, then a spec, nine questions put and answered (Q3 against the recommendation:
 8-character passwords; Q6 a free answer: currency is a symbol only), then "Build the spec out"
 as its own turn. The planner says every migration through `0044` is applied to the live project; *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
@@ -142,7 +142,7 @@ not checked by this session. Read the spec's **Build status**; the short version
   timezone change has run. **`0045` is not applied to the live project.** *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 
 **Session 45 (spec 39):** a third assignee (part B) and a planner login (part C), built on
-branch `claude/spec-39-third-assignee` (**no PR opened**). Asked for as a scoping question,
+branch `claude/spec-39-third-assignee` (**merged as PR #82**). Asked for as a scoping question,
 written up as a spec over two rounds, then "Okay let's go defaults and build it all" as its own
 turn. Read the spec's **Build status**; the short version:
 
@@ -165,7 +165,7 @@ turn. Read the spec's **Build status**; the short version:
 - **Housekeeping:** `node_modules` was absent, `npm ci` was run.
 
 **Session 44 (spec 38):** the registry's live preview and Contribute block, built on branch
-`claude/spec-38-registry-preview-contribute` (**no PR opened**). Asked for as a story, seven
+`claude/spec-38-registry-preview-contribute` (**merged as PR #81**). Asked for as a story, seven
 questions put and answered one at a time (Q5 against the recommendation), then "Let's build".
 Read the spec's **Build status** (§11).
 
@@ -185,7 +185,7 @@ Read the spec's **Build status** (§11).
   automatic JSX runtime so a component can be rendered in a test.
 
 **Session 43 (small site changes, no spec):** three asks on the wedding site, branch
-`claude/site-registry-button-and-timeline` (**no PR opened**). Asked for directly as changes;
+`claude/site-registry-button-and-timeline` (**merged as PR #76**). Asked for directly as changes;
 "Ask a question" turned out not to exist, so the planner picked "a form that lands in the
 planner" ("2. Plz") before it was built.
 
@@ -205,7 +205,7 @@ planner" ("2. Plz") before it was built.
   has never run. No email to the couple on a new question; they see it in the inbox only.
 
 **Session 42 (spec 36):** the gift registry, built end to end on branch
-`claude/spec-36-gift-registry` (**no PR opened**). Asked for as a plan, 14 questions
+`claude/spec-36-gift-registry` (**merged as PR #75**). Asked for as a plan, 14 questions
 put and answered (two against the recommendation: a plain-name link, and its own
 design), "Q7a: b" as a separate turn, then "Okay lets build it" as its own. Read the
 spec's **Build status** (§15); this is the short version.
@@ -282,7 +282,7 @@ took its recommendation. Read the spec's **Build status — round two**.
   editor, untick a few Reply form switches and reload the household page.
 
 **Session 40 (spec 34):** the music section, built end to end on branch
-`claude/spec-31-music-section` (**no PR opened**). Asked for as a spec, the nine
+`claude/spec-31-music-section` (**merged as PR #71**). Asked for as a spec, the nine
 questions put and answered, then "Yea build plz" as its own turn. Read the spec's
 **Build status** first; this is the short version.
 
@@ -317,7 +317,7 @@ questions put and answered, then "Yea build plz" as its own turn. Read the spec'
 
 **Session 39 (spec 33):** the seating plan, specced, scoped in full, researched
 against nine competing products (§2A), then built end to end on branch
-`claude/spec-33-seating-plan` (**no PR opened**). "Build it" came with none of the
+`claude/spec-33-seating-plan` (**merged as PR #70**). "Build it" came with none of the
 spec's 18 questions answered, so **every one took its recommendation** — the spec's
 **Answered** section lists them; any can be changed. Read the spec's **Build status**
 first; this is the short version.
@@ -357,7 +357,7 @@ first; this is the short version.
   spec's "Pick up here" walk-through on an iPad.
 
 **Session 38 (spec 32):** backups you can restore from on the free plan, and an audit
-log, built on branch `claude/spec-32-backup-and-audit-log` (**no PR opened**). Asked for
+log, built on branch `claude/spec-32-backup-and-audit-log` (**merged as PR #69**). Asked for
 as a spec, committed as one, then "Okay let's build and ask questions" as its own turn;
 four questions asked and answered, five took the recommendation. Read the spec's **Build
 status** first; this is the short version.
@@ -405,7 +405,7 @@ status** first; this is the short version.
   Keep a copy of your Vercel env vars, above all `INVITE_TOKEN_PEPPER`.
 
 **Session 37 (spec 31):** text colour, fonts, and three small fixes, built on branch
-`claude/spec-31-site-text-colour` (**no PR opened**). Asked for as a spec, grew over
+`claude/spec-31-site-text-colour` (**merged as PR #67**). Asked for as a spec, grew over
 four follow-ups, nineteen questions answered one by one, then "Okay let's build" as its
 own turn. Read the spec's **Build status** first; this is the short version.
 
@@ -440,7 +440,7 @@ own turn. Read the spec's **Build status** first; this is the short version.
   on a phone. `0026`–`0034` are still not applied to the live project. *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 
 **Session 36 (spec 30):** two small fixes, built on branch
-`claude/spec-30-save-the-date-reply-and-undimmed-photos` (**no PR opened**). Asked
+`claude/spec-30-save-the-date-reply-and-undimmed-photos` (**merged as PR #66**). Asked
 for as a spec, then "ask open questions and build" as its own turn. Read the spec's
 **Build status** first; this is the short version.
 
@@ -523,7 +523,7 @@ spec's **Build status** first; this is the short version.
   real wedding.
 
 **Session 34 (spec 28):** invite polish, round one, built end to end on branch
-`claude/spec-28-invite-polish-build` (not merged, **no PR opened**). Asked for as
+`claude/spec-28-invite-polish-build` (not merged, **merged as PR #64**). Asked for as
 "can we build the most recent spec" after the spec had been written and every
 question answered, so all nine steps were built, each committed separately. Read the
 spec's **Build status** first; this is the short version.
@@ -575,7 +575,7 @@ spec's **Build status** first; this is the short version.
   shell, the Contribute popup in an in-app browser, and a household with no invitation.
 
 **Session 33 (spec 27):** the invitation experience, built end to end on
-branch `claude/spec-27-invitation-experience` (not merged, **no PR opened**).
+branch `claude/spec-27-invitation-experience` (not merged, **merged as PR #61**).
 Asked for as a spec ("elegant, smooth, personal, technology-forward"), the eleven
 questions answered one by one, then "Let's build it" — so all eight steps of the
 spec's §15 were built, each step committed separately. Read the spec's **Build status**
