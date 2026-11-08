@@ -7,8 +7,11 @@ import { getBudgetSummary, getUpcomingPayments } from "@/server/queries/budget";
 import { getRegistrySummary } from "@/server/queries/registry";
 import { daysUntil, formatDate, formatMoney, pluralise } from "@/lib/format";
 import { todayIso } from "@/lib/lists/generate";
+import { getInboxNeedsYouCount } from "@/server/queries/inbox";
+import { listInvitations } from "@/server/queries/invitations";
+import { nextUp } from "@/lib/today";
 
-export const metadata = { title: "Overview" };
+export const metadata = { title: "Today" };
 
 export default async function DashboardPage() {
   const wedding = await requireWedding();
@@ -17,7 +20,7 @@ export default async function DashboardPage() {
   if ((await getViewerKind()) === "planner") {
     return <PlannerOverview wedding={wedding} personId={await getPlannerPersonId()} />;
   }
-  const [stats, tasks, budget, payments, registry] = await Promise.all([
+  const [stats, tasks, budget, payments, registry, inboxNeedsYou, invitations] = await Promise.all([
     getWeddingStats(wedding.id),
     getTimelineSummary(wedding.id, wedding.timezone, wedding.reminder_window_days),
     getBudgetSummary(wedding.id),
@@ -25,6 +28,9 @@ export default async function DashboardPage() {
     // Fails soft: until 0039 is applied the registry tables don't exist, and a
     // missing optional tile must never take the whole overview down with it.
     getRegistrySummary(wedding.id).catch(() => null),
+    getInboxNeedsYouCount(wedding.id),
+    // Only for one "Next up" line, so it fails soft too.
+    listInvitations(wedding.id).catch(() => []),
   ]);
   const today = todayIso(wedding.timezone);
   const upcomingPaymentCount = payments.filter((p) => !p.paid_at && p.due_date && p.due_date >= today).length;
@@ -41,10 +47,48 @@ export default async function DashboardPage() {
       : 0;
   const lockDays = daysUntil(wedding.rsvp_lock_at);
 
+  // Spec 43 §4.2: what to do next, above the figures.
+  const lines = nextUp({
+    today,
+    overdueTasks: tasks.overdueCount,
+    dueThisWeekTasks: tasks.dueSoonCount,
+    payments,
+    inbox: { needsYou: inboxNeedsYou },
+    saveTheDateNoInvitation: invitations.filter((row) => row.summary?.std_sent_at && !row.summary.sent_at).length,
+    silentHouseholds,
+    overCapacity,
+    rsvpLockDays: lockDays,
+  });
+  const TONE = { bad: "bg-red-600", warn: "bg-tierB", neutral: "bg-muted" } as const;
+
   return (
     <div className="space-y-8">
+      <section aria-labelledby="next-up" className="space-y-3">
+        <h1 className="font-serif text-2xl">Today</h1>
+        <h2 id="next-up" className="text-sm font-medium uppercase tracking-wide text-muted">
+          Next up
+        </h2>
+        {lines.length === 0 ? (
+          <p className="card p-4 text-sm text-muted">Nothing needs you today.</p>
+        ) : (
+          <ul className="card divide-y divide-line">
+            {lines.map((line) => (
+              <li key={line.text}>
+                <Link href={line.href} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-line/30">
+                  <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${TONE[line.tone]}`} />
+                  <span className="flex-1">{line.text}</span>
+                  <span aria-hidden className="text-muted">
+                    ›
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section>
-        <h1 className="font-serif text-2xl">Where things stand</h1>
+        <h2 className="font-serif text-xl">Where things stand</h2>
         <p className="mt-1 text-sm text-muted">
           Every number here is a link. If it looks wrong, click it and see the list behind it.
         </p>

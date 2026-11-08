@@ -3,6 +3,16 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 50 (spec 43):** Inbox and Today, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
+opened**). Four questions, all recommended, then built. No migration. Read the spec's §11:
+
+- **`/inbox`** merges five sources (`src/lib/inbox.ts`, `src/server/queries/inbox.ts`). Each fails
+  soft. The sidebar badge is `getInboxNeedsYouCount`, head-only counts run in the planner layout
+  on every couple page.
+- **Today** is the overview with **Next up** on top (`src/lib/today.ts`); the tiles are unchanged.
+- **Verified:** typecheck, 1357 unit tests, `next build`, a sample page in headless Chromium.
+  **Not verified:** Supabase; the inbox actions and badge have never run.
+
 **Session 49 (spec 42):** Design and Invitations, built on branch `claude/nice-mccarthy-x93m9s`
 (**no PR opened**). The spec was rewritten over four rounds of answers (the invitation is the
 website; designing and sending are different jobs; all eight Design tabs, alike; the registry stays

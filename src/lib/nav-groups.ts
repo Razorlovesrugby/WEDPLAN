@@ -70,8 +70,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/invitations", label: "Invitations", matchPrefixes: ["/invitations"] },
       // The route is /gifts, not /registry: /registry/<slug> is the PUBLIC page (spec 36 §5).
       { href: "/gifts", label: "Registry", matchPrefixes: ["/gifts"] },
-      // Spec 43 makes this a real inbox. Until then it is the guest questions inbox.
-      { href: "/site/questions", label: "Inbox", matchPrefixes: ["/site/questions"] },
+      // Everything guests send in (spec 43). The guest-questions screen it grew
+      // out of stays lit here too.
+      { href: "/inbox", label: "Inbox", matchPrefixes: ["/inbox", "/site/questions"] },
     ],
   },
   {

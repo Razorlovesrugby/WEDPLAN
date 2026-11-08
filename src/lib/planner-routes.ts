@@ -30,6 +30,7 @@ export const COUPLE_ONLY_ROUTES = [
   "budget",
   "gallery",
   "gifts",
+  "inbox",
   "invitations",
   "questions",
   "settings",

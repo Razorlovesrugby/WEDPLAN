@@ -11,7 +11,7 @@ import { activeHref, navGroupsFor, type Viewer } from "@/lib/nav-groups";
  * `aria-current` on the lit entry, so a screen reader or an AI assistant
  * driving the browser reads it as the app's main menu.
  */
-export function Sidebar({ viewer }: { viewer: Viewer }) {
+export function Sidebar({ viewer, badges = {} }: { viewer: Viewer; badges?: Record<string, number> }) {
   const pathname = usePathname();
   const groups = navGroupsFor(viewer);
   const current = activeHref(pathname, groups);
@@ -28,16 +28,24 @@ export function Sidebar({ viewer }: { viewer: Viewer }) {
           <ul className="space-y-0.5">
             {group.entries.map((entry) => {
               const active = entry.href === current;
+              const badge = badges[entry.href] ?? 0;
               return (
                 <li key={entry.href}>
                   <Link
                     href={entry.href}
                     aria-current={active ? "page" : undefined}
-                    className={`block rounded-md px-3 py-1.5 transition-colors ${
+                    className={`flex items-center justify-between rounded-md px-3 py-1.5 transition-colors ${
                       active ? "bg-line font-medium text-ink" : "text-ink/80 hover:bg-line/50 hover:text-ink"
                     }`}
                   >
                     {entry.label}
+                    {/* Spec 43: what needs the couple, e.g. Inbox's count. */}
+                    {badge > 0 ? (
+                      <span className="text-xs tabular-nums text-muted">
+                        {badge}
+                        <span className="sr-only"> need you</span>
+                      </span>
+                    ) : null}
                   </Link>
                 </li>
               );
