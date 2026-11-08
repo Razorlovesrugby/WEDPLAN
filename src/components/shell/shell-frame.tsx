@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { InspectorProvider } from "./inspector";
+import { OPEN_SHORTCUTS_EVENT, openPalette } from "./command-palette";
+import { isTypingTarget, shortcutFor } from "@/lib/shortcuts";
 
 const STORAGE_KEY = "wedplan.sidebar.collapsed";
 
@@ -11,8 +14,18 @@ const STORAGE_KEY = "wedplan.sidebar.collapsed";
  * throw or come back empty (private windows, blocked site data), so every
  * read and write is guarded and the default is "shown".
  */
-export function ShellFrame({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+export function ShellFrame({
+  sidebar,
+  canOpenSettings = true,
+  children,
+}: {
+  sidebar: ReactNode;
+  /** A planner login can't open Settings, so ⌘, does nothing for them. */
+  canOpenSettings?: boolean;
+  children: ReactNode;
+}) {
   const [collapsed, setCollapsed] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     try {
@@ -21,6 +34,22 @@ export function ShellFrame({ sidebar, children }: { sidebar: ReactNode; children
       // Keep the default.
     }
   }, []);
+
+  // The keyboard shortcuts (spec 46). Esc is handled by whatever is open.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const action = shortcutFor(event, isTypingTarget(event.target as HTMLElement | null));
+      if (!action) return;
+      if (action === "settings" && !canOpenSettings) return;
+      event.preventDefault();
+      if (action === "palette") openPalette();
+      else if (action === "settings") router.push("/settings");
+      else if (action === "sidebar") toggle();
+      else window.dispatchEvent(new Event(OPEN_SHORTCUTS_EVENT));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   function toggle() {
     setCollapsed((was) => {

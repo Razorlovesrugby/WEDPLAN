@@ -3,6 +3,18 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 52 (spec 46, spec 45 answers):** ⌘K and shortcuts, built on branch
+`claude/nice-mccarthy-x93m9s` (**no PR opened**). Spec 45 got two answers ("make iPad friendly",
+report-only check), then the planner chose to do 46 first; **45 is not built**. Read 46's §11:
+
+- **⌘K** is `src/components/shell/command-palette.tsx` (mounted in the planner layout). Its rules are
+  in `src/lib/command-palette.ts`, its search in `src/server/queries/search.ts` via the
+  `searchPalette` action. **Go to is built from `nav-groups`**, so a new sidebar entry appears there
+  automatically.
+- **Shortcuts** (`src/lib/shortcuts.ts`) are listened for in `ShellFrame`.
+- **Verified:** typecheck, 1379 unit tests, build, the dialog and keys on a sample page.
+  **Not verified:** Find against Supabase; creating from the box.
+
 **Session 51 (spec 44):** the side panel and the registry's "Use the invitation's look", built
 on branch `claude/nice-mccarthy-x93m9s` (**no PR opened**). Scope narrowed first, three questions
 (switch off by default, all four panels, "Both"), then built. Read the spec's §11:

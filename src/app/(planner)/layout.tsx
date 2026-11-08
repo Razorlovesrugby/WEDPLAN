@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { AccountMenu } from "@/components/shell/account-menu";
+import { CommandPalette, PaletteButton } from "@/components/shell/command-palette";
 import { ShellFrame } from "@/components/shell/shell-frame";
 import { Sidebar } from "@/components/shell/sidebar";
 import { TabBar } from "@/components/shell/tab-bar";
@@ -23,7 +24,7 @@ export default async function PlannerLayout({ children }: { children: React.Reac
   const badges = { "/inbox": inboxCount };
 
   return (
-    <ShellFrame sidebar={<Sidebar viewer={navViewer} badges={badges} />}>
+    <ShellFrame sidebar={<Sidebar viewer={navViewer} badges={badges} />} canOpenSettings={navViewer === "couple"}>
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-3 px-4 py-3">
           <div className="flex items-baseline gap-3">
@@ -38,7 +39,10 @@ export default async function PlannerLayout({ children }: { children: React.Reac
             ) : null}
           </div>
 
-          <AccountMenu email={user?.email ?? null} canOpenSettings={navViewer === "couple"} />
+          <div className="flex items-center gap-1">
+            <PaletteButton />
+            <AccountMenu email={user?.email ?? null} canOpenSettings={navViewer === "couple"} />
+          </div>
         </div>
       </header>
 
@@ -48,6 +52,8 @@ export default async function PlannerLayout({ children }: { children: React.Reac
       </main>
 
       {/* useSearchParams needs a Suspense boundary. */}
+      <CommandPalette viewer={navViewer} />
+
       <Suspense fallback={null}>
         <TabBar viewer={navViewer} badges={badges} />
       </Suspense>
