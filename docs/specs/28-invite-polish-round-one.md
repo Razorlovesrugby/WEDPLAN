@@ -79,7 +79,7 @@ real guest on a real phone.** Findings 1–3 are almost certainly that gap
 showing, not new bugs.
 
 One more, specific to this session: the only Supabase project this session's
-connector can see is `arm15lite_PROD`, whose migration history belongs to a
+connector can see is an unrelated production project, whose migration history belongs to a
 different app entirely (rugby club tables). **WEDPLAN's live migration state
 could not be checked from here.** Everything in group A below is inferred
 from `docs/HANDOFF.md`, which says `0026` onward have not been applied.
