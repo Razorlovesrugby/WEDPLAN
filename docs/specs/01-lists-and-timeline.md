@@ -4,7 +4,7 @@
 `0005_lists_status_assignment.sql`), seed data restructuring, generation
 logic, server queries/actions, and all five screens from section 6. Not yet
 applied to the live project (nobody has run these migrations against
-`lsgbwxisqqazahgkibmj` — see `docs/HANDOFF.md` section 0) and not yet opened
+`<project-ref>` — see `docs/HANDOFF.md` section 0) and not yet opened
 in a browser — see the caveats at the end of this status block and in
 `docs/HANDOFF.md`'s "Active work" section.**
 
