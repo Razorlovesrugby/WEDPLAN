@@ -1,6 +1,6 @@
 # Feature spec: The app shell — a grouped sidebar, a phone tab bar, and Settings that only holds what's global
 
-**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, PR #89.** No migration.
 Written as a proposal on 2026-11-06. On 2026-11-08 the planner said "Can you build the first spec,
 ask me the questions"; the six questions were put and answered (§10, Q3 against the
 recommendation), then it was built. **§11 says what was built and where it departs from §4.**

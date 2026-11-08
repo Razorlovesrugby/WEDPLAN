@@ -1,7 +1,7 @@
 # Feature spec: Self-serve onboarding, and account, timezone and currency settings
 
-**Status: built (2026-11-06), branch `claude/confident-fermat-eali50`, no PR. `0045` is not
-applied to the live project.** This document describes **what was built**, so it can be checked
+**Status: built (2026-11-06), branch `claude/confident-fermat-eali50`, no PR. `0045` is
+applied to the live project (planner, 2026-11-08).** This document describes **what was built**, so it can be checked
 against the code. History: asked for as an investigation, then as a spec; nine questions were put
 and answered (§10); then "Build the spec out". The planner later said that turn meant "finish
 the spec", not "build it", but chose to keep the build and asked for this document to match it

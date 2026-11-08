@@ -1,7 +1,7 @@
 # Feature spec: The inspector, and one look for everything guests see
 
-**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** Migration `0046`, **not
-applied to the live project**. The scope was narrowed before asking, because specs 42/43 had already
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, PR #89.** Migration `0046`, **applied to the
+live project since (planner, 2026-11-08)**. The scope was narrowed before asking, because specs 42/43 had already
 done part of it: Design tabs have controls beside a live preview, and the save the date already
 offers the invitation's colours. Three questions were put (§10); the planner chose the switch *off*
 by default (against the recommendation), side panels for all four kinds of screen, and "Both"

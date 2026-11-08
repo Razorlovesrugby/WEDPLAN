@@ -1,11 +1,126 @@
 # Session history
 
-The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–44). Kept for the record and for specs that cite a session number. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 45–47 are in `docs/HANDOFF.md`; everything older is in `git log`.
+The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–51). Kept for the record and for specs that cite a session number. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 52 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
 
 ---
 
+**Session 51 (spec 44):** the side panel and the registry's "Use the invitation's look", built
+on branch `claude/nice-mccarthy-x93m9s` (**merged as PR #89**). Scope narrowed first, three questions
+(switch off by default, all four panels, "Both"), then built. Read the spec's §11:
+
+- **`0046_registry_use_site_theme.sql` is new and not applied to the live project.** Code reads it *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
+  tolerantly (`select *`, the form only sends the switch once changed), but turning the switch on
+  needs the migration.
+- **The side panel** is `src/components/shell/inspector.tsx`, mounted in `ShellFrame`. A row opens
+  it with `useInspector().openInspector("task:<id>")` and renders `<InspectorPortal>`; a server page
+  renders `<InspectorPortal closeHref>` when its URL says so.
+- **Rows unchanged after the follow-up** ("remove clicks"): task controls and budget payments stay
+  inline as before spec 44. The panel holds task notes (new), a budget line's edit form, vendors and
+  the ⋯ settings.
+- **Guest-facing files changed:** `/registry/<slug>` and its preview image, `lib/registry/look.ts`,
+  `server/registry/public.ts`. They're behind the switch, which is off everywhere.
+- **Verified:** typecheck, 1361 unit tests, 774 SQL assertions, single-tx, bootstrap, build, the
+  panel on a sample page. **Not verified:** Supabase, real rows in the panel, the switch.
+
+**Session 50 (spec 43):** Inbox and Today, built on branch `claude/nice-mccarthy-x93m9s` (**merged as PR #89**). Four questions, all recommended, then built. No migration. Read the spec's §11:
+
+- **`/inbox`** merges five sources (`src/lib/inbox.ts`, `src/server/queries/inbox.ts`). Each fails
+  soft. The sidebar badge is `getInboxNeedsYouCount`, head-only counts run in the planner layout
+  on every couple page.
+- **Today** is the overview with **Next up** on top (`src/lib/today.ts`); the tiles are unchanged.
+- **Verified:** typecheck, 1357 unit tests, `next build`, a sample page in headless Chromium.
+  **Not verified:** Supabase; the inbox actions and badge have never run.
+
+**Session 49 (spec 42):** Design and Invitations, built on branch `claude/nice-mccarthy-x93m9s`
+(**merged as PR #89**). The spec was rewritten over four rounds of answers (the invitation is the
+website; designing and sending are different jobs; all eight Design tabs, alike; the registry stays
+whole), then "Yes go with recommended and build 42". No migration. Read the spec's §13; the short
+version:
+
+- **Sidebar "Website" is now "Design"**, eight tabs, all in `DesignFrame`
+  (`src/components/design/`). **A new Design tab must render inside `<DesignFrame>`** or
+  `nav-groups.test.ts` fails.
+- **Invitations is stages × steps** (`?stage=save-the-date|invitation&step=who|send|track`). The
+  logic is in `src/lib/invitations/journey.ts`; the `?status=` filters moved there verbatim.
+- **Guest links:** `src/lib/guest-links-isolated.test.ts` fails if a guest-facing page (`/w`,
+  `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`, the middleware, the root layout) imports
+  planner-only code. Nothing guest-facing was edited this session.
+- **Verified:** typecheck, 1342 unit tests, `next build` (placeholder env), sample-data screens
+  in headless Chromium (temporary page, deleted). **Not verified:** Supabase, real data, the
+  preview reloading after a real save, a phone.
+
+**Session 48 (spec 41):** the app shell, built on branch `claude/nice-mccarthy-x93m9s` (**merged as PR #89**). "Can you build the first spec, ask me the questions": six questions put and answered
+(Q3 against the recommendation: seating stays inside Events), then built. No migration. Read the
+spec's §11; the short version:
+
+- **`src/lib/nav-groups.ts` is now the only list of places.** The sidebar, the phone tab bar and
+  `/menu` read it. **A new planner page must sit under an entry's `matchPrefixes`** or
+  `nav-groups.test.ts` fails (exempt: `/setup`, `/menu`). Longest prefix wins.
+- **`src/components/nav.tsx` is gone**; the shell is `src/components/shell/`. `SubTabs` is the
+  segmented control; tab lists are in `src/lib/nav-tabs.ts`.
+- **Settings is global only.** List appearance → `/lists?panel=appearance`; Pinterest & clipper →
+  `/moodboards?panel=import` (the OAuth callback returns there); cut lines were already on Ranking.
+- **Verified:** typecheck, 1299 unit tests, `next build` (placeholder env), the shell on a
+  temporary sample page in headless Chromium at 1280/390 (deleted). **Not verified:** any real
+  page in the new shell, Supabase, a phone. Check the site builder's sticky rail offset.
+- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
+
+**Session 47 (specs 41–46, spec only):** a discovery pass on the customer journey ("where
+everything lives… feel like an Apple native app"), then "Write all the specs now". **Six
+proposals, nothing built, no code or migration touched**, branch `claude/nice-mccarthy-x93m9s`, **merged as PR #84**.
+One decision taken before writing: laptop first, but easy on a phone and for an AI assistant.
+41 (shell, sidebar, tab bar, Settings tidy; no URL changes) goes first; 42–46 sit inside it.
+Every spec ends with open questions and recommendations; none answered yet. The facts in them
+come from reading the code (no browser, no live data); spec 45's drag table is a text count,
+not a test.
+
+**Session 46 (spec 40):** self-serve onboarding plus account, timezone and currency
+settings, built on branch `claude/confident-fermat-eali50` (**merged as PR #83**). Asked for as an
+investigation, then a spec, nine questions put and answered (Q3 against the recommendation:
+8-character passwords; Q6 a free answer: currency is a symbol only), then "Build the spec out"
+as its own turn. The planner says every migration through `0044` is applied to the live project;
+not checked by this session. Read the spec's **Build status**; the short version:
+
+- **`0045`.** `weddings.currency` (a label, never converts, always hundredths),
+  `create_wedding()` (service role only; the one way a wedding is made, by `/start` and by
+  `bootstrap.sql`), `change_wedding_timezone()` (keeps planner-entered wall-clock times). No new
+  table, so `planner_table_access` is unchanged.
+- **`/start`** is public and gated by **`ONBOARDING_OPEN`** (unset = closed). Public sign-up stays
+  off in Supabase; the action makes the login with the admin API, already confirmed (Q2).
+- **`todayIso(timeZone)` is now required.** "Today" was the UTC date; every caller now passes the
+  wedding's timezone. A new caller has to as well.
+- **`formatMoney(minor, currency)` is now required.** Client components get it from
+  `useCurrency()` (`CurrencyProvider` in the planner layout), which throws outside the provider.
+- **Verified:** typecheck, 1263 unit tests, 770 SQL assertions (740 earlier unchanged), single-tx,
+  `verify-bootstrap.sh`, `next build` (placeholder env), `/start` in headless Chromium.
+  **Not verified:** anything against Supabase: no sign-up, partner email, password change or
+  timezone change has run. **`0045` is not applied to the live project.** *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
+
+**Session 45 (spec 39):** a third assignee (part B) and a planner login (part C), built on
+branch `claude/spec-39-third-assignee` (**merged as PR #82**). Asked for as a scoping question,
+written up as a spec over two rounds, then "Okay let's go defaults and build it all" as its own
+turn. Read the spec's **Build status**; the short version:
+
+- **B (`0043`).** `people` (a name; optional `user_id` + `access`), `list_items.assigned_person_id`
+  with a check that a task has at most one of that and `assigned_to`. The assign picker speaks
+  one string (`u:<id>` / `p:<id>`; `src/lib/people.ts`). Settings → People adds/renames/removes.
+- **C (`0044`). The planner is NOT a `collaborators` row**, so `is_collaborator()` and every
+  existing policy are untouched. `can_plan()` + `planner_table_access` (one row per table:
+  write/read/denied/global) generate additive policies. **A new table must be added to
+  `planner_table_access`** or `25_planner_access.sql` fails; a new route directory must be added
+  to `src/lib/planner-routes.ts` or its test fails. `weddings.total_budget` is kept out of reach
+  by giving the planner no policy on `weddings` and a view, `v_wedding_basics`.
+- **Where a planner lands:** nav Overview/Guests/Vendors/Events/Tasks/Moodboards; the couple-only
+  sections redirect them (`CoupleOnly`, per-segment `layout.tsx`); vendor money is hidden
+  (`showMoney`); `PlannerOverview` replaces the dashboard.
+- **Verified:** typecheck, 1236 unit tests, 740 SQL assertions (671 earlier ones unchanged),
+  `verify-bootstrap.sh`, `next build` (placeholder env). Two deliberate policy breaks were caught.
+  **Not verified:** any browser, Supabase, a second login, the invite email, the set-password
+  link. **`0043`/`0044` are not applied to the live project, nor are `0026`-`0042`.** *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
+- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
+
 **Session 44 (spec 38):** the registry's live preview and Contribute block, built on branch
-`claude/spec-38-registry-preview-contribute` (**no PR opened**). Asked for as a story, seven
+`claude/spec-38-registry-preview-contribute` (**merged as PR #81**). Asked for as a story, seven
 questions put and answered one at a time (Q5 against the recommendation), then "Let's build".
 Read the spec's **Build status** (§11).
 
@@ -18,14 +133,14 @@ Read the spec's **Build status** (§11).
   `src/lib/registry/contribute.ts`. **The registry link has no credential, so the bank details
   are visible to anyone holding it**; the settings screen says so and a test keeps them out of
   the link preview and metadata.
-- **`0042` is not applied to the live project, nor are `0026`-`0041`.**
+- **`0042` is not applied to the live project, nor are `0026`-`0041`.** *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 - **Verified:** typecheck, 1213 unit tests, 671 SQL assertions, `next build` (placeholder env).
   **Not verified:** any browser, Supabase; the iframe reload after Save has never run.
 - **Housekeeping:** `node_modules` was absent, `npm ci` was run; `vitest.config.ts` now uses the
   automatic JSX runtime so a component can be rendered in a test.
 
 **Session 43 (small site changes, no spec):** three asks on the wedding site, branch
-`claude/site-registry-button-and-timeline` (**no PR opened**). Asked for directly as changes;
+`claude/site-registry-button-and-timeline` (**merged as PR #76**). Asked for directly as changes;
 "Ask a question" turned out not to exist, so the planner picked "a form that lands in the
 planner" ("2. Plz") before it was built.
 
@@ -38,14 +153,14 @@ planner" ("2. Plz") before it was built.
   no moderation. `askQuestion` in `src/server/actions/questions-inbox.ts` (named so because
   `questions.ts` is the RSVP questions) reuses the guestbook's throttle and token-to-household
   lookup. Planner inbox at `/site/questions` (linked under "Elsewhere" in the site editor):
-  waiting / answered / dismissed. **`0040_guest_questions.sql`, not applied to the live
+  waiting / answered / dismissed. **`0040_guest_questions.sql`, not applied to the live *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   project (nor are `0026`-`0039`).** Audited, `contact` redacted.
 - **Verified:** typecheck, 1184 unit tests, 664 SQL assertions (8 new), `next build`
   (placeholder env). **Not verified:** anything in a browser or against Supabase; the form
   has never run. No email to the couple on a new question; they see it in the inbox only.
 
 **Session 42 (spec 36):** the gift registry, built end to end on branch
-`claude/spec-36-gift-registry` (**no PR opened**). Asked for as a plan, 14 questions
+`claude/spec-36-gift-registry` (**merged as PR #75**). Asked for as a plan, 14 questions
 put and answered (two against the recommendation: a plain-name link, and its own
 design), "Q7a: b" as a separate turn, then "Okay lets build it" as its own. Read the
 spec's **Build status** (§15); this is the short version.
@@ -73,7 +188,7 @@ spec's **Build status** (§15); this is the short version.
   `/api/registry/import-image` and are re-encoded and uploaded **in the browser**
   (no image library on the server). Prices are only taken when NZD or unlabelled.
 - **Two migrations: `0038`** (enum value only, the 55P04 rule) **and `0039`**. Run in
-  order. **Not applied to the live project, and neither are `0026`–`0037`.**
+  order. **Not applied to the live project, and neither are `0026`–`0037`.** *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 - **Verified:** typecheck, 1184 unit tests, 656 SQL assertions (55 new; a deliberate
   break of the over-claim check was caught), single-transaction check, bootstrap,
   `next build` (placeholder env). **Seen:** the public page, sheet, claim form,
@@ -122,7 +237,7 @@ took its recommendation. Read the spec's **Build status — round two**.
   editor, untick a few Reply form switches and reload the household page.
 
 **Session 40 (spec 34):** the music section, built end to end on branch
-`claude/spec-31-music-section` (**no PR opened**). Asked for as a spec, the nine
+`claude/spec-31-music-section` (**merged as PR #71**). Asked for as a spec, the nine
 questions put and answered, then "Yea build plz" as its own turn. Read the spec's
 **Build status** first; this is the short version.
 
@@ -146,18 +261,18 @@ questions put and answered, then "Yea build plz" as its own turn. Read the spec'
   fallback, and what shows when Apple is down or there's no token.
 - **`/site/songs`** ranked with who voted, ♥, merge, an "On the night" big-button
   mode, `/api/export/songs` and `/site/songs/print` for the DJ.
-- **One migration, `0037_song_chart.sql`** — additive; not applied to the live
+- **One migration, `0037_song_chart.sql`** — additive; not applied to the live *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   project, and neither are `0026`–`0034`.
 - **Verified:** typecheck, 991 unit tests, 523 SQL assertions, `next build`
   (placeholder env). **Not:** any browser, Supabase, or **Apple's API — blocked by
   this session's network policy**, so search is untested against a real response.
-- **Pick up here:** apply `0037`, publish a Song requests block with a ban list,
+- **Pick up here:** apply `0037`, publish a Song requests block with a ban list, *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   open two households' links on two phones, search, add, vote, and watch the
   other phone's chart move.
 
 **Session 39 (spec 33):** the seating plan, specced, scoped in full, researched
 against nine competing products (§2A), then built end to end on branch
-`claude/spec-33-seating-plan` (**no PR opened**). "Build it" came with none of the
+`claude/spec-33-seating-plan` (**merged as PR #70**). "Build it" came with none of the
 spec's 18 questions answered, so **every one took its recommendation** — the spec's
 **Answered** section lists them; any can be changed. Read the spec's **Build status**
 first; this is the short version.
@@ -193,11 +308,11 @@ first; this is the short version.
   a real iPad; the print views have never rendered (they need the database).
 - **Also:** `scripts/check-migrations.sql` was stale at `0034`; now lists `0035`
   and `0036`.
-- **Pick up here:** apply `0026`–`0036` to the live project in order, then the
+- **Pick up here:** apply `0026`–`0036` to the live project in order, then the *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   spec's "Pick up here" walk-through on an iPad.
 
 **Session 38 (spec 32):** backups you can restore from on the free plan, and an audit
-log, built on branch `claude/spec-32-backup-and-audit-log` (**no PR opened**). Asked for
+log, built on branch `claude/spec-32-backup-and-audit-log` (**merged as PR #69**). Asked for
 as a spec, committed as one, then "Okay let's build and ask questions" as its own turn;
 four questions asked and answered, five took the recommendation. Read the spec's **Build
 status** first; this is the short version.
@@ -239,13 +354,13 @@ status** first; this is the short version.
   `src/lib/zip.ts` is new and tested. The nightly workflow is untouched, and the
   command-line scripts are no use to someone with no terminal — whether to make
   `backup.yml`'s encryption optional (so setup is two pasted secrets) is still open.
-- **Pick up here:** apply `0035` to the live project (**before** the first backup run —
+- **Pick up here:** apply `0035` to the live project (**before** the first backup run — *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   the workflow checks the dump contains `audit_log`); make the repo private if it isn't;
   do "Setting it up" then the "Rehearsal" in `docs/RESTORE.md`; open `/settings/activity`.
   Keep a copy of your Vercel env vars, above all `INVITE_TOKEN_PEPPER`.
 
 **Session 37 (spec 31):** text colour, fonts, and three small fixes, built on branch
-`claude/spec-31-site-text-colour` (**no PR opened**). Asked for as a spec, grew over
+`claude/spec-31-site-text-colour` (**merged as PR #67**). Asked for as a spec, grew over
 four follow-ups, nineteen questions answered one by one, then "Okay let's build" as its
 own turn. Read the spec's **Build status** first; this is the short version.
 
@@ -277,10 +392,10 @@ own turn. Read the spec's **Build status** first; this is the short version.
 - **Pick up here:** `/site` → Text colour & font on both a light and a dark palette; switch
   the sitewide switch off and style one block (try a dark colour on a Photograph block over a
   pale print); a Script site choosing a body font (loads two extra faces); rename a mood board
-  on a phone. `0026`–`0034` are still not applied to the live project.
+  on a phone. `0026`–`0034` are still not applied to the live project. *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 
 **Session 36 (spec 30):** two small fixes, built on branch
-`claude/spec-30-save-the-date-reply-and-undimmed-photos` (**no PR opened**). Asked
+`claude/spec-30-save-the-date-reply-and-undimmed-photos` (**merged as PR #66**). Asked
 for as a spec, then "ask open questions and build" as its own turn. Read the spec's
 **Build status** first; this is the short version.
 
@@ -345,7 +460,7 @@ spec's **Build status** first; this is the short version.
   household is still invited. The plain QR sheet and the save-the-date/broadcast
   senders are unchanged.
 - **One migration, `0034_save_the_date_tracking.sql`** — additive; appended view
-  columns only; **not applied to the live project, and neither are `0026`–`0033`**,
+  columns only; **not applied to the live project, and neither are `0026`–`0033`**, *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   which it stacks on (`0031`'s view in particular).
 - **Verified:** typecheck clean, 949 unit tests, 508 SQL assertions (37 new), the
   single-transaction check, bootstrap and `next build` (placeholder env). **Looked
@@ -354,7 +469,7 @@ spec's **Build status** first; this is the short version.
   looked at or run:** `/invitations` (ticks, chip, filters, guards), the household
   toggle, the `/guests` marker, the stationery print, the cron skip, the designer's
   new panel, anything against live Supabase, a real phone.
-- **Pick up here:** apply `0026`–`0034` in order, load `/api/health`, then press the
+- **Pick up here:** apply `0026`–`0034` in order, load `/api/health`, then press the *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   button on a real household's save-the-date from a phone (decline, reload, Undo),
   tick both boxes on `/invitations`, flag a guest on the household page and watch
   `/guests/rank` and `/budget` move. The likeliest faults are where nobody has
@@ -363,7 +478,7 @@ spec's **Build status** first; this is the short version.
   real wedding.
 
 **Session 34 (spec 28):** invite polish, round one, built end to end on branch
-`claude/spec-28-invite-polish-build` (not merged, **no PR opened**). Asked for as
+`claude/spec-28-invite-polish-build` (not merged, **merged as PR #64**). Asked for as
 "can we build the most recent spec" after the spec had been written and every
 question answered, so all nine steps were built, each committed separately. Read the
 spec's **Build status** first; this is the short version.
@@ -386,7 +501,7 @@ spec's **Build status** first; this is the short version.
   do this again.
 - **One migration, `0033_gift_bank_details.sql`** — one row per wedding, digits-only
   account number (a check insists on 15 or 16), its own table so an account number
-  never rides along in `weddings.*`. **Not applied to the live project; neither are
+  never rides along in `weddings.*`. **Not applied to the live project; neither are *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   `0026`–`0032`** (the planner applies them, spec 28 Q1). `gift_funds.target_minor`
   / `raised_minor` are kept and unread; `saveGiftFund` no longer writes them.
 - **New things to know before changing anything:** `blockHeading` / `blockLabel` /
@@ -408,14 +523,14 @@ spec's **Build status** first; this is the short version.
   the slug; `events.is_public` now decides nothing a guest sees; a household with no
   invitation previews as invited to nothing; the stale `revalidatePath("/w/[slug]")`
   calls. Spec 28's "Left" list has the rest.
-- **Pick up here:** apply `0026`–`0033` in order, load `/api/health`, then open `/site`
+- **Pick up here:** apply `0026`–`0033` in order, load `/api/health`, then open `/site` *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   on a laptop (the preview, the picker, the bar, a Title field), `/site/gifts` (fill in
   the bank details) and a household link on a phone (Contribute, Copy, the vote pill).
   The likeliest faults are where nobody has looked: the preview inside the real planner
   shell, the Contribute popup in an in-app browser, and a household with no invitation.
 
 **Session 33 (spec 27):** the invitation experience, built end to end on
-branch `claude/spec-27-invitation-experience` (not merged, **no PR opened**).
+branch `claude/spec-27-invitation-experience` (not merged, **merged as PR #61**).
 Asked for as a spec ("elegant, smooth, personal, technology-forward"), the eleven
 questions answered one by one, then "Let's build it" — so all eight steps of the
 spec's §15 were built, each step committed separately. Read the spec's **Build status**
@@ -438,7 +553,7 @@ before touching any of it; this is the short version.
   `focal_x/focal_y`; the both-or-neither rule is written
   `(focal_x is null) = (focal_y is null)` because a range check on each column
   alone passes when the other is NULL — a half-set pair got through until the
-  SQL test caught it). **Not applied to
+  SQL test caught it). **Not applied to *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   the live project.** It is additive and existing rows keep working at one size.
 - **New things to know before changing anything:** zod schemas for blocks now
   live in `src/lib/site/block-schemas.ts` (a `"use server"` file cannot export
@@ -464,7 +579,7 @@ before touching any of it; this is the short version.
   for 12s and doesn't survive a reload; the household note was cut (Q3) and is
   one nullable column away if wanted; Look picker thumbnails are schematic, not
   renderings of the planner's content.
-- **Pick up here:** apply `0032`, open `/site` on a laptop and a household link
+- **Pick up here:** apply `0032`, open `/site` on a laptop and a household link *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
   on a phone. The likeliest faults are where nobody has looked: signed URLs behind
   `/api/photo`, a half-set focal point on a saved block, the `.ics` in a real
   calendar app, the reply bar with the keyboard open.
@@ -547,7 +662,7 @@ three layouts at phone and desktop widths, and the designer with its preview,
 were rendered in local Chromium from a throwaway page fed sample data
 (placeholder images — the sandbox cannot reach any photo host). **Never run
 against Supabase**: saving, uploading, signed photo URLs, the .ics download and
-the OG image are typechecked and built, not exercised. `0031` is not applied
+the OG image are typechecked and built, not exercised. `0031` is not applied *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 to the live project, and Guests will not load until it is.
 
 Previously in session 30 — **the Editorial theme is built out, `/site` is a
@@ -708,7 +823,7 @@ built.
 
 608 tests, 424 SQL assertions, typecheck, both migration checks, bootstrap and
 build all clean. **Nothing has been opened in a browser**, and `0022` through
-`0029` are none of them applied to the live project.
+`0029` are none of them applied to the live project. *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 
 Previously in session 29 — **spec 25: the site's blocks now read the wedding
 instead of being a second place to type it.**
@@ -760,7 +875,7 @@ rendered in the browser default. Second, the default could not just be flipped:
 was rendering Script by *fallback*, and changing the constant would have
 restyled all of them. `0028` pins them explicitly first.
 
-**`0026`, `0027` and `0028` are not applied to the live project** — nor are
+**`0026`, `0027` and `0028` are not applied to the live project** — nor are *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 `0022` through `0025` from the three sessions before. They apply in order. The
 migrations README had also gone stale at `0019` while the directory held files
 through `0025`, which is exactly the failure its own warning describes; it is
@@ -821,7 +936,7 @@ agent), the built-in decline-note question — stored as a household-scope
 `rsvp_answers` row so it lands where the planner already looks — and recounts
 `v_household_rsvp` and `v_wedding_stats` onto the invites view so an answer
 kept from before an un-invite stops inflating every total. **Neither `0022`
-nor `0023` has been applied to the live project; they apply in order.** 540
+nor `0023` has been applied to the live project; they apply in order.** 540 *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 tests (up from 513), 333 SQL assertions (up from 304), typecheck, single-
 transaction check and build all clean. See
 `docs/specs/22-per-event-invite-status-and-tracking.md`.
@@ -855,7 +970,7 @@ Anyone proposing to drop the suffix should read spec 21 §3 first.
 `0022_household_slugs.sql` adds `households.slug`/`slug_suffix` with their
 derivation functions, insert trigger and backfill, `household_slug_aliases`
 (so an edited address keeps working), `events.guest_note`, and two columns on
-`v_households`. **It has not been applied to the live project**, and nothing
+`v_households`. **It has not been applied to the live project**, and nothing *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 degrades gracefully without it. 513 tests (up from 487), 304 SQL assertions
 (up from 261), typecheck and build clean. See
 `docs/specs/21-per-household-site-addresses.md`.
@@ -1007,7 +1122,7 @@ rather than the reference's. Screenshots of `/example-wedding`, or that host
 on the allowlist, would close it.
 
 Session 19 —  the deployment 500 is diagnosed: `0013`/`0014`
-have never been applied to the live project, and the guard that should have
+have never been applied to the live project, and the guard that should have *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 degraded gracefully was written against the wrong error layer (42P01 vs
 PostgREST's PGRST205) so it never fired. Fixed, with tests. **The remaining
 step is a migration run only the planner can do.** Session 18, below — a
@@ -1073,7 +1188,7 @@ blocks and a revision, because a fresh database applies migrations before the
 seed and would otherwise reset to a blank page; and an empty heading drew a
 heading's rule and spacing with nothing in it.
 
-**Where to pick this up:** open it. Apply `0022`–`0025` in order, then look at
+**Where to pick this up:** open it. Apply `0022`–`0025` in order, then look at *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 `/site` on a laptop and at `/w/<slug>` on a phone. The most likely places for
 something to be wrong are the ones nobody has seen: the preview iframe's
 sizing, the drag handles, and how the photo blocks crop at each aspect.
@@ -1191,7 +1306,7 @@ a leaked URL keeps working; and the page renders before an invitation exists,
 saying the invitation is on its way, rather than 404ing on a link the planner
 has just copied.
 
-**Loose ends, in the order they would bite:** `0022` is not applied to the
+**Loose ends, in the order they would bite:** `0022` is not applied to the *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 live project and nothing degrades gracefully without it; nothing here has been
 opened in a browser; the invitations table shows "Copy link" but not the
 address; `revalidatePath("/rsvp/<token>")` in the gallery and travel actions
@@ -1600,7 +1715,7 @@ per-country compliance or opt-out handling), and no natural-language setup
 assistant (§13 — two people entering forty facts once are better served by a
 form they can see).
 
-**Unchanged and still outstanding from session 19:** apply `0013` and `0014`
+**Unchanged and still outstanding from session 19:** apply `0013` and `0014` *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 to the live project and run `node scripts/ensure-bucket.mjs` against it. Only
 the planner can do it, and nothing about moodboards works until it happens.
 `/api/health` confirms both.
@@ -1666,7 +1781,7 @@ than linking to an anchor that is not there. Steps 2–5 otherwise untouched.
   non-empty strings; nothing calls out with them.
 
 **Unrelated and still outstanding from session 19:** `0013`/`0014` have never
-been applied to the live project and `ensure-bucket.mjs` has never run against
+been applied to the live project and `ensure-bucket.mjs` has never run against *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 it. `0015` now joins that queue. `/api/health` confirms.
 
 ## Session 20 (build, continued): the /site editor, the FAQ library, seed content
@@ -1851,7 +1966,7 @@ bug and would have mislabelled the very outage it exists to explain.
 `npm run typecheck`, `npm test` (299), `./scripts/verify-migrations.sh` (167)
 and `npm run build` are green.
 
-**Still outstanding, and still only the planner can do it:** apply `0013` and
+**Still outstanding, and still only the planner can do it:** apply `0013` and *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 `0014` to the live project, then run `node scripts/ensure-bucket.mjs` against
 it. Nothing about moodboards works until both have happened. `/api/health`
 confirms both.
@@ -1906,7 +2021,7 @@ link to `/api/health`. They never render `error.message` — a page that shows
 internals to whoever visits shows them to a stranger holding a share link.
 
 **And:** the moodboard reads used by `/settings` now treat `42P01` as empty
-rather than throwing. `0013`/`0014` have never been applied to a live
+rather than throwing. `0013`/`0014` have never been applied to a live *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 database, so without this the two new cards would black out the cut-line and
 list-appearance editors next to them on a page that worked before.
 
@@ -2157,7 +2272,7 @@ and `npm run build` are all green, reconfirmed this session against the
 built code.
 
 **Same live/browser caveat as every session since session 6:** none of
-this has been applied to the live Supabase project or clicked through in a
+this has been applied to the live Supabase project or clicked through in a *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 real browser — no live project is reachable from this session. The new
 color palette, the auto-assign behavior, the today highlight, and the
 click-to-preview popup on both `/calendar` and `/timeline` have all only
@@ -2254,7 +2369,7 @@ went straight to building, per each part's own build order (A3–A5, B8).
 `npm run build` are all green.
 
 **Same live/browser caveat as every session since session 6:** none of
-this has been applied to the live Supabase project or clicked through in
+this has been applied to the live Supabase project or clicked through in *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 a real browser — no live project is reachable from this session. The
 migrations were verified against a throwaway local Postgres cluster
 (`scripts/verify-migrations.sh`), not the hosted one.
@@ -2585,7 +2700,7 @@ existing tenant table, not a new one), `verify-bootstrap.sh`, `typecheck`,
 `npm test` (181 tests, 10 of them new) and `npm run build` are all green.
 
 **Same caveat as every session since session 6, because it's the same
-root cause: nothing here has been applied to the live project or opened
+root cause: nothing here has been applied to the live project or opened *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 in a browser.** The mobile pass and every touch-drag fallback in
 particular are exactly the class of thing that passed every automated
 check here and still needs someone to actually look — see the two real
@@ -2630,7 +2745,7 @@ policy), `verify-bootstrap.sh`, `typecheck`, `npm test` (171 tests, 12 of
 them new) and `npm run build` are all green.
 
 **Same caveat as session 8, because it's the same root cause: nothing here
-has been applied to the live project or opened in a browser.** No real
+has been applied to the live project or opened in a browser.** No real *[2026-11-08: now applied — the planner says every migration through `0046` is on the live project.]*
 email has ever been sent by this app — the dev-mode fallback in
 `sendEmail()` (log instead of send when `RESEND_API_KEY` is unset) has
 never actually been exercised by a cron run, only relied upon by

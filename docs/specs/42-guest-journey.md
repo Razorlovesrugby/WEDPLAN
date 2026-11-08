@@ -1,6 +1,6 @@
 # Feature spec: Design and Invitations — making what guests see, and sending it
 
-**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, PR #89.** No migration.
 Revised three times with the planner's answers (§11). The last open question (Q9) was answered
 "Yes go with recommended and build 42", which is the build authorisation. **§13 says what was
 built and where it departs from §5.** No guest link, token, public route or guest-facing file was
