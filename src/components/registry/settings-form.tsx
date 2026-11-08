@@ -144,6 +144,7 @@ function PageCard({
     disclosure_text: settings.disclosure_text ?? "",
     palette: resolvePalette(settings.palette).id as string,
     type_pairing: resolvePairing(settings.type_pairing) as string,
+    use_site_theme: settings.use_site_theme ?? false,
   }));
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [status, setStatus] = useState<string | null>(null);
@@ -161,7 +162,12 @@ function PageCard({
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     startTransition(async () => {
-      const result = await saveRegistrySettings(s);
+      // Only send the switch once it differs from what's stored (spec 44), so a
+      // save never names a column the database may not have yet.
+      const { use_site_theme, ...rest } = s;
+      const result = await saveRegistrySettings(
+        use_site_theme === (settings.use_site_theme ?? false) ? rest : { ...rest, use_site_theme },
+      );
       if (!result.ok) {
         setErrors(result.fieldErrors ?? {});
         setStatus(result.error);
@@ -327,7 +333,22 @@ function PageCard({
 
       <section className="space-y-3">
         <h2 className="font-serif text-lg">The look</h2>
-        <fieldset>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            id="registry-use-site-theme"
+            checked={s.use_site_theme}
+            onChange={(event) => set("use_site_theme", event.target.checked)}
+          />
+          <span>
+            Use the invitation&rsquo;s look
+            <span className="block text-xs text-muted">
+              The registry takes your invitation&rsquo;s colours and lettering. Your choices below are kept, and come
+              back if you turn this off.
+            </span>
+          </span>
+        </label>
+        <fieldset disabled={s.use_site_theme} className={s.use_site_theme ? "opacity-50" : undefined}>
           <legend className="mb-1 text-sm font-medium">Colours</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {REGISTRY_PALETTE_IDS.map((id) => {
@@ -347,7 +368,7 @@ function PageCard({
             })}
           </div>
         </fieldset>
-        <fieldset>
+        <fieldset disabled={s.use_site_theme} className={s.use_site_theme ? "opacity-50" : undefined}>
           <legend className="mb-1 text-sm font-medium">Lettering</legend>
           <div className="grid gap-2 sm:grid-cols-3">
             {REGISTRY_PAIRING_IDS.map((id) => (

@@ -16,7 +16,7 @@ const baseSettings: RegistrySettingsRow = {
   thanks_text: null, thanks_asset_id: null, no_gifts_line: null, show_prices: true, show_taken: false,
   show_funds: false, contribute_position: "off", contribute_heading: null, contribute_text: null,
   contribute_button_only: false, disclosure_on: false, disclosure_text: null, palette: "linen",
-  type_pairing: "classic", last_viewed_claims_at: null, created_at: "", updated_at: "",
+  type_pairing: "classic", use_site_theme: false, last_viewed_claims_at: null, created_at: "", updated_at: "",
 };
 
 const { RegistryView } = await import("./registry-view");

@@ -16,6 +16,7 @@ import {
 } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import { InlineText } from "@/components/guests/inline-text";
+import { InspectorPortal, useInspector } from "@/components/shell/inspector";
 import { assigneeOptions, itemAssigneeValue } from "@/lib/people";
 import type { CollaboratorRow, ListItemRow, ListSectionRow, PersonRow } from "@/lib/types/database";
 
@@ -76,7 +77,12 @@ export function ItemRow({
   const [addingSub, setAddingSub] = useState(false);
   const [subTitle, setSubTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Details open in the side panel, addressed as ?inspect=task:<id> (spec 44).
+  const { openKey, openInspector, closeInspector } = useInspector();
+  const inspectKey = `task:${item.id}`;
+  const detailsOpen = openKey === inspectKey;
   const assignOptions = assigneeOptions(collaborators, people, currentUserId, assignedValue);
+  const assignedLabel = assignOptions.find((option) => option.value === assignedValue)?.label ?? null;
 
   // A sub-item can be closed by its parent's own checkbox (spec 11 §1D)
   // rather than this row's, so `checked` has to track the server value
@@ -272,137 +278,160 @@ export function ItemRow({
 
           {item.notes ? <p className="mt-0.5 text-xs text-muted">{item.notes}</p> : null}
 
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-            {dueMode === "fixed" ? (
-              <>
-                <input
-                  type="date"
-                  value={dueDate ?? ""}
-                  onChange={(e) => onDateChange(e.target.value)}
-                  aria-label={`Due date for "${item.title}"`}
-                  className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
-                />
-                {dueDate ? (
-                  <button
-                    type="button"
-                    onClick={() => onDateChange("")}
-                    aria-label={`Clear due date for "${item.title}"`}
-                    className="text-muted hover:text-ink"
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <span className="flex items-center gap-1 text-muted">
-                <input
-                  type="number"
-                  min={0}
-                  value={offsetWeeks}
-                  onChange={(e) => {
-                    const weeks = Math.max(0, Math.trunc(Number(e.target.value)) || 0);
-                    setOffsetWeeks(weeks);
-                    applyOffset(weeks, offsetDirection);
-                  }}
-                  aria-label={`Weeks ${offsetDirection} the wedding, for "${item.title}"`}
-                  className="w-12 rounded border border-line bg-transparent px-1 py-0.5"
-                />
-                weeks
-                <select
-                  value={offsetDirection}
-                  onChange={(e) => {
-                    const direction = e.target.value as "before" | "after";
-                    setOffsetDirection(direction);
-                    applyOffset(offsetWeeks, direction);
-                  }}
-                  aria-label={`Before or after the wedding, for "${item.title}"`}
-                  className="rounded border border-line bg-transparent px-1 py-0.5"
-                >
-                  <option value="before">before</option>
-                  <option value="after">after</option>
-                </select>
-                the wedding{dueDate ? ` → ${dueDate}` : ""}
-              </span>
-            )}
+          {/* Spec 44: a short summary here; everything else is in the side panel. */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+            {dueDate ? <span>Due {dueDate}</span> : null}
+            {flagged ? <span className="text-amber-700">⚑ Flagged</span> : null}
+            {assignedLabel ? <span>{assignedLabel}</span> : null}
             <button
               type="button"
-              onClick={dueMode === "fixed" ? switchToRelative : switchToFixed}
-              className="text-[11px] text-muted underline hover:text-ink"
+              onClick={() => (detailsOpen ? closeInspector() : openInspector(inspectKey))}
+              aria-expanded={detailsOpen}
+              aria-label={`Details for "${item.title}"`}
+              className="underline hover:text-ink"
             >
-              {dueMode === "fixed" ? "Calculate from the wedding date" : "Use a fixed date"}
-            </button>
-            <button
-              type="button"
-              onClick={onToggleFlag}
-              aria-pressed={flagged}
-              aria-label={flagged ? "Remove flag" : "Flag"}
-              className={flagged ? "text-amber-700" : "text-muted hover:text-ink"}
-            >
-              ⚑
-            </button>
-            <button
-              type="button"
-              onClick={onPriorityClick}
-              aria-label="Cycle priority"
-              className="text-muted hover:text-ink"
-            >
-              !
-            </button>
-            {assignOptions.length > 0 ? (
-              <select
-                value={assignedValue}
-                onChange={(e) => onAssign(e.target.value)}
-                aria-label={`Assign "${item.title}"`}
-                className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
-              >
-                <option value="">Unassigned</option>
-                {assignOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            {allowSubItems && sections && sections.length > 0 && onSelectSection ? (
-              <select
-                value={currentSectionId ?? ""}
-                onChange={(e) => onSelectSection(item.id, e.target.value || null)}
-                aria-label={`Section for "${item.title}"`}
-                className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
-              >
-                <option value="">No section</option>
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            {allowSubItems && !item.parent_item_id ? (
-              <button type="button" onClick={() => setAddingSub((v) => !v)} className="text-muted hover:text-ink">
-                + sub-item
-              </button>
-            ) : null}
-            <button type="button" onClick={onDelete} className="text-red-700 hover:underline">
-              Remove
+              {detailsOpen ? "Close details" : "Details"}
             </button>
           </div>
 
-          {addingSub ? (
-            <input
-              autoFocus
-              value={subTitle}
-              onChange={(e) => setSubTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onAddSub();
-                if (e.key === "Escape") setAddingSub(false);
-              }}
-              onBlur={() => {
-                if (!subTitle.trim()) setAddingSub(false);
-              }}
-              placeholder="Sub-item title, then Enter"
-              className="field mt-1 max-w-xs text-xs"
-            />
+          {detailsOpen ? (
+            <InspectorPortal inspectKey={inspectKey} title={item.title} onClose={closeInspector}>
+              <NotesEditor itemId={item.id} notes={item.notes} />
+              <div className="space-y-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                {dueMode === "fixed" ? (
+                  <>
+                    <input
+                      type="date"
+                      value={dueDate ?? ""}
+                      onChange={(e) => onDateChange(e.target.value)}
+                      aria-label={`Due date for "${item.title}"`}
+                      className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
+                    />
+                    {dueDate ? (
+                      <button
+                        type="button"
+                        onClick={() => onDateChange("")}
+                        aria-label={`Clear due date for "${item.title}"`}
+                        className="text-muted hover:text-ink"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="flex items-center gap-1 text-muted">
+                    <input
+                      type="number"
+                      min={0}
+                      value={offsetWeeks}
+                      onChange={(e) => {
+                        const weeks = Math.max(0, Math.trunc(Number(e.target.value)) || 0);
+                        setOffsetWeeks(weeks);
+                        applyOffset(weeks, offsetDirection);
+                      }}
+                      aria-label={`Weeks ${offsetDirection} the wedding, for "${item.title}"`}
+                      className="w-12 rounded border border-line bg-transparent px-1 py-0.5"
+                    />
+                    weeks
+                    <select
+                      value={offsetDirection}
+                      onChange={(e) => {
+                        const direction = e.target.value as "before" | "after";
+                        setOffsetDirection(direction);
+                        applyOffset(offsetWeeks, direction);
+                      }}
+                      aria-label={`Before or after the wedding, for "${item.title}"`}
+                      className="rounded border border-line bg-transparent px-1 py-0.5"
+                    >
+                      <option value="before">before</option>
+                      <option value="after">after</option>
+                    </select>
+                    the wedding{dueDate ? ` → ${dueDate}` : ""}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={dueMode === "fixed" ? switchToRelative : switchToFixed}
+                  className="text-[11px] text-muted underline hover:text-ink"
+                >
+                  {dueMode === "fixed" ? "Calculate from the wedding date" : "Use a fixed date"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleFlag}
+                  aria-pressed={flagged}
+                  aria-label={flagged ? "Remove flag" : "Flag"}
+                  className={flagged ? "text-amber-700" : "text-muted hover:text-ink"}
+                >
+                  ⚑
+                </button>
+                <button
+                  type="button"
+                  onClick={onPriorityClick}
+                  aria-label="Cycle priority"
+                  className="text-muted hover:text-ink"
+                >
+                  !
+                </button>
+                {assignOptions.length > 0 ? (
+                  <select
+                    value={assignedValue}
+                    onChange={(e) => onAssign(e.target.value)}
+                    aria-label={`Assign "${item.title}"`}
+                    className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
+                  >
+                    <option value="">Unassigned</option>
+                    {assignOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {allowSubItems && sections && sections.length > 0 && onSelectSection ? (
+                  <select
+                    value={currentSectionId ?? ""}
+                    onChange={(e) => onSelectSection(item.id, e.target.value || null)}
+                    aria-label={`Section for "${item.title}"`}
+                    className="rounded border border-line bg-transparent px-1 py-0.5 text-muted"
+                  >
+                    <option value="">No section</option>
+                    {sections.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {allowSubItems && !item.parent_item_id ? (
+                  <button type="button" onClick={() => setAddingSub((v) => !v)} className="text-muted hover:text-ink">
+                    + sub-item
+                  </button>
+                ) : null}
+                <button type="button" onClick={onDelete} className="text-red-700 hover:underline">
+                  Remove
+                </button>
+              </div>
+    
+              {addingSub ? (
+                <input
+                  autoFocus
+                  value={subTitle}
+                  onChange={(e) => setSubTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onAddSub();
+                    if (e.key === "Escape") setAddingSub(false);
+                  }}
+                  onBlur={() => {
+                    if (!subTitle.trim()) setAddingSub(false);
+                  }}
+                  placeholder="Sub-item title, then Enter"
+                  className="field mt-1 max-w-xs text-xs"
+                />
+              ) : null}
+              </div>
+            </InspectorPortal>
           ) : null}
 
           {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
@@ -422,6 +451,54 @@ export function ItemRow({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A task's notes, in the side panel (spec 44). Words wait for Save, with a
+ * note while they differ, as on every other form (spec 42 Q9).
+ */
+function NotesEditor({ itemId, notes }: { itemId: string; notes: string | null }) {
+  const router = useRouter();
+  const [value, setValue] = useState(notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const dirty = value !== (notes ?? "");
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium">Notes</span>
+        <textarea
+          id={`task-notes-${itemId}`}
+          className="field"
+          rows={4}
+          maxLength={2000}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
+      </label>
+      {dirty ? (
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await updateItem(itemId, { notes: value });
+                setError(result.ok ? null : result.error);
+                router.refresh();
+              })
+            }
+          >
+            Save
+          </button>
+          <span className="text-muted">Unsaved changes</span>
+        </div>
+      ) : null}
+      {error ? <p className="text-xs text-red-700">{error}</p> : null}
     </div>
   );
 }

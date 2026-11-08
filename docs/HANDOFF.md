@@ -3,6 +3,23 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 51 (spec 44):** the side panel and the registry's "Use the invitation's look", built
+on branch `claude/nice-mccarthy-x93m9s` (**no PR opened**). Scope narrowed first, three questions
+(switch off by default, all four panels, "Both"), then built. Read the spec's §11:
+
+- **`0046_registry_use_site_theme.sql` is new and not applied to the live project.** Code reads it
+  tolerantly (`select *`, the form only sends the switch once changed), but turning the switch on
+  needs the migration.
+- **The side panel** is `src/components/shell/inspector.tsx`, mounted in `ShellFrame`. A row opens
+  it with `useInspector().openInspector("task:<id>")` and renders `<InspectorPortal>`; a server page
+  renders `<InspectorPortal closeHref>` when its URL says so.
+- **Behaviour moved:** task dates, flag, priority and assignee, and budget payments, are now edited
+  in the panel (Details), not in the row.
+- **Guest-facing files changed:** `/registry/<slug>` and its preview image, `lib/registry/look.ts`,
+  `server/registry/public.ts`. They're behind the switch, which is off everywhere.
+- **Verified:** typecheck, 1361 unit tests, 774 SQL assertions, single-tx, bootstrap, build, the
+  panel on a sample page. **Not verified:** Supabase, real rows in the panel, the switch.
+
 **Session 50 (spec 43):** Inbox and Today, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
 opened**). Four questions, all recommended, then built. No migration. Read the spec's §11:
 

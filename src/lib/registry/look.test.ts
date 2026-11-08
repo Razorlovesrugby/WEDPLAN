@@ -4,7 +4,9 @@ import {
   REGISTRY_PALETTE_IDS,
   REGISTRY_PALETTES,
   paletteProblems,
+  pairingForTypography,
   registryColourVars,
+  registryLook,
   resolvePairing,
   resolvePalette,
 } from "./look";
@@ -49,3 +51,39 @@ describe("registry pairings", () => {
     expect(resolvePairing("bookish")).toBe("bookish");
   });
 });
+
+describe("following the invitation's look (spec 44)", () => {
+  const invitation = {
+    tokens: { ink: "#101010", paper: "#fefefe", muted: "#555555", line: "#dddddd", accent: "#123456" },
+    typography: "garamond_inter",
+  };
+
+  it("with the switch off, renders exactly as before", () => {
+    const look = registryLook({ palette: "sage", type_pairing: "modern", use_site_theme: false }, invitation);
+    expect(look.colourVars).toEqual(registryColourVars("sage"));
+    expect(look.pairing).toBe("modern");
+  });
+
+  it("treats a missing switch (a row from before 0046) as off", () => {
+    expect(registryLook({ palette: "sea", type_pairing: "classic" }, invitation).colourVars).toEqual(registryColourVars("sea"));
+  });
+
+  it("with the switch on, takes the invitation's colours and nearest pairing", () => {
+    const look = registryLook({ palette: "sage", type_pairing: "modern", use_site_theme: true }, invitation);
+    expect(look.colourVars["--site-accent"]).toBe(toRgbChannelsForTest("#123456"));
+    expect(look.pairing).toBe("bookish");
+    expect(pairingForTypography("fraunces_garamond")).toBe("classic");
+    expect(pairingForTypography("something-new")).toBe("classic");
+  });
+
+  it("falls back to its own look if the invitation's can't be read", () => {
+    const look = registryLook({ palette: "blush", type_pairing: "bookish", use_site_theme: true }, null);
+    expect(look.colourVars).toEqual(registryColourVars("blush"));
+    expect(look.pairing).toBe("bookish");
+  });
+});
+
+function toRgbChannelsForTest(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
+}

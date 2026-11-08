@@ -6,7 +6,8 @@ import { NewListForm } from "@/components/lists/new-list-form";
 import { SmartView } from "@/components/lists/smart-view";
 import { SubTabs } from "@/components/sub-tabs";
 import { TASKS_TABS } from "@/lib/nav-tabs";
-import { MoreMenu, SectionPanel } from "@/components/shell/more-menu";
+import { MoreMenu } from "@/components/shell/more-menu";
+import { InspectorPortal } from "@/components/shell/inspector";
 import { ListAppearanceEditor } from "@/components/settings/list-appearance-editor";
 import {
   getAllItems,
@@ -98,9 +99,10 @@ export default async function ListsPage({
     <div className="space-y-4">
       <SubTabs tabs={TASKS_TABS} />
       {showAppearance ? (
-        <SectionPanel id="list-appearance" title="List appearance" doneHref={viewHref}>
+        // In the side panel (spec 44); ?panel= stays the address, so older links work.
+        <InspectorPortal inspectKey="panel:appearance" title="List appearance" closeHref={viewHref}>
           <ListAppearanceEditor lists={lists} />
-        </SectionPanel>
+        </InspectorPortal>
       ) : null}
       <div className="flex flex-col gap-6 sm:flex-row">
         <ListsSidebar lists={lists} openCounts={openCounts} />

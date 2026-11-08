@@ -9,7 +9,8 @@ import { ConsumptionEditor } from "./consumption-editor";
 import { PaymentList } from "./payment-list";
 import { BudgetLinksPopup } from "./budget-links-popup";
 import { BudgetItemFields, type BudgetItemFormValue } from "./budget-item-fields";
-import { formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
+import { InspectorPortal, useInspector } from "@/components/shell/inspector";
 import { variance as computeVariance, filled } from "@/lib/budget";
 import { trimPct } from "./budget-header";
 import type { VendorLike } from "@/lib/vendors";
@@ -80,7 +81,12 @@ export function BudgetItemRow({
 }) {
   const currency = useCurrency();
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
+  // The line's details open in the side panel (spec 44), addressed as
+  // ?inspect=budget:<id> so a link or a reload opens the same line.
+  const { openKey, openInspector, closeInspector } = useInspector();
+  const inspectKey = `budget:${item.id}`;
+  const editing = openKey === inspectKey;
+  const setEditing = (open: boolean) => (open ? openInspector(inspectKey) : closeInspector());
   const [popupOpen, setPopupOpen] = useState(autoOpenLinks);
 
   useEffect(() => {
@@ -158,8 +164,13 @@ export function BudgetItemRow({
           </div>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted">
-          <button type="button" className="hover:text-ink hover:underline" onClick={() => setEditing((v) => !v)}>
-            {editing ? "Close" : "Edit"}
+          <button
+            type="button"
+            className="hover:text-ink hover:underline"
+            aria-expanded={editing}
+            onClick={() => setEditing(!editing)}
+          >
+            {editing ? "Close details" : "Details"}
           </button>
           <button type="button" className="text-red-700 hover:underline" onClick={onDelete}>
             Delete
@@ -220,8 +231,11 @@ export function BudgetItemRow({
         <FollowUpPrompt item={item} onDone={() => setPrompt(false)} />
       ) : null}
 
+      {payments.length > 0 ? <PaymentSummary payments={payments} timezone={timezone} /> : null}
+
       {editing ? (
-        <div className="rounded border border-line bg-paper/40 p-3">
+        <InspectorPortal inspectKey={inspectKey} title={item.label} onClose={closeInspector}>
+          {error ? <p className="text-sm text-red-700">{error}</p> : null}
           <BudgetItemFields
             initial={item}
             events={events}
@@ -233,14 +247,12 @@ export function BudgetItemRow({
             onSubmit={onSave}
             onCancel={() => setEditing(false)}
           />
-        </div>
+          {item.quantity_basis === "consumption" ? (
+            <ConsumptionEditor budgetItemId={item.id} components={components} counts={counts} />
+          ) : null}
+          <PaymentList budgetItemId={item.id} payments={payments} timezone={timezone} />
+        </InspectorPortal>
       ) : null}
-
-      {item.quantity_basis === "consumption" ? (
-        <ConsumptionEditor budgetItemId={item.id} components={components} counts={counts} />
-      ) : null}
-
-      <PaymentList budgetItemId={item.id} payments={payments} timezone={timezone} />
 
       <BudgetLinksPopup
         itemId={item.id}
@@ -315,5 +327,21 @@ function FollowUpPrompt({ item, onDone }: { item: BudgetItemView; onDone: () => 
         </button>
       </div>
     </div>
+  );
+}
+
+/** One line in the row; the payments themselves are edited in the side panel (spec 44). */
+function PaymentSummary({ payments, timezone }: { payments: PaymentRow[]; timezone: string }) {
+  const paid = payments.filter((payment) => payment.paid_at).length;
+  const next = payments
+    .filter((payment) => !payment.paid_at && payment.due_date)
+    .map((payment) => payment.due_date!)
+    .sort()[0];
+  return (
+    <p className="text-xs text-muted">
+      {payments.length} payment{payments.length === 1 ? "" : "s"} · {paid} paid
+      {/* Midday UTC, so the calendar date reads the same in every timezone. */}
+      {next ? ` · next due ${formatDate(`${next}T12:00:00Z`, timezone, { day: "numeric", month: "short" })}` : ""}
+    </p>
   );
 }

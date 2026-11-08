@@ -52,6 +52,9 @@ const settingsSchema = z.object({
   disclosure_text: optionalText(300),
   palette: z.string().refine(isRegistryPalette, "Pick one of the palettes"),
   type_pairing: z.string().refine(isRegistryPairing, "Pick one of the pairings"),
+  // Spec 44. Optional, and only sent by the form once it's been changed, so
+  // saving keeps working on a database that doesn't have 0046's column yet.
+  use_site_theme: z.boolean().optional(),
 });
 
 export async function saveRegistrySettings(fields: Record<string, unknown>): Promise<ActionResult> {

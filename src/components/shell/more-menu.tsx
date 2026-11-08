@@ -23,30 +23,3 @@ export function MoreMenu({ label, items }: { label: string; items: { href: strin
     </details>
   );
 }
-
-/** The frame a `?panel=` opens in: a titled card at the top of the section, with a Done link that drops the panel. */
-export function SectionPanel({
-  id,
-  title,
-  doneHref,
-  children,
-}: {
-  id: string;
-  title: string;
-  doneHref: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} aria-labelledby={`${id}-title`} className="card space-y-4 p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id={`${id}-title`} className="text-sm font-medium uppercase tracking-wide text-muted">
-          {title}
-        </h2>
-        <Link href={doneHref} className="btn">
-          Done
-        </Link>
-      </div>
-      {children}
-    </section>
-  );
-}

@@ -25,6 +25,14 @@ import type { VendorCategoryRow, VendorView } from "@/lib/types/database";
  * have committed to with no money set aside, and the budget lines with a
  * typed vendor name and no record behind it.
  */
+/** A vendor opens in the side panel beside the list, keeping the filters (spec 44). */
+function inspectHref(params: Record<string, string | undefined>, vendorId: string): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value && key !== "inspect") query.set(key, value);
+  query.set("inspect", `vendor:${vendorId}`);
+  return `/vendors?${query.toString()}`;
+}
+
 export function VendorList({
   vendors,
   categories,
@@ -140,7 +148,7 @@ export function VendorList({
           {unbudgeted.map((vendor, index) => (
             <span key={vendor.id}>
               {index > 0 ? ", " : ""}
-              <Link href={`/vendors/${vendor.id}`} className="underline">
+              <Link href={inspectHref(params, vendor.id)} className="underline">
                 {vendor.name}
               </Link>
             </span>
@@ -237,7 +245,7 @@ export function VendorList({
             <ul className="card divide-y divide-line">
               {rows.map((vendor) => (
                 <li key={vendor.id} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 p-3">
-                  <Link href={`/vendors/${vendor.id}`} className="font-medium hover:underline">
+                  <Link href={inspectHref(params, vendor.id)} className="font-medium hover:underline">
                     {vendor.name}
                   </Link>
                   <span className="text-xs uppercase tracking-wide text-muted">

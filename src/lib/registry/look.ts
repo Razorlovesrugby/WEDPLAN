@@ -105,3 +105,46 @@ export function registryColourVars(id: string | null | undefined): Record<string
   }
   return vars;
 }
+
+/**
+ * The invitation's type pairing, as the registry's nearest (spec 44). The site
+ * offers two; both are made of faces the registry already loads.
+ */
+const PAIRING_FOR_TYPOGRAPHY: Record<string, RegistryPairingId> = {
+  fraunces_garamond: "classic",
+  garamond_inter: "bookish",
+};
+
+export function pairingForTypography(typography: string | null | undefined): RegistryPairingId {
+  return PAIRING_FOR_TYPOGRAPHY[typography ?? ""] ?? DEFAULT_REGISTRY_PAIRING;
+}
+
+function colourVars(tokens: PaletteTokens): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const [name, hex] of Object.entries(tokens)) {
+    const channels = toRgbChannels(hex);
+    if (channels) vars[`--site-${name}`] = channels;
+  }
+  return vars;
+}
+
+/**
+ * What the public registry renders with (spec 44). With `use_site_theme` off,
+ * exactly what it rendered before: its own palette and pairing. On, the
+ * invitation's five colours and nearest pairing. If the invitation's theme
+ * can't be read, it falls back to the registry's own rather than to nothing.
+ */
+export function registryLook(
+  settings: { palette: string | null; type_pairing: string | null; use_site_theme?: boolean | null },
+  invitation: { tokens: PaletteTokens; typography: string | null } | null,
+): { colourVars: Record<string, string>; pairing: RegistryPairingId; tokens: PaletteTokens } {
+  if (settings.use_site_theme && invitation) {
+    return {
+      colourVars: colourVars(invitation.tokens),
+      pairing: pairingForTypography(invitation.typography),
+      tokens: invitation.tokens,
+    };
+  }
+  const { tokens } = resolvePalette(settings.palette);
+  return { colourVars: registryColourVars(settings.palette), pairing: resolvePairing(settings.type_pairing), tokens };
+}

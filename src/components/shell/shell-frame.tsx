@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { InspectorProvider } from "./inspector";
 
 const STORAGE_KEY = "wedplan.sidebar.collapsed";
 
@@ -34,7 +35,7 @@ export function ShellFrame({ sidebar, children }: { sidebar: ReactNode; children
   }
 
   return (
-    <div className="min-h-dvh md:flex">
+    <div className="min-h-dvh md:flex md:items-start">
       <aside
         id="sidebar"
         aria-label="Sidebar"
@@ -44,6 +45,8 @@ export function ShellFrame({ sidebar, children }: { sidebar: ReactNode; children
       >
         {sidebar}
       </aside>
+      {/* The side panel (spec 44) sits in this row, after the content, from lg: up. */}
+      <InspectorProvider>
       <div className="min-w-0 flex-1">
         <div className="hidden bg-white px-4 pt-2 md:block">
           <button
@@ -58,6 +61,7 @@ export function ShellFrame({ sidebar, children }: { sidebar: ReactNode; children
         </div>
         {children}
       </div>
+      </InspectorProvider>
     </div>
   );
 }

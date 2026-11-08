@@ -4,6 +4,7 @@ import { listArchivedMoodboards, listMoodboards } from "@/server/queries/moodboa
 import { signPaths } from "@/lib/supabase/storage";
 import { getViewerKind, requireWedding } from "@/server/queries/wedding";
 import { MoreMenu } from "@/components/shell/more-menu";
+import { InspectorPortal } from "@/components/shell/inspector";
 import { PinterestCard } from "@/components/moodboards/pinterest-card";
 import { ClipTokensCard } from "@/components/moodboards/clip-tokens-card";
 import { getPinterestAccount, listClipTokens } from "@/server/queries/moodboards";
@@ -61,18 +62,11 @@ export default async function MoodboardsPage({
       </header>
 
       {showImport ? (
-        <section id="import" aria-labelledby="import-title" className="space-y-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 id="import-title" className="text-sm font-medium uppercase tracking-wide text-muted">
-              Pinterest &amp; clipper
-            </h2>
-            <Link href="/moodboards" className="btn">
-              Done
-            </Link>
-          </div>
+        // In the side panel (spec 44); ?panel=import stays the address (the Pinterest callback returns there).
+        <InspectorPortal inspectKey="panel:import" title="Pinterest & clipper" closeHref="/moodboards">
           <PinterestCard account={pinterest} configured={pinterestConfig() !== null} />
           <ClipTokensCard tokens={clipTokens} boards={boards.map((board) => ({ id: board.id, title: board.title }))} />
-        </section>
+        </InspectorPortal>
       ) : null}
 
       {!ready ? (
