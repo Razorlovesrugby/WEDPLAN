@@ -4,12 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
-  PointerSensor,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
 import { buildDigest, type DigestItem } from "@/lib/reminders/digest";
@@ -18,6 +15,7 @@ import { todayIso } from "@/lib/lists/generate";
 import { listAccentBorderColor } from "@/lib/list-colors";
 import { TaskPreviewPopup } from "./task-preview-popup";
 import type { TimelineItemView } from "@/lib/types/database";
+import { stopDrag, useDragSensors } from "@/components/ui/use-drag-sensors";
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -55,7 +53,7 @@ export function CalendarView({
   const [error, setError] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<TimelineItemView | null>(null);
   const [, startTransition] = useTransition();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const sensors = useDragSensors({ sortable: false });
 
   const today = todayIso(timezone);
   const weeks = useMemo(() => monthWeeks(month), [month]);
@@ -253,8 +251,9 @@ function CalendarCard({
           type="button"
           aria-label={`Move "${item.title}" to a different day`}
           aria-expanded={movePickerOpen}
+          {...stopDrag}
           onClick={() => setMovePickerOpen((v) => !v)}
-          className="flex-none px-0.5 leading-none text-muted hover:text-ink"
+          className="flex-none px-0.5 leading-none text-muted hover:text-ink [@media(pointer:coarse)]:px-2 [@media(pointer:coarse)]:py-1"
         >
           📅
         </button>
@@ -265,6 +264,7 @@ function CalendarCard({
           defaultValue={item.due_date}
           autoFocus
           aria-label={`New date for "${item.title}"`}
+          {...stopDrag}
           onChange={(e) => {
             if (e.target.value) {
               onReschedule(item.id, e.target.value);

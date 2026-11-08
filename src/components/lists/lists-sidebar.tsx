@@ -5,24 +5,21 @@ import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderLists } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import type { ListRow } from "@/lib/types/database";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
+import { RowMenu, moveItems, type RowMenuItem } from "@/components/ui/row-menu";
 
 const SMART_VIEWS = [
   { view: "today", label: "Today" },
@@ -73,10 +70,7 @@ export function ListsSidebar({
     return kept;
   }, [lists, orderOverride]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useDragSensors();
 
   function applyMove(from: number, to: number) {
     if (from < 0 || to < 0 || to >= order.length || from === to) return;
@@ -132,7 +126,7 @@ export function ListsSidebar({
         >
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
             <div className="space-y-0.5">
-              {order.map((id) => {
+              {order.map((id, index) => {
                 const list = listsById.get(id);
                 if (!list) return null;
                 return (
@@ -141,6 +135,7 @@ export function ListsSidebar({
                     list={list}
                     active={pathname === `/lists/${list.id}`}
                     openCount={openCounts[id] ?? 0}
+                    moves={moveItems(index, order.length, (to) => applyMove(index, to))}
                   />
                 );
               })}
@@ -158,10 +153,13 @@ function SortableListLink({
   list,
   active,
   openCount,
+  moves,
 }: {
   list: ListRow;
   active: boolean;
   openCount: number;
+  /** Spec 45: the same moves as a drag, by tap or keyboard. */
+  moves: RowMenuItem[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: list.id });
 
@@ -199,7 +197,7 @@ function SortableListLink({
         )}
         <span className="truncate">{list.title}</span>
       </Link>
-      {/* Spec 16 §1 — replaces the old Move up/down buttons; the drag handle above is the only reorder control now. */}
+      {/* Spec 16 §1 dropped the Move up/down buttons; spec 45 brings the moves back as one ⋯ menu, for iPad and keyboard. */}
       <span
         className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
           openCount > 0 ? "bg-line/60 text-muted" : "text-muted/50"
@@ -208,6 +206,7 @@ function SortableListLink({
       >
         {openCount}
       </span>
+      <RowMenu label={`Move "${list.title}"`} items={moves} />
     </div>
   );
 }

@@ -3,18 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
@@ -22,6 +17,7 @@ import type { Repeat } from "@/lib/site/editor-fields";
 import { moveWithin } from "@/lib/reorder";
 import { repeatHeading } from "@/lib/site/style-labels";
 import { FieldInput } from "./field";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
 
 /**
  * The list of rows inside a block — questions, people, suggestions, moments
@@ -93,10 +89,7 @@ export function RepeatRows({
       ? keys
       : rows.map((_, index) => keys[index] ?? newKey());
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useDragSensors({ distance: 6 });
 
   /** Every change goes through here, so rows and keys can never part company. */
   function commit(nextRows: Row[], nextKeys: string[], undoLabel?: string) {
@@ -271,7 +264,7 @@ function SortableRow({
         <span className="flex shrink-0 gap-0.5 opacity-0 focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
           <button
             type="button"
-            className="px-1.5 text-xs text-muted hover:text-ink disabled:opacity-25"
+            className="px-1.5 text-xs text-muted hover:text-ink disabled:opacity-25 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
             disabled={!canMoveUp}
             aria-label={`Move ${label} up`}
             onClick={() => onMove(-1)}
@@ -280,7 +273,7 @@ function SortableRow({
           </button>
           <button
             type="button"
-            className="px-1.5 text-xs text-muted hover:text-ink disabled:opacity-25"
+            className="px-1.5 text-xs text-muted hover:text-ink disabled:opacity-25 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
             disabled={!canMoveDown}
             aria-label={`Move ${label} down`}
             onClick={() => onMove(1)}

@@ -6,6 +6,7 @@ import { setStatus } from "@/server/actions/lists";
 import { listAccentBorderColor } from "@/lib/list-colors";
 import type { ListItemStatus } from "@/lib/types/database";
 import type { ItemWithList } from "./item-row";
+import { stopDrag, useDragSensors } from "@/components/ui/use-drag-sensors";
 
 const COLUMNS: { status: ListItemStatus; label: string }[] = [
   { status: "not_started", label: "Not started" },
@@ -57,6 +58,8 @@ export function BoardView({ items: initialItems }: { items: ItemWithList[] }) {
     });
   }
 
+  const sensors = useDragSensors({ sortable: false });
+
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over) return;
@@ -69,7 +72,7 @@ export function BoardView({ items: initialItems }: { items: ItemWithList[] }) {
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
       ) : null}
 
-      <DndContext onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="grid gap-3 sm:grid-cols-3">
           {COLUMNS.map((column) => (
             <BoardColumn
@@ -150,7 +153,7 @@ function BoardCard({
       <select
         value={item.status}
         aria-label={`Move "${item.title}" to a different column`}
-        onPointerDown={(e) => e.stopPropagation()}
+        {...stopDrag}
         onChange={(e) => onMoveTo(item.id, e.target.value as ListItemStatus)}
         className="mt-1 w-full rounded border border-line bg-white px-1 py-0.5 text-[11px] text-muted"
       >

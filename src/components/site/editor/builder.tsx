@@ -6,17 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
   closestCenter,
   pointerWithin,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
-  type DragStartEvent,
+  type DragStartEvent
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import type { Modifier } from "@dnd-kit/core";
@@ -67,6 +64,7 @@ import { PALETTES } from "@/lib/theme/presets";
 import { TEMPLATES, VIBES, getVibe, type Vibe } from "@/lib/site/vibes";
 import type { PhotoOption } from "./photo-picker";
 import type { PreviewHousehold } from "@/lib/site/preview-households";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
 
 /**
  * The builder (spec 23 §5, recomposed by spec 24, extended by spec 27).
@@ -255,7 +253,7 @@ export function SiteBuilder({
   const marks = useMemo(() => sectionNumbers(visibleBlocks(ordered)), [ordered]);
 
   const hero = useMemo(() => ordered.find((block) => block.type === "hero") ?? null, [ordered]);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useDragSensors({ distance: 6 });
 
   // Selecting a block takes the preview to it, so the list and the page always
   // agree about where the planner is.
@@ -1287,11 +1285,12 @@ function ChapterRow({
         ⠿
       </button>
 
-      {/* The touch fallback for the drag handle (spec 24 Q3). */}
-      <span className="flex flex-col lg:hidden">
+      {/* The touch fallback for the drag handle (spec 24 Q3). Shown at every
+          width since spec 45: an iPad in landscape is lg: too. Bigger on touch. */}
+      <span className="flex flex-col">
         <button
           type="button"
-          className="px-1 text-[10px] leading-none text-muted disabled:opacity-25"
+          className="px-1 text-[10px] leading-none text-muted disabled:opacity-25 [@media(pointer:coarse)]:min-h-6 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:text-xs"
           disabled={!canMoveUp || pending}
           aria-label={`Move ${def.label} up`}
           onClick={() => onMove(-1)}
@@ -1300,7 +1299,7 @@ function ChapterRow({
         </button>
         <button
           type="button"
-          className="px-1 text-[10px] leading-none text-muted disabled:opacity-25"
+          className="px-1 text-[10px] leading-none text-muted disabled:opacity-25 [@media(pointer:coarse)]:min-h-6 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:text-xs"
           disabled={!canMoveDown || pending}
           aria-label={`Move ${def.label} down`}
           onClick={() => onMove(1)}

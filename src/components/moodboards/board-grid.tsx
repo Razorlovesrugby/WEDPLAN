@@ -4,10 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -20,12 +17,14 @@ import {
 } from "@/server/actions/moodboards";
 import { uploadFiles } from "./uploader";
 import type { SignedItem } from "@/server/queries/moodboards";
+import { stopDrag, useDragSensors } from "@/components/ui/use-drag-sensors";
+import { GRID_WORDS, RowMenu, moveItems, type RowMenuItem } from "@/components/ui/row-menu";
 
 /**
  * The board itself: a masonry grid, drag to reorder, drop/paste to upload,
  * click a tile to edit it.
  *
- * The 4px PointerSensor activation constraint is the app's standing fix for
+ * The few-pixel activation distance (now in useDragSensors) is the app's standing fix for
  * dnd-kit swallowing a plain click as a zero-distance drag (session 15), and
  * this screen needs it more than most — every tile is both draggable and
  * clickable.
@@ -48,7 +47,7 @@ export function BoardGrid({
   const inputRef = useRef<HTMLInputElement>(null);
   const [, startTransition] = useTransition();
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const sensors = useDragSensors();
 
   async function ingest(files: File[]) {
     if (files.length === 0) return;
@@ -117,11 +116,14 @@ export function BoardGrid({
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const toIndex = items.findIndex((item) => item.id === over.id);
-    if (toIndex === -1) return;
+    moveTo(String(active.id), items.findIndex((item) => item.id === over.id));
+  }
 
+  /** Shared by the drag and the ⋯ menu (spec 45). */
+  function moveTo(itemId: string, toIndex: number) {
+    if (toIndex === -1) return;
     startTransition(async () => {
-      await reorderMoodboardItems(moodboardId, String(active.id), toIndex);
+      await reorderMoodboardItems(moodboardId, itemId, toIndex);
       router.refresh();
     });
   }
@@ -182,8 +184,13 @@ export function BoardGrid({
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
           <SortableContext items={items.map((item) => item.id)} strategy={rectSortingStrategy}>
             <div className="columns-2 gap-3 sm:columns-3 lg:columns-4 [&>*]:mb-3">
-              {items.map((item) => (
-                <Tile key={item.id} item={item} onOpen={() => setSelected(item.id)} />
+              {items.map((item, index) => (
+                <Tile
+                  key={item.id}
+                  item={item}
+                  onOpen={() => setSelected(item.id)}
+                  moves={moveItems(index, items.length, (to) => moveTo(item.id, to), GRID_WORDS)}
+                />
               ))}
             </div>
           </SortableContext>
@@ -205,7 +212,7 @@ export function BoardGrid({
   );
 }
 
-function Tile({ item, onOpen }: { item: SignedItem; onOpen: () => void }) {
+function Tile({ item, onOpen, moves }: { item: SignedItem; onOpen: () => void; moves: RowMenuItem[] }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -248,12 +255,16 @@ function Tile({ item, onOpen }: { item: SignedItem; onOpen: () => void }) {
       <button
         type="button"
         onClick={onOpen}
-        onPointerDown={(event) => event.stopPropagation()}
-        className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 text-left text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+        {...stopDrag}
+        className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 text-left text-xs text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover-reveal"
       >
         {item.is_cover ? "★ " : ""}
         {item.caption ?? "Edit"}
       </button>
+      {/* Spec 45: move a picture by tap or keyboard, not only by dragging. */}
+      <div className="absolute right-1 top-1 rounded bg-white/90" {...stopDrag}>
+        <RowMenu label={`Move ${item.caption ?? "this picture"}`} items={moves} />
+      </div>
     </figure>
   );
 }

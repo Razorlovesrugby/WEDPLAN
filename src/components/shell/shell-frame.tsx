@@ -64,7 +64,7 @@ export function ShellFrame({
   }
 
   return (
-    <div className="min-h-dvh md:flex md:items-start">
+    <div data-planner className="min-h-dvh md:flex md:items-start">
       <aside
         id="sidebar"
         aria-label="Sidebar"

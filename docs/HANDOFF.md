@@ -3,6 +3,19 @@
 **Living document.** Rewritten at the end of every work chunk. A new session
 needs this file and `docs/wedding-platform-spec.md`, and nothing else.
 
+**Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (**no
+PR opened**). Read the spec's §10:
+
+- **Every `DndContext` must use `useDragSensors()`** (`src/components/ui/use-drag-sensors.ts`), or
+  `drag-sensors.test.ts` fails. Put `{...stopDrag}` on any control inside a draggable element.
+- **The ⋯ move menu** is `RowMenu` + `moveItems` (`src/components/ui/row-menu.tsx`).
+- **Touch sizes** are CSS under `@media (pointer: coarse)`, scoped to `[data-planner]` (set on
+  `ShellFrame`).
+- **`npm run a11y`** checks pages with axe-core, report only. `axe-core` is a new dev dependency;
+  `npm ci` picks it up.
+- **Verified:** typecheck, 1395 unit tests, build, a11y on public pages, an emulated iPad.
+  **Not verified:** a real iPad, Supabase.
+
 **Session 52 (spec 46, spec 45 answers):** ⌘K and shortcuts, built on branch
 `claude/nice-mccarthy-x93m9s` (**no PR opened**). Spec 45 got two answers ("make iPad friendly",
 report-only check), then the planner chose to do 46 first; **45 is not built**. Read 46's §11:

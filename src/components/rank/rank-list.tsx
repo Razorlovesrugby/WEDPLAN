@@ -4,19 +4,14 @@ import { useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -24,6 +19,7 @@ import { moveHousehold, setCutLine } from "@/server/actions/rank";
 import { tierFor, type CutLine, type Tier } from "@/lib/tier";
 import { tierTextClass } from "@/lib/tier-colors";
 import type { CutLineRow, HouseholdView } from "@/lib/types/database";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
 
 type Row = HouseholdView;
 
@@ -70,10 +66,7 @@ export function RankList({
   const [, startTransition] = useTransition();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useDragSensors();
 
   const virtualizer = useVirtualizer({
     count: optimisticRows.length,
@@ -298,7 +291,7 @@ function SortableRow({
           aria-label={`Move ${row.display_name} up`}
           disabled={!onMoveUp}
           onClick={onMoveUp}
-          className="rounded px-1 text-xs text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+          className="rounded px-1 text-xs text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
         >
           ↑
         </button>
@@ -307,7 +300,7 @@ function SortableRow({
           aria-label={`Move ${row.display_name} down`}
           disabled={!onMoveDown}
           onClick={onMoveDown}
-          className="rounded px-1 text-xs text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+          className="rounded px-1 text-xs text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
         >
           ↓
         </button>

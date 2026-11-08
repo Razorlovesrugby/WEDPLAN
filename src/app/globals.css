@@ -56,6 +56,10 @@
   .card {
     @apply rounded-lg border border-line bg-white;
   }
+  /* Spec 45: Apple's minimum touch target, for icon-sized controls like ⋯ and ↑↓. */
+  .touch-target {
+    @apply min-h-11 min-w-11;
+  }
   .skeleton {
     @apply animate-pulse rounded bg-line/60;
   }
@@ -1796,4 +1800,26 @@ textarea.site-rsvp-input:focus {
 @keyframes registry-sheet-in {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: none; }
+}
+
+/*
+ * Spec 45, iPad friendly: on a touch screen, the planner's buttons and tick
+ * boxes are at least Apple's 44 pt target. Scoped to the planner shell
+ * ([data-planner]) so nothing on a guest's page changes size.
+ */
+@media (pointer: coarse) {
+  [data-planner] :is(.btn, .btn-primary) {
+    min-height: 2.75rem;
+  }
+  [data-planner] input:is([type="checkbox"], [type="radio"]):not(.sr-only) {
+    width: 1.375rem;
+    height: 1.375rem;
+  }
+  /* Nothing waits for a hover on a screen that can't hover. */
+  [data-planner] .hover-reveal {
+    opacity: 1 !important;
+  }
+}
+[data-planner] .hover-reveal:focus-within {
+  opacity: 1;
 }
