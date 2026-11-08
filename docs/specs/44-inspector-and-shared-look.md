@@ -161,13 +161,12 @@ has the invitation's colours).
 - What's open is in the address as `?inspect=<key>`, so a link opens it, reload keeps it, and
   Back/Forward follow it. Rows that hold their own data open it in place with
   `history.replaceState`; server-rendered panels use real links and a `closeHref`.
-- **Tasks** (`item-row.tsx`): the row keeps its tick box, title, badges and notes, plus a summary
-  (due date, flag, assignee) and **Details**. The panel has a new **Notes** box (Save button and
-  "Unsaved changes", spec 42 Q9) and every control that used to sit in the row: date or "weeks before
-  the wedding", flag, priority, assignee, section, sub-item and Remove.
-- **Budget lines** (`budget-item-row.tsx`): **Edit** is now **Details**. The panel holds the line's
-  fields, consumption components and payments; the row keeps its figures and gains a payments summary
-  ("2 payments · 1 paid · next due 12 Dec").
+- **Tasks** (`item-row.tsx`): **every control stays in the row, as before** (follow-up below). A new
+  **+ notes** / **Edit notes** button opens a **Notes** box in the panel (Save button and "Unsaved
+  changes", spec 42 Q9). Before this, notes could be read in the row but not edited there.
+- **Budget lines** (`budget-item-row.tsx`): **Edit** opens the line's edit form in the panel,
+  instead of expanding it in the row. Payments and consumption components **stay in the row, as
+  before** (follow-up below).
 - **Vendors:** a vendor in the list opens `?inspect=vendor:<id>` with `VendorDetail` in the panel,
   keeping the list's filters. "Open the full page" goes to `/vendors/<id>`, which is unchanged.
 - **⋯ settings:** List appearance (`/lists?panel=appearance`) and Pinterest & clipper
@@ -178,10 +177,11 @@ has the invitation's colours).
 
 1. **The registry switch is off by default** (Q1), so the original backfill rule is moot.
 2. **"Use website theme" is "Use the invitation's look"** in the words on screen, per spec 42 §2.
-3. **Budget payments are edited only in the panel.** The row shows a one-line summary instead of the
-   list, so marking a payment paid is now Details → payments.
-4. **The task row's date, flag, priority and assignee controls moved into the panel.** Changing a due
-   date is now Details → date. The calendar, board and timeline views are unchanged.
+3. **Follow-up, same day: "make the edit on the one page… remove clicks."** The first build moved
+   task dates, flag, priority and assignee, and budget payments, into the panel, which made each one
+   an extra click. All of them are back in their rows exactly as before spec 44. The panel now holds
+   only what used to need a separate step or didn't exist: a budget line's edit form, task notes,
+   vendors, and the ⋯ settings.
 
 **Verified:** `npm run typecheck`; `npm test`, 1361 tests; `./scripts/verify-migrations.sh`, 774
 assertions (770 unchanged); `verify-migrations-single-tx.sh`; `verify-bootstrap.sh`; `next build`

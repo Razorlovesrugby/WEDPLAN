@@ -13,8 +13,9 @@ on branch `claude/nice-mccarthy-x93m9s` (**no PR opened**). Scope narrowed first
 - **The side panel** is `src/components/shell/inspector.tsx`, mounted in `ShellFrame`. A row opens
   it with `useInspector().openInspector("task:<id>")` and renders `<InspectorPortal>`; a server page
   renders `<InspectorPortal closeHref>` when its URL says so.
-- **Behaviour moved:** task dates, flag, priority and assignee, and budget payments, are now edited
-  in the panel (Details), not in the row.
+- **Rows unchanged after the follow-up** ("remove clicks"): task controls and budget payments stay
+  inline as before spec 44. The panel holds task notes (new), a budget line's edit form, vendors and
+  the ⋯ settings.
 - **Guest-facing files changed:** `/registry/<slug>` and its preview image, `lib/registry/look.ts`,
   `server/registry/public.ts`. They're behind the switch, which is off everywhere.
 - **Verified:** typecheck, 1361 unit tests, 774 SQL assertions, single-tx, bootstrap, build, the
