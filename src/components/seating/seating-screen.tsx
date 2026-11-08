@@ -5,13 +5,8 @@ import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
-  type DragStartEvent,
+  type DragStartEvent
 } from "@dnd-kit/core";
 import { serialiseColourBy, type ColourBy } from "@/lib/seating/colour";
 import type { SeatingSnapshotSummary } from "@/server/queries/seating";
@@ -24,6 +19,7 @@ import { SummaryBar } from "./summary-bar";
 import { TableDrawer } from "./table-drawer";
 import { TablesGrid } from "./tables-grid";
 import { Tray } from "./tray";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
 
 type View = "tables" | "room";
 const VIEW_KEY = "wedplan.seating.view";
@@ -81,11 +77,7 @@ function Screen({
   };
 
   // A drag must not start on a tap (that's tap-to-place), nor on a scroll on a phone.
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
-    useSensor(KeyboardSensor),
-  );
+  const sensors = useDragSensors({ sortable: false, distance: 6 });
 
   const onDragStart = (e: DragStartEvent) => {
     hold(null);

@@ -39,6 +39,7 @@ export function defaultRegistrySettings(weddingId: string): RegistrySettingsRow 
     disclosure_text: null,
     palette: "linen",
     type_pairing: "classic",
+    use_site_theme: false,
     last_viewed_claims_at: null,
     created_at: "",
     updated_at: "",

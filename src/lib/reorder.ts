@@ -17,3 +17,21 @@ export function moveWithin<T>(list: readonly T[], from: number, to: number): T[]
   next.splice(target, 0, item as T);
   return next;
 }
+
+/**
+ * Where "Move up / down / to top / to bottom" would put the item at `index`
+ * in a list of `count` (spec 45). Null where the move would do nothing, so the
+ * menu can leave that item out.
+ */
+export function moveTargets(
+  index: number,
+  count: number,
+): { up: number | null; down: number | null; top: number | null; bottom: number | null } {
+  const valid = index >= 0 && index < count;
+  return {
+    up: valid && index > 0 ? index - 1 : null,
+    down: valid && index < count - 1 ? index + 1 : null,
+    top: valid && index > 1 ? 0 : null,
+    bottom: valid && index < count - 2 ? count - 1 : null,
+  };
+}

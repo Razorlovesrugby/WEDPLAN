@@ -4,25 +4,22 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderRunSheetItem } from "@/server/actions/run-sheet";
 import { formatTime, pluralise } from "@/lib/format";
 import { RunSheetItemEditor } from "./item-editor";
 import type { RunSheetItemView, RunSheetTrack } from "@/lib/types/database";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
+import { RowMenu, moveItems, type RowMenuItem } from "@/components/ui/row-menu";
 
 const TRACKS: { value: RunSheetTrack; label: string }[] = [
   { value: "guests", label: "Guests" },
@@ -112,20 +109,22 @@ function TrackColumn({
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useDragSensors();
 
   const ids = useMemo(() => items.map((i) => i.id), [items]);
 
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
+    moveRow(
+      items.findIndex((i) => i.id === active.id),
+      items.findIndex((i) => i.id === over.id),
+    );
+  }
 
-    const from = items.findIndex((i) => i.id === active.id);
-    const to = items.findIndex((i) => i.id === over.id);
-    if (from < 0 || to < 0) return;
+  /** Shared by the drag and the ⋯ menu (spec 45), so both land a row in the same place. */
+  function moveRow(from: number, to: number) {
+    if (from < 0 || to < 0 || from === to) return;
     const dragged = items[from];
     if (!dragged || dragged.pinned) return; // Pinned items never move on their own.
 
@@ -167,8 +166,14 @@ function TrackColumn({
         >
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             <ul className="space-y-1.5">
-              {items.map((item) => (
-                <RunSheetRow key={item.id} item={item} timeZone={timeZone} onEdit={() => onEdit(item)} />
+              {items.map((item, index) => (
+                <RunSheetRow
+                  key={item.id}
+                  item={item}
+                  timeZone={timeZone}
+                  onEdit={() => onEdit(item)}
+                  moves={item.pinned ? [] : moveItems(index, items.length, (to) => moveRow(index, to))}
+                />
               ))}
             </ul>
           </SortableContext>
@@ -182,10 +187,13 @@ function RunSheetRow({
   item,
   timeZone,
   onEdit,
+  moves,
 }: {
   item: RunSheetItemView;
   timeZone: string;
   onEdit: () => void;
+  /** Spec 45: the drag's moves by tap or keyboard. None for a pinned row. */
+  moves: RowMenuItem[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -229,6 +237,7 @@ function RunSheetRow({
           </span>
         ) : null}
       </button>
+      <RowMenu label={`Move ${item.title}`} items={moves} />
     </li>
   );
 }

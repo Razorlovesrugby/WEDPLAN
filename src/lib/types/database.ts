@@ -1760,6 +1760,8 @@ export type RegistrySettingsRow = {
   disclosure_text: string | null;
   palette: string;
   type_pairing: string;
+  /** Follow the invitation's colours and type instead of `palette` / `type_pairing` (0046, spec 44). Off by default. */
+  use_site_theme: boolean;
   last_viewed_claims_at: string | null;
   created_at: string;
   updated_at: string;
@@ -2081,7 +2083,7 @@ export type Database = {
         | "enabled" | "open" | "title" | "intro" | "hero_asset_id" | "thanks_text" | "thanks_asset_id"
         | "no_gifts_line" | "show_prices" | "show_taken" | "show_funds" | "disclosure_on"
         | "contribute_position" | "contribute_heading" | "contribute_text" | "contribute_button_only"
-        | "disclosure_text" | "palette" | "type_pairing" | "last_viewed_claims_at"
+        | "disclosure_text" | "palette" | "type_pairing" | "last_viewed_claims_at" | "use_site_theme"
       >;
       registry_shipping: Table<
         RegistryShippingRow,

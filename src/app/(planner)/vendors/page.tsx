@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { getViewerKind, requireWedding } from "@/server/queries/wedding";
 import {
+  getVendor,
   listUnlinkedVendorNames,
+  listVendorBudgetLines,
   listVendorCategories,
+  listVendorContacts,
+  listVendorNotes,
+  listVendorTasks,
   listVendors,
 } from "@/server/queries/vendors";
 import { VendorList } from "@/components/vendors/vendor-list";
+import { VendorDetail } from "@/components/vendors/vendor-detail";
+import { InspectorPortal } from "@/components/shell/inspector";
 
 export const metadata = { title: "Vendors" };
 
@@ -30,6 +37,21 @@ export default async function VendorsPage({
     listUnlinkedVendorNames(wedding.id),
   ]);
 
+  // `?inspect=vendor:<id>` opens one vendor in the side panel (spec 44).
+  const inspectId = params.inspect?.startsWith("vendor:") ? params.inspect.slice("vendor:".length) : null;
+  const inspected = inspectId ? await getVendor(wedding.id, inspectId) : null;
+  const detail = inspected
+    ? await Promise.all([
+        listVendorContacts(wedding.id, inspected.id),
+        listVendorNotes(wedding.id, inspected.id),
+        listVendorBudgetLines(wedding.id, inspected.id),
+        listVendorTasks(wedding.id, inspected.id),
+      ])
+    : null;
+  const closeQuery = new URLSearchParams(
+    Object.entries(params).filter((entry): entry is [string, string] => entry[0] !== "inspect" && Boolean(entry[1])),
+  ).toString();
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -53,6 +75,27 @@ export default async function VendorsPage({
         params={params}
         showMoney={showMoney}
       />
+
+      {inspected && detail ? (
+        <InspectorPortal
+          inspectKey={`vendor:${inspected.id}`}
+          title={inspected.name}
+          closeHref={`/vendors${closeQuery ? `?${closeQuery}` : ""}`}
+        >
+          <Link href={`/vendors/${inspected.id}`} className="text-sm text-muted underline">
+            Open the full page
+          </Link>
+          <VendorDetail
+            vendor={inspected}
+            categories={categories}
+            contacts={detail[0]}
+            notes={detail[1]}
+            lines={detail[2]}
+            tasks={detail[3]}
+            showMoney={showMoney}
+          />
+        </InspectorPortal>
+      ) : null}
     </div>
   );
 }

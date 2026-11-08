@@ -1,3 +1,5 @@
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
@@ -18,6 +20,7 @@ export const metadata = { title: "What to wear" };
  */
 export default async function AttirePage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const supabase = await createClient();
 
   const [codes, { data: events }, { data: boards }] = await Promise.all([
@@ -37,16 +40,13 @@ export default async function AttirePage() {
   ]);
 
   return (
-    <div className="space-y-5">
+    <DesignFrame preview={{ households, anchor: "dress_code" }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-2xl">What to wear</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             A dress code is a named thing your events point at. Tick the events it covers and it
-            shows up on each of them in the schedule, as well as here.{" "}
-            <Link href="/site" className="underline">
-              Back to the site →
-            </Link>
+            shows up on each of them in the schedule, as well as here.
           </p>
         </div>
       </div>
@@ -56,6 +56,6 @@ export default async function AttirePage() {
         events={(events ?? []) as Pick<EventRow, "id" | "name" | "dress_code_id">[]}
         boards={(boards ?? []) as Pick<MoodboardRow, "id" | "title">[]}
       />
-    </div>
+    </DesignFrame>
   );
 }

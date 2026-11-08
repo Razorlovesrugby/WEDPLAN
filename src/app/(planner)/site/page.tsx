@@ -1,3 +1,4 @@
+import { DesignFrame } from "@/components/design/design-frame";
 import { SiteBuilder } from "@/components/site/editor/builder";
 import { createClient } from "@/lib/supabase/server";
 import { signPaths } from "@/lib/supabase/storage";
@@ -9,7 +10,7 @@ import { getSiteTheme } from "@/server/queries/site";
 import { previewHouseholds } from "@/lib/site/preview-households";
 import type { SiteAssetRow } from "@/lib/types/database";
 
-export const metadata = { title: "The site" };
+export const metadata = { title: "Invitation · Design" };
 
 /**
  * `/site` — the builder (spec 23).
@@ -75,13 +76,17 @@ export default async function SitePage() {
   });
 
   return (
-    <SiteBuilder
+    // The builder carries its own live preview, tied to the unsaved draft, so
+    // it takes the Design frame without the shared one (spec 42 §5.3).
+    <DesignFrame>
+      <SiteBuilder
       blocks={blocks}
       photos={photos}
       theme={theme}
       publishedAt={publishState.publishedAt}
       unpublished={publishState.unpublished}
       households={previewHouseholds(households ?? [], invitations ?? [])}
-    />
+      />
+    </DesignFrame>
   );
 }

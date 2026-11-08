@@ -4,20 +4,15 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
   useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -36,6 +31,7 @@ import { ItemRow } from "./item-row";
 import { QuickAdd } from "./quick-add";
 import { SectionNotes } from "./section-notes";
 import type { CollaboratorRow, ListItemRow, ListRow, ListSectionRow, PersonRow } from "@/lib/types/database";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
 
 /** A section's own droppable/container id, and back — dnd-kit ids are opaque strings, so a
  * "no section" bucket (which has no `list_sections` row) needs a stand-in of its own. */
@@ -186,10 +182,7 @@ export function ListDetail({
     return map;
   }, [orderByContainer]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useDragSensors();
 
   /** Shared by the cross-section drag, the per-item "Section" select, and Move up/down — see rank-list.tsx for the same split. */
   function applyItemMove(sourceKey: string, destKey: string, itemId: string, overId: string) {
@@ -496,7 +489,7 @@ function SectionGroup({
               aria-label={`Move "${section.title}" section up`}
               disabled={!onMoveSectionUp}
               onClick={onMoveSectionUp}
-              className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+              className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
             >
               ↑
             </button>
@@ -505,7 +498,7 @@ function SectionGroup({
               aria-label={`Move "${section.title}" section down`}
               disabled={!onMoveSectionDown}
               onClick={onMoveSectionDown}
-              className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+              className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
             >
               ↓
             </button>
@@ -620,7 +613,7 @@ function SortableItem({
                 aria-label={`Move "${item.title}" up`}
                 disabled={!onMoveUp}
                 onClick={onMoveUp}
-                className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+                className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
               >
                 ↑
               </button>
@@ -629,7 +622,7 @@ function SortableItem({
                 aria-label={`Move "${item.title}" down`}
                 disabled={!onMoveDown}
                 onClick={onMoveDown}
-                className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30"
+                className="rounded px-0.5 text-xs leading-none text-muted hover:bg-line/50 hover:text-ink disabled:opacity-30 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
               >
                 ↓
               </button>

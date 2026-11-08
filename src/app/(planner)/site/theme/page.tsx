@@ -1,3 +1,5 @@
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { ThemeEditor } from "@/components/site/editor/theme-editor";
 import { requireWedding } from "@/server/queries/wedding";
@@ -17,21 +19,19 @@ export const metadata = { title: "How the site looks" };
 
 export default async function SiteThemePage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const theme = await getSiteTheme(wedding.id);
 
   return (
-    <div className="space-y-5">
+    <DesignFrame preview={{ households }}>
       <div>
         <h1 className="font-serif text-2xl">How the site looks</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          One theme, one set of colours, one choice about the top of the page.{" "}
-          <Link href="/site" className="underline">
-            Back to the content →
-          </Link>
+          One theme, one set of colours, one choice about the top of the page.
         </p>
       </div>
 
       <ThemeEditor theme={theme} />
-    </div>
+    </DesignFrame>
   );
 }

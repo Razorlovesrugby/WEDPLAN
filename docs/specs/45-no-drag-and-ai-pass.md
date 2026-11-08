@@ -1,8 +1,8 @@
 # Feature spec: Everything works without dragging, and every control can be found by name
 
-**Status: proposal, not built.** Written 2026-11-06 from a discovery pass over the code.
-Nothing here is authorised to build until §8's questions are answered and the planner says to
-build it.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration. Two answers
+("make iPad friendly", report-only check); spec 46 was done first at the planner's choice; then "Build
+45 and 46" (46 was already built). **§10 is what was built.**
 
 **Depends on:** spec 41 (the shell). Independent of 42–44 and 46; could be built alongside any of
 them.
@@ -106,3 +106,80 @@ Controls revealed on hover are **always visible on touch devices** (`@media (hov
 | 1 | Add `axe-core` (and `@axe-core/playwright`) as dev dependencies? | **Yes.** Dev only, nothing ships to users. |
 | 2 | Should the axe check fail the build, or just report? | **Report only at first**, then fail once the backlog is cleared. |
 | 3 | Move menus on every reorderable row, or only where drag is the only way today? | **Every row**, so all lists behave the same. |
+
+## 9. Answered (2026-11-08)
+
+| Q | Question | Answer |
+| --- | --- | --- |
+| 3 | Move menus on every reorderable row, or only where drag is the only way? | **"Make iPad friendly."** Read as: every reorderable row gets the menu, and the pass is aimed at a touch tablet. That means: |
+| 2 | Should the axe check fail the build? | **Report only for now.** |
+
+What "iPad friendly" adds to §3, to confirm before building:
+
+- **Touch targets of at least 44×44 pt** on every row action, the ⋯ menu, tick boxes and the side
+  panel's Done button (Apple's minimum).
+- **The ⋯ menu is a button, not a long-press**, and drag gets a short press-and-hold delay on touch
+  (dnd-kit `TouchSensor`, ~200 ms), so scrolling a list never starts a drag.
+- **No hover-only controls** (§3.2 already), checked at iPad widths (768 and 1024, both
+  orientations), plus **the side panel as a sheet in portrait and on the right in landscape**.
+- Q1 (add `axe-core` as a dev dependency) wasn't asked separately. "Report only" implies yes; to
+  confirm when this is built.
+
+## 10. Build status (2026-11-08)
+
+**What was built:**
+
+- **One drag setup** (`src/components/ui/use-drag-sensors.ts`), used by all 12 drag screens. The
+  board view had none before.
+  - **Touch** waits for a 200 ms press within 8 px, so scrolling never picks a row up.
+  - **Mouse** starts after 4–6 px.
+  - **Keyboard** works on every screen: Space, arrows, Space.
+  - `stopDrag` stops a control *inside* a draggable thing (a select, ⋯, 📅) from starting a drag by
+    mouse, touch or key.
+  - `drag-sensors.test.ts` fails if a `DndContext` sets up its own sensors or none.
+- **A ⋯ menu** (`src/components/ui/row-menu.tsx`): 44×44, arrow keys between items, Esc returns
+  focus. It offers Move up / down / to top / to bottom, leaving out any that would do nothing or
+  repeat another (`moveTargets` in `src/lib/reorder.ts`, tested). Where drag was the only way, it's
+  added to:
+  - the **lists sidebar** (spec 16 had dropped its buttons);
+  - **run-sheet rows** (pinned rows have no menu);
+  - **moodboard pictures**: "Move earlier / later / to the start / to the end".
+- **Timeline cards** get the calendar's 📅 change-date button; before, dragging was the only way to
+  change a date there.
+- **The invitation builder's ▲▼** now show at every width. They were hidden at `lg:`, which
+  includes an iPad in landscape.
+- **Touch sizes,** on coarse pointers inside the planner (`[data-planner]`), so guest pages are
+  untouched:
+  - `.btn` is at least 44 px tall, and tick boxes and radios are 22 px;
+  - `.touch-target` sets the 44×44 minimum, and the ↑↓ buttons on tasks, sections, ranking, RSVP
+    questions and block rows grow to it;
+  - `.hover-reveal` shows hover-only controls on touch and on focus (moodboard captions).
+- **Labels:** a scan for symbol-only buttons with no `aria-label` found none to fix.
+- **`npm run a11y`** (`scripts/a11y-check.mjs`, `axe-core` 4.10.2 as a **dev dependency only**).
+  - It checks each page at iPad (1024 × 768) and phone (390) widths and **always exits 0** (Q2).
+  - Planner pages need `A11Y_COOKIE` from a signed-in browser.
+  - Run against the built app's public pages (`/login`, `/forgot-password`, `/start`, `/privacy`):
+    no problems at either width.
+
+**Departures:**
+
+1. **Screens that already had a non-drag way keep it**, rather than gaining a second ⋯ menu:
+   - ↑↓ buttons on tasks, list sections, ranking, RSVP questions and block rows;
+   - "Move to…" on the board and the calendar;
+   - tap-to-place on seating.
+
+   Their buttons were made touch-sized instead. This answers "iPad friendly" with fewer controls.
+2. **Planner pages weren't run through the accessibility check.** They need a signed-in session
+   against a real project.
+
+**Verified:** `npm run typecheck`; `npm test`, 1395 tests (16 new); `next build`; `npm run a11y` on
+the public pages.
+
+**Seen** on an emulated iPad (landscape, touch) on a temporary sample page (deleted):
+- the lists sidebar's ⋯ is 44×44;
+- it offers only the moves that do something;
+- focus starts on the first item and Esc closes it;
+- "Move up" reorders the list;
+- no errors.
+
+**Not verified:** a real iPad; long-press dragging by a real finger; the moves saving to Supabase.

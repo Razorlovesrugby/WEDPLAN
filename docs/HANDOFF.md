@@ -22,6 +22,94 @@
 
 ## Recent sessions
 
+**Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (**no
+PR opened**). Read the spec's §10:
+
+- **Every `DndContext` must use `useDragSensors()`** (`src/components/ui/use-drag-sensors.ts`), or
+  `drag-sensors.test.ts` fails. Put `{...stopDrag}` on any control inside a draggable element.
+- **The ⋯ move menu** is `RowMenu` + `moveItems` (`src/components/ui/row-menu.tsx`).
+- **Touch sizes** are CSS under `@media (pointer: coarse)`, scoped to `[data-planner]` (set on
+  `ShellFrame`).
+- **`npm run a11y`** checks pages with axe-core, report only. `axe-core` is a new dev dependency;
+  `npm ci` picks it up.
+- **Verified:** typecheck, 1395 unit tests, build, a11y on public pages, an emulated iPad.
+  **Not verified:** a real iPad, Supabase.
+
+**Session 52 (spec 46, spec 45 answers):** ⌘K and shortcuts, built on branch
+`claude/nice-mccarthy-x93m9s` (**no PR opened**). Spec 45 got two answers ("make iPad friendly",
+report-only check), then the planner chose to do 46 first; **45 is not built**. Read 46's §11:
+
+- **⌘K** is `src/components/shell/command-palette.tsx` (mounted in the planner layout). Its rules are
+  in `src/lib/command-palette.ts`, its search in `src/server/queries/search.ts` via the
+  `searchPalette` action. **Go to is built from `nav-groups`**, so a new sidebar entry appears there
+  automatically.
+- **Shortcuts** (`src/lib/shortcuts.ts`) are listened for in `ShellFrame`.
+- **Verified:** typecheck, 1379 unit tests, build, the dialog and keys on a sample page.
+  **Not verified:** Find against Supabase; creating from the box.
+
+**Session 51 (spec 44):** the side panel and the registry's "Use the invitation's look", built
+on branch `claude/nice-mccarthy-x93m9s` (**no PR opened**). Scope narrowed first, three questions
+(switch off by default, all four panels, "Both"), then built. Read the spec's §11:
+
+- **`0046_registry_use_site_theme.sql` is new and not applied to the live project.** Code reads it
+  tolerantly (`select *`, the form only sends the switch once changed), but turning the switch on
+  needs the migration.
+- **The side panel** is `src/components/shell/inspector.tsx`, mounted in `ShellFrame`. A row opens
+  it with `useInspector().openInspector("task:<id>")` and renders `<InspectorPortal>`; a server page
+  renders `<InspectorPortal closeHref>` when its URL says so.
+- **Rows unchanged after the follow-up** ("remove clicks"): task controls and budget payments stay
+  inline as before spec 44. The panel holds task notes (new), a budget line's edit form, vendors and
+  the ⋯ settings.
+- **Guest-facing files changed:** `/registry/<slug>` and its preview image, `lib/registry/look.ts`,
+  `server/registry/public.ts`. They're behind the switch, which is off everywhere.
+- **Verified:** typecheck, 1361 unit tests, 774 SQL assertions, single-tx, bootstrap, build, the
+  panel on a sample page. **Not verified:** Supabase, real rows in the panel, the switch.
+
+**Session 50 (spec 43):** Inbox and Today, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
+opened**). Four questions, all recommended, then built. No migration. Read the spec's §11:
+
+- **`/inbox`** merges five sources (`src/lib/inbox.ts`, `src/server/queries/inbox.ts`). Each fails
+  soft. The sidebar badge is `getInboxNeedsYouCount`, head-only counts run in the planner layout
+  on every couple page.
+- **Today** is the overview with **Next up** on top (`src/lib/today.ts`); the tiles are unchanged.
+- **Verified:** typecheck, 1357 unit tests, `next build`, a sample page in headless Chromium.
+  **Not verified:** Supabase; the inbox actions and badge have never run.
+
+**Session 49 (spec 42):** Design and Invitations, built on branch `claude/nice-mccarthy-x93m9s`
+(**no PR opened**). The spec was rewritten over four rounds of answers (the invitation is the
+website; designing and sending are different jobs; all eight Design tabs, alike; the registry stays
+whole), then "Yes go with recommended and build 42". No migration. Read the spec's §13; the short
+version:
+
+- **Sidebar "Website" is now "Design"**, eight tabs, all in `DesignFrame`
+  (`src/components/design/`). **A new Design tab must render inside `<DesignFrame>`** or
+  `nav-groups.test.ts` fails.
+- **Invitations is stages × steps** (`?stage=save-the-date|invitation&step=who|send|track`). The
+  logic is in `src/lib/invitations/journey.ts`; the `?status=` filters moved there verbatim.
+- **Guest links:** `src/lib/guest-links-isolated.test.ts` fails if a guest-facing page (`/w`,
+  `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`, the middleware, the root layout) imports
+  planner-only code. Nothing guest-facing was edited this session.
+- **Verified:** typecheck, 1342 unit tests, `next build` (placeholder env), sample-data screens
+  in headless Chromium (temporary page, deleted). **Not verified:** Supabase, real data, the
+  preview reloading after a real save, a phone.
+
+**Session 48 (spec 41):** the app shell, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
+opened**). "Can you build the first spec, ask me the questions": six questions put and answered
+(Q3 against the recommendation: seating stays inside Events), then built. No migration. Read the
+spec's §11; the short version:
+
+- **`src/lib/nav-groups.ts` is now the only list of places.** The sidebar, the phone tab bar and
+  `/menu` read it. **A new planner page must sit under an entry's `matchPrefixes`** or
+  `nav-groups.test.ts` fails (exempt: `/setup`, `/menu`). Longest prefix wins.
+- **`src/components/nav.tsx` is gone**; the shell is `src/components/shell/`. `SubTabs` is the
+  segmented control; tab lists are in `src/lib/nav-tabs.ts`.
+- **Settings is global only.** List appearance → `/lists?panel=appearance`; Pinterest & clipper →
+  `/moodboards?panel=import` (the OAuth callback returns there); cut lines were already on Ranking.
+- **Verified:** typecheck, 1299 unit tests, `next build` (placeholder env), the shell on a
+  temporary sample page in headless Chromium at 1280/390 (deleted). **Not verified:** any real
+  page in the new shell, Supabase, a phone. Check the site builder's sticky rail offset.
+- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
+
 **Session 47 (specs 41–46, spec only):** a discovery pass on the customer journey ("where
 everything lives… feel like an Apple native app"), then "Write all the specs now". **Six
 proposals, nothing built, no code or migration touched**, branch `claude/nice-mccarthy-x93m9s`.

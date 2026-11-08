@@ -1,3 +1,5 @@
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { TravelEditor } from "@/components/travel/travel-editor";
 import { getTravel } from "@/server/queries/travel";
@@ -9,6 +11,7 @@ export const metadata = { title: "Getting there" };
 
 export default async function TravelPage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const supabase = await createClient();
   const [data, arrivals, { data: events }] = await Promise.all([
     getTravel(wedding.id),
@@ -22,7 +25,7 @@ export default async function TravelPage() {
   ]);
 
   return (
-    <div className="space-y-5">
+    <DesignFrame preview={{ households, anchor: "travel" }}>
       <div>
         <h1 className="font-serif text-2xl">Getting there</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
@@ -41,6 +44,6 @@ export default async function TravelPage() {
         events={events ?? []}
         timeZone={wedding.timezone}
       />
-    </div>
+    </DesignFrame>
   );
 }

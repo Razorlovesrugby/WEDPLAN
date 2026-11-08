@@ -4,17 +4,15 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
-  PointerSensor,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import { setDueDate } from "@/server/actions/lists";
 import { listAccentBorderColor } from "@/lib/list-colors";
 import { TaskPreviewPopup } from "./task-preview-popup";
 import type { TimelineItemView } from "@/lib/types/database";
+import { stopDrag, useDragSensors } from "@/components/ui/use-drag-sensors";
 
 type Zoom = "week" | "month" | "quarter";
 
@@ -58,7 +56,7 @@ export function TimelineView({
   const [error, setError] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<TimelineItemView | null>(null);
   const [, startTransition] = useTransition();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const sensors = useDragSensors({ sortable: false });
 
   useEffect(() => {
     if (!highlightId) return;
@@ -70,8 +68,11 @@ export function TimelineView({
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over) return;
-    const itemId = String(active.id);
-    const targetDate = String(over.id);
+    reschedule(String(active.id), String(over.id));
+  }
+
+  /** Shared by the drag and the 📅 button (spec 45). */
+  function reschedule(itemId: string, targetDate: string) {
     const item = items.find((i) => i.id === itemId);
     if (!item || item.due_date === targetDate) return;
 
@@ -119,6 +120,7 @@ export function TimelineView({
                 budgetLinksByItem={budgetLinksByItem}
                 highlightId={highlightId}
                 onPreview={setPreviewItem}
+                onReschedule={reschedule}
               />
             ))}
           </div>
@@ -168,11 +170,13 @@ function TimelineColumn({
   budgetLinksByItem,
   highlightId,
   onPreview,
+  onReschedule,
 }: {
   bucket: Bucket;
   budgetLinksByItem: Record<string, { id: string; label: string }[]>;
   highlightId: string | null;
   onPreview: (item: TimelineItemView) => void;
+  onReschedule: (itemId: string, date: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: bucket.anchorDate });
 
@@ -192,6 +196,7 @@ function TimelineColumn({
             budgetLinks={budgetLinksByItem[item.id] ?? []}
             highlighted={item.id === highlightId}
             onPreview={onPreview}
+            onReschedule={onReschedule}
           />
         ))}
       </div>
@@ -204,13 +209,16 @@ function TimelineCard({
   budgetLinks,
   highlighted,
   onPreview,
+  onReschedule,
 }: {
   item: TimelineItemView;
   budgetLinks: { id: string; label: string }[];
   highlighted: boolean;
   onPreview: (item: TimelineItemView) => void;
+  onReschedule: (itemId: string, date: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
+  const [picking, setPicking] = useState(false);
 
   return (
     <div
@@ -228,7 +236,41 @@ function TimelineCard({
         ${item.status === "done" ? "line-through opacity-60" : ""}
         ${highlighted ? "ring-2 ring-accent" : ""}`}
     >
-      <p className="truncate font-medium">{item.title}</p>
+      <div className="flex items-start justify-between gap-1">
+        <p className="truncate font-medium">{item.title}</p>
+        {/* Spec 45: change the date without dragging, as the calendar does. */}
+        <button
+          type="button"
+          aria-label={`Change the date of "${item.title}"`}
+          aria-expanded={picking}
+          {...stopDrag}
+          onClick={(event) => {
+            event.stopPropagation();
+            setPicking((was) => !was);
+          }}
+          className="flex-none leading-none text-muted hover:text-ink [@media(pointer:coarse)]:px-2 [@media(pointer:coarse)]:py-1"
+        >
+          📅
+        </button>
+      </div>
+      {picking ? (
+        <input
+          type="date"
+          defaultValue={item.due_date ?? ""}
+          autoFocus
+          aria-label={`New date for "${item.title}"`}
+          {...stopDrag}
+          onClick={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            if (event.target.value) {
+              onReschedule(item.id, event.target.value);
+              setPicking(false);
+            }
+          }}
+          onBlur={() => setPicking(false)}
+          className="field my-1 w-full px-1 py-0.5 text-[10px]"
+        />
+      ) : null}
       <p className="truncate text-muted">
         {item.list_icon ? <span aria-hidden>{item.list_icon} </span> : null}
         {item.list_title}

@@ -15,6 +15,14 @@ import { getCollaborators, getEvents, requireWedding } from "@/server/queries/we
 import { formatRelative, guestName, pluralise } from "@/lib/format";
 import { tierTextClass } from "@/lib/tier-colors";
 
+/** Spec 41 §4.6: the most specific part first, so the tab says which household. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const wedding = await requireWedding();
+  const { household } = await getHousehold(wedding.id, id);
+  return { title: household ? `${household.display_name} · Guests` : "Household" };
+}
+
 export default async function HouseholdPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();

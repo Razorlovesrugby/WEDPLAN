@@ -16,6 +16,7 @@ import {
 } from "@/server/actions/lists";
 import { DEFAULT_LIST_COLOR } from "@/lib/list-colors";
 import { InlineText } from "@/components/guests/inline-text";
+import { InspectorPortal, useInspector } from "@/components/shell/inspector";
 import { assigneeOptions, itemAssigneeValue } from "@/lib/people";
 import type { CollaboratorRow, ListItemRow, ListSectionRow, PersonRow } from "@/lib/types/database";
 
@@ -76,6 +77,10 @@ export function ItemRow({
   const [addingSub, setAddingSub] = useState(false);
   const [subTitle, setSubTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Details open in the side panel, addressed as ?inspect=task:<id> (spec 44).
+  const { openKey, openInspector, closeInspector } = useInspector();
+  const inspectKey = `task:${item.id}`;
+  const detailsOpen = openKey === inspectKey;
   const assignOptions = assigneeOptions(collaborators, people, currentUserId, assignedValue);
 
   // A sub-item can be closed by its parent's own checkbox (spec 11 §1D)
@@ -383,6 +388,16 @@ export function ItemRow({
                 + sub-item
               </button>
             ) : null}
+            {/* Notes are the one thing edited in the side panel (spec 44); everything else stays here. */}
+            <button
+              type="button"
+              onClick={() => (detailsOpen ? closeInspector() : openInspector(inspectKey))}
+              aria-expanded={detailsOpen}
+              aria-label={`Notes for "${item.title}"`}
+              className="text-muted hover:text-ink"
+            >
+              {item.notes ? "Edit notes" : "+ notes"}
+            </button>
             <button type="button" onClick={onDelete} className="text-red-700 hover:underline">
               Remove
             </button>
@@ -405,6 +420,12 @@ export function ItemRow({
             />
           ) : null}
 
+          {detailsOpen ? (
+            <InspectorPortal inspectKey={inspectKey} title={item.title} onClose={closeInspector}>
+              <NotesEditor itemId={item.id} notes={item.notes} />
+            </InspectorPortal>
+          ) : null}
+
           {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
 
           {subItems.length > 0 ? (
@@ -422,6 +443,54 @@ export function ItemRow({
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A task's notes, in the side panel (spec 44). Words wait for Save, with a
+ * note while they differ, as on every other form (spec 42 Q9).
+ */
+function NotesEditor({ itemId, notes }: { itemId: string; notes: string | null }) {
+  const router = useRouter();
+  const [value, setValue] = useState(notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const dirty = value !== (notes ?? "");
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium">Notes</span>
+        <textarea
+          id={`task-notes-${itemId}`}
+          className="field"
+          rows={4}
+          maxLength={2000}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
+      </label>
+      {dirty ? (
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await updateItem(itemId, { notes: value });
+                setError(result.ok ? null : result.error);
+                router.refresh();
+              })
+            }
+          >
+            Save
+          </button>
+          <span className="text-muted">Unsaved changes</span>
+        </div>
+      ) : null}
+      {error ? <p className="text-xs text-red-700">{error}</p> : null}
     </div>
   );
 }

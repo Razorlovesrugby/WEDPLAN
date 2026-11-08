@@ -9,6 +9,14 @@ import { getListDetail, getLists, getOpenItemCounts } from "@/server/queries/lis
 import { getBudgetLinksForLists, getBudgetLinksForSections } from "@/server/queries/budget-links";
 import { getCollaborators, getSessionUser, requireWedding } from "@/server/queries/wedding";
 
+/** Spec 41 §4.6: the most specific part first, so the tab says which list. */
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const wedding = await requireWedding();
+  const detail = await getListDetail(wedding.id, id);
+  return { title: detail ? `${detail.list.title} · Tasks` : "List" };
+}
+
 export default async function ListDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();

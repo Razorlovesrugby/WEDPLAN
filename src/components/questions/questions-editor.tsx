@@ -4,24 +4,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
   closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+  type DragEndEvent
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
+  verticalListSortingStrategy
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { moveWithin } from "@/lib/reorder";
 import { removeQuestion, reorderQuestion, saveQuestion } from "@/server/actions/questions";
 import type { QuestionScope, QuestionType, RsvpQuestionRow } from "@/lib/types/database";
+import { useDragSensors } from "@/components/ui/use-drag-sensors";
 
 /**
  * The question builder.
@@ -115,10 +111,7 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
   // snapping back first.
   const [ordered, setOrdered] = useState(questions);
   useEffect(() => setOrdered(questions), [questions]);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sensors = useDragSensors({ distance: 6 });
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(toDraft());
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -361,7 +354,7 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
               <div className="flex flex-wrap gap-1">
                 <button
                   type="button"
-                  className="btn px-2 py-1 text-xs"
+                  className="btn px-2 py-1 text-xs [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
                   disabled={pending || index === 0}
                   onClick={() => onMove(question.id, "up")}
                   aria-label={`Move “${question.label}” up`}
@@ -370,7 +363,7 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
                 </button>
                 <button
                   type="button"
-                  className="btn px-2 py-1 text-xs"
+                  className="btn px-2 py-1 text-xs [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
                   disabled={pending || index === ordered.length - 1}
                   onClick={() => onMove(question.id, "down")}
                   aria-label={`Move “${question.label}” down`}

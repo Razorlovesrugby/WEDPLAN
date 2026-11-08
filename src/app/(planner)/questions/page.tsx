@@ -1,3 +1,5 @@
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { QuestionsEditor } from "@/components/questions/questions-editor";
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +10,7 @@ export const metadata = { title: "RSVP questions" };
 
 export default async function QuestionsPage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const supabase = await createClient();
 
   // Inactive questions are listed too — this is the screen for managing them,
@@ -23,7 +26,7 @@ export default async function QuestionsPage() {
   if (error) throw new Error(`Could not load questions: ${error.message}`);
 
   return (
-    <div className="space-y-5">
+    <DesignFrame preview={{ households, anchor: "rsvp" }}>
       <div>
         <h1 className="font-serif text-2xl">RSVP questions</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
@@ -37,6 +40,6 @@ export default async function QuestionsPage() {
       </div>
 
       <QuestionsEditor questions={(data ?? []) as RsvpQuestionRow[]} />
-    </div>
+    </DesignFrame>
   );
 }

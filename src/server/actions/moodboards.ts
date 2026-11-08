@@ -645,7 +645,7 @@ export async function createClipToken(
     .single();
 
   if (error) return fail(error.message);
-  revalidatePath("/settings");
+  revalidatePath("/moodboards");
   return ok({ id: data.id, token });
 }
 
@@ -659,6 +659,6 @@ export async function revokeClipToken(id: string): Promise<ActionResult> {
     .eq("wedding_id", wedding.id);
 
   if (error) return fail(error.message);
-  revalidatePath("/settings");
+  revalidatePath("/moodboards");
   return ok(undefined);
 }

@@ -1,8 +1,9 @@
 # Feature spec: Inbox and Today — one place for what guests send you, and a home screen that says what's next
 
-**Status: proposal, not built.** Written 2026-11-06 from a discovery pass over the code.
-Nothing here is authorised to build until §9's questions are answered and the planner says to
-build it.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration. Asked as
+"build next spec… any qs". The four questions were put and all took the recommendation (§10), then
+it was built. **§11 says what was built and where it departs from §4.** No guest-facing file
+changed.
 
 **Depends on:** spec 41 (the shell), spec 26 (overdue on Today), spec 34 (song requests), spec 36
 (registry claims), spec 37 (guest questions), spec 29 ("can't come").
@@ -107,3 +108,70 @@ Two parts, top to bottom:
 | 3 | Next up: cap at six lines? | **Yes.** |
 | 4 | Keep the full tile grid on Today under Next up? | **Yes, unchanged.** |
 | 5 | Sidebar badge counts "Needs you" only? | **Yes.** |
+
+## 10. Answered (2026-11-08)
+
+| Q | Answer |
+| --- | --- |
+| 1 | **All five:** questions, songs, guestbook, registry claims, can't come. |
+| 2 | **Last 14 days**, no migration. |
+| 3 + 4 | **Keep every tile; Next up capped at six.** |
+| 5 | **The badge counts only what needs you.** |
+
+## 11. Build status (2026-11-08)
+
+**What was built:**
+
+- **`src/lib/inbox.ts`** (pure, 8 tests): one builder per source, sorting, filters and the
+  "needs you" rule.
+  - A question, song or guestbook note needs you while its status is `new`.
+  - A claim needs you while it's live and newer than `registry_settings.last_viewed_claims_at`.
+  - A can't-come needs you if it's from the last 14 days, and only those are listed.
+- **`src/server/queries/inbox.ts`**:
+  - `getInboxItems` reuses `getGuestQuestions`, `getPlannerSongs`, `getGuestNotes`,
+    `getRegistryClaims` and `getRegistrySettings`, plus one guests query for recent can't-comes.
+  - `getInboxNeedsYouCount` uses five head-only counts for the badge, since it runs on every page.
+  - Every source fails soft, so a missing table can't take the Inbox or the shell down.
+  - `site-extras.ts` (read by guest pages) is imported, not edited.
+- **`/inbox`** (couple only: `CoupleOnly` layout, `COUPLE_ONLY_ROUTES`).
+  - Filters **Needs you** (the default) · All · Questions · Songs · Guestbook · Registry · Can't
+    come, in `?kind=`.
+  - Each row shows the kind, who, a preview, the date, "Needs you", its actions and **Open**.
+    The actions are the source screens' own: `setQuestionStatus`, `setSongStatus`,
+    `setNoteStatus`, `markClaimsViewed`.
+- **Sidebar:** Inbox → `/inbox` (`/site/questions` still lights it). The badge sits on the sidebar
+  entry and on the phone's "For guests" tab.
+- **Today** (`/`, title "Today"): **Next up** (`src/lib/today.ts`, pure, 6 tests), up to six links
+  in this order:
+  1. overdue tasks;
+  2. payments past due;
+  3. payments due within 7 days, in the wedding's own `todayIso`;
+  4. Inbox needs-you;
+  5. households with a save the date sent but no invitation sent;
+  6. opened but not replied;
+  7. over capacity;
+  8. RSVPs closing within 14 days;
+  9. then, if there's room, tasks due this week.
+
+  "Nothing needs you today." when empty. Every tile is unchanged below, under "Where things
+  stand". The planner login's own overview is untouched.
+
+**Departures from §4:**
+
+1. **Claims are cleared all at once.** "Seen" is one timestamp for the whole registry (spec 36), so
+   "Mark claims seen" clears every new claim, the same as opening Claims.
+2. **Two extra Next-up lines:** payments *past due* get their own line, and tasks due this week
+   fill spare room at the end.
+3. **"All" and the per-kind filters show the newest 200.** "Needs you" is never cut.
+4. **Handled songs and guestbook notes** show only **Open** (moderation beyond approve/ignore stays
+   on their screens). A handled question can be moved back to new.
+
+**Verified:** `npm run typecheck`; `npm test`, 1357 tests, including `inbox.test.ts`,
+`today.test.ts`, the Inbox routes in `nav-groups.test.ts`, and `guest-links-isolated.test.ts`;
+`next build` (placeholder env).
+
+**Seen** on a temporary sample page in headless Chromium at 1280 and 390 wide (deleted): the Next
+up list and the Inbox rows with their actions. No horizontal scroll, no errors.
+
+**Not verified:** anything against Supabase. The counts, the actions from the Inbox, and the badge
+updating after an action have never run.

@@ -1,8 +1,8 @@
 # Feature spec: ⌘K to go anywhere or make anything, and Mac keyboard shortcuts
 
-**Status: proposal, not built.** Written 2026-11-06 from a discovery pass over the code.
-Nothing here is authorised to build until §8's questions are answered and the planner says to
-build it.
+**Status: built (2026-11-08), branch `claude/nice-mccarthy-x93m9s`, no PR.** No migration. The
+planner chose to do this before spec 45. Four questions were put, everything offered was picked, then
+"Build it" (§10). **§11 is what was built.**
 
 **Depends on:** spec 41 (the shell and its one array of sidebar entries, `src/lib/nav-groups.ts`).
 Spec 44's inspector shortcut needs 44.
@@ -93,3 +93,69 @@ trigram indexes in a later migration; the expected size (hundreds of rows) doesn
 - Headless Chromium: ⌘K opens, typing filters, Enter navigates, Esc restores focus; the search
   button works at 390 wide.
 - typecheck, test, build.
+
+## 10. Answered (2026-11-08)
+
+| Q | Question | Answer |
+| --- | --- | --- |
+| Find | What can ⌘K find? | **All of it:** households and guests, vendors, tasks and lists, moodboards and budget lines. |
+| Make | What can it create? | **All six:** task, household, vendor, budget line, moodboard, event. |
+| Keys | Which shortcuts? | **All:** ⌘K, ⌘, (Settings), Esc, ⌘⇧S (sidebar) and ? (the list). |
+| Build | | **Build it.** |
+
+Q1 (library or hand-built) wasn't asked. It was built by hand to avoid a new dependency; see §11.
+
+## 11. Build status (2026-11-08)
+
+**What was built:**
+
+- **`src/lib/command-palette.ts`** (pure). **Go to** is built from `navGroupsFor` plus every
+  sub-view tab, so it can't drift from the sidebar; it also has Settings' account and activity
+  sections, and Settings answers to "timezone" and "currency".
+  - **Make**: "Add “…” to <list>" for up to five lists, "Add vendor “…”" and "New moodboard “…”" use
+    the typed text directly. With nothing typed, New task, household, vendor, budget line, moodboard
+    and event each open their own screen or form.
+  - A planner login gets only task, vendor and event, and never a couple-only screen.
+  - Ranking: the label starts with the query, then a word does, then it's anywhere in the label,
+    hint or keywords. Go to comes before Find, which comes before Make, eight each. Case and
+    accents are ignored.
+  - `ilikePattern` escapes `% _ \` and the characters that would break PostgREST's `or()`.
+- **`src/lib/shortcuts.ts`** (pure). ⌘K/Ctrl+K works everywhere, including in a field; ⌘, and ⌘⇧S
+  likewise; a bare `?` never fires while typing. 18 tests cover both files.
+- **Find** (`src/server/queries/search.ts`, `cache()`, via the `searchPalette` action). From two
+  characters, eight of each kind, read as the signed-in person so RLS decides. Each kind fails soft.
+  - Results link to: households and guests' pages; vendors in the side panel; lists; tasks with
+    `?highlight=`; moodboards; budget lines in the side panel (`?inspect=budget:`).
+  - Budget lines are never searched for a planner login.
+- **The dialog** (`src/components/shell/command-palette.tsx`): a text box plus a listbox with
+  `aria-activedescendant`.
+  - Keys: ↑/↓, Enter, Esc. Esc stops there, so an open side panel stays open; focus returns to where
+    it was; Tab stays in the box.
+  - It searches 150 ms after typing stops, and still offers Go to and Make if the search fails.
+  - The **Search** button in the header opens the same box for iPad and phone.
+  - **?** or "Shortcuts" shows the list of shortcuts.
+- **Shortcuts** are listened for in `ShellFrame`. ⌘, does nothing for a planner login.
+
+**Departures:**
+
+1. **Hand-built, no `cmdk`** (§8 Q1 had recommended `cmdk`): no new dependency.
+2. **⌘⌥I (toggle the side panel) wasn't added.** The panel opens from a row and closes with
+   Done or Esc, so a toggle with nothing selected would do nothing.
+3. **"New budget line" and "New event"** go to their screen rather than straight into a form,
+   because a budget line needs a category and an event a date. "New household" opens
+   `/households/new` directly.
+
+**Verified:** `npm run typecheck`; `npm test`, 1379 tests (18 new); `next build`.
+
+**Seen** in headless Chromium on a temporary sample page (deleted):
+- ⌘K opens the box with focus in it;
+- typing "cal" puts Calendar first;
+- Esc closes it;
+- `?` in a text field types a `?`, while outside a field it opens the shortcut list;
+- ⌘⇧S hides the sidebar;
+- Enter goes to `/calendar` (the sign-in page there, with no session);
+- at 390 wide the Search button opens it with no horizontal scroll;
+- no errors.
+
+**Not verified:** Find against real data (it needs Supabase); creating a task, vendor or moodboard
+from the box; a real iPad keyboard.

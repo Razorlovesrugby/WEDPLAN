@@ -5,6 +5,34 @@ import type { GiftBankDetailsRow, GiftFundRow, RegistryItemView, RegistrySetting
 import { resolveContributePosition } from "@/lib/registry/contribute";
 import { formatPrice } from "@/lib/registry/items";
 import type { BrowseItem } from "@/lib/registry/browse";
+import { resolveTheme, themeTokens } from "@/lib/theme/presets";
+import type { PaletteTokens } from "@/lib/theme/contrast";
+
+/** The invitation's colours and type, for a registry set to follow them (spec 44). */
+export type InvitationLook = { tokens: PaletteTokens; typography: string | null };
+
+/**
+ * Read only when `use_site_theme` is on, so a registry left on its own look
+ * makes exactly the reads it always did. Any failure gives null, and the
+ * registry falls back to its own look (`registryLook`).
+ */
+export async function loadInvitationLook(
+  admin: ReturnType<typeof createAdminClient>,
+  weddingId: string,
+): Promise<InvitationLook | null> {
+  try {
+    const { data } = await admin
+      .from("site_content")
+      .select("payload")
+      .eq("wedding_id", weddingId)
+      .eq("block_key", "theme")
+      .maybeSingle();
+    const theme = resolveTheme(data?.payload ?? null);
+    return { tokens: themeTokens(theme), typography: theme.typography };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * What the public registry page may read (spec 36 §4, §6.2).
@@ -45,6 +73,8 @@ export type PublicRegistry = {
   /** The photograph's average colour, painted behind it until it loads. */
   heroColour: string | null;
   thanksImageUrl: string | null;
+  /** Set only when the registry follows the invitation's look (spec 44). */
+  invitationLook?: InvitationLook | null;
   /** True only for the signed-in couple previewing their own page: nothing can be claimed. */
   preview: boolean;
 };
@@ -157,6 +187,7 @@ export async function loadPublicRegistry(
         : null,
     heroColour: hero.data?.colour ?? null,
     thanksImageUrl: imageUrl(settings.thanks_asset_id, 960),
+    invitationLook: settings.use_site_theme ? await loadInvitationLook(admin, wedding.id) : null,
     preview,
   };
 }

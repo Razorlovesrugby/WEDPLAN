@@ -2,7 +2,8 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolvePalette } from "@/lib/registry/look";
+import { registryLook } from "@/lib/registry/look";
+import { loadInvitationLook } from "@/server/registry/public";
 
 /**
  * The link preview for the registry (spec 36 §4.1) — what shows when the
@@ -27,7 +28,7 @@ async function loadFont(file: string): Promise<ArrayBuffer> {
 export default async function OpengraphImage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   let heading = "Our registry";
-  let paletteId: string | null = null;
+  let look = registryLook({ palette: null, type_pairing: null }, null);
 
   try {
     if (/^[a-z0-9][a-z0-9-]{0,80}$/.test(slug)) {
@@ -36,12 +37,17 @@ export default async function OpengraphImage({ params }: { params: Promise<{ slu
       if (wedding) {
         const { data: settings } = await admin
           .from("registry_settings")
-          .select("enabled, title, palette")
+          // "*", not a column list, so this keeps working on a database
+          // that doesn't have 0046's column yet.
+          .select("*")
           .eq("wedding_id", wedding.id)
           .maybeSingle();
         if (settings?.enabled) {
           heading = settings.title || wedding.name;
-          paletteId = settings.palette;
+          look = registryLook(
+            settings,
+            settings.use_site_theme ? await loadInvitationLook(admin, wedding.id) : null,
+          );
         }
       }
     }
@@ -49,7 +55,7 @@ export default async function OpengraphImage({ params }: { params: Promise<{ slu
     // A preview that can't read the database is the neutral card, never an error.
   }
 
-  const { tokens } = resolvePalette(paletteId);
+  const { tokens } = look;
   const text = heading.length > 40 ? `${heading.slice(0, 39)}…` : heading;
 
   return new ImageResponse(

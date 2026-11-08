@@ -1,3 +1,5 @@
+import { DesignFrame } from "@/components/design/design-frame";
+import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { requireWedding } from "@/server/queries/wedding";
 import { getGuestNotes } from "@/server/queries/site-extras";
@@ -18,13 +20,14 @@ export const metadata = { title: "The guestbook" };
  */
 export default async function GuestbookPage() {
   const wedding = await requireWedding();
+  const households = await getPreviewHouseholds(wedding.id);
   const notes = await getGuestNotes(wedding.id);
 
   const waiting = notes.filter((note) => note.status === "new").length;
   const published = notes.filter((note) => note.status === "approved").length;
 
   return (
-    <div className="space-y-5">
+    <DesignFrame preview={{ households, anchor: "guestbook" }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-2xl">The guestbook</h1>
@@ -48,9 +51,6 @@ export default async function GuestbookPage() {
             )}
           </p>
         </div>
-        <Link href="/site" className="btn">
-          Back to the site
-        </Link>
       </div>
 
       <GuestNoteList
@@ -65,6 +65,6 @@ export default async function GuestbookPage() {
           fromInvitation: note.household_id !== null,
         }))}
       />
-    </div>
+    </DesignFrame>
   );
 }

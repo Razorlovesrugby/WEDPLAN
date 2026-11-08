@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { PublicRegistry } from "@/server/registry/public";
 import { applyFilters, parseFilters, usableTags } from "@/lib/registry/browse";
-import { registryColourVars } from "@/lib/registry/look";
+import { registryLook } from "@/lib/registry/look";
 import { registryFonts } from "@/lib/registry/fonts";
 import { contributeSection, resolveContributePosition } from "@/lib/registry/contribute";
 import { GiftFunds } from "@/components/site/gift-funds";
@@ -20,7 +20,9 @@ export function RegistryView({ registry, search }: { registry: PublicRegistry; s
   const filters = parseFilters(search, registry.tags.map((t) => t.id));
   const shown = applyFilters(registry.items, filters);
   const tags = usableTags(registry.tags, registry.items);
-  const fonts = registryFonts(settings.type_pairing);
+  // Its own look, or the invitation's when the couple chose that (spec 44).
+  const look = registryLook(settings, registry.invitationLook ?? null);
+  const fonts = registryFonts(look.pairing);
   const open = settings.open && !registry.preview;
   const heading = settings.title || registry.weddingName;
   const contribute = contributeSection({
@@ -38,7 +40,7 @@ export function RegistryView({ registry, search }: { registry: PublicRegistry; s
     <div
       data-registry
       className={`${fonts.className} min-h-screen bg-paper font-body text-ink`}
-      style={{ ...registryColourVars(settings.palette), ...fonts.vars } as CSSProperties}
+      style={{ ...look.colourVars, ...fonts.vars } as CSSProperties}
     >
       {registry.preview ? (
         <p className="bg-ink px-4 py-2 text-center text-sm text-paper">
