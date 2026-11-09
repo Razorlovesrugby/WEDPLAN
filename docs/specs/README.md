@@ -26,6 +26,31 @@ table family, one spec. The two are now merged into
 [`01-lists-and-timeline.md`](01-lists-and-timeline.md); reminders,
 renumbered to spec 2, is unchanged in substance.
 
+## Writing a spec: the six-month test
+
+Adapted from the spec-writing guide in Meta's Astryx design system (MIT).
+Ask of every sentence that says what the feature does: *in six months, when
+every session and branch named here is forgotten, does this still say
+something true about the app?* Behaviour, defaults, limits, owners and
+evidence pass. Narration about how the spec got here fails.
+
+This covers the sections that describe behaviour. The dated "Answered"
+section and the build notes (often §10/§11) stay as this process defines
+them, but keep them short and don't let their history leak back into the
+behaviour sections. Before handing a spec over, check:
+
+| ID | Check | If yes |
+|----|-------|--------|
+| R1 | Does a sentence say what was proposed, decided, replaced or "used to" happen, rather than what the app does? (Scan for *proposes*, *we decided*, *previously*, *now*.) | Restate it in the present tense, or delete it. |
+| R2 | Is there research in it: a survey of other apps, an options table, mockup scores? | Move it out (artifact or chat); keep the conclusion as one or two sentences in the decision it supports. |
+| R3 | Does an evidence or "verified" line name a session, branch or PR instead of the fact? | Name the fact: "1410 unit tests", "headless Chromium at 1280px". |
+| R4 | Is a rejected alternative longer than one line, or outside the decision that rejects it? | Collapse it to one `Rejected:` line in that decision, and only if naming it stops it being proposed again. |
+| R5 | Searching for `#` plus digits, `/pull/`, `/issues/`, `session `: does any remain in the behaviour sections? | Delete it, or link the spec or file that owns the fact. Links to other specs are encouraged. |
+| R6 | Does an answered open question still list its options? | Fold the chosen option into the behaviour; keep at most a one-line `Rejected:`. Only unanswered questions keep options side by side. |
+
+A finding is normal, not a failure: "R1: two sentences restated" is a clean
+result. Report the results in one line per check when you hand the spec over.
+
 ## Features and status
 
 | # | Feature | Status | Depends on |
