@@ -5,25 +5,45 @@
 
 ## Start here (read this first)
 
-**What this is.** WEDPLAN: a wedding planning platform for a couple and their collaborators. Next.js App Router on Vercel, Supabase (Postgres, Auth, RLS keyed to `wedding_id`), TypeScript, Vitest. `README.md` is the overview; `docs/wedding-platform-spec.md` is the technical spec; `docs/specs/README.md` is the index of per-feature specs and how the spec process works.
+**What this is.** WEDPLAN: a wedding planning platform. Couples sign themselves up at `/start` and plan with their collaborators; guests reach RSVP links and wedding websites without an account. Next.js App Router on Vercel, Supabase (Postgres, Auth, RLS keyed to `wedding_id`), TypeScript, Vitest. `README.md` is the overview; `docs/wedding-platform-spec.md` is the technical spec; `docs/specs/README.md` is the index of per-feature specs and how the spec process works.
 
-**Where it stands.** Specs 1–40 are built or in progress, with per-spec status in `docs/specs/README.md` (lists and timeline, reminders, guests and households, budget, moodboards, public site builder, invitations and RSVP, registry, seating, audit log and backups, self-serve onboarding). Specs 41–46 (app shell, guest journey, inbox, inspector, no-drag pass, command palette) are proposals only; nothing is built and their open questions are unanswered. Migrations run `0001`–`0045`; the planner says `0044` and earlier are applied to the live project and `0045` is not (not checked by any session).
+**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is not recorded here. Specs 1–47 are built and merged to `main` (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0046`.
 
-**What has and hasn't been verified.** Typecheck, unit tests, the SQL suite (`./scripts/verify-migrations.sh`) and `npm run build` pass. Some screens were rendered in headless Chromium with sample data. Nothing has been checked against live Supabase data, on a real phone, or by a real user unless a session below says so. Do not imply otherwise to the planner.
+**What that changes.** Every migration now runs against real guest data: no destructive change to a column without a backfill, and check what a live database already holds before assuming a fresh one. Guest-facing pages (`/w`, `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`) are used by people with no account and no way to report a bug except to the couple. The app serves many weddings, so nothing may assume there is only one (session 55 found the privacy notice doing exactly that).
+
+**What has and hasn't been verified by a session.** Typecheck, unit tests, the SQL suite (`./scripts/verify-migrations.sh`) and `npm run build` pass. Some screens were rendered in headless Chromium with sample data. Beyond the planner's report above, no session has checked anything against live Supabase, a real phone, a printer or a real inbox. Say which checks you actually ran.
 
 **How to work here.**
 - Rules and conventions are in `CLAUDE.md`; section 8 below has the full convention list. A spec request is not a build request.
-- Verify with `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh` (non-root user) and `npm run build`, and say which you ran.
+- Verify with `npm run typecheck`, `npm test`, `./scripts/verify-migrations.sh` (non-root user) and `npm run build` (with the placeholder env from `.github/workflows/verify.yml`; without `NEXT_PUBLIC_SITE_URL` the build fails on `/api/export/[kind]`), and say which you ran.
 - At the end of a work chunk, rewrite the "Recent sessions" block below (keep about three), and move older entries to [`history/sessions.md`](history/sessions.md).
 
-**Map of this file.** Recent sessions (next) → Active work → 0 Live project → 1 What exists → 2 What has NOT been verified → 3 Where this veered off the spec → 4 What is left → 5 Things worth knowing before changing anything → 6 Traps → 7 Deliberate exceptions → 8 Conventions → 9 Open questions.
+**Map of this file.** Recent sessions (next) → 1 What exists → 3 Where this veered off the spec → 5 Things worth knowing before changing anything → 6 Traps → 7 Deliberate exceptions → 8 Conventions → 9 Open questions. Sections 0, 2 and 4 (live project, unverified, launch checklist) and the old "Active work" note were pre-launch and moved to [`history/sessions.md`](history/sessions.md) in session 55; the numbers are kept because specs cite them.
 
 ---
 
 ## Recent sessions
 
-**Session 54 (spec 47):** the guest table, built on branch `claude/pensive-euler-natrmu` (**no PR
-opened**). A brainstorm with mockups, then a spec, six questions (all recommended, plus a Planning
+**Session 55 (no spec):** went live; privacy notice and docs. Branch
+`claude/confident-keller-xiwcvn` (no PR opened). A brainstorm of non-feature work, then the
+planner said the app is **live, works, and has real users**, and asked for a check against a
+"don't get sued" checklist (privacy, cookies, embeds, accessibility, consent).
+
+- **Bug fixed: the privacy notice named the wrong couple.** `/privacy` loaded the first wedding
+  ever created and showed that couple to every wedding's guests. It now names no couple and reads
+  no data (a static page). It also says the site is free and run by an individual, names the
+  Google Maps and Spotify embeds (`site/blocks/media.tsx`) and guest photo uploads, and cites
+  NZ's Privacy Act 2020 and Privacy Commissioner instead of the UK/EU.
+- **Checked and fine:** the only cookie is sign-in (no consent banner needed); no analytics; fonts
+  are self-hosted; images checked have alt text.
+- **Deliberately not done** (planner: no charging, no business, region not needed): no terms page,
+  refund policy, business details or storage region.
+- **Docs:** this file rewritten for launch (above); sessions 45–52 and the pre-launch sections
+  moved to `history/sessions.md`; spec index updated to "merged".
+- **Verified:** typecheck, 1411 unit tests, build (CI env). **Not verified:** the page in a
+  browser or on the live site.
+
+**Session 54 (spec 47):** the guest table, built on branch `claude/pensive-euler-natrmu` (merged, PR #96). A brainstorm with mockups, then a spec, six questions (all recommended, plus a Planning
 view), then "Build it all". No migration. Read the spec's §11:
 
 - **The table** (`src/components/guests/guests-table.tsx`) groups by household; view and grouping
@@ -37,8 +57,7 @@ view), then "Build it all". No migration. Read the spec's §11:
 - **Verified:** typecheck, 1410 unit tests, build, a sample page in headless Chromium at 1280px and
   an emulated iPad, axe clean. **Not verified:** Supabase, real data, a real iPad or phone.
 
-**Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (**no
-PR opened**). Read the spec's §10:
+**Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (merged, PR #89). Read the spec's §10:
 
 - **Every `DndContext` must use `useDragSensors()`** (`src/components/ui/use-drag-sensors.ts`), or
   `drag-sensors.test.ts` fails. Put `{...stopDrag}` on any control inside a draggable element.
@@ -50,220 +69,15 @@ PR opened**). Read the spec's §10:
 - **Verified:** typecheck, 1395 unit tests, build, a11y on public pages, an emulated iPad.
   **Not verified:** a real iPad, Supabase.
 
-**Session 52 (spec 46, spec 45 answers):** ⌘K and shortcuts, built on branch
-`claude/nice-mccarthy-x93m9s` (**no PR opened**). Spec 45 got two answers ("make iPad friendly",
-report-only check), then the planner chose to do 46 first; **45 is not built**. Read 46's §11:
-
-- **⌘K** is `src/components/shell/command-palette.tsx` (mounted in the planner layout). Its rules are
-  in `src/lib/command-palette.ts`, its search in `src/server/queries/search.ts` via the
-  `searchPalette` action. **Go to is built from `nav-groups`**, so a new sidebar entry appears there
-  automatically.
-- **Shortcuts** (`src/lib/shortcuts.ts`) are listened for in `ShellFrame`.
-- **Verified:** typecheck, 1379 unit tests, build, the dialog and keys on a sample page.
-  **Not verified:** Find against Supabase; creating from the box.
-
-**Session 51 (spec 44):** the side panel and the registry's "Use the invitation's look", built
-on branch `claude/nice-mccarthy-x93m9s` (**no PR opened**). Scope narrowed first, three questions
-(switch off by default, all four panels, "Both"), then built. Read the spec's §11:
-
-- **`0046_registry_use_site_theme.sql` is new and not applied to the live project.** Code reads it
-  tolerantly (`select *`, the form only sends the switch once changed), but turning the switch on
-  needs the migration.
-- **The side panel** is `src/components/shell/inspector.tsx`, mounted in `ShellFrame`. A row opens
-  it with `useInspector().openInspector("task:<id>")` and renders `<InspectorPortal>`; a server page
-  renders `<InspectorPortal closeHref>` when its URL says so.
-- **Rows unchanged after the follow-up** ("remove clicks"): task controls and budget payments stay
-  inline as before spec 44. The panel holds task notes (new), a budget line's edit form, vendors and
-  the ⋯ settings.
-- **Guest-facing files changed:** `/registry/<slug>` and its preview image, `lib/registry/look.ts`,
-  `server/registry/public.ts`. They're behind the switch, which is off everywhere.
-- **Verified:** typecheck, 1361 unit tests, 774 SQL assertions, single-tx, bootstrap, build, the
-  panel on a sample page. **Not verified:** Supabase, real rows in the panel, the switch.
-
-**Session 50 (spec 43):** Inbox and Today, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
-opened**). Four questions, all recommended, then built. No migration. Read the spec's §11:
-
-- **`/inbox`** merges five sources (`src/lib/inbox.ts`, `src/server/queries/inbox.ts`). Each fails
-  soft. The sidebar badge is `getInboxNeedsYouCount`, head-only counts run in the planner layout
-  on every couple page.
-- **Today** is the overview with **Next up** on top (`src/lib/today.ts`); the tiles are unchanged.
-- **Verified:** typecheck, 1357 unit tests, `next build`, a sample page in headless Chromium.
-  **Not verified:** Supabase; the inbox actions and badge have never run.
-
-**Session 49 (spec 42):** Design and Invitations, built on branch `claude/nice-mccarthy-x93m9s`
-(**no PR opened**). The spec was rewritten over four rounds of answers (the invitation is the
-website; designing and sending are different jobs; all eight Design tabs, alike; the registry stays
-whole), then "Yes go with recommended and build 42". No migration. Read the spec's §13; the short
-version:
-
-- **Sidebar "Website" is now "Design"**, eight tabs, all in `DesignFrame`
-  (`src/components/design/`). **A new Design tab must render inside `<DesignFrame>`** or
-  `nav-groups.test.ts` fails.
-- **Invitations is stages × steps** (`?stage=save-the-date|invitation&step=who|send|track`). The
-  logic is in `src/lib/invitations/journey.ts`; the `?status=` filters moved there verbatim.
-- **Guest links:** `src/lib/guest-links-isolated.test.ts` fails if a guest-facing page (`/w`,
-  `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`, the middleware, the root layout) imports
-  planner-only code. Nothing guest-facing was edited this session.
-- **Verified:** typecheck, 1342 unit tests, `next build` (placeholder env), sample-data screens
-  in headless Chromium (temporary page, deleted). **Not verified:** Supabase, real data, the
-  preview reloading after a real save, a phone.
-
-**Session 48 (spec 41):** the app shell, built on branch `claude/nice-mccarthy-x93m9s` (**no PR
-opened**). "Can you build the first spec, ask me the questions": six questions put and answered
-(Q3 against the recommendation: seating stays inside Events), then built. No migration. Read the
-spec's §11; the short version:
-
-- **`src/lib/nav-groups.ts` is now the only list of places.** The sidebar, the phone tab bar and
-  `/menu` read it. **A new planner page must sit under an entry's `matchPrefixes`** or
-  `nav-groups.test.ts` fails (exempt: `/setup`, `/menu`). Longest prefix wins.
-- **`src/components/nav.tsx` is gone**; the shell is `src/components/shell/`. `SubTabs` is the
-  segmented control; tab lists are in `src/lib/nav-tabs.ts`.
-- **Settings is global only.** List appearance → `/lists?panel=appearance`; Pinterest & clipper →
-  `/moodboards?panel=import` (the OAuth callback returns there); cut lines were already on Ranking.
-- **Verified:** typecheck, 1299 unit tests, `next build` (placeholder env), the shell on a
-  temporary sample page in headless Chromium at 1280/390 (deleted). **Not verified:** any real
-  page in the new shell, Supabase, a phone. Check the site builder's sticky rail offset.
-- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
-
-**Session 47 (specs 41–46, spec only):** a discovery pass on the customer journey ("where
-everything lives… feel like an Apple native app"), then "Write all the specs now". **Six
-proposals, nothing built, no code or migration touched**, branch `claude/nice-mccarthy-x93m9s`.
-One decision taken before writing: laptop first, but easy on a phone and for an AI assistant.
-41 (shell, sidebar, tab bar, Settings tidy; no URL changes) goes first; 42–46 sit inside it.
-Every spec ends with open questions and recommendations; none answered yet. The facts in them
-come from reading the code (no browser, no live data); spec 45's drag table is a text count,
-not a test.
-
-**Session 46 (spec 40):** self-serve onboarding plus account, timezone and currency
-settings, built on branch `claude/confident-fermat-eali50` (**no PR opened**). Asked for as an
-investigation, then a spec, nine questions put and answered (Q3 against the recommendation:
-8-character passwords; Q6 a free answer: currency is a symbol only), then "Build the spec out"
-as its own turn. The planner says every migration through `0044` is applied to the live project;
-not checked by this session. Read the spec's **Build status**; the short version:
-
-- **`0045`.** `weddings.currency` (a label, never converts, always hundredths),
-  `create_wedding()` (service role only; the one way a wedding is made, by `/start` and by
-  `bootstrap.sql`), `change_wedding_timezone()` (keeps planner-entered wall-clock times). No new
-  table, so `planner_table_access` is unchanged.
-- **`/start`** is public and gated by **`ONBOARDING_OPEN`** (unset = closed). Public sign-up stays
-  off in Supabase; the action makes the login with the admin API, already confirmed (Q2).
-- **`todayIso(timeZone)` is now required.** "Today" was the UTC date; every caller now passes the
-  wedding's timezone. A new caller has to as well.
-- **`formatMoney(minor, currency)` is now required.** Client components get it from
-  `useCurrency()` (`CurrencyProvider` in the planner layout), which throws outside the provider.
-- **Verified:** typecheck, 1263 unit tests, 770 SQL assertions (740 earlier unchanged), single-tx,
-  `verify-bootstrap.sh`, `next build` (placeholder env), `/start` in headless Chromium.
-  **Not verified:** anything against Supabase: no sign-up, partner email, password change or
-  timezone change has run. **`0045` is not applied to the live project.**
-
-**Session 45 (spec 39):** a third assignee (part B) and a planner login (part C), built on
-branch `claude/spec-39-third-assignee` (**no PR opened**). Asked for as a scoping question,
-written up as a spec over two rounds, then "Okay let's go defaults and build it all" as its own
-turn. Read the spec's **Build status**; the short version:
-
-- **B (`0043`).** `people` (a name; optional `user_id` + `access`), `list_items.assigned_person_id`
-  with a check that a task has at most one of that and `assigned_to`. The assign picker speaks
-  one string (`u:<id>` / `p:<id>`; `src/lib/people.ts`). Settings → People adds/renames/removes.
-- **C (`0044`). The planner is NOT a `collaborators` row**, so `is_collaborator()` and every
-  existing policy are untouched. `can_plan()` + `planner_table_access` (one row per table:
-  write/read/denied/global) generate additive policies. **A new table must be added to
-  `planner_table_access`** or `25_planner_access.sql` fails; a new route directory must be added
-  to `src/lib/planner-routes.ts` or its test fails. `weddings.total_budget` is kept out of reach
-  by giving the planner no policy on `weddings` and a view, `v_wedding_basics`.
-- **Where a planner lands:** nav Overview/Guests/Vendors/Events/Tasks/Moodboards; the couple-only
-  sections redirect them (`CoupleOnly`, per-segment `layout.tsx`); vendor money is hidden
-  (`showMoney`); `PlannerOverview` replaces the dashboard.
-- **Verified:** typecheck, 1236 unit tests, 740 SQL assertions (671 earlier ones unchanged),
-  `verify-bootstrap.sh`, `next build` (placeholder env). Two deliberate policy breaks were caught.
-  **Not verified:** any browser, Supabase, a second login, the invite email, the set-password
-  link. **`0043`/`0044` are not applied to the live project, nor are `0026`-`0042`.**
-- **Housekeeping:** `node_modules` was absent, `npm ci` was run.
-
-
----
-
-## Active work: lists, timeline, reminders, settings, calendar, mobile — see `docs/specs/`
-
-**The full plan moved out of this file and into one spec per feature.** See
-the table near the top of this document, or go straight to
-[`docs/specs/README.md`](specs/README.md) for the index and build order.
-Schema is `0004_lists.sql` + `0005_lists_status_assignment.sql` (spec 1,
-two migrations for one feature: 0004 shipped the core shape, 0005 added
-what answering the open questions required — board status, sub-items,
-recurrence, assignment), `0006_reminders.sql` (spec 2, one enum value),
-and `0007_settings.sql` (spec 3, one column).
-
-Kept here, because it doesn't belong in any one feature's spec:
-
-- **Scope for the whole rebase:** none of lists/timeline, reminders, or
-  settings/calendar/mobile need vendors, budget or Gmail — only
-  `weddings`, `events` and the collaborators already in place. That's why
-  this can ship ahead of V2 rather than as part of it. None of them touch
-  `guests`, `households`, `invitations` or `rsvp_*` either — no
-  guest-facing work is in scope.
-- **This is a narrower slice than the full AI-native product direction**
-  floated in an earlier, unmerged planning pass (ingestion, a vigilance
-  engine, semantic search). Nothing in `docs/specs/` depends on any of
-  that, and nothing there should grow to need it without the planner
-  asking again.
-- **All three specs are now built end to end** — spec 1 (session 8:
-  schema, generation logic, queries/actions, all five screens), spec 2
-  (session 9: schema, digest logic, email template, extended cron,
-  dashboard tiles), and spec 3 (session 10: schema, settings/cut-line/
-  list-appearance actions, `/settings`, `/calendar`, mobile nav,
-  touch-drag fallbacks). See each session's note above, and each spec's
-  own status block, for what's simplified and what's still unverified —
-  nothing in any of them has run against the live project, in a browser,
-  or (for spec 2) sent a real email.
-
-### Parked, not cancelled: invitations, vendors, budget, AI
-
-Section 4 below ("What is left, and who can do it") is the prior priority
-list — the Vercel Preview build that's never gone green, live Supabase
-verification, the sending domain, printing. **All of it is still accurate
-and still has to happen before a real invitation goes out.** It's parked,
-not fixed. Pick it back up when invitations are back on the roadmap. Until
-then, lists/timeline work should not touch `invitations`, `rsvp_*`, or
-`message_log`'s existing `invitation` / `reminder` kinds.
-
----
-
-## 0. Live project
-
-| | |
-| --- | --- |
-| **Project ref** | `<project-ref>` |
-| **URL** | `https://<project-ref>.supabase.co` |
-| **Organisation** | unknown — see open question 6 |
-| **Migrations** | `0001`, `0002`, `0003` reported applied; `0004` and `0005` written and verified locally, neither yet applied here |
-| **Bootstrap** | assumed run — unconfirmed |
-
-**Recorded on the planner's word. No session has ever verified it.** The
-Supabase connector in sessions 2 and 3 was scoped to a different organisation
-and returned `You do not have permission to perform this action` for this ref,
-so not one check query has run against it.
-
-`scripts/verify-live.mjs` exists to close exactly this gap — see section 1.
-Run it, then replace this block with what it actually reported.
-
-> **The other project on the account (`<other-project-ref>`) is not this one.** It is an
-> unrelated production database for a rugby club app — 29 tables, thousands of
-> live rows, 62 migrations of its own. It shares the account and, depending on
-> connector scope, may be the *only* project a session can see, which makes it
-> exactly the wrong thing to reach for when the wedding project looks absent.
-> Never apply these migrations to it, and do not read it "just to check" — the
-> planner has asked explicitly that it not be touched. If `list_projects` does
-> not return `<project-ref>`, the connector is scoped to the wrong
-> organisation: that is a permissions problem to fix, not an empty account.
-
 ---
 
 ## 1. What exists
 
 ### Database — `supabase/migrations/`
 
-Three numbered migrations, applied in order, plus `bootstrap.sql` to create the
-first wedding. Full instructions in `supabase/migrations/README.md`.
+Numbered migrations `0001`–`0046`, applied in order; the table below covers the
+early ones (later ones are named in each spec). `bootstrap.sql` makes a wedding by hand;
+`/start` is the normal way since spec 40. Full instructions in `supabase/migrations/README.md`.
 
 | # | File | What it creates |
 | --- | --- | --- |
@@ -471,48 +285,6 @@ confirm the script exits non-zero.
 
 ---
 
-## 2. What has NOT been verified
-
-Read this before trusting anything above.
-
-- **The migrations are reported applied, but nothing has been verified there.**
-  See section 0. Every green check in section 1 comes from throwaway local
-  clusters running through a shim. A shim is not Supabase Auth: it is exactly
-  where a policy depending on real `auth.uid()` behaviour passes locally and
-  fails live.
-- **Most of the UI is still unopened in a browser — but the pattern of the
-  first screens tried is the important finding, not the specific bugs.**
-  Session 6: password sign-in worked first try; live CSV import worked
-  cleanly; `/guests/rank` needed two separate fixes in a row (blank list,
-  then dead drag-and-drop — both above), and **neither fix has actually been
-  confirmed live**, because this branch's Vercel Preview build has never
-  gone green (see "THE ACTUAL BLOCKER"). **That build going green is the
-  single most useful thing to happen next** — until it does, `/guests/rank`
-  cannot be judged at all. Once it's live: confirm a drag actually moves a
-  row and the new order survives a reload. Read every remaining unopened
-  screen — the question builder, the
-  print sheet, the invitations flow, the public RSVP page and `/w` — with
-  this ratio in mind, not with the assumption that "it type-checks and
-  builds" means it renders or behaves correctly. Neither check can catch a
-  CSS containment bug or a modifier clamping a drag to nothing; only opening
-  the page and trying the interaction can.
-- **No email has been sent.** Without `RESEND_API_KEY` the sender logs instead,
-  by design. The templates have never met a real inbox or a spam filter.
-- **Password sign-in now confirmed working live**, first try, session 6. The
-  `/forgot-password` → `/reset-password` recovery half of the flow is still
-  unconfirmed — only sign-in with an already-set password has been exercised.
-- **Nothing has been printed.** `/invitations/print` is laid out for A4 with
-  `@media print` rules no printer has seen. Print one page before committing a
-  stationery run to it.
-- **The CSV import now confirmed working against a real guest list**, session
-  6, planner-reported as clean. Worth noting for whoever tests next: "clean"
-  here means the planner didn't report a problem, not that every column,
-  every dedupe edge case, and every age-band boundary was individually
-  checked — the ranking bug above was also invisible until someone looked
-  directly at its screen.
-
----
-
 ## 3. Where this veered off the spec
 
 ### 3a. Decisions taken that the spec left open
@@ -592,75 +364,6 @@ Read this before trusting anything above.
   as Yes/No, multi-select joined with commas) is `src/lib/answer-format.ts`,
   unit-tested directly per the `lib/` convention in section 8. Not yet seen
   rendered against real data — see section 2.
-
----
-
-## 4. What is left, and who can do it
-
-**Parked as of session 7 — see "Active work: lists, timeline and
-reminders" above.** Everything below is still true and still has to happen
-before a real invitation goes out; it's just not what the next session
-should pick up first. Kept in full rather than deleted, because none of it
-stops being true just because the priority changed.
-
-**Everything remaining needs credentials, a browser, a printer or a DNS
-record.** A coding session can prepare it and cannot finish it. That is not a
-scheduling problem to route around; it is the shape of the work now.
-
-### The one remaining session — get it running for real
-
-**0. Get this branch's Vercel Preview build to go green — see "THE ACTUAL
-BLOCKER" near the top.** It needs `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` (and likely others) set for the **Preview**
-environment scope in Vercel's project settings — this cannot be done by a
-session, only by the planner in the Vercel dashboard. Nothing below,
-including confirming the two rank-list fixes already in code
-(`ba9bb73`, `52dd4d3`), can be verified until this is green.
-
-1. **Verify what is actually there.** Run the three checks in
-   `supabase/migrations/README.md` (16 tables; zero rows without RLS; 3 views),
-   or `node scripts/verify-live.mjs`, which does those and more. Until this
-   happens, section 0 is hearsay.
-2. **Add both users, with a password,** under Authentication → Users. Sign-up
-   is disabled and sign-in is by email and password, so each account must
-   exist first — set a password there directly, or leave it unset and use the
-   app's own `/forgot-password` flow afterwards to set one by email.
-3. **Run `bootstrap.sql`** with its seven values edited. Status unconfirmed —
-   if `/` renders empty or loops, this is the first thing to check, because
-   `weddings` has no insert policy and the app shows nothing without a wedding
-   row and a collaborator row.
-4. **Set the environment and deploy.** `NEXT_PUBLIC_*`,
-   `SUPABASE_SERVICE_ROLE_KEY`, `INVITE_TOKEN_PEPPER` and `CRON_SECRET` (both
-   `openssl rand -hex 32`). `vercel.json` already schedules the reminder cron
-   for Tuesdays at 10:00 UTC; it returns 401 without `CRON_SECRET`.
-5. **Walk the spec's own "done when"** end to end: add a household, rank it
-   above the cut, send an invitation to your own second address, reply as a
-   guest with dietary requirements, watch it land on the dashboard, export the
-   caterer's CSV.
-6. **Exercise the import hardest**, with a real export from wherever the names
-   actually live. It is new, it writes in bulk, and its dedupe has only ever
-   seen test data.
-7. **Print one page** of `/invitations/print` before trusting a stationery run.
-
-**Start the sending domain today, independently of all the above** — SPF, DKIM,
-DMARC and warming. Days of lead time, sitting directly in front of the one
-immovable deadline. It is the likeliest thing to make V1 technically complete
-and practically broken.
-
-### Then
-
-**This "then" is itself parked.** It used to point straight at V2. As of
-session 7 it instead points at "Active work: lists, timeline and
-reminders" near the top of this file — that work is next, ahead of V2,
-and needs none of the live-verification steps above. Once the lists/timeline
-system and reminders are built and this section's items are actually done,
-resume here: whatever the first real invitation use exposes, then the 3c
-leftovers (saved views, inline edit on more fields), then V2 —
-`docs/wedding-platform-spec.md` has the full plan. Before starting V2,
-decide the Gmail question: testing-mode OAuth issues refresh tokens that
-expire every seven days, and the three ways to live with that are written up
-in the spec. That decision changes the `email_*` tables, so make it before
-the V2 migration.
 
 ---
 
@@ -878,26 +581,11 @@ green light, no matter how small the feature looks.**
 
 ---
 
+---
+
 ## 9. Open questions still blocking
 
-From the spec. (1) and (2) decide whether the schedule is real. **(1) now also
-gates the session-7 work:** task generation (see "Active work" above) needs
-`weddings.wedding_date` to produce anything — without it, `/setup/plan`
-should render an empty state, not an error, so this is worth having an
-answer to but does not block building the feature itself.
-
-1. **Wedding date and invitation send date.** The only fixed dates in the plan.
-2. **RSVP lock date.** Drives the read-only cutover; already enforced by
-   `weddings.rsvp_lock_at` wherever it is set.
-3. **Guest pool size and final capacity.** Sets `weddings.capacity`.
-4. **Sending domain.** See section 4 — start it today regardless of everything
-   else.
-
-Added since, and answerable without the planner:
-
-5. **Did `bootstrap.sql` actually run on `<project-ref>`?** Section 0
-   records the migrations as applied on the planner's word and the bootstrap as
-   assumed. `node scripts/verify-live.mjs` answers this in about ten seconds.
-6. **Which organisation owns that project?** A session whose Supabase connector
-   is scoped elsewhere sees only an unrelated production project and concludes the account is
-   empty. Recording the organisation in section 0 closes that trap for good.
+None for the code. The pre-launch list (wedding date, RSVP lock, capacity, sending domain,
+bootstrap, project organisation) is per-wedding settings or done now that the app is live; it is
+kept in `history/sessions.md`. One worth closing when convenient: run
+`node scripts/verify-live.mjs` once and record which migrations the live project actually has.

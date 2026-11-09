@@ -102,11 +102,11 @@ docs/             spec, per-feature specs, HANDOFF.md (current state)
 
 ## Status
 
-A personal project, built in public and still in progress. The feature specs
-through 40 are built; 41–46 are proposals. Verification so far is typecheck,
-unit tests, the SQL suite and production builds, plus headless-browser checks
-of some screens. [`docs/HANDOFF.md`](docs/HANDOFF.md) lists exactly what has
-and hasn't been verified against a live Supabase project.
+A personal project, built in public. It is live and in use by real couples
+and their guests. Feature specs 1–47 are built. Automated verification is
+typecheck, unit tests, the SQL suite and production builds, plus
+headless-browser checks of some screens. [`docs/HANDOFF.md`](docs/HANDOFF.md)
+has the current state.
 
 ## Licence
 

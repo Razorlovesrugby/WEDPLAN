@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/format";
 
 /**
@@ -8,32 +7,22 @@ import { formatDate } from "@/lib/format";
  * Public, because the people it is written for — guests — have no account and
  * reach it from an RSVP link or the public site. It is deliberately specific:
  * it names the fields this app actually stores (guests, rsvps, rsvp_answers,
- * invitations, message_log, rsvp_token_attempts) rather than the usual generic
- * "we may collect information about you". If those tables change, this page
- * changes with them.
+ * invitations, message_log, rsvp_token_attempts, guest photo uploads) rather
+ * than the usual generic "we may collect information about you". If those
+ * tables change, this page changes with them.
  *
- * Two things it must not do:
- *
- *   - Call serverEnv(). CI builds with only the NEXT_PUBLIC_* values set, so
- *     touching the server schema here would fail the build for a page that is
- *     otherwise static text. The contact route is therefore the reply-to on
- *     the invitation email, which is configured, rather than an address
- *     inlined from the environment.
- *   - Claim a storage region. Nobody has created the Supabase project yet
- *     (docs/HANDOFF.md), so the region is not knowable from this repository.
- *     "Processors" below names who holds the data and why; add the region
- *     once the project exists, because it is the one fact a guest in the UK
- *     or the EU may actually want.
+ * It names no couple. Couples sign themselves up, so there is no single
+ * wedding to name: an earlier version loaded the first wedding ever created
+ * and showed that couple's name to every wedding's guests. The page has no
+ * database read at all, so it renders even when everything else is broken.
  */
-
-export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Privacy",
 };
 
 /** Change this whenever the wording below changes materially. */
-const LAST_UPDATED = "2026-09-16";
+const LAST_UPDATED = "2026-11-09";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -44,36 +33,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/**
- * The couple's name and timezone, or nothing.
- *
- * Same shape as the public site: no session here, V1 is one wedding, so this
- * takes the first. Wrapped in a try/catch because this is the one page that
- * has to render when everything else is broken — a privacy notice that 500s
- * because the database is unreachable, or because the service role key is
- * missing from a preview deployment, is a privacy notice nobody can read when
- * they most want to. The name is a courtesy; the text below is the point.
- */
-async function loadWedding(): Promise<{ name: string; timezone: string } | null> {
-  try {
-    const { data } = await createAdminClient()
-      .from("weddings")
-      .select("name, timezone")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return data ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export default async function PrivacyPage() {
-  const wedding = await loadWedding();
-
-  const couple = wedding?.name ?? "the couple";
-  const timezone = wedding?.timezone ?? "Europe/London";
-
+export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
       <header className="pb-8">
@@ -82,18 +42,20 @@ export default async function PrivacyPage() {
           What this site holds about you, why, and how to get it changed or deleted.
         </p>
         <p className="mt-1 text-sm text-muted">
-          Last updated {formatDate(LAST_UPDATED, timezone)}
+          Last updated {formatDate(LAST_UPDATED, "Pacific/Auckland")}
         </p>
       </header>
 
       <Section title="Who holds it">
         <p>
-          This site is run by {couple} to organise their wedding. It is not a company and there
-          is no business behind it: the only people who can sign in are the couple and anyone
-          they have explicitly added to help plan.
+          The couple who invited you. They use this site to organise their wedding, and they
+          decide what goes on the guest list and what happens to it. The only people who can see
+          a wedding&rsquo;s guest list are that couple and anyone they have explicitly added to
+          help plan; other couples using the site cannot see it.
         </p>
         <p>
-          It is not run for profit, your details are never sold, and nothing here is used for
+          The site itself is run by an individual, not a company, and is free to use. It is not
+          run for profit, your details are never sold, and nothing here is used for
           advertising.
         </p>
       </Section>
@@ -127,6 +89,10 @@ export default async function PrivacyPage() {
             <strong>Email records.</strong> The address an invitation or reminder was sent to,
             and whether it was delivered or failed.
           </li>
+          <li>
+            <strong>Photos.</strong> If the couple turn on their photo gallery and you upload a
+            photo from your RSVP link, the photo and which household sent it.
+          </li>
         </ul>
         <p>
           Most of it either came from the couple, who typed or imported it from their own
@@ -154,9 +120,9 @@ export default async function PrivacyPage() {
           been answered. That is the whole purpose. When the wedding is over, so is the purpose.
         </p>
         <p>
-          In UK and EU data protection terms, that is the couple&rsquo;s legitimate interest in
-          organising their own wedding, and — for dietary and accessibility details — your
-          explicit consent, given by choosing to write them down.
+          New Zealand&rsquo;s Privacy Act 2020 applies. Your details are collected for that
+          purpose only, and dietary and accessibility details only because you chose to write
+          them down.
         </p>
       </Section>
 
@@ -170,6 +136,11 @@ export default async function PrivacyPage() {
             <strong>The caterer and the venue.</strong> They receive a list of confirmed
             attendees with dietary notes, because that is what a kitchen needs. They do not
             receive your contact details or the planning notes.
+          </li>
+          <li>
+            <strong>Other guests, for photos only.</strong> A photo you upload is checked by the
+            couple and, once they approve it, shown in the gallery on their wedding website. Ask
+            the couple and they will take it down.
           </li>
           <li>
             <strong>Nobody else.</strong> The guest list is not published, not shared with other
@@ -193,11 +164,18 @@ export default async function PrivacyPage() {
           </li>
         </ul>
         <p>Nothing is sent anywhere else. There are no third-party analytics or advertising tools.</p>
+        <p>
+          Some couples add a <strong>Google Maps</strong> map or a <strong>Spotify</strong>{" "}
+          playlist to their wedding website. If you view one, it loads from Google or Spotify,
+          who may set their own cookies under their own privacy policies. This site sends them
+          nothing about you.
+        </p>
       </Section>
 
       <Section title="Cookies and tracking">
         <p>
-          As a guest, you are given no cookies at all. There are no analytics scripts, no
+          As a guest, this site gives you no cookies at all (a Google Maps or Spotify embed, if
+          the couple added one, is the exception described above). There are no analytics scripts, no
           advertising tags and no tracking pixels in the emails — the &ldquo;opened&rdquo; marker
           the couple see is simply the first time your RSVP link was loaded, which tells them a
           message arrived and nothing about you.
@@ -216,7 +194,7 @@ export default async function PrivacyPage() {
       <Section title="How long it is kept">
         <p>
           Until the wedding is over and the last of the thank-yous are out — then the guest list,
-          the RSVPs and the email records are deleted. Rate-limiting records are transient and
+          the RSVPs, the photos and the email records are deleted. Rate-limiting records are transient and
           matter for minutes.
         </p>
         <p>
@@ -233,12 +211,12 @@ export default async function PrivacyPage() {
           removes them; it does not affect your RSVP.
         </p>
         <p>
-          If you are in the UK and you are unhappy with how a request was handled, you can
-          complain to the Information Commissioner&rsquo;s Office at{" "}
-          <a className="underline hover:text-accent" href="https://ico.org.uk/make-a-complaint/">
-            ico.org.uk
+          If you are unhappy with how a request was handled, you can complain to New
+          Zealand&rsquo;s Privacy Commissioner at{" "}
+          <a className="underline hover:text-accent" href="https://www.privacy.org.nz/your-rights/making-a-complaint/">
+            privacy.org.nz
           </a>
-          . In the EU, your national data protection authority does the same job.
+          .
         </p>
       </Section>
 
