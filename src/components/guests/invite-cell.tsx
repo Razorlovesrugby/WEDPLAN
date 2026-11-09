@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ACTION_LABEL,
@@ -16,6 +16,9 @@ import {
   setGuestEventInvite,
   setRsvpStatus,
 } from "@/server/actions/invites";
+import { STATE_DESCRIPTION } from "@/lib/guest-table";
+import { StatusMark } from "./status-mark";
+import { useFixedMenu } from "./use-fixed-menu";
 
 /**
  * One cell of the guest grid: this person, this event (spec 22 §5).
@@ -31,15 +34,6 @@ import {
  * confirm text says "the whole invitation" out loud.
  */
 
-const STATE_STYLE: Record<InviteState, string> = {
-  not_invited: "text-muted/60",
-  invited: "text-muted",
-  sent: "text-muted",
-  yes: "bg-green-50 text-green-800",
-  no: "bg-red-50 text-red-800",
-  maybe: "bg-amber-50 text-amber-800",
-};
-
 export function InviteCell({
   guestId,
   householdId,
@@ -50,6 +44,7 @@ export function InviteCell({
   /** True when this person is singled out — the grid marks it with a dot. */
   overridden,
   hasInvitation,
+  dimmed = false,
 }: {
   guestId: string;
   householdId: string;
@@ -59,12 +54,17 @@ export function InviteCell({
   state: InviteState;
   overridden: boolean;
   hasInvitation: boolean;
+  /** Faded for someone who can't attend; the menu itself stays full strength. */
+  dimmed?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const cellRef = useRef<HTMLTableCellElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const menuStyle = useFixedMenu(open, close, buttonRef, cellRef, 224);
 
   useEffect(() => {
     if (!open) return;
@@ -128,29 +128,42 @@ export function InviteCell({
 
   const actions = actionsFor(state);
 
+  const words = `${guestName}, ${eventName}: ${STATE_DESCRIPTION[state]}${
+    overridden ? ". Set for this person, not their household" : ""
+  }`;
+
   return (
-    <td ref={cellRef} className={`relative px-3 py-1.5 ${STATE_STYLE[state]}`}>
+    <td ref={cellRef} className="px-1 py-1 text-center">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((was) => !was)}
         disabled={pending}
-        className="w-full text-left hover:underline disabled:opacity-60"
+        className={`inline-flex min-h-8 min-w-10 items-center justify-center rounded-md hover:bg-line/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60 ${dimmed ? "opacity-55" : ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${guestName}, ${eventName}: ${INVITE_LABEL[state]}`}
-        title={overridden ? "Set for this person, not their household" : undefined}
+        aria-label={words}
+        title={words}
       >
-        {INVITE_LABEL[state]}
-        {overridden ? <span className="ml-1 text-[0.6rem] align-super">•</span> : null}
+        <StatusMark state={state} overridden={overridden} />
       </button>
 
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 w-56 rounded border border-line bg-white p-1 shadow-lg"
+          aria-label={`${guestName}, ${eventName}`}
+          style={menuStyle}
+          className="z-40 rounded-md border border-line bg-white p-1 text-left shadow-lg"
         >
+          <p className="flex items-center gap-2 border-b border-line px-2 pb-2 pt-1 text-xs text-muted">
+            <StatusMark state={state} overridden={overridden} />
+            <span>
+              <span className="block font-medium text-ink">{eventName}</span>
+              {STATE_DESCRIPTION[state]}
+            </span>
+          </p>
           {!hasInvitation ? (
-            <p className="px-2 py-1.5 text-xs text-muted">
+            <p className="px-2 py-1.5 text-xs font-normal text-muted">
               No invitation yet — create one on Invitations before inviting them to events.
             </p>
           ) : null}
@@ -162,7 +175,7 @@ export function InviteCell({
               role="menuitem"
               disabled={pending || !hasInvitation}
               onClick={() => run(action)}
-              className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-paper disabled:opacity-50"
+              className="block min-h-9 w-full rounded px-2 py-1.5 text-left text-sm font-normal text-ink hover:bg-paper disabled:opacity-50"
             >
               {ACTION_LABEL[action]}
             </button>

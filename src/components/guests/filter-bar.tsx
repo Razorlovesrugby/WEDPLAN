@@ -85,7 +85,8 @@ export function FilterBar({
         </select>
       </label>
 
-      {events.length > 1 ? (
+      {/* Shown with one event too once a reply bar has set it, so it can be seen and cleared. */}
+      {events.length > 1 || current("event") ? (
         <label>
           <span className="mb-1 block text-xs text-muted">For event</span>
           <select value={current("event")} onChange={(e) => setParam("event", e.target.value)} className="field">
@@ -166,7 +167,14 @@ export function FilterBar({
           className="btn"
           onClick={() => {
             clearTimeout(searchDebounce.current);
-            startTransition(() => router.replace("/guests", { scroll: false }));
+            // Clearing filters keeps the table's view and grouping (spec 47).
+            const kept = new URLSearchParams();
+            for (const key of ["view", "rows"]) {
+              const value = searchParams.get(key);
+              if (value) kept.set(key, value);
+            }
+            const query = kept.toString();
+            startTransition(() => router.replace(query ? `/guests?${query}` : "/guests", { scroll: false }));
           }}
         >
           Clear {activeCount}
