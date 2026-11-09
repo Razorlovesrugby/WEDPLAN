@@ -166,7 +166,14 @@ export function FilterBar({
           className="btn"
           onClick={() => {
             clearTimeout(searchDebounce.current);
-            startTransition(() => router.replace("/guests", { scroll: false }));
+            // Clearing filters keeps the table's view and grouping (spec 47).
+            const kept = new URLSearchParams();
+            for (const key of ["view", "rows"]) {
+              const value = searchParams.get(key);
+              if (value) kept.set(key, value);
+            }
+            const query = kept.toString();
+            startTransition(() => router.replace(query ? `/guests?${query}` : "/guests", { scroll: false }));
           }}
         >
           Clear {activeCount}

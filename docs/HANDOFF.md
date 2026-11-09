@@ -22,6 +22,19 @@
 
 ## Recent sessions
 
+**Session 54 (spec 47):** the guest table, built on branch `claude/pensive-euler-natrmu` (**no PR
+opened**). A brainstorm with mockups, then a spec, six questions (all recommended, plus a Planning
+view), then "Build it all". No migration. Read the spec's §11:
+
+- **The table** (`src/components/guests/guests-table.tsx`) groups by household; view and grouping
+  are `?view=` / `?rows=people`, rules in `src/lib/guest-table.ts`. Event cells are symbols
+  (`status-mark.tsx`); each household has a **Links ▾** menu (`household-links.tsx`); reply bars
+  above the table are `event-summary.tsx`.
+- **Behaviour change:** `listGuests` with both `rsvp` and `event` now keeps only guests invited to
+  that event (the exports follow).
+- **Verified:** typecheck, 1410 unit tests, build, a sample page in headless Chromium at 1280px and
+  an emulated iPad, axe clean. **Not verified:** Supabase, real data, a real iPad or phone.
+
 **Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (**no
 PR opened**). Read the spec's §10:
 

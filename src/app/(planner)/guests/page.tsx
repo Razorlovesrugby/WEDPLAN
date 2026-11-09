@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { EventSummary } from "@/components/guests/event-summary";
 import { FilterBar } from "@/components/guests/filter-bar";
 import { GuestsTable } from "@/components/guests/guests-table";
 import { SubTabs } from "@/components/sub-tabs";
 import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { countActiveFilters, guestFiltersToQuery, parseGuestFilters } from "@/lib/filters";
+import { formatDate } from "@/lib/format";
+import { eventReplyCounts } from "@/lib/guest-table";
 import { listGuests, listHouseholds } from "@/server/queries/guests";
 import { listInvites } from "@/server/queries/invites";
 import { listSaveTheDateOpens } from "@/server/queries/save-the-date";
@@ -20,10 +23,14 @@ export default async function GuestsPage({
   const filters = parseGuestFilters(params);
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
+  const activeCount = countActiveFilters(filters);
 
-  const [guests, tags, events, households, cutLines, collaborators, invites, saveTheDateOpens] =
+  const [guests, everyone, tags, events, households, cutLines, collaborators, invites, saveTheDateOpens] =
     await Promise.all([
     listGuests(wedding.id, filters),
+    // The reply bars count the whole wedding, so they hold still while the
+    // table below is filtered (spec 47 §4.4). Unfiltered, it's the same list.
+    activeCount > 0 ? listGuests(wedding.id, parseGuestFilters({})) : null,
     getTags(wedding.id),
     getEvents(wedding.id),
     listHouseholds(wedding.id),
@@ -32,6 +39,10 @@ export default async function GuestsPage({
     listInvites(wedding.id),
     listSaveTheDateOpens(wedding.id),
   ]);
+
+  const replyCounts = Object.fromEntries(
+    events.map((event) => [event.id, eventReplyCounts(event.id, invites, everyone ?? guests)]),
+  );
 
   return (
     <div className="space-y-5">
@@ -57,12 +68,14 @@ export default async function GuestsPage({
         </div>
       </div>
 
+      <EventSummary events={events} counts={replyCounts} />
+
       <FilterBar
         tags={tags}
         events={events}
         cutLines={cutLines}
         collaborators={collaborators}
-        activeCount={countActiveFilters(filters)}
+        activeCount={activeCount}
       />
 
       <GuestsTable
@@ -74,6 +87,10 @@ export default async function GuestsPage({
         invites={invites}
         weddingSlug={wedding.slug}
         saveTheDateOpens={saveTheDateOpens}
+        weddingName={wedding.name}
+        dateLabel={
+          wedding.wedding_date ? formatDate(wedding.wedding_date, wedding.timezone) : "date to be confirmed"
+        }
       />
     </div>
   );

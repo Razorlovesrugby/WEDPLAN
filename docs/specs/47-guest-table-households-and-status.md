@@ -1,8 +1,8 @@
 # Feature spec: The guest table — less sideways scrolling, status at a glance, links on the row
 
-**Status: questions answered (2026-11-09), branch `claude/pensive-euler-natrmu`. Nothing built.**
-No migration expected. All six questions in §8 are answered (§10, every recommendation taken, plus
-a Planning view). Not yet authorised to build.
+**Status: built (2026-11-09), branch `claude/pensive-euler-natrmu`, no PR.** No migration. All six
+questions in §8 were answered (§10: every recommendation, plus a Planning view), then "Build it
+all". **§11 says what was built and where it departs from §4.**
 
 **Depends on:** spec 4 (households), spec 5 (tiers), spec 20 (last name column, named sides),
 spec 21 (household addresses), spec 22 (per-event invite cells), spec 29/30 (save the date,
@@ -175,3 +175,47 @@ and date label, which `requireWedding()` already returns.
    spec.
 5. **Links menu:** all four (save-the-date link, invitation link, WhatsApp message, QR code).
 6. **Event summary bars:** included, as in §4.4.
+
+## 11. Build status (2026-11-09)
+
+Built as §4 describes, with these departures and details:
+
+- **Views (`src/lib/guest-table.ts`).** RSVP, Contact, Catering, Planning, Everything. Everything
+  also shows Address. **Links is the last column in every view**, Catering included, so it is
+  always in the same place. Grouping is `?rows=people`. Both are switched with
+  `history.replaceState`, so no reload; Clear filters keeps them.
+- **A household of one is a single row**, not a household row plus a person row. It shows the
+  household's own cells, and the household name under the person's when the two differ.
+- **Side** is per guest in the data. The household row shows it when everyone shares it, otherwise
+  "Mixed" and each person row shows their own.
+- **Last name** moved into the name cell (still editable), so it no longer needs a column. Flat
+  mode adds a Household column after the name.
+- **Faded rows** for people who can't attend are grey text and grey colours, not transparency, so
+  they pass WCAG contrast (axe flagged the transparent version). Only the event symbols are faded.
+- **Menus** (the event cell's and Links) are fixed-position (`use-fixed-menu.ts`) so the table's
+  scroll box no longer clips them on the last rows. They open upward near the bottom of the
+  window and close if the page scrolls. If the clipboard refuses, the Links menu shows the text
+  selected in a box to copy by hand.
+- **Reply bars** count the whole wedding, not the filtered list, so they hold still while the
+  table narrows. With filters on, the page loads the guest list a second time, unfiltered. A
+  fifth, grey "Can't come" part (not a link: there is no filter for it) holds people flagged
+  unable who haven't answered that event.
+- **Filter fix in `listGuests`.** With both `rsvp` and `event` set, it now keeps only guests
+  invited to that event (one extra read of `v_guest_event_invites`, only then). Before,
+  "no answer for the brunch" also listed everyone never invited to the brunch, so a bar's number
+  and the list behind it disagreed. The CSV exports use `listGuests`, so they follow.
+- **Save the date** shows on the household row only; its Copy link moved to the Links menu.
+
+**Files:** `src/lib/guest-table.ts` (+ test), `src/components/guests/{guests-table, invite-cell,
+save-the-date-cell, filter-bar}.tsx`, new `status-mark.tsx`, `household-links.tsx`,
+`event-summary.tsx`, `use-fixed-menu.ts`, `src/app/(planner)/guests/page.tsx`,
+`src/server/queries/guests.ts`.
+
+**Verified:** typecheck, 1410 unit tests (15 new), `next build` (placeholder env). A temporary
+sample page (deleted) rendered the table with 7 households in headless Chromium: at 1280px the
+RSVP, Contact, Catering and Planning views and the flat list fit without sideways scrolling,
+Everything scrolls with the name pinned; Links and event-cell menus open, take focus, close on
+Esc, and aren't clipped on the last row; axe-core reports no violations on the page or with the
+Links menu open. **Not verified:** Supabase or real data (no copy, invite or RSVP action has run
+from here), a real iPad or phone. On an emulated iPad in portrait (768px) the RSVP view still
+scrolls sideways a little (about 150px), as Q4 accepted for small screens.

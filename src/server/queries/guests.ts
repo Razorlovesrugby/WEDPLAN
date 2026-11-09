@@ -33,7 +33,17 @@ export const listGuests = cache(
   async (weddingId: string, filters: GuestFilters): Promise<GuestListItem[]> => {
     const supabase = await createClient();
 
-    const [{ data: guests, error }, { data: households, error: householdError }] = await Promise.all([
+    // An answer for one event only means something for people invited to it.
+    // Without this, "no answer yet for the brunch" also listed everyone who
+    // was never invited to the brunch, and the guest table's reply bars
+    // (spec 47) would disagree with the list behind them.
+    const narrowToInvited = Boolean(filters.rsvp && filters.event);
+
+    const [
+      { data: guests, error },
+      { data: households, error: householdError },
+      { data: invited, error: invitedError },
+    ] = await Promise.all([
       supabase
         .from("guests")
         .select(
@@ -42,10 +52,22 @@ export const listGuests = cache(
         .eq("wedding_id", weddingId)
         .is("deleted_at", null),
       supabase.from("v_households").select("*").eq("wedding_id", weddingId),
+      narrowToInvited
+        ? supabase
+            .from("v_guest_event_invites")
+            .select("guest_id")
+            .eq("wedding_id", weddingId)
+            .eq("event_id", filters.event!)
+            .eq("invited", true)
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (error) throw new Error(`Could not load guests: ${error.message}`);
     if (householdError) throw new Error(`Could not load tiers: ${householdError.message}`);
+    if (invitedError) throw new Error(`Could not load invitations: ${invitedError.message}`);
+    const invitedIds = narrowToInvited
+      ? new Set(((invited ?? []) as { guest_id: string }[]).map((row) => row.guest_id))
+      : null;
 
     const householdById = new Map<string, HouseholdView>(
       ((households ?? []) as HouseholdView[]).map((h) => [h.id, h]),
@@ -65,7 +87,10 @@ export const listGuests = cache(
       };
     });
 
-    return sortGuests(rows.filter((guest) => matches(guest, filters)), filters.sort);
+    return sortGuests(
+      rows.filter((guest) => (!invitedIds || invitedIds.has(guest.id)) && matches(guest, filters)),
+      filters.sort,
+    );
   },
 );
 
