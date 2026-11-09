@@ -32,6 +32,8 @@ view), then "Build it all". No migration. Read the spec's §11:
   above the table are `event-summary.tsx`.
 - **Behaviour change:** `listGuests` with both `rsvp` and `event` now keeps only guests invited to
   that event (the exports follow).
+- **After a review (same session):** `listGuests` now filters `listAllGuests` (one cached read);
+  `listInvites` pages past the 1000-row cap. Ten fixes in the spec's §11 "Review fixes".
 - **Verified:** typecheck, 1410 unit tests, build, a sample page in headless Chromium at 1280px and
   an emulated iPad, axe clean. **Not verified:** Supabase, real data, a real iPad or phone.
 

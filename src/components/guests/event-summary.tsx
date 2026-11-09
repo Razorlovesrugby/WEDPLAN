@@ -8,7 +8,7 @@ import type { ReplyCounts } from "@/lib/guest-table";
  * One card per event above the guest table (spec 47 §4.4): how many are
  * coming, and a bar of the replies so far.
  *
- * Each part of the bar is a link carrying the guest filters that produce it,
+ * Each part of the bar is a link to exactly the guests it counts,
  * the way the dashboard's tiles work, so "who hasn't answered the reception?"
  * is one click. Clicking the part already showing clears it. The counts are
  * for the whole wedding, not the filtered list, so the overview stays put
@@ -37,12 +37,15 @@ export function EventSummary({
   const activeEvent = searchParams.get("event");
   const activeRsvp = searchParams.get("rsvp");
 
+  // The counts are for the whole wedding, so a link keeps only the table's
+  // view and grouping: the list it opens then holds exactly that many people.
   function href(eventId: string, part: Part, active: boolean): string {
-    const params = new URLSearchParams(searchParams.toString());
-    if (active) {
-      params.delete("rsvp");
-      params.delete("event");
-    } else {
+    const params = new URLSearchParams();
+    for (const key of ["view", "rows"]) {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    }
+    if (!active) {
       params.set("rsvp", part);
       params.set("event", eventId);
     }

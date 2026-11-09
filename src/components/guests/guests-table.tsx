@@ -16,12 +16,12 @@ import {
   GUEST_VIEWS,
   columnsFor,
   groupByHousehold,
-  householdEventSummary,
   parseGrouped,
   parseGuestView,
   type GuestColumn,
   type GuestView,
   type HouseholdGroup,
+  type HouseholdSummary,
 } from "@/lib/guest-table";
 import { guestName, sideLabel } from "@/lib/format";
 import { tierBadgeClass } from "@/lib/tier-colors";
@@ -69,6 +69,8 @@ export function GuestsTable({
   invites,
   weddingSlug,
   saveTheDateOpens,
+  invitationIds,
+  householdSummaries,
   weddingName,
   dateLabel,
 }: {
@@ -82,6 +84,10 @@ export function GuestsTable({
   weddingSlug: string;
   /** Save-the-date opens by household id (0031). */
   saveTheDateOpens: Record<string, SaveTheDateOpens>;
+  /** Each household's invitation id, for its Links menu. */
+  invitationIds: Record<string, string>;
+  /** The household rows' event cells and size, from the whole household. */
+  householdSummaries: Record<string, HouseholdSummary>;
   /** For the WhatsApp message in each household's Links menu. */
   weddingName: string;
   dateLabel: string;
@@ -109,11 +115,6 @@ export function GuestsTable({
     () => new Map(invites.map((row) => [`${row.guest_id}:${row.event_id}`, row])),
     [invites],
   );
-  const invitationByHousehold = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const row of invites) if (row.invitation_id) map.set(row.household_id, row.invitation_id);
-    return map;
-  }, [invites]);
 
   const groups = useMemo(() => groupByHousehold(guests), [guests]);
 
@@ -226,7 +227,9 @@ export function GuestsTable({
 
   // ---- cells -------------------------------------------------------------
 
-  const multiGroups = groups.filter((group) => group.guests.length > 1);
+  const multiGroups = groups.filter(
+    (group) => (householdSummaries[group.householdId]?.size ?? group.guests.length) > 1,
+  );
   const anyCollapsible = grouped && multiGroups.length > 0;
   const allCollapsed = anyCollapsible && multiGroups.every((group) => collapsed.has(group.householdId));
 
@@ -324,7 +327,7 @@ export function GuestsTable({
         householdName={householdName}
         weddingSlug={weddingSlug}
         address={household ? { slug: household.slug, suffix: household.slug_suffix } : null}
-        invitationId={invitationByHousehold.get(householdId) ?? null}
+        invitationId={invitationIds[householdId] ?? null}
         weddingName={weddingName}
         dateLabel={dateLabel}
       />
@@ -531,7 +534,9 @@ export function GuestsTable({
               <td key={event.id} className={`px-1 py-1.5 text-center ${fade}`}>
                 <HouseholdMark
                   eventName={event.name}
-                  summary={householdEventSummary(group.guests.map((guest) => stateFor(guest, event.id)))}
+                  summary={
+                    householdSummaries[group.householdId]?.events[event.id] ?? { kind: "same", state: "not_invited" }
+                  }
                 />
               </td>
             ))}
@@ -547,6 +552,8 @@ export function GuestsTable({
     const ids = group.guests.map((guest) => guest.id);
     const picked = ids.filter((id) => selected.has(id)).length;
     const isCollapsed = collapsed.has(group.householdId);
+    // A filter can leave some of the household off screen.
+    const size = householdSummaries[group.householdId]?.size ?? ids.length;
     const mixedSide = group.guests.some((guest) => guest.side !== first.side);
     const allUnable = group.guests.every((guest) => guest.unable_to_attend_at !== null);
     const fade = allUnable ? FADED : "";
@@ -558,7 +565,7 @@ export function GuestsTable({
             <span className="flex items-center gap-2.5">
               <input
                 type="checkbox"
-                aria-label={`Select everyone in ${first.household_name}`}
+                aria-label={`Select ${size > ids.length ? "the people shown" : "everyone"} in ${first.household_name}`}
                 checked={picked === ids.length}
                 ref={(box) => {
                   if (box) box.indeterminate = picked > 0 && picked < ids.length;
@@ -579,8 +586,8 @@ export function GuestsTable({
               <Link href={`/households/${group.householdId}`} className="font-semibold hover:underline">
                 {first.household_name}
               </Link>
-              <span className="text-xs tabular-nums text-muted" aria-label={`${ids.length} people`}>
-                {ids.length}
+              <span className="text-xs tabular-nums text-muted">
+                {size > ids.length ? `${ids.length} of ${size} shown` : ids.length}
               </span>
             </span>
           </td>
@@ -761,7 +768,11 @@ export function GuestsTable({
             <tbody>
               {grouped
                 ? groups.map((group) =>
-                    group.guests.length === 1 ? personRow(group.guests[0]!, "solo") : householdRows(group),
+                    // One row only for a household of one, not for a bigger one
+                    // a filter has narrowed to one person.
+                    (householdSummaries[group.householdId]?.size ?? group.guests.length) === 1
+                      ? personRow(group.guests[0]!, "solo")
+                      : householdRows(group),
                   )
                 : guests.map((guest) => personRow(guest, "flat"))}
             </tbody>

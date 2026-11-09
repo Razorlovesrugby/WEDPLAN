@@ -1,20 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { absoluteUrl } from "@/lib/env";
 import { whatsappMessage } from "@/lib/email/templates-client";
 import { saveTheDatePath } from "@/lib/site/save-the-date";
-import type { HouseholdAddress } from "@/lib/site/household-slug";
-import { revealInvitationLink } from "@/server/actions/invitations";
+import { householdPath, type HouseholdAddress } from "@/lib/site/household-slug";
 import { useFixedMenu } from "./use-fixed-menu";
 
 /**
  * "Links ▾" on a household's row (spec 47 §4.5): the links a planner pastes
  * into whichever chat that household reads, without leaving the guest list.
  *
- * The same actions as Invitations → Send, which keeps its own buttons; this
- * is a second way in, not a move. Copy rather than send: nothing here
- * emails anyone.
+ * The same links as Invitations → Send, which keeps its own buttons; this is
+ * a second way in, not a move. Copy rather than send: nothing here emails
+ * anyone. The links are built here, not fetched: Safari refuses a clipboard
+ * write that waits on the network after the click.
  */
 export function HouseholdLinks({
   householdName,
@@ -37,8 +37,6 @@ export function HouseholdLinks({
   const [copied, setCopied] = useState<string | null>(null);
   /** Shown when the clipboard refuses, so the text can be copied by hand. */
   const [fallback, setFallback] = useState<{ label: string; text: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
   const wrapper = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -47,7 +45,6 @@ export function HouseholdLinks({
   const close = useCallback(() => {
     setOpen(false);
     setFallback(null);
-    setError(null);
   }, []);
   const style = useFixedMenu(open, close, button, wrapper, 256);
 
@@ -90,20 +87,12 @@ export function HouseholdLinks({
   }
 
   function copyInvitation(asMessage: boolean) {
-    if (!invitationId) return;
-    startTransition(async () => {
-      const result = await revealInvitationLink(invitationId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      await copy(
-        asMessage ? "WhatsApp message copied" : "Invitation link copied",
-        asMessage
-          ? whatsappMessage({ weddingName, householdName, dateLabel, url: result.data.url })
-          : result.data.url,
-      );
-    });
+    if (!address) return;
+    const url = absoluteUrl(householdPath(weddingSlug, address));
+    void copy(
+      asMessage ? "WhatsApp message copied" : "Invitation link copied",
+      asMessage ? whatsappMessage({ weddingName, householdName, dateLabel, url }) : url,
+    );
   }
 
   function onKeyDown(event: React.KeyboardEvent) {
@@ -130,7 +119,15 @@ export function HouseholdLinks({
   const hint = <span className="shrink-0 text-xs text-muted">No invitation yet</span>;
 
   return (
-    <div ref={wrapper} className="inline-block" onKeyDown={open ? onKeyDown : undefined}>
+    <div
+      ref={wrapper}
+      className="inline-block"
+      onKeyDown={open ? onKeyDown : undefined}
+      // Tabbing out closes it, like clicking away does.
+      onBlur={(event) => {
+        if (open && event.relatedTarget && !wrapper.current?.contains(event.relatedTarget)) close();
+      }}
+    >
       <button
         ref={button}
         type="button"
@@ -201,7 +198,7 @@ export function HouseholdLinks({
               <button
                 type="button"
                 role="menuitem"
-                disabled={noInvitation || pending}
+                disabled={noInvitation || !address}
                 className={item}
                 onClick={() => copyInvitation(false)}
               >
@@ -211,7 +208,7 @@ export function HouseholdLinks({
               <button
                 type="button"
                 role="menuitem"
-                disabled={noInvitation || pending}
+                disabled={noInvitation || !address}
                 className={item}
                 onClick={() => copyInvitation(true)}
               >
@@ -240,7 +237,6 @@ export function HouseholdLinks({
                   </span>
                 </a>
               )}
-              {error ? <p className="px-2.5 py-1.5 text-xs text-red-700">{error}</p> : null}
             </>
           )}
         </div>

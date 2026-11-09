@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { GuestFilters } from "@/lib/filters";
 import { isExcludedFromCounts } from "@/lib/unable-to-attend";
+import { listInvites } from "./invites";
 import type { GuestRow, HouseholdView, RsvpStatus } from "@/lib/types/database";
 
 export type GuestListItem = GuestRow & {
@@ -31,68 +32,66 @@ export type GuestListItem = GuestRow & {
  */
 export const listGuests = cache(
   async (weddingId: string, filters: GuestFilters): Promise<GuestListItem[]> => {
-    const supabase = await createClient();
-
     // An answer for one event only means something for people invited to it.
     // Without this, "no answer yet for the brunch" also listed everyone who
     // was never invited to the brunch, and the guest table's reply bars
     // (spec 47) would disagree with the list behind them.
-    const narrowToInvited = Boolean(filters.rsvp && filters.event);
-
-    const [
-      { data: guests, error },
-      { data: households, error: householdError },
-      { data: invited, error: invitedError },
-    ] = await Promise.all([
-      supabase
-        .from("guests")
-        .select(
-          "*, households(display_name, rank, address), guest_tags(tag_id), rsvps(event_id, status)",
-        )
-        .eq("wedding_id", weddingId)
-        .is("deleted_at", null),
-      supabase.from("v_households").select("*").eq("wedding_id", weddingId),
-      narrowToInvited
-        ? supabase
-            .from("v_guest_event_invites")
-            .select("guest_id")
-            .eq("wedding_id", weddingId)
-            .eq("event_id", filters.event!)
-            .eq("invited", true)
-        : Promise.resolve({ data: null, error: null }),
+    const [all, invites] = await Promise.all([
+      listAllGuests(weddingId),
+      filters.rsvp && filters.event ? listInvites(weddingId) : null,
     ]);
-
-    if (error) throw new Error(`Could not load guests: ${error.message}`);
-    if (householdError) throw new Error(`Could not load tiers: ${householdError.message}`);
-    if (invitedError) throw new Error(`Could not load invitations: ${invitedError.message}`);
-    const invitedIds = narrowToInvited
-      ? new Set(((invited ?? []) as { guest_id: string }[]).map((row) => row.guest_id))
+    const invitedIds = invites
+      ? new Set(
+          invites.filter((row) => row.invited && row.event_id === filters.event).map((row) => row.guest_id),
+        )
       : null;
 
-    const householdById = new Map<string, HouseholdView>(
-      ((households ?? []) as HouseholdView[]).map((h) => [h.id, h]),
-    );
-
-    const rows: GuestListItem[] = (guests ?? []).map((guest) => {
-      const household = householdById.get(guest.household_id);
-      return {
-        ...guest,
-        household_name: guest.households?.display_name ?? "—",
-        household_rank: guest.households?.rank ?? "",
-        household_address: guest.households?.address ?? null,
-        tier: household?.tier ?? "",
-        tier_position: household?.tier_position ?? 0,
-        tag_ids: (guest.guest_tags ?? []).map((t) => t.tag_id),
-        rsvps: guest.rsvps ?? [],
-      };
-    });
-
     return sortGuests(
-      rows.filter((guest) => (!invitedIds || invitedIds.has(guest.id)) && matches(guest, filters)),
+      all.filter((guest) => (!invitedIds || invitedIds.has(guest.id)) && matches(guest, filters)),
       filters.sort,
     );
   },
 );
+
+/**
+ * Every guest, unfiltered and unsorted. Cached per request by wedding id, so
+ * the guest page's filtered list and its reply bars (spec 47) share one read.
+ */
+export const listAllGuests = cache(async (weddingId: string): Promise<GuestListItem[]> => {
+  const supabase = await createClient();
+
+  const [{ data: guests, error }, { data: households, error: householdError }] = await Promise.all([
+    supabase
+      .from("guests")
+      .select(
+        "*, households(display_name, rank, address), guest_tags(tag_id), rsvps(event_id, status)",
+      )
+      .eq("wedding_id", weddingId)
+      .is("deleted_at", null),
+    supabase.from("v_households").select("*").eq("wedding_id", weddingId),
+  ]);
+
+  if (error) throw new Error(`Could not load guests: ${error.message}`);
+  if (householdError) throw new Error(`Could not load tiers: ${householdError.message}`);
+
+  const householdById = new Map<string, HouseholdView>(
+    ((households ?? []) as HouseholdView[]).map((h) => [h.id, h]),
+  );
+
+  return (guests ?? []).map((guest) => {
+    const household = householdById.get(guest.household_id);
+    return {
+      ...guest,
+      household_name: guest.households?.display_name ?? "—",
+      household_rank: guest.households?.rank ?? "",
+      household_address: guest.households?.address ?? null,
+      tier: household?.tier ?? "",
+      tier_position: household?.tier_position ?? 0,
+      tag_ids: (guest.guest_tags ?? []).map((t) => t.tag_id),
+      rsvps: guest.rsvps ?? [],
+    };
+  });
+});
 
 function matches(guest: GuestListItem, filters: GuestFilters): boolean {
   if (filters.tier && guest.tier !== filters.tier) return false;

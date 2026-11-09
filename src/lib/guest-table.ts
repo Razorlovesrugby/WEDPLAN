@@ -1,4 +1,6 @@
-import type { InviteState } from "./invites";
+import { inviteState, type InviteRow, type InviteState } from "./invites";
+import type { RsvpStatus } from "./types/database";
+import { isExcludedFromCounts } from "./unable-to-attend";
 
 /**
  * The guest table's shape (spec 47): which columns each view shows, how people
@@ -139,6 +141,48 @@ export function householdEventSummary(states: InviteState[]): HouseholdEventSumm
   return { kind: "split", yes, invited: invited.length, detail };
 }
 
+export type HouseholdSummary = {
+  /** Everyone in the household, whether or not a filter is showing them. */
+  size: number;
+  events: Record<string, HouseholdEventSummary>;
+};
+
+/**
+ * The household row's cells, from the whole household rather than whoever
+ * the filters left on screen: with "no answer for the reception" on, a
+ * couple where one said yes should still read "1/2", not "no answer".
+ */
+export function summariseHouseholds(
+  guests: { id: string; household_id: string; rsvps: { event_id: string; status: RsvpStatus }[] }[],
+  eventIds: string[],
+  invites: Pick<InviteRow, "guest_id" | "event_id" | "invited" | "sent_at">[],
+): Record<string, HouseholdSummary> {
+  const inviteByPair = new Map(invites.map((row) => [`${row.guest_id}:${row.event_id}`, row]));
+  const members = new Map<string, typeof guests>();
+  for (const guest of guests) {
+    const list = members.get(guest.household_id);
+    if (list) list.push(guest);
+    else members.set(guest.household_id, [guest]);
+  }
+
+  const result: Record<string, HouseholdSummary> = {};
+  for (const [householdId, people] of members) {
+    const events: Record<string, HouseholdEventSummary> = {};
+    for (const eventId of eventIds) {
+      events[eventId] = householdEventSummary(
+        people.map((guest) =>
+          inviteState(
+            inviteByPair.get(`${guest.id}:${eventId}`),
+            guest.rsvps.find((rsvp) => rsvp.event_id === eventId)?.status,
+          ),
+        ),
+      );
+    }
+    result[householdId] = { size: people.length, events };
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Reply counts above the table
 // ---------------------------------------------------------------------------
@@ -183,10 +227,7 @@ export function eventReplyCounts(
     const status = guest.rsvps.find((rsvp) => rsvp.event_id === eventId)?.status;
     if (status === "yes" || status === "no" || status === "maybe") {
       counts[status] += 1;
-    } else if (
-      guest.unable_to_attend_at !== null &&
-      !guest.rsvps.some((rsvp) => rsvp.status === "yes")
-    ) {
+    } else if (isExcludedFromCounts(guest)) {
       counts.cantCome += 1;
     } else {
       counts.pending += 1;

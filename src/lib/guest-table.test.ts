@@ -7,6 +7,7 @@ import {
   householdEventSummary,
   parseGrouped,
   parseGuestView,
+  summariseHouseholds,
 } from "./guest-table";
 
 describe("parseGuestView", () => {
@@ -156,6 +157,26 @@ describe("eventReplyCounts", () => {
       no: 0,
       pending: 0,
       cantCome: 0,
+    });
+  });
+});
+
+describe("summariseHouseholds", () => {
+  const sent = "2026-10-01T00:00:00Z";
+  it("summarises the whole household, whoever is shown", () => {
+    const guests = [
+      { id: "a", household_id: "h", rsvps: [{ event_id: "e", status: "yes" as const }] },
+      { id: "b", household_id: "h", rsvps: [{ event_id: "e", status: "pending" as const }] },
+      { id: "c", household_id: "solo", rsvps: [] },
+    ];
+    const invites = [
+      { guest_id: "a", event_id: "e", invited: true, sent_at: sent },
+      { guest_id: "b", event_id: "e", invited: true, sent_at: sent },
+      { guest_id: "c", event_id: "e", invited: false, sent_at: null },
+    ];
+    expect(summariseHouseholds(guests, ["e"], invites)).toEqual({
+      h: { size: 2, events: { e: { kind: "split", yes: 1, invited: 2, detail: "1 coming, 1 no answer yet" } } },
+      solo: { size: 1, events: { e: { kind: "same", state: "not_invited" } } },
     });
   });
 });

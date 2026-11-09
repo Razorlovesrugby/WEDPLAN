@@ -85,7 +85,8 @@ export function FilterBar({
         </select>
       </label>
 
-      {events.length > 1 ? (
+      {/* Shown with one event too once a reply bar has set it, so it can be seen and cleared. */}
+      {events.length > 1 || current("event") ? (
         <label>
           <span className="mb-1 block text-xs text-muted">For event</span>
           <select value={current("event")} onChange={(e) => setParam("event", e.target.value)} className="field">

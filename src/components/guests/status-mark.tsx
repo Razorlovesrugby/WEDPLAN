@@ -54,7 +54,7 @@ export function StatusMark({ state, overridden = false }: { state: InviteState; 
 export function HouseholdMark({ summary, eventName }: { summary: HouseholdEventSummary; eventName: string }) {
   const words =
     summary.kind === "same"
-      ? `${eventName}: ${STATE_DESCRIPTION[summary.state]}${summary.state === "not_invited" ? "" : " (everyone invited)"}`
+      ? `${eventName}: ${STATE_DESCRIPTION[summary.state]}`
       : `${eventName}: ${summary.yes} of ${summary.invited} coming (${summary.detail})`;
   return (
     <span role="img" aria-label={words} title={words} className="inline-flex">

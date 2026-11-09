@@ -219,3 +219,26 @@ Esc, and aren't clipped on the last row; axe-core reports no violations on the p
 Links menu open. **Not verified:** Supabase or real data (no copy, invite or RSVP action has run
 from here), a real iPad or phone. On an emulated iPad in portrait (768px) the RSVP view still
 scrolls sideways a little (about 150px), as Q4 accepted for small screens.
+
+### Review fixes (2026-11-09)
+
+A code review of the build found ten problems; all fixed, no migration:
+
+- **One guest read.** `listAllGuests` (cached by wedding id) fetches every guest once;
+  `listGuests` filters it in memory. The page's bars and household rows no longer cost a second
+  read when a filter is on. The per-event "invited" narrowing now uses the cached `listInvites`.
+- **`listInvites` reads in pages of 1000**, the API's row cap, so a big wedding isn't cut short.
+- **Household rows describe the whole household** (`summariseHouseholds`, computed on the page):
+  "1/2" stays "1/2" when a filter shows one of them, the name reads "1 of 2 shown", and a household
+  narrowed to one person keeps its household row.
+- **Links menu:** the invitation link is built in the browser (Safari refuses a clipboard write
+  that waits on the network); invitation ids come from `listInvitationIds`, so they're there before
+  any event exists; Tab out closes it.
+- **Reply bar links keep only the view and grouping**, so the list holds exactly the number on the
+  bar. The "For event" filter shows on a one-event wedding when a bar has set it.
+- `eventReplyCounts` uses `isExcludedFromCounts` instead of a copy of the rule; the household
+  tooltip no longer claims "(everyone invited)".
+
+Verified again: typecheck, 1411 unit tests, build, and a temporary sample page in headless
+Chromium (filtered household row, bar links, invitation link on the clipboard, disabled items with
+no invitation, Tab closing the menu). Still never run against Supabase.

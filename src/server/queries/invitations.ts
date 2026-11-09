@@ -84,3 +84,20 @@ export const listInvitations = cache(async (weddingId: string): Promise<Invitati
     };
   });
 });
+
+/**
+ * Each household's invitation id, for the guest table's Links menu (spec 47).
+ * Read from `invitations` itself: the per-event invite rows only exist once
+ * the wedding has events.
+ */
+export const listInvitationIds = cache(async (weddingId: string): Promise<Record<string, string>> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("invitations")
+    .select("id, household_id")
+    .eq("wedding_id", weddingId)
+    .is("deleted_at", null);
+
+  if (error) throw new Error(`Could not load invitations: ${error.message}`);
+  return Object.fromEntries((data ?? []).map((row) => [row.household_id, row.id]));
+});

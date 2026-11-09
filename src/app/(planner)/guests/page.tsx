@@ -6,8 +6,9 @@ import { SubTabs } from "@/components/sub-tabs";
 import { GUESTS_TABS } from "@/lib/nav-tabs";
 import { countActiveFilters, guestFiltersToQuery, parseGuestFilters } from "@/lib/filters";
 import { formatDate } from "@/lib/format";
-import { eventReplyCounts } from "@/lib/guest-table";
-import { listGuests, listHouseholds } from "@/server/queries/guests";
+import { eventReplyCounts, summariseHouseholds } from "@/lib/guest-table";
+import { listAllGuests, listGuests, listHouseholds } from "@/server/queries/guests";
+import { listInvitationIds } from "@/server/queries/invitations";
 import { listInvites } from "@/server/queries/invites";
 import { listSaveTheDateOpens } from "@/server/queries/save-the-date";
 import { getCollaborators, getCutLines, getEvents, getTags, requireWedding } from "@/server/queries/wedding";
@@ -23,25 +24,30 @@ export default async function GuestsPage({
   const filters = parseGuestFilters(params);
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
-  const activeCount = countActiveFilters(filters);
 
-  const [guests, everyone, tags, events, households, cutLines, collaborators, invites, saveTheDateOpens] =
+  const [guests, everyone, tags, events, households, cutLines, collaborators, invites, invitationIds, saveTheDateOpens] =
     await Promise.all([
     listGuests(wedding.id, filters),
-    // The reply bars count the whole wedding, so they hold still while the
-    // table below is filtered (spec 47 §4.4). Unfiltered, it's the same list.
-    activeCount > 0 ? listGuests(wedding.id, parseGuestFilters({})) : null,
+    // The same cached read as the line above: the reply bars and household
+    // rows describe the whole wedding while the table is filtered (spec 47).
+    listAllGuests(wedding.id),
     getTags(wedding.id),
     getEvents(wedding.id),
     listHouseholds(wedding.id),
     getCutLines(wedding.id),
     getCollaborators(wedding.id),
     listInvites(wedding.id),
+    listInvitationIds(wedding.id),
     listSaveTheDateOpens(wedding.id),
   ]);
 
   const replyCounts = Object.fromEntries(
-    events.map((event) => [event.id, eventReplyCounts(event.id, invites, everyone ?? guests)]),
+    events.map((event) => [event.id, eventReplyCounts(event.id, invites, everyone)]),
+  );
+  const householdSummaries = summariseHouseholds(
+    everyone,
+    events.map((event) => event.id),
+    invites,
   );
 
   return (
@@ -75,7 +81,7 @@ export default async function GuestsPage({
         events={events}
         cutLines={cutLines}
         collaborators={collaborators}
-        activeCount={activeCount}
+        activeCount={countActiveFilters(filters)}
       />
 
       <GuestsTable
@@ -87,6 +93,8 @@ export default async function GuestsPage({
         invites={invites}
         weddingSlug={wedding.slug}
         saveTheDateOpens={saveTheDateOpens}
+        invitationIds={invitationIds}
+        householdSummaries={householdSummaries}
         weddingName={wedding.name}
         dateLabel={
           wedding.wedding_date ? formatDate(wedding.wedding_date, wedding.timezone) : "date to be confirmed"
