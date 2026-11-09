@@ -1,7 +1,8 @@
 # Feature spec: The guest table — less sideways scrolling, status at a glance, links on the row
 
-**Status: proposal (2026-11-08), branch `claude/pensive-euler-natrmu`. Nothing built.** No
-migration expected. Open questions in §8 need answers before any code.
+**Status: questions answered (2026-11-09), branch `claude/pensive-euler-natrmu`. Nothing built.**
+No migration expected. All six questions in §8 are answered (§10, every recommendation taken, plus
+a Planning view). Not yet authorised to build.
 
 **Depends on:** spec 4 (households), spec 5 (tiers), spec 20 (last name column, named sides),
 spec 21 (household addresses), spec 22 (per-event invite cells), spec 29/30 (save the date,
@@ -83,6 +84,7 @@ A segmented control above the table, kept in the URL as `?view=`, the way filter
 | **RSVP** (default) | tier, side, save the date, one per event, Links |
 | **Contact** | email (editable), address status, save the date, Links |
 | **Catering** | age band, dietary (editable), "coming to n of m" |
+| **Planning** | tier, side, tags |
 | **Everything** | today's full set, with the name column pinned while you scroll sideways |
 
 The view list and its columns are a plain map in `src/lib/guest-views.ts`, not configurable.
@@ -162,3 +164,14 @@ and date label, which `requireWedding()` already returns.
   scroll in the RSVP view with 3 events; check an emulated iPad.
 - `npm run typecheck && npm test && npm run build`; `npm run a11y` on the page if it can be reached
   with sample data.
+
+## 10. Answered (2026-11-09)
+
+1. **Group by household by default:** yes, with a "One row per person" switch.
+2. **Fold by default:** no. Households start unfolded, with Collapse all.
+3. **Views:** RSVP (default), Contact, Catering, **Planning** (tier, side, tags), and Everything.
+   §4.3's table now includes Planning.
+4. **Phone:** the table keeps scrolling sideways on phones for now; household cards are a later
+   spec.
+5. **Links menu:** all four (save-the-date link, invitation link, WhatsApp message, QR code).
+6. **Event summary bars:** included, as in §4.4.
