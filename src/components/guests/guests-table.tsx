@@ -737,7 +737,10 @@ export function GuestsTable({
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* `relative` keeps the cells' absolutely positioned sr-only labels
+            inside this scroller; without it they widen the whole page on a
+            phone and Safari zooms out to fit. */}
+        <div className="relative overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
               <tr>
