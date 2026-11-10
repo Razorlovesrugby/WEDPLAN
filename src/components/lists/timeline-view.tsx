@@ -112,7 +112,7 @@ export function TimelineView({
         </p>
       ) : (
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="relative flex gap-3 overflow-x-auto pb-2">
             {buckets.map((bucket) => (
               <TimelineColumn
                 key={bucket.key}

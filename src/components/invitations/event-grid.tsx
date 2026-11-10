@@ -111,7 +111,7 @@ export function EventGrid({ rows, events }: { rows: GridRow[]; events: { id: str
       {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
       {notice ? <p className="text-sm text-muted" role="status">{notice}</p> : null}
 
-      <div className="card overflow-x-auto">
+      <div className="card relative overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
             <tr>

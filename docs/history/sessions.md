@@ -1,8 +1,20 @@
 # Session history
 
-The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–52), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 53 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
+The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–53), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 54 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
 
 ---
+
+**Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (merged, PR #89). Read the spec's §10:
+
+- **Every `DndContext` must use `useDragSensors()`** (`src/components/ui/use-drag-sensors.ts`), or
+  `drag-sensors.test.ts` fails. Put `{...stopDrag}` on any control inside a draggable element.
+- **The ⋯ move menu** is `RowMenu` + `moveItems` (`src/components/ui/row-menu.tsx`).
+- **Touch sizes** are CSS under `@media (pointer: coarse)`, scoped to `[data-planner]` (set on
+  `ShellFrame`).
+- **`npm run a11y`** checks pages with axe-core, report only. `axe-core` is a new dev dependency;
+  `npm ci` picks it up.
+- **Verified:** typecheck, 1395 unit tests, build, a11y on public pages, an emulated iPad.
+  **Not verified:** a real iPad, Supabase.
 
 **Session 52 (spec 46, spec 45 answers):** ⌘K and shortcuts, built on branch
 `claude/nice-mccarthy-x93m9s` (**no PR opened**). Spec 45 got two answers ("make iPad friendly",

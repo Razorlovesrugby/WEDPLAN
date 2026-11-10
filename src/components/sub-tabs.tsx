@@ -11,7 +11,8 @@ import type { SubTab } from "@/lib/nav-tabs";
  *
  * Each segment is a plain link to that view's own route, not a client-side tab
  * panel, so Back, bookmarks and an AI assistant all land on the same view
- * (spec 13 §1B). It wraps rather than scrolls on a narrow phone.
+ * (spec 13 §1B). It wraps rather than scrolls on a narrow phone, where it
+ * spans the width like an iOS segmented control (spec 48).
  */
 export function SubTabs({ tabs }: { tabs: readonly SubTab[] }) {
   const pathname = usePathname();
@@ -28,7 +29,7 @@ export function SubTabs({ tabs }: { tabs: readonly SubTab[] }) {
   return (
     <nav
       aria-label="Views"
-      className="mb-4 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg border border-line bg-line/30 p-0.5"
+      className="mb-4 flex w-full flex-wrap gap-0.5 rounded-[0.6rem] bg-line/50 p-0.5 md:inline-flex md:w-auto md:max-w-full md:rounded-lg md:border md:border-line md:bg-line/30"
     >
       {tabs.map((tab) => {
         const active = tab.href === activeHref;
@@ -37,7 +38,7 @@ export function SubTabs({ tabs }: { tabs: readonly SubTab[] }) {
             key={tab.href}
             href={tab.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-md px-3 py-1 text-sm transition-colors ${
+            className={`flex min-h-9 flex-1 items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-[13px] transition-colors md:min-h-0 md:flex-none md:text-sm ${
               active ? "bg-white font-medium text-ink shadow-sm" : "text-muted hover:text-ink"
             }`}
           >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { sideLabel } from "@/lib/format";
 import type { CollaboratorRow, CutLineRow, EventRow, TagRow } from "@/lib/types/database";
 
@@ -42,6 +42,8 @@ export function FilterBar({
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const searchDebounce = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // On a phone the filters fold away behind one button (spec 48); from md: up they always show.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => () => clearTimeout(searchDebounce.current), []);
 
@@ -62,16 +64,34 @@ export function FilterBar({
 
   return (
     <div className={`flex flex-wrap items-end gap-2 ${pending ? "opacity-70" : ""}`}>
-      <label className="flex-1 basis-56">
-        <span className="mb-1 block text-xs text-muted">Search</span>
-        <input
-          type="search"
-          defaultValue={current("q")}
-          placeholder="Name, email, household"
-          onChange={(e) => setSearch(e.target.value)}
-          className="field"
-        />
-      </label>
+      <div className="flex w-full items-end gap-2 md:w-auto md:flex-1 md:basis-56">
+        <label className="flex-1">
+          <span className="mb-1 block text-xs text-muted max-md:sr-only">Search</span>
+          <input
+            type="search"
+            defaultValue={current("q")}
+            placeholder="Name, email, household"
+            onChange={(e) => setSearch(e.target.value)}
+            className="field max-md:min-h-11 max-md:rounded-xl max-md:border-transparent max-md:bg-line/50"
+          />
+        </label>
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="guest-filters"
+          onClick={() => setFiltersOpen((open) => !open)}
+          className={`min-h-11 shrink-0 rounded-xl px-3 text-[15px] font-medium md:hidden ${
+            filtersOpen || activeCount > 0 ? "bg-accent text-white" : "bg-line/50 text-accent"
+          }`}
+        >
+          Filters{activeCount > 0 ? ` · ${activeCount}` : ""}
+        </button>
+      </div>
+
+      <div
+        id="guest-filters"
+        className={filtersOpen ? "grid w-full grid-cols-2 gap-2 md:contents" : "hidden md:contents"}
+      >
 
       <label>
         <span className="mb-1 block text-xs text-muted">RSVP</span>
@@ -180,6 +200,7 @@ export function FilterBar({
           Clear {activeCount}
         </button>
       ) : null}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import { NAV_GROUPS, activeHref, activeTabId, navGroupsFor, tabsFor } from "./nav-groups";
+import { NAV_GROUPS, activeHref, activeTabId, moreGroupsFor, navGroupsFor, tabsFor } from "./nav-groups";
 import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, TASKS_TABS } from "./nav-tabs";
 import { PLANNER_NAV_HREFS } from "./planner-routes";
 
@@ -88,24 +88,38 @@ describe("the planner's sidebar", () => {
   });
 });
 
-describe("the phone tab bar", () => {
-  it.each(["couple", "planner"] as const)("lists the same places as the sidebar (%s)", (viewer) => {
-    const fromTabs = tabsFor(viewer).flatMap((tab) => tab.groups.flatMap((group) => group.entries.map((e) => e.href)));
-    expect(fromTabs.sort()).toEqual(hrefs(navGroupsFor(viewer)).sort());
+describe("the phone tab bar (spec 48)", () => {
+  it.each(["couple", "planner"] as const)("tabs plus More list exactly the sidebar's places (%s)", (viewer) => {
+    const onTabs = tabsFor(viewer).map((tab) => tab.href);
+    const inMore = hrefs(moreGroupsFor(viewer));
+    expect([...onTabs, ...inMore].sort()).toEqual(hrefs(navGroupsFor(viewer)).sort());
+    expect(new Set([...onTabs, ...inMore]).size).toBe(onTabs.length + inMore.length);
   });
 
-  it("has the five tabs from spec 41 Q4", () => {
-    expect(tabsFor("couple").map((tab) => tab.label)).toEqual(["Today", "Planning", "Guests", "For guests", "More"]);
+  it("gives a couple Today, Tasks, Guests and Website, each going straight to its page", () => {
+    expect(tabsFor("couple").map((tab) => [tab.label, tab.href])).toEqual([
+      ["Today", "/"],
+      ["Tasks", "/lists"],
+      ["Guests", "/guests"],
+      ["Website", "/site"],
+    ]);
+  });
+
+  it("drops Website for a planner, who can't open it", () => {
+    expect(tabsFor("planner").map((tab) => tab.label)).toEqual(["Today", "Tasks", "Guests"]);
   });
 
   it.each([
     ["/", "home"],
-    ["/budget", "planning"],
-    ["/households/x", "people"],
-    ["/site/questions", "guests"],
+    ["/calendar", "tasks"],
+    ["/households/x", "guests"],
+    ["/travel", "site"],
+    ["/budget", "more"],
+    ["/site/questions", "more"],
     ["/events", "more"],
     ["/settings", "more"],
-    ["/menu", null],
+    ["/menu", "more"],
+    ["/sitemap", null],
   ])("%s lights %s", (path, tab) => {
     expect(activeTabId(path, "couple")).toBe(tab);
   });

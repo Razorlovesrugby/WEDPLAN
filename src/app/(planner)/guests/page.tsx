@@ -53,9 +53,38 @@ export default async function GuestsPage({
   return (
     <div className="space-y-5">
       <SubTabs tabs={GUESTS_TABS} />
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="font-serif text-2xl">Guests</h1>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="font-serif text-3xl md:text-2xl">Guests</h1>
+        {/* Phone (spec 48): the exports and import behind ⋯, and Add as a round + — the iOS navigation-bar pattern. */}
+        <div className="flex items-center gap-1 md:hidden">
+          <details className="relative">
+            <summary
+              aria-label="More guest actions"
+              className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full text-xl text-accent active:bg-line/50 [&::-webkit-details-marker]:hidden"
+            >
+              <span aria-hidden>⋯</span>
+            </summary>
+            <div className="absolute right-0 z-40 mt-1 w-56 overflow-hidden rounded-xl border border-line bg-white text-[15px] shadow-lg">
+              <a href={`/api/export/guests${query}`} className="block border-b border-line/70 px-4 py-3 active:bg-line/40">
+                Export guests
+              </a>
+              <a href={`/api/export/catering${query}`} className="block border-b border-line/70 px-4 py-3 active:bg-line/40">
+                Catering numbers
+              </a>
+              <Link href="/guests/import" className="block px-4 py-3 active:bg-line/40">
+                Import CSV
+              </Link>
+            </div>
+          </details>
+          <Link
+            href="/households/new"
+            aria-label="Add household"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-2xl leading-none text-white shadow-sm active:opacity-80"
+          >
+            <span aria-hidden>+</span>
+          </Link>
+        </div>
+        <div className="hidden flex-wrap gap-2 md:flex">
           {/* Exports carry the current filters, so "everyone who hasn't
               answered" is one click rather than a second round of filtering
               in the spreadsheet. */}

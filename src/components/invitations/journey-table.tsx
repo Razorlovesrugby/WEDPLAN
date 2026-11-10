@@ -39,7 +39,7 @@ export function JourneyTable({
     return <p className="card p-6 text-center text-sm text-muted">No households match.</p>;
   }
   return (
-    <div className="card overflow-x-auto">
+    <div className="card relative overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
           <tr>

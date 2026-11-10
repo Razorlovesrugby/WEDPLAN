@@ -30,10 +30,15 @@ export function PaletteButton() {
     <button
       type="button"
       onClick={openPalette}
-      className="rounded px-2 py-1 text-xs text-muted hover:bg-line/50 hover:text-ink"
+      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted hover:bg-line/50 hover:text-ink md:min-h-0 md:min-w-0 md:rounded md:px-2 md:py-1 md:text-xs"
       aria-label="Search, go to, or make something (⌘K)"
     >
-      Search <kbd className="ml-1 hidden rounded border border-line px-1 font-sans text-[10px] sm:inline">⌘K</kbd>
+      {/* A magnifying glass on a phone (spec 48); the word and shortcut from md: up. */}
+      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-5 w-5 md:hidden">
+        <path d="M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13ZM20 20l-4.6-4.6" />
+      </svg>
+      <span className="hidden md:inline">Search</span>
+      <kbd className="ml-1 hidden rounded border border-line px-1 font-sans text-[10px] md:inline">⌘K</kbd>
     </button>
   );
 }
