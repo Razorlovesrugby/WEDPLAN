@@ -45,6 +45,7 @@ export function InviteCell({
   overridden,
   hasInvitation,
   dimmed = false,
+  layout = "cell",
 }: {
   guestId: string;
   householdId: string;
@@ -56,15 +57,22 @@ export function InviteCell({
   hasInvitation: boolean;
   /** Faded for someone who can't attend; the menu itself stays full strength. */
   dimmed?: boolean;
+  /**
+   * "cell" is a table cell with a menu beside it. "sheet" is the phone's
+   * guest cards (spec 48): a plain box whose choices open as an iOS-style
+   * action sheet from the bottom of the screen, with full-width targets.
+   */
+  layout?: "cell" | "sheet";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const cellRef = useRef<HTMLTableCellElement>(null);
+  const cellRef = useRef<HTMLElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setOpen(false), []);
-  const menuStyle = useFixedMenu(open, close, buttonRef, cellRef, 224);
+  const menuStyle = useFixedMenu(open && layout === "cell", close, buttonRef, cellRef, 224);
+  const sheet = layout === "sheet";
 
   useEffect(() => {
     if (!open) return;
@@ -132,14 +140,19 @@ export function InviteCell({
     overridden ? ". Set for this person, not their household" : ""
   }`;
 
+  const Wrapper = sheet ? "div" : "td";
+  const item = sheet
+    ? "block min-h-12 w-full border-b border-line/70 px-4 text-left text-[17px] font-normal text-accent last:border-b-0 active:bg-line/40 disabled:opacity-50"
+    : "block min-h-9 w-full rounded px-2 py-1.5 text-left text-sm font-normal text-ink hover:bg-paper disabled:opacity-50";
+
   return (
-    <td ref={cellRef} className="px-1 py-1 text-center">
+    <Wrapper ref={cellRef as never} className={sheet ? "flex justify-center" : "px-1 py-1 text-center"}>
       <button
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((was) => !was)}
         disabled={pending}
-        className={`inline-flex min-h-8 min-w-10 items-center justify-center rounded-md hover:bg-line/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60 ${dimmed ? "opacity-55" : ""}`}
+        className={`inline-flex ${sheet ? "min-h-11 min-w-11" : "min-h-8 min-w-10"} items-center justify-center rounded-md hover:bg-line/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60 ${dimmed ? "opacity-55" : ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={words}
@@ -148,17 +161,37 @@ export function InviteCell({
         <StatusMark state={state} overridden={overridden} />
       </button>
 
+      {open && sheet ? (
+        <button
+          type="button"
+          aria-label="Close"
+          tabIndex={-1}
+          className="sheet-backdrop fixed inset-0 z-40 cursor-default bg-black/30"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
       {open ? (
         <div
           role="menu"
           aria-label={`${guestName}, ${eventName}`}
-          style={menuStyle}
-          className="z-40 rounded-md border border-line bg-white p-1 text-left shadow-lg"
+          style={sheet ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" } : menuStyle}
+          className={
+            sheet
+              ? "sheet-panel fixed inset-x-0 bottom-0 z-50 space-y-2 px-2 text-center"
+              : "z-40 rounded-md border border-line bg-white p-1 text-left shadow-lg"
+          }
         >
-          <p className="flex items-center gap-2 border-b border-line px-2 pb-2 pt-1 text-xs text-muted">
+          <div className={sheet ? "overflow-hidden rounded-2xl bg-white/95 text-center backdrop-blur-xl" : ""}>
+          <p
+            className={
+              sheet
+                ? "flex flex-col items-center gap-1 border-b border-line/70 px-4 py-3 text-[13px] text-muted"
+                : "flex items-center gap-2 border-b border-line px-2 pb-2 pt-1 text-xs text-muted"
+            }
+          >
             <StatusMark state={state} overridden={overridden} />
             <span>
-              <span className="block font-medium text-ink">{eventName}</span>
+              <span className="block font-medium text-ink">{sheet ? `${guestName} · ${eventName}` : eventName}</span>
               {STATE_DESCRIPTION[state]}
             </span>
           </p>
@@ -175,7 +208,7 @@ export function InviteCell({
               role="menuitem"
               disabled={pending || !hasInvitation}
               onClick={() => run(action)}
-              className="block min-h-9 w-full rounded px-2 py-1.5 text-left text-sm font-normal text-ink hover:bg-paper disabled:opacity-50"
+              className={sheet ? item.replace("text-left", "text-center") : item}
             >
               {ACTION_LABEL[action]}
             </button>
@@ -197,15 +230,29 @@ export function InviteCell({
                   router.refresh();
                 })
               }
-              className="mt-1 block w-full rounded border-t border-line px-2 py-1.5 text-left text-xs text-muted hover:bg-paper"
+              className={
+                sheet
+                  ? item.replace("text-left", "text-center")
+                  : "mt-1 block w-full rounded border-t border-line px-2 py-1.5 text-left text-xs text-muted hover:bg-paper"
+              }
             >
               Follow the household again
             </button>
           ) : null}
 
           {error ? <p className="px-2 py-1.5 text-xs text-red-700">{error}</p> : null}
+          </div>
+          {sheet ? (
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="block min-h-14 w-full rounded-2xl bg-white text-[17px] font-semibold text-accent active:bg-line/40"
+            >
+              Cancel
+            </button>
+          ) : null}
         </div>
       ) : null}
-    </td>
+    </Wrapper>
   );
 }

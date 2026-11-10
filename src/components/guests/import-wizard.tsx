@@ -315,7 +315,7 @@ The Boatengs,Esi,Boateng,,child`}
             </p>
           ) : null}
 
-          <div className="card overflow-x-auto">
+          <div className="card relative overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-line text-left">
                 <tr>

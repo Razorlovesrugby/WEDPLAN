@@ -24,6 +24,22 @@
 
 ## Recent sessions
 
+**Session 56 (spec 48):** the phone experience, built on branch `claude/vibrant-bohr-xd2w8t`
+(no PR). The planner said the live app was poor on a phone (zooming, sideways scroll, Guests with
+no phone view, a bad bottom bar) and asked for it fixed, Apple-style. Read the spec's §2–§4:
+
+- **Bug fixed: Guests zoomed out on phones.** The guest table's `sr-only` labels escaped its
+  scroller and made the page 746px wide. Every sideways scroller is now `relative`, and the shell
+  has `overflow-x: clip`. **Rule: a sideways scroller must be `relative`.**
+- **No zoom:** 16px inputs on touch screens and below `md:`; `touch-action: manipulation`.
+- **Tab bar** is `PHONE_TABS` in `nav-groups.ts` (Today · Tasks · Guests · Website) plus More, a
+  bottom sheet; `/menu` is its no-JS fallback. `TAB_BAR`/group tabs from spec 41 are gone.
+- **Guests on a phone** are cards (`phoneCards()` in `guests-table.tsx`); a mark opens
+  `InviteCell` with `layout="sheet"`. The table is `md:` up only.
+- **Verified:** typecheck, 1415 unit tests, build, Guests/filters/sheets on an emulated iPhone 13
+  with sample data (390px wide throughout). **Not verified:** a real phone, live data, any other
+  screen on a phone.
+
 **Session 55 (no spec):** went live; privacy notice and docs. Branch
 `claude/confident-keller-xiwcvn` (no PR opened). A brainstorm of non-feature work, then the
 planner said the app is **live, works, and has real users**, and asked for a check against a
@@ -56,18 +72,6 @@ view), then "Build it all". No migration. Read the spec's §11:
   `listInvites` pages past the 1000-row cap. Ten fixes in the spec's §11 "Review fixes".
 - **Verified:** typecheck, 1410 unit tests, build, a sample page in headless Chromium at 1280px and
   an emulated iPad, axe clean. **Not verified:** Supabase, real data, a real iPad or phone.
-
-**Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (merged, PR #89). Read the spec's §10:
-
-- **Every `DndContext` must use `useDragSensors()`** (`src/components/ui/use-drag-sensors.ts`), or
-  `drag-sensors.test.ts` fails. Put `{...stopDrag}` on any control inside a draggable element.
-- **The ⋯ move menu** is `RowMenu` + `moveItems` (`src/components/ui/row-menu.tsx`).
-- **Touch sizes** are CSS under `@media (pointer: coarse)`, scoped to `[data-planner]` (set on
-  `ShellFrame`).
-- **`npm run a11y`** checks pages with axe-core, report only. `axe-core` is a new dev dependency;
-  `npm ci` picks it up.
-- **Verified:** typecheck, 1395 unit tests, build, a11y on public pages, an emulated iPad.
-  **Not verified:** a real iPad, Supabase.
 
 ---
 

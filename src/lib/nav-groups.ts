@@ -119,38 +119,41 @@ export function activeGroupId(pathname: string, groups: readonly NavGroup[] = NA
 }
 
 /**
- * The phone's five tabs (spec 41 §4.2). Today links straight to `/`; the rest
- * open `/menu?group=…`, a plain page listing that group's entries. "More"
- * holds The day and Settings.
+ * The phone's tab bar (spec 48, replacing spec 41 §4.2's group tabs). Each tab
+ * goes straight to one place, as in an iOS app; "More" opens a sheet (or, with
+ * no JavaScript, `/menu`) listing every other place, grouped as in the sidebar.
  */
-export const TAB_BAR = [
-  { id: "home", label: "Today", groups: ["home"] },
-  { id: "planning", label: "Planning", groups: ["planning"] },
-  { id: "people", label: "Guests", groups: ["people"] },
-  { id: "guests", label: "For guests", groups: ["guests"] },
-  { id: "more", label: "More", groups: ["day", "settings"] },
-] as const satisfies readonly { id: string; label: string; groups: readonly NavGroup["id"][] }[];
+export const PHONE_TABS = [
+  { id: "home", label: "Today", href: "/" },
+  { id: "tasks", label: "Tasks", href: "/lists" },
+  { id: "guests", label: "Guests", href: "/guests" },
+  { id: "site", label: "Website", href: "/site" },
+] as const satisfies readonly { id: string; label: string; href: string }[];
 
-export type TabId = (typeof TAB_BAR)[number]["id"];
+export type TabId = (typeof PHONE_TABS)[number]["id"] | "more";
 
-export function isTabId(value: string | undefined): value is TabId {
-  return TAB_BAR.some((tab) => tab.id === value);
-}
-
-/** The tabs a viewer sees, each with the groups it holds (planner-filtered; empty tabs dropped). */
+/** The direct tabs a viewer sees: a planner only gets the places it may open. */
 export function tabsFor(viewer: Viewer) {
-  const groups = navGroupsFor(viewer);
-  return TAB_BAR.map((tab) => ({
-    id: tab.id as TabId,
-    label: tab.label,
-    groups: groups.filter((group) => (tab.groups as readonly string[]).includes(group.id)),
-  })).filter((tab) => tab.groups.length > 0);
+  const allowed = new Set(hrefsFor(viewer));
+  return PHONE_TABS.filter((tab) => allowed.has(tab.href));
 }
 
-/** Which tab a path lights. */
+/** Everything not on a direct tab, grouped as in the sidebar: what "More" lists. */
+export function moreGroupsFor(viewer: Viewer): NavGroup[] {
+  const onTabs = new Set<string>(tabsFor(viewer).map((tab) => tab.href));
+  return navGroupsFor(viewer)
+    .map((group) => ({ ...group, entries: group.entries.filter((entry) => !onTabs.has(entry.href)) }))
+    .filter((group) => group.entries.length > 0);
+}
+
+/** Which tab a path lights: its own tab, else More (a place More lists), else none. */
 export function activeTabId(pathname: string, viewer: Viewer): TabId | null {
-  if (pathname === "/menu") return null;
-  const group = activeGroupId(pathname, navGroupsFor(viewer));
-  if (group === null) return null;
-  return tabsFor(viewer).find((tab) => tab.groups.some((g) => g.id === group))?.id ?? null;
+  if (pathname === "/menu") return "more";
+  const href = activeHref(pathname, navGroupsFor(viewer));
+  if (href === null) return null;
+  return tabsFor(viewer).find((tab) => tab.href === href)?.id ?? "more";
+}
+
+function hrefsFor(viewer: Viewer): string[] {
+  return navGroupsFor(viewer).flatMap((group) => group.entries.map((entry) => entry.href));
 }

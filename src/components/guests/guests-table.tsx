@@ -669,6 +669,112 @@ export function GuestsTable({
 
   const householdCount = groups.length;
 
+  /**
+   * The phone's guest list (spec 48): one card per household, as an iOS inset
+   * grouped list, instead of a table scrolled sideways. Each person has a mark
+   * per event; tapping it opens the same choices as the table's cell, as an
+   * action sheet. Names go to the guest's and household's own pages, where
+   * everything else is edited.
+   */
+  function phoneCards() {
+    const eventCols = `minmax(0,1fr) repeat(${events.length}, ${events.length > 3 ? "3rem" : "3.75rem"})`;
+    return (
+      <div className="space-y-3 md:hidden">
+        <p className="px-1 text-[13px] tabular-nums text-muted">
+          {householdCount} {householdCount === 1 ? "household" : "households"} · {guests.length}{" "}
+          {guests.length === 1 ? "guest" : "guests"}
+        </p>
+        <ul className="space-y-3">
+          {groups.map((group) => {
+            const first = group.guests[0]!;
+            const size = householdSummaries[group.householdId]?.size ?? group.guests.length;
+            return (
+              <li key={group.householdId} className="overflow-hidden rounded-xl border border-line/70 bg-white">
+                <div className="flex items-center gap-2 py-2.5 pl-4 pr-2">
+                  <Link href={`/households/${group.householdId}`} className="min-w-0 flex-1 active:opacity-60">
+                    <span className="block truncate text-[17px] font-semibold leading-snug">{first.household_name}</span>
+                    <span className="mt-0.5 flex items-center gap-2 text-[13px] text-muted">
+                      {size === 1 ? "1 guest" : size > group.guests.length ? `${group.guests.length} of ${size} shown` : `${size} guests`}
+                      {tierChip(first)}
+                    </span>
+                  </Link>
+                  {linksFor(group.householdId, first.household_name)}
+                </div>
+                {events.length > 0 ? (
+                  <div
+                    aria-hidden
+                    className="grid items-end border-t border-line/60 bg-paper/60 py-1 pl-4 text-[11px] font-medium leading-tight text-muted"
+                    style={{ gridTemplateColumns: eventCols }}
+                  >
+                    <span />
+                    {events.map((event) => (
+                      <span key={event.id} className="truncate text-center" title={event.name}>
+                        {event.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <ul>
+                  {group.guests.map((guest) => {
+                    const dim = guest.unable_to_attend_at !== null;
+                    return (
+                      <li
+                        key={guest.id}
+                        className="grid min-h-12 items-center border-t border-line/60 pl-4"
+                        style={{ gridTemplateColumns: eventCols }}
+                      >
+                        <Link href={`/guests/${guest.id}`} className={`min-w-0 py-2 pr-2 active:opacity-60 ${dim ? "text-muted" : ""}`}>
+                          <span className="block truncate text-[15px]">{guestName(guest)}</span>
+                          {guest.unable_to_attend_at || guest.age_band !== "adult" || guest.dietary ? (
+                            <span className="block truncate text-xs text-muted">
+                              {[
+                                guest.unable_to_attend_at ? "Can\u2019t attend" : null,
+                                guest.age_band !== "adult" ? AGE_WORDS[guest.age_band] : null,
+                                guest.dietary,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          ) : null}
+                        </Link>
+                        {events.map((event) => {
+                          const invite = inviteByPair.get(`${guest.id}:${event.id}`);
+                          return (
+                            <InviteCell
+                              key={event.id}
+                              layout="sheet"
+                              guestId={guest.id}
+                              householdId={guest.household_id}
+                              eventId={event.id}
+                              guestName={guestName(guest)}
+                              eventName={event.name}
+                              state={stateFor(guest, event.id)}
+                              overridden={invite?.override != null}
+                              hasInvitation={invite?.invitation_id != null}
+                              dimmed={dim}
+                            />
+                          );
+                        })}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+        {events.length > 0 ? (
+          <details className="px-1 text-[13px] text-muted">
+            <summary className="min-h-11 cursor-pointer py-2 text-accent">What the marks mean</summary>
+            <div className="pb-2">
+              <StatusLegend />
+            </div>
+          </details>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {selected.size > 0 ? (
@@ -701,7 +807,9 @@ export function GuestsTable({
 
       {message ? <p className="text-sm text-muted">{message}</p> : null}
 
-      <div className="card">
+      {phoneCards()}
+
+      <div className="card hidden md:block">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-3 py-2.5">
           <Segmented
             label="Columns"
@@ -789,7 +897,7 @@ export function GuestsTable({
         ) : null}
       </div>
 
-      <p className="text-xs text-muted">
+      <p className="hidden text-xs text-muted md:block">
         Last name, email and dietary are editable here; everything else is on the guest page. Click
         an event cell to invite someone, mark their invitation as sent, or record an answer. Each
         household&rsquo;s Links menu copies its save-the-date link, invitation link or WhatsApp
