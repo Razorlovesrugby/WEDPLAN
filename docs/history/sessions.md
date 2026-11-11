@@ -1,8 +1,22 @@
 # Session history
 
-The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–53), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 54 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
+The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–54), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 55 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
 
 ---
+
+**Session 54 (spec 47):** the guest table, built on branch `claude/pensive-euler-natrmu` (merged, PR #96). A brainstorm with mockups, then a spec, six questions (all recommended, plus a Planning
+view), then "Build it all". No migration. Read the spec's §11:
+
+- **The table** (`src/components/guests/guests-table.tsx`) groups by household; view and grouping
+  are `?view=` / `?rows=people`, rules in `src/lib/guest-table.ts`. Event cells are symbols
+  (`status-mark.tsx`); each household has a **Links ▾** menu (`household-links.tsx`); reply bars
+  above the table are `event-summary.tsx`.
+- **Behaviour change:** `listGuests` with both `rsvp` and `event` now keeps only guests invited to
+  that event (the exports follow).
+- **After a review (same session):** `listGuests` now filters `listAllGuests` (one cached read);
+  `listInvites` pages past the 1000-row cap. Ten fixes in the spec's §11 "Review fixes".
+- **Verified:** typecheck, 1410 unit tests, build, a sample page in headless Chromium at 1280px and
+  an emulated iPad, axe clean. **Not verified:** Supabase, real data, a real iPad or phone.
 
 **Session 53 (spec 45):** no-drag and iPad pass, built on branch `claude/nice-mccarthy-x93m9s` (merged, PR #89). Read the spec's §10:
 

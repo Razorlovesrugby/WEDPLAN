@@ -2,28 +2,29 @@ import { DesignFrame } from "@/components/design/design-frame";
 import { getPreviewHouseholds } from "@/server/queries/design";
 import Link from "next/link";
 import { QuestionsEditor } from "@/components/questions/questions-editor";
-import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
-import type { RsvpQuestionRow } from "@/lib/types/database";
+import { getAnswersOverview } from "@/server/queries/questions";
+import { scopeIds, tallyQuestion, type Tally } from "@/lib/questions/tally";
 
 export const metadata = { title: "RSVP questions" };
 
 export default async function QuestionsPage() {
   const wedding = await requireWedding();
   const households = await getPreviewHouseholds(wedding.id);
-  const supabase = await createClient();
-
   // Inactive questions are listed too — this is the screen for managing them,
   // and one that has been switched off still needs to be findable to switch
   // back on. The RSVP form's own query filters to active.
-  const { data, error } = await supabase
-    .from("rsvp_questions")
-    .select("*")
-    .eq("wedding_id", wedding.id)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
+  const overview = await getAnswersOverview(wedding.id);
 
-  if (error) throw new Error(`Could not load questions: ${error.message}`);
+  // Each question's results, shown under it (spec 49 §4.1).
+  const tallies: Record<string, Tally> = {};
+  for (const question of overview.questions) {
+    tallies[question.id] = tallyQuestion(
+      question,
+      overview.answers.filter((answer) => answer.question_id === question.id),
+      scopeIds(question.scope, overview.guests),
+    );
+  }
 
   return (
     <DesignFrame preview={{ households, anchor: "rsvp" }}>
@@ -39,7 +40,7 @@ export default async function QuestionsPage() {
         </p>
       </div>
 
-      <QuestionsEditor questions={(data ?? []) as RsvpQuestionRow[]} />
+      <QuestionsEditor questions={overview.questions} tallies={tallies} />
     </DesignFrame>
   );
 }

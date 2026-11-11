@@ -111,12 +111,13 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
     if (guest.accessibility !== undefined) patch.accessibility = guest.accessibility || null;
 
     if (Object.keys(patch).length > 0) {
-      await supabase
+      const { error } = await supabase
         .from("guests")
         .update(patch)
         .eq("id", guest.guestId)
         .eq("wedding_id", weddingId)
         .eq("household_id", context.household.id);
+      if (error) return fail("Could not save one of the answers. Nothing was lost — try again.");
     }
 
     for (const response of guest.responses) {
@@ -144,7 +145,9 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
       const question = questionById.get(questionId);
       if (!question || question.scope !== "guest") continue;
       const answer = coerceAnswer(question, value);
-      await supabase.from("rsvp_answers").upsert(
+      // Checked, like every other write here: an unchecked upsert is how every
+      // answer was lost without anyone noticing (spec 49, migration 0047).
+      const { error } = await supabase.from("rsvp_answers").upsert(
         {
           wedding_id: weddingId,
           question_id: questionId,
@@ -155,6 +158,7 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
         },
         { onConflict: "question_id,guest_id" },
       );
+      if (error) return fail("Could not save one of the answers. Nothing was lost — try again.");
     }
   }
 
@@ -162,7 +166,7 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
     const question = questionById.get(questionId);
     if (!question || question.scope !== "household") continue;
     const answer = coerceAnswer(question, value);
-    await supabase.from("rsvp_answers").upsert(
+    const { error } = await supabase.from("rsvp_answers").upsert(
       {
         wedding_id: weddingId,
         question_id: questionId,
@@ -173,6 +177,7 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
       },
       { onConflict: "question_id,household_id" },
     );
+    if (error) return fail("Could not save one of the answers. Nothing was lost — try again.");
   }
 
   await supabase

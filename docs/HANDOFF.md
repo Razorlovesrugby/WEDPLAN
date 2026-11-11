@@ -7,7 +7,7 @@
 
 **What this is.** WEDPLAN: a wedding planning platform. Couples sign themselves up at `/start` and plan with their collaborators; guests reach RSVP links and wedding websites without an account. Next.js App Router on Vercel, Supabase (Postgres, Auth, RLS keyed to `wedding_id`), TypeScript, Vitest. `README.md` is the overview; `docs/wedding-platform-spec.md` is the technical spec; `docs/specs/README.md` is the index of per-feature specs and how the spec process works.
 
-**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is not recorded here. Specs 1–47 are built and merged to `main` (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0046`.
+**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is not recorded here. Specs 1–47 are built and merged to `main` (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0047`.
 
 **What that changes.** Every migration now runs against real guest data: no destructive change to a column without a backfill, and check what a live database already holds before assuming a fresh one. Guest-facing pages (`/w`, `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`) are used by people with no account and no way to report a bug except to the couple. The app serves many weddings, so nothing may assume there is only one (session 55 found the privacy notice doing exactly that).
 
@@ -23,6 +23,23 @@
 ---
 
 ## Recent sessions
+
+**Session 57 (spec 49):** RSVP answers, built on branch `claude/funny-goldberg-4u6zsj` (no PR).
+The planner found `rsvp_answers` empty although guests had answered a "do you need transport?"
+question, and asked for the fix, a way to see answers, and a check of everything else:
+
+- **Bug fixed: no RSVP question answer was ever saved.** The form's upserts named columns whose
+  only unique indexes were partial, so Postgres rejected every one (42P10) and the action ignored
+  the error. Migration **`0047` must be applied to live** before answers save; answers given
+  before then are gone and guests must answer again. **Rule: check every write's `error`.**
+- **Checked:** all 24 upserts in `src/` against the migrated schema (only these two were broken);
+  three user-facing unchecked writes fixed (coach seat cancel, guest photo removal, seat swap).
+  Spec 49 §11 lists what was left best-effort and why.
+- **Results:** a summary under each question on `/questions` (Yes 36 · No 19 · Left blank ·
+  Not replied yet), each number linking to `/questions/[id]/answers?answer=…`; an answers CSV
+  (`/api/export/answers`, also in the zip).
+- **Verified:** typecheck, 1424 unit tests, build, SQL suite (777 assertions), sample render at
+  1280px and iPhone 13. **Not verified:** live Supabase, real data, a real phone.
 
 **Session 56 (spec 48):** the phone experience, built on branch `claude/vibrant-bohr-xd2w8t`
 (no PR). The planner said the live app was poor on a phone (zooming, sideways scroll, Guests with
@@ -59,27 +76,13 @@ planner said the app is **live, works, and has real users**, and asked for a che
 - **Verified:** typecheck, 1411 unit tests, build (CI env). **Not verified:** the page in a
   browser or on the live site.
 
-**Session 54 (spec 47):** the guest table, built on branch `claude/pensive-euler-natrmu` (merged, PR #96). A brainstorm with mockups, then a spec, six questions (all recommended, plus a Planning
-view), then "Build it all". No migration. Read the spec's §11:
-
-- **The table** (`src/components/guests/guests-table.tsx`) groups by household; view and grouping
-  are `?view=` / `?rows=people`, rules in `src/lib/guest-table.ts`. Event cells are symbols
-  (`status-mark.tsx`); each household has a **Links ▾** menu (`household-links.tsx`); reply bars
-  above the table are `event-summary.tsx`.
-- **Behaviour change:** `listGuests` with both `rsvp` and `event` now keeps only guests invited to
-  that event (the exports follow).
-- **After a review (same session):** `listGuests` now filters `listAllGuests` (one cached read);
-  `listInvites` pages past the 1000-row cap. Ten fixes in the spec's §11 "Review fixes".
-- **Verified:** typecheck, 1410 unit tests, build, a sample page in headless Chromium at 1280px and
-  an emulated iPad, axe clean. **Not verified:** Supabase, real data, a real iPad or phone.
-
 ---
 
 ## 1. What exists
 
 ### Database — `supabase/migrations/`
 
-Numbered migrations `0001`–`0046`, applied in order; the table below covers the
+Numbered migrations `0001`–`0047`, applied in order; the table below covers the
 early ones (later ones are named in each spec). `bootstrap.sql` makes a wedding by hand;
 `/start` is the normal way since spec 40. Full instructions in `supabase/migrations/README.md`.
 
