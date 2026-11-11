@@ -1,7 +1,7 @@
 # Feature spec: RSVP answers in one place
 
-**Status: spec only, not built.** No migration. Question 1 in §8 is answered (§10); questions 2–5
-are still open.
+**Status: built (2026-11-11), branch `claude/funny-goldberg-4u6zsj`, no PR.** Migration `0047`
+fixes a bug that stopped any answer being saved (§11). All questions in §8 are answered (§10).
 
 **Depends on:** spec 22 (per-event invites, the built-in decline note), spec 47 (guest table
 status), spec 17 (CSV export).
@@ -85,7 +85,9 @@ rules in spec 48 (16px inputs, relative sideways scrollers).
 
 ## 6. Data
 
-No migration. One read in `src/server/queries/questions.ts` (`getAnswersOverview`, wrapped in
+Migration `0047` adds plain unique indexes on `rsvp_answers (question_id, guest_id)` and
+`(question_id, household_id)`: the RSVP form's upserts cannot use 0001's partial indexes, so
+without it no answer is saved (§11). One read in `src/server/queries/questions.ts` (`getAnswersOverview`, wrapped in
 `cache()`): the wedding's questions, all their answers, and the in-scope guests and households
 (from `v_guest_event_invites`, not soft-deleted). RLS already limits all of it to the wedding.
 
@@ -102,15 +104,7 @@ No migration. One read in `src/server/queries/questions.ts` (`getAnswersOverview
 
 ## 8. Open questions
 
-1. *Answered, see §10.*
-2. **Who counts as "not replied yet".** (a) Anyone invited to at least one event *(recommended)*,
-   or (b) only guests who have replied yes to something, since people who can't come may not
-   matter for most questions (bus, meal).
-3. **People who said no to everything.** Show their answers and blanks like everyone else
-   *(recommended: simplest, and you can see who they are)*, or leave them out of the counts.
-4. **The CSV.** Include it now *(recommended: it's what you'd send the bus company)*, or later.
-5. **The decline note.** Show it as a card here *(recommended)*, or leave it on the household
-   screen only.
+None. All answered in §10.
 
 ## 9. Test plan
 
@@ -126,3 +120,40 @@ No migration. One read in `src/server/queries/questions.ts` (`getAnswersOverview
 1. **Where:** the results summary sits on each question on `/questions`, and clicking it opens
    that question's own results screen with everyone's answer (§4.1). Rejected: a separate
    all-questions answers screen.
+2. **Not replied yet** counts everyone invited to at least one event.
+3. **People who said no to everything** are counted like everyone else.
+4. **The CSV** is included.
+5. **The decline note** is listed on `/questions` like any question, so it has a summary and a
+   results screen.
+
+Questions 2–5 took the recommended option when the planner said "build the fix in — and the way
+to view it".
+
+## 11. Build status (2026-11-11)
+
+**The bug.** No RSVP question answer had ever been saved. `submitRsvp` upserts with
+`onConflict: "question_id,guest_id"` / `"question_id,household_id"`; the only unique indexes on
+those columns were partial (`where guest_id is not null`), which Postgres cannot use as an
+ON CONFLICT arbiter without the same WHERE clause, so every insert failed with 42P10, and the
+action ignored the error and told the guest it had worked. Answers given before `0047` is applied
+are not recoverable; guests have to answer again. `0047` adds the plain indexes; the action now
+checks every write and fails visibly.
+
+**Checked across the app.** Every `onConflict` target in `src/` (24 of them) was run as
+`INSERT … ON CONFLICT` against the migrated schema: only the two above failed. Unchecked writes
+were reviewed: three user-facing ones now check their result (a guest cancelling coach seats,
+a guest removing their photo, which now deletes the row before the file as the planner's
+removal does, and the second half of a seat swap). The rest are deliberate best-effort
+housekeeping after the main write (`message_log` status, `opened_at`/`first_response_at`/
+`sent_at` stamps, view counters, token-attempt rows, a duplicate song vote).
+
+**Built:** `src/lib/questions/tally.ts` (counting, filter keys), `src/lib/questions/export.ts`
+(the CSV), `getAnswersOverview` in `src/server/queries/questions.ts` (paged past the 1000-row
+cap), `AnswerSummary`, the summary on `/questions`, `/questions/[id]/answers?answer=<key>`, and
+the `answers` export kind (also in the zip). Option bars are full width on a phone.
+
+**Verified:** typecheck, 1424 unit tests, `npm run build`, the SQL suite with
+`28_rsvp_answer_upsert.sql` (777 assertions; that file fails with 42P10 when `0047` is removed),
+the summary and results list rendered with sample data in headless Chromium at 1280px and an
+emulated iPhone 13 (no sideways scroll). **Not verified:** live Supabase, the results screen
+with real data, a real phone.

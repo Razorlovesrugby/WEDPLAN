@@ -180,13 +180,15 @@ export async function deleteGuestUpload(
 
   if (!asset) return fail("That photo isn't yours to remove");
 
-  await removePaths([asset.storage_path]);
-  await supabase
+  // The row first: if it can't go, the photo must still be there to show.
+  const { error } = await supabase
     .from("site_assets")
     .delete()
     .eq("id", parsed.data.asset_id)
     .eq("wedding_id", wedding.id)
     .eq("uploaded_by_household", household.id);
+  if (error) return fail("Could not remove that photo. Try again.");
+  await removePaths([asset.storage_path]);
 
   revalidatePath(`/rsvp/${parsed.data.token}`);
   revalidatePath("/gallery");

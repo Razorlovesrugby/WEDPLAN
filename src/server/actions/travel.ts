@@ -295,11 +295,12 @@ export async function reserveCoachSeats(
 
   if (seats === 0) {
     if (existing) {
-      await supabase
+      const { error } = await supabase
         .from("coach_seats")
         .delete()
         .eq("id", existing.id)
         .eq("wedding_id", wedding.id);
+      if (error) return fail("Could not cancel those seats. Try again.");
     }
     revalidatePath(`/rsvp/${token}`);
     return ok({ seats: 0 });

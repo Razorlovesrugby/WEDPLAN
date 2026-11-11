@@ -29,6 +29,9 @@ those only when a spec cites one.
 ## Conventions
 
 - Every write is a server action in `src/server/actions/` returning `ActionResult`.
+- Check the `error` of every Supabase write that matters to the user, and test any
+  new `onConflict` against the SQL suite: an unchecked, always-failing upsert
+  lost every RSVP answer (spec 49).
 - Every read is in `src/server/queries/`, wrapped in `cache()`.
 - Pure, testable logic goes in `src/lib/`, never inline in a `"use server"` file.
 - Migrations are append-only: add the next numbered file, never edit a landed one.

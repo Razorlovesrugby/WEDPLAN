@@ -18,6 +18,8 @@ import { moveWithin } from "@/lib/reorder";
 import { removeQuestion, reorderQuestion, saveQuestion } from "@/server/actions/questions";
 import type { QuestionScope, QuestionType, RsvpQuestionRow } from "@/lib/types/database";
 import { useDragSensors } from "@/components/ui/use-drag-sensors";
+import { AnswerSummary } from "@/components/questions/answer-summary";
+import type { Tally } from "@/lib/questions/tally";
 
 /**
  * The question builder.
@@ -103,7 +105,14 @@ function SortableQuestion({
   );
 }
 
-export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] }) {
+export function QuestionsEditor({
+  questions,
+  tallies = {},
+}: {
+  questions: RsvpQuestionRow[];
+  /** Each question's results, by id (spec 49). */
+  tallies?: Record<string, Tally>;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   // The list as the planner is arranging it. Follows the server, but a drag
@@ -347,6 +356,9 @@ export function QuestionsEditor({ questions }: { questions: RsvpQuestionRow[] })
                 </p>
                 {question.help_text ? (
                   <p className="mt-0.5 text-xs text-muted">{question.help_text}</p>
+                ) : null}
+                {tallies[question.id] ? (
+                  <AnswerSummary questionId={question.id} type={question.type} tally={tallies[question.id]!} />
                 ) : null}
               </div>
               </div>

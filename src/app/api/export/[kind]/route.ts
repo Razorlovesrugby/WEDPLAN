@@ -17,6 +17,8 @@ import { getPlannerSongs } from "@/server/queries/site-extras";
 import { getEventIdsWithSeating, getSeatingPlan } from "@/server/queries/seating";
 import { SEATING_CSV_HEADER, seatingCsvRows } from "@/lib/seating/listings";
 import { getRegistryClaims } from "@/server/queries/registry";
+import { getAnswersOverview } from "@/server/queries/questions";
+import { answersCsv } from "@/lib/questions/export";
 import { REGISTRY_CSV_HEADER, registryCsvRows } from "@/lib/registry/export";
 import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
 
@@ -33,7 +35,7 @@ import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating", "registry"] as const;
+const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating", "registry", "answers"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -85,6 +87,14 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
         ]),
       ),
     };
+  }
+
+  if (kind === "answers") {
+    // Answers to the RSVP questions (spec 49 §4.3), every question including
+    // switched-off ones, since their answers were kept on purpose.
+    const overview = await getAnswersOverview(wedding.id);
+    const { header, rows } = answersCsv(overview.questions, overview.answers, overview.guests);
+    return { filename: `rsvp-answers-${stamp}.csv`, body: csvDocument(header, rows) };
   }
 
   if (kind === "coach") {
@@ -301,6 +311,7 @@ These are spreadsheets (CSV) you can open in Excel, Numbers or Google Sheets:
   coach-manifest    who is on which coach, from which stop
   seating           who sits at which table (and chair), for every event with a plan
   registry          who is giving what from your registry, their messages, and who needs a thank-you
+  rsvp-answers      every guest's answers to your RSVP questions
 
 This is a copy of what you can read, not a full backup: it can't be loaded back
 in automatically, and it doesn't include the budget, vendors, moodboards, the

@@ -349,11 +349,12 @@ export async function assignGuests(
     // The displaced guest takes the mover's old chair, if it had one.
     const from = currentBy.get(mover);
     if (swappedWith && from && from.seat_index !== null) {
-      await supabase
+      const { error: swapError } = await supabase
         .from("seat_assignments")
         .update({ seat_index: from.seat_index })
         .eq("guest_id", swappedWith)
         .eq("event_id", eventId);
+      if (swapError) return fail(swapError.message);
     }
   } else {
     // Moving to a table without choosing a chair. Someone who stays at the
