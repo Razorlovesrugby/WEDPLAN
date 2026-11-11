@@ -1,7 +1,7 @@
 # Feature spec: RSVP answers in one place
 
-**Status: spec only, not built.** No migration. The questions in §8 need answers before anything
-is built.
+**Status: spec only, not built.** No migration. Question 1 in §8 is answered (§10); questions 2–5
+are still open.
 
 **Depends on:** spec 22 (per-event invites, the built-in decline note), spec 47 (guest table
 status), spec 17 (CSV export).
@@ -14,8 +14,9 @@ way to see how many guests said yes to "do you want the bus" without writing SQL
 ## 2. Story
 
 Sam asked on the RSVP form "Will you need a seat on the bus from the hotel?" (per guest, yes/no).
-Sam opens **RSVP questions → Answers** and sees: *Yes 34 · No 21 · Left blank 3 · Not replied
-yet 18*. Sam clicks **Yes** and sees the 34 names, grouped by household, each linking to the
+Sam opens **RSVP questions**. Under the question it says: *Yes 34 · No 21 · Left blank 3 · Not
+replied yet 18*. Sam clicks the question's results and sees every answer; clicking **Yes** narrows
+it to the 34 names, grouped by household, each linking to the
 guest. Sam downloads the answers as a CSV to send to the bus company.
 
 ## 3. What's there now
@@ -32,16 +33,15 @@ guest. Sam downloads the answers as a CSV to send to the bus company.
 
 ## 4. The proposal
 
-### 4.1 Where
+### 4.1 Where: on the question, then click in
 
-A new screen, **`/questions/answers`**, linked from the top of `/questions` ("See answers →")
-and from each question in the editor ("12 answers"). It sits in the same nav group as
-`/questions`.
+Each question on **`/questions`** shows its results summary (§4.2) directly under it, so the
+results are visible without leaving the page. The summary is a link to
+**`/questions/[id]/answers`**, the question's own results screen: the same summary at the top,
+then everyone's answer (name, household, answer, when), grouped by answer. Clicking a count or
+option on either screen opens `/questions/[id]/answers` filtered to that answer.
 
-### 4.2 One card per question
-
-In the form's own order (`sort_order`, then label). Each card shows the label, the scope, and a
-summary that depends on the type:
+### 4.2 The summary, per question type
 
 | Type | Summary |
 |------|---------|
@@ -49,19 +49,20 @@ summary that depends on the type:
 | Choose one | One bar per option with its count, in the question's option order |
 | Choose any | One bar per option (a guest can count towards several), plus how many answered |
 | Number | Answered *n* · total · smallest–largest |
-| Short / long text | Answered *n*, then the answers themselves, newest first |
+| Short / long text | Answered *n* (the answers themselves are on the results screen, newest first) |
 
-Every card also shows two numbers that are not answers:
+Every summary also shows two numbers that are not answers:
 
 - **Left blank:** they sent the RSVP but did not answer this (a row with `value` null).
 - **Not replied yet:** in scope (a guest, or a household, that is invited to at least one event
   and not soft-deleted) with no answer row at all.
 
-Clicking any count, option or "Not replied yet" opens the list of who it is: name, household,
-answer, when they answered, each linking to `/guests/[id]` or `/households/[id]`.
+On the results screen each name links to `/guests/[id]` or `/households/[id]`. An answer to an
+option that has since been removed from the question is shown as itself, under "Other".
 
-Inactive questions that have answers are shown under a "Switched off" heading, collapsed. The
-decline note is shown as its own card ("Notes from people who can't come"), text type.
+Inactive questions with answers stay on `/questions` (it already lists them) with their summary.
+The decline note gets a results screen too, linked from `/questions` as "Notes from people who
+can't come".
 
 ### 4.3 CSV
 
@@ -92,16 +93,16 @@ No migration. One read in `src/server/queries/questions.ts` (`getAnswersOverview
 
 - `src/lib/questions/tally.ts` + `tally.test.ts`: pure tallying per type, blank vs not replied.
 - `src/server/queries/questions.ts`: `getAnswersOverview`.
-- `src/app/(planner)/questions/answers/page.tsx`, `src/components/questions/answers-overview.tsx`.
-- `src/components/questions/questions-editor.tsx`, `src/app/(planner)/questions/page.tsx`: links.
+- `src/components/questions/answer-summary.tsx`: the summary, used on both screens.
+- `src/app/(planner)/questions/page.tsx`, `src/components/questions/questions-editor.tsx`: the
+  summary under each question.
+- `src/app/(planner)/questions/[id]/answers/page.tsx`: the results screen.
 - `src/app/api/export/[kind]/route.ts`: the `answers` kind.
-- `src/lib/nav-groups.ts`: `/questions/answers` already matches the `/questions` prefix; check.
+- `src/lib/nav-groups.ts`: `/questions/[id]/answers` already matches the `/questions` prefix; check.
 
 ## 8. Open questions
 
-1. **Where it lives.** (a) A new screen `/questions/answers` linked from RSVP questions
-   *(recommended: the questions screen stays an editor)*, or (b) answers shown inline under each
-   question on `/questions`.
+1. *Answered, see §10.*
 2. **Who counts as "not replied yet".** (a) Anyone invited to at least one event *(recommended)*,
    or (b) only guests who have replied yes to something, since people who can't come may not
    matter for most questions (bus, meal).
@@ -117,5 +118,11 @@ No migration. One read in `src/server/queries/questions.ts` (`getAnswersOverview
   each option; a household answer is counted once, not per member; soft-deleted guests and
   guests invited to nothing are not "not replied yet"; an answer to a since-removed option still
   shows (as "other").
-- Typecheck, unit tests, build; render `/questions/answers` with sample data in headless
+- Typecheck, unit tests, build; render `/questions` and `/questions/[id]/answers` with sample data in headless
   Chromium at desktop and iPhone width.
+
+## 10. Answered (2026-11-11)
+
+1. **Where:** the results summary sits on each question on `/questions`, and clicking it opens
+   that question's own results screen with everyone's answer (§4.1). Rejected: a separate
+   all-questions answers screen.
