@@ -1,9 +1,8 @@
 # Feature spec: The run sheet as one timeline
 
-**Status: proposed, not built.** Asked for as a spec (2026-11-15). The scope in
-§1 was agreed in conversation. The questions in §12 are still open, and
-nothing beyond this file is built until they are answered (see
-`docs/specs/README.md`).
+**Status: proposed, not built.** Asked for as a spec (2026-11-15). All five
+open questions are answered (§12). Nothing is built until the planner says to
+build it (see `docs/specs/README.md`).
 
 **Depends on:** spec 5 part B (the run sheet whose shape this replaces),
 spec 8 (vendors), spec 39 (`people`), spec 40 (wedding timezone and
@@ -21,7 +20,9 @@ spec 8 (vendors), spec 39 (`people`), spec 40 (wedding timezone and
 6. A list view as well, as a toggle over the same data.
 7. Where the old screen grouped things (by event, by track), that information
    is not lost.
-8. A printable per-person view is wanted next. It is a separate spec.
+8. An item can still be set to start when another ends, so moving one moves
+   what follows it. This is optional per item.
+9. A printable per-person view is wanted next. It is a separate spec.
 
 ## 2. Story
 
@@ -135,9 +136,11 @@ spec 8 (vendors), spec 39 (`people`), spec 40 (wedding timezone and
 
 ## 4. Findings that shape the design
 
-1. **The cascade is the reason times are not stored.** Spec 5 chose chaining on
-   purpose. Stored start and end on every item removes it. This is the largest
-   change here, and §12 Q1 asks for it explicitly.
+1. **Chaining and stored times can coexist only if one of them is the source of
+   truth.** Spec 5 computes every time from the chain on read. A stored start
+   and end on every item, with chaining kept as an option, means the stored
+   time is the truth and the chain is a rule applied when a time changes (§7.10).
+   Computing on read for some items and storing for others would disagree.
 2. **"Sections" in the request means two things in the code**: the per-event
    partition and the per-track columns. Both go. Event stays as an optional
    label, track goes.
@@ -163,14 +166,19 @@ spec 8 (vendors), spec 39 (`people`), spec 40 (wedding timezone and
   Timeline / List toggle over one dataset.
 - Filter by assignee.
 - A soft warning when one assignee is on two overlapping items.
+- Optional "starts after" on an item: its start is the other item's end plus a
+  gap, and moving or resizing that item moves what follows it. Many items may
+  follow one item.
 - Event as an optional label on an item.
-- Migration of every existing item without losing a time, an owner, a vendor
-  link or an event.
-- Atomic save of an item with its assignees.
+- Migration of every existing item without losing a time, a chain, an owner, a
+  vendor link or an event.
+- Atomic save of an item with its assignees, and atomic cascade of a move.
 
 **Out:**
 - Sections, headers, track columns, per-event pages.
-- Chaining, offsets and cascading moves (§12 Q1).
+- Pinned items as a separate concept. An item with no "starts after" is
+  fixed: it does not move when anything else does.
+- A warning for an item running past a pinned time.
 - Printable or per-person export. That is the next spec.
 - Publishing to `/w` and any change to `guest_visible`.
 - Reminders or notifications to assignees.
@@ -186,17 +194,21 @@ Migration `0048_run_sheet_one_timeline.sql`. Append-only: nothing in `0009`,
 
 On `run_sheet_items`:
 
-- Add `starts_at timestamptz` and `ends_at timestamptz`, backfill from
-  `v_run_sheet_items`, apply §12 Q2 to rows still null, then set both `not
-  null` and add `check (ends_at > starts_at)`.
+- Add `starts_at timestamptz`, `ends_at timestamptz` and `time_estimated
+  boolean not null default false`. Backfill them per §6.3, then set the two
+  times `not null` and add `check (ends_at > starts_at)`.
+- `predecessor_id` and `offset_minutes` stay and keep their meaning: this item
+  **starts after** the predecessor, `offset_minutes` after its end. The
+  stored times are the truth, and an item with a predecessor always satisfies
+  `starts_at = predecessor.ends_at + offset_minutes`. The function in §9
+  maintains that invariant.
 - Drop `not null` from `event_id`. The composite foreign key stays, so a set
   event must still belong to the wedding.
-- `pinned`, `pinned_at`, `predecessor_id`, `offset_minutes`,
-  `duration_minutes`, `owner`, `track` and `vendor_id` are no longer read or
-  written by the app. They stay in place for this migration and are dropped in
-  a later one once the data is verified. New rows write `pinned = false`,
-  `predecessor_id = null`, `duration_minutes` as the span in minutes and
-  `track = 'other'`, so every old constraint still holds.
+- `pinned`, `pinned_at`, `duration_minutes`, `owner`, `track` and `vendor_id`
+  are no longer read or written by the app. They stay in place for this
+  migration and are dropped in a later one once the data is verified. New rows
+  write `pinned = false`, `pinned_at = null`, `duration_minutes` as the span in
+  minutes and `track = 'other'`, so every old constraint still holds.
 - Index on `(wedding_id, starts_at)`.
 
 ### 6.2 Assignees
@@ -233,14 +245,38 @@ New table `run_sheet_item_assignees`:
 | Old | New |
 |---|---|
 | Resolved `starts_at`/`ends_at` from the view | Stored columns |
+| `predecessor_id`, `offset_minutes` | Kept, as "starts after" |
+| `pinned` items | Items with no predecessor |
 | `vendor_id` | A vendor assignee row |
-| `owner` free text | Per §12 Q3 |
+| `owner` free text | An assignee, per §6.3.2 |
 | `track` | Dropped from the UI, derivable from assignee types |
 | `event_id` | Kept as the optional label |
-| Items with no resolvable time | Per §12 Q2 |
+| Items with no resolvable time | A time, per §6.3.1 |
 
 For every item that has a resolved time today, the migration stores exactly the
-`starts_at` and `ends_at` the view gives. The SQL suite asserts this.
+`starts_at` and `ends_at` the view gives, and its chain link is unchanged. The
+SQL suite asserts both.
+
+#### 6.3.1 Items with no time ("Time TBD")
+
+A chain whose first item has no time takes a root time, then resolves through
+the existing chain as today, so the links survive:
+
+- the event's `starts_at`, else the wedding date at 09:00 in the wedding's
+  timezone, else 09:00 on the day the migration runs;
+- the root lasts 30 minutes, or its own `duration_minutes` if that is above 0;
+- every item in such a chain gets `time_estimated = true`.
+
+`time_estimated` shows as a quiet "time estimated" note on the item and clears
+when the item's start or end is saved.
+
+#### 6.3.2 The `owner` text
+
+A non-empty `owner` is matched, exactly and case-insensitively, in this order:
+collaborators' display names, vendors, people, guests. A single match becomes
+an assignee. No match, or more than one match within a source, creates a
+`people` row with that name (one per distinct name) and assigns it. Created
+people appear wherever people are offered for tasks (spec 39).
 
 ### 6.4 Timezone
 
@@ -253,8 +289,9 @@ For every item that has a resolved time today, the migration stores exactly the
 ### 6.5 The view
 
 `v_run_sheet_items` is redefined without the recursive CTE: it reads the stored
-columns, carries `assignee_count`, and `conflict` becomes "this item overlaps
-another item that shares an assignee". The view keeps `security_invoker`.
+columns, carries `time_estimated` and `assignee_count`, and `conflict` becomes
+"this item overlaps another item that shares an assignee". The view keeps
+`security_invoker`.
 
 ## 7. Behaviour
 
@@ -271,9 +308,15 @@ another item that shares an assignee". The view keeps `security_invoker`.
 
 ### 7.2 Timeline
 
-One vertical time axis for the whole day, from the earliest start to the
-latest end, padded by 30 minutes.
+One vertical time axis for one day, from the earliest start to the latest end
+on that day, padded by 30 minutes.
 
+- A day runs from 06:00 to 06:00 in the wedding's timezone, so a 00:30 item
+  belongs to the evening before. This matches the 06:00 limit on an end time.
+- When every item falls on one day there is no date control. When items fall
+  on more than one day, a date control appears above the timeline and the
+  timeline shows one day at a time. It opens on the wedding date if it has
+  items, otherwise on the earliest day. The list (§7.3) is not split by day.
 - Height follows duration, with a tappable minimum.
 - Overlapping items share the width in lanes. Sort by start, put each item in
   the first lane free at its start, then widen to the unused lane space on its
@@ -307,8 +350,10 @@ sharing no assignee with another never warns.
   does.
 - A soft-deleted guest or person is hidden from an item's assignees and from
   the picker. Their rows remain, so restoring them restores the assignment.
-- Someone in no source can be added from the picker, per §12 Q5. A planner
-  login does not see the add option, since it cannot write `people`.
+- Someone in no source can be added from the picker. This creates a `people`
+  row (spec 39), never a guest, so invitations, RSVPs, seat counts and
+  per-head budget figures are unchanged. A planner login does not see the add
+  option, since it cannot write `people`.
 - Unassigned items are allowed and have an "Unassigned" filter choice.
 
 ### 7.6 Filter
@@ -318,18 +363,24 @@ rest dim. Positions never reflow.
 
 ### 7.7 Editor
 
-The existing dialog pattern, extended. Fields in order: title, start, end,
-assignees, location, notes, event, and the guest-visible checkbox it already
-has. Saving writes the item and its assignees in **one transaction**, through
-a single database function (§9), so a failed assignee write leaves the item
-unchanged.
+The existing dialog pattern, extended. Fields in order: title, starts after
+(optional) with its gap, start, end, assignees, location, notes, event, and the
+guest-visible checkbox it already has. Saving writes the item, its assignees
+and any cascade (§7.10) in **one transaction**, through a single database
+function (§9), so a failed write leaves everything unchanged.
+
+When "starts after" is set, the start field shows the computed time and is
+edited through the gap (§7.10).
 
 ### 7.8 Moving
 
-A move is one update of `starts_at` and `ends_at` together. Spec 45 applies:
-every move works without dragging. Each item's `RowMenu` offers "Earlier by 15
-minutes" and "Later by 15 minutes", and the editor's time fields do the rest.
-Drag is a shortcut that snaps to 5 minutes, and the bottom edge resizes.
+A move changes `starts_at` and `ends_at` together and carries every item that
+follows it (§7.10). Spec 45 applies: every move works without dragging. Each
+item's `RowMenu` offers "Earlier by 15 minutes" and "Later by 15 minutes", and
+the editor's time fields do the rest. Drag is a shortcut that snaps to 5
+minutes, and the bottom edge resizes. An item that starts after another cannot
+be dragged earlier than that item's end, and the menu does not offer a move
+that would do so.
 
 ### 7.9 Devices
 
@@ -337,6 +388,30 @@ Phone (spec 48): one scrolling timeline, up to three legible lanes, narrower
 lanes show the title only. iPad and laptop: wider lanes with full assignee
 names. The emoji in the current controls go. Colour is used sparingly:
 selected item, now line, overlap marker.
+
+### 7.10 Starts after
+
+An item may start after another item in the same wedding, with a gap of 0 to
+1440 minutes after that item's end. Many items may start after the same item,
+which is how two things begin when the ceremony ends.
+
+- Setting "starts after" sets the item's stored start to the other item's end
+  plus the gap, and its end keeps its length.
+- Changing a follower's start changes its gap. A start earlier than the other
+  item's end removes the link, and the editor says so before saving.
+- Changing an item's start or end shifts every item that follows it, and
+  everything that follows those, by the change in its end. Gaps are kept. A
+  cascade never changes an item's length and never touches an item with no
+  link to the moved one.
+- Resizing an item shifts followers by the change in its **end** only.
+- A link that would make an item follow itself, directly or through others, is
+  refused.
+- Deleting an item keeps every follower's stored time. Each follower is
+  re-linked to the deleted item's own predecessor when that gives a gap of 0 or
+  more, and is otherwise unlinked.
+- An item with no link is fixed and never moves when anything else does.
+- A follower may end up overlapping other items. That is allowed and silent
+  (§7.4).
 
 ## 8. Screens
 
@@ -349,15 +424,22 @@ selected item, now line, overlap marker.
 
 ## 9. Code changes
 
-- **`supabase/migrations/0048_run_sheet_one_timeline.sql`**: §6, plus a
-  function `save_run_sheet_item(...)` (security invoker, so RLS applies) that
-  inserts or updates an item and replaces its assignee set in one transaction.
-- **`src/lib/run-sheet.ts`**: lane packer, shared-assignee overlap, midnight
-  handling. The chain resolver and `computeConflicts` are removed.
+- **`supabase/migrations/0048_run_sheet_one_timeline.sql`**: §6, plus security
+  invoker functions (so RLS applies), each one transaction:
+  - `save_run_sheet_item(...)`: inserts or updates an item, applies "starts
+    after" (§7.10), replaces its assignee set, and cascades the change to its
+    followers with a recursive CTE. Refuses a cycle.
+  - `delete_run_sheet_item(...)`: re-links or unlinks followers per §7.10,
+    then deletes.
+- **`src/lib/run-sheet.ts`**: lane packer, shared-assignee overlap, the day
+  boundary, and a pure mirror of the cascade used for the editor's live preview
+  of the computed start (the same "duplicate the SQL deliberately, test it
+  against the SQL suite" pattern the file already follows). `resolveRunSheetTimes`
+  and `computeConflicts` are removed.
 - **`src/server/actions/run-sheet.ts`**: `saveRunSheetItem`,
-  `moveRunSheetItem`, `duplicateRunSheetItem`, `deleteRunSheetItem`. Every
-  write returns `ActionResult` and checks the Supabase `error`. The pin,
-  unpin and reorder actions are removed.
+  `moveRunSheetItem`, `duplicateRunSheetItem`, `deleteRunSheetItem`, each a
+  thin call to a function above. Every write returns `ActionResult` and checks
+  the Supabase `error`. The pin, unpin and reorder actions are removed.
 - **`src/server/queries/run-sheet.ts`**: one wedding-wide `cache()`d query with
   assignees. The per-event and "events with items" queries go.
 - **`src/server/actions/vendors.ts`**: `setRunSheetItemVendor` is removed
@@ -374,9 +456,9 @@ selected item, now line, overlap marker.
 ## 10. Decisions
 
 1. **One dataset, two views.** Rejected: separate list and timeline data.
-2. **Stored times, not chains.** The request is a start and end on every item.
-   Rejected: keeping chains next to stored times, since two sources of truth
-   for one time disagree.
+2. **Stored times are the truth, and "starts after" is a rule applied on
+   write.** Rejected: computing a chained item's time on read while storing the
+   rest, since two sources for one time disagree.
 3. **Four typed foreign keys for assignees.** Rejected: one polymorphic id,
    which cannot cascade or enforce the wedding.
 4. **"Both of us" is two rows.** Each partner can be filtered or removed alone.
@@ -392,62 +474,59 @@ selected item, now line, overlap marker.
    action that writes the item and then the assignees.
 10. **A deleted vendor cascades its assignee rows and the item stays**, the
     behaviour `12_vendors.sql` already asserts.
+11. **An unlinked item is the new "pinned".** Rejected: a separate pinned flag,
+    which would repeat what having no predecessor already says.
+12. **Editing a follower earlier than its predecessor's end unlinks it.**
+    Rejected: a negative gap, which the existing 0 to 1440 range excludes.
+13. **Owner text becomes people.** Names like "DJ" or "best man" become `people`
+    rows and appear wherever people are offered for tasks. Rejected: moving the
+    text into notes, which would assign nobody.
 
 ## 11. Test plan
 
 - **Unit** (`src/lib/run-sheet.test.ts`, rewritten): lane packing (overlap,
   chains of overlap, identical times, touching items, one long item over
-  several short ones), shared-assignee overlap, midnight crossing, and a London
-  viewer with an Auckland wedding across a daylight-saving change.
-- **SQL** (`04_run_sheet.sql`, rewritten): the backfill reproduces every time
-  the view resolves today; `ends_at > starts_at`; exactly-one-source on
-  assignees; a duplicate assignee is refused; a cross-wedding assignee is
-  refused; a non-collaborator reads and writes nothing; `save_run_sheet_item`
-  rolls back the item when an assignee insert fails; the audit row is written;
-  `change_wedding_timezone` keeps the wall-clock time.
+  several short ones), shared-assignee overlap, the 06:00 day boundary,
+  midnight crossing, the cascade mirror (a move, a resize, two followers of one
+  item, a three-deep chain, a cycle refused), and a London viewer with an
+  Auckland wedding across a daylight-saving change.
+- **SQL** (`04_run_sheet.sql`, rewritten):
+  - Migration: the backfill reproduces every time the view resolves today and
+    keeps every link; a TBD chain gets the §6.3.1 root time, resolves through
+    its links and is flagged; owner text matches in the §6.3.2 order, an
+    ambiguous name creates a person, and the same name creates one person.
+  - Invariants: `ends_at > starts_at`; a follower's start equals its
+    predecessor's end plus its gap after any save, move, resize or delete.
+  - Cascade: moving an item shifts followers and followers of followers by the
+    change in its end; a cycle is refused; deleting a mid-chain item keeps
+    every follower's time.
+  - Assignees: exactly-one-source; a duplicate is refused; a cross-wedding
+    assignee is refused; a non-collaborator reads and writes nothing.
+  - `save_run_sheet_item` rolls back the item when an assignee insert fails;
+    the audit row is written; `change_wedding_timezone` keeps the wall-clock
+    time of `starts_at` and `ends_at`.
 - **SQL** (`12_vendors.sql`): the inserted row gains times; deleting a vendor
   keeps the item and removes its assignee row.
 - **SQL** (`25_planner_access.sql`): the new table is in the registry.
 - **Browser** (a real run is needed): five overlapping items at phone width,
   the filter, the toggle, the editor, the no-drag moves.
 
-## 12. Open questions
+## 12. Answered (2026-11-15)
 
-**Q1. Retiring the cascade.** Moving the ceremony no longer moves what follows
-it. *Recommended:* accept the loss, and add a "shift this and everything after
-it by N minutes" action later if it is missed. *Alternative:* keep chains as an
-optional way to fill in a start time, which brings two sources of truth back.
-
-**Q2. Items with no time yet.** Today an unpinned item with no predecessor
-saves as "Time TBD". The new rule requires a start and end. *Recommended:*
-migrated TBD items take the start of their event (or 09:00 on the event's date
-if it has none) for 30 minutes, and are marked "time estimated" until edited.
-*Alternative:* allow a null time and show those items in a "No time yet"
-strip, which breaks "everything has a start and end".
-
-**Q3. Existing `owner` text.** *Recommended:* a non-empty `owner` is matched
-exactly, case-insensitively, against collaborators' display names, people,
-guests and vendors. A match becomes an assignee. An unmatched value becomes a
-new `people` row, deduplicated by name, and an assignee. *Alternative:* append
-the text to the item's notes and add no assignee.
-
-**Q4. Events on different days.** Events can fall on different dates (a
-rehearsal dinner and the wedding). *Recommended:* the timeline shows one date at
-a time, with a date control only when items fall on more than one local date,
-and the list is one continuous list sorted by start. *Alternative:* one
-continuous timeline across all dates.
-
-**Q5. Who counts as a "guest name".** The guest list drives invitations, RSVP,
-seat and per-head budget counts, so adding a non-guest (a groomsman who is not
-invited, the photographer's assistant) as a guest changes those.
-*Recommended:* guests are assigned from real guest records, and anyone else is
-a `people` row created from the picker. *Alternative:* create a guest record
-from the picker, at the cost of those side effects.
+1. **Chaining stays, as an option.** An item may start after another, and a
+   move carries what follows it (§7.10). Stored times are the truth.
+2. **Items with no time get one.** The §6.3.1 root time, flagged "time
+   estimated" until edited.
+3. **Owner text becomes assignees**, matched to collaborators, vendors, people
+   and guests, otherwise a new person (§6.3.2).
+4. **One date at a time.** A date control appears only when items fall on more
+   than one day (§7.2).
+5. **Non-guests are people, not guests** (§7.5).
 
 ## 13. Build order
 
-1. `0048`, `save_run_sheet_item`, the `0045` function replacement, and the SQL
-   suite changes. Run `./scripts/verify-migrations.sh`.
+1. `0048`, `save_run_sheet_item`, `delete_run_sheet_item`, the `0045` function
+   replacement, and the SQL suite changes. Run `./scripts/verify-migrations.sh`.
 2. `src/lib/run-sheet.ts` and its tests.
 3. Actions and queries.
 4. Timeline, list, picker, filter, editor.
