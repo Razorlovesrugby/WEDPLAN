@@ -52,6 +52,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 45 | `0045_onboarding_timezone_currency.sql` | `weddings.currency` (a symbol only, three uppercase letters, default NZD; never converts), `v_wedding_basics` recreated with it appended, `create_wedding()` (service-role only, SECURITY INVOKER; the one way a wedding is made, by `/start` and by `bootstrap.sql`; no site rows: the builder's empty state offers starter layouts), and `change_wedding_timezone()` (keeps planner-entered wall-clock times as typed). No new table. Spec 40. | 41, 44 |
 | 46 | `0046_registry_use_site_theme.sql` | `registry_settings.use_site_theme` (default off): the registry page follows the invitation's theme. Spec 44. | 39 |
 | 47 | `0047_rsvp_answers_upsert_keys.sql` | Plain unique indexes on `rsvp_answers (question_id, guest_id)` and `(question_id, household_id)`. The RSVP form's upserts need them; with only 0001's partial indexes every answer save failed (42P10) and nothing was stored. No new table. Spec 49. | 1 |
+| 48 | `0048_run_sheet_one_timeline.sql` | Run sheet becomes one timeline: stored `starts_at`/`ends_at`, optional `predecessor_id` + `offset_minutes`, `run_sheet_item_assignees` (four sources), save/shift/delete functions, overlap view. Replaces tracks, pinning, owner text and `vendor_id`. Spec 50. | 1 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

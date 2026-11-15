@@ -183,6 +183,12 @@ describe("coverage against the migration", () => {
     "utf8",
   );
   const audited = [...migration.matchAll(/^\s+'([a-z_]+)\|[^']*',?$/gm)].map((m) => m[1] as string);
+  // Tables audited by a later migration's own `create trigger audit_row`.
+  const later = readFileSync(
+    new URL("../../../supabase/migrations/0048_run_sheet_one_timeline.sql", import.meta.url),
+    "utf8",
+  );
+  for (const m of later.matchAll(/create trigger audit_row[^\n]* on public\.([a-z_]+)/g)) audited.push(m[1] as string);
 
   it("found the audited list in the migration", () => {
     expect(audited.length).toBeGreaterThan(40);

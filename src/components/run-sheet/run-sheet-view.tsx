@@ -1,243 +1,377 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  DndContext,
-  closestCenter,
-  type DragEndEvent
-} from "@dnd-kit/core";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { reorderRunSheetItem } from "@/server/actions/run-sheet";
+import { RowMenu } from "@/components/ui/row-menu";
 import { formatTime, pluralise } from "@/lib/format";
+import { utcToZonedInput } from "@/lib/timezone";
+import {
+  axisRange,
+  dayKeyOf,
+  dayWindow,
+  daysWithItems,
+  defaultDay,
+  packLanes,
+  type RunSheetAssignee,
+  type RunSheetItem,
+} from "@/lib/run-sheet";
+import { deleteRunSheetItem, duplicateRunSheetItem, moveRunSheetItem } from "@/server/actions/run-sheet";
 import { RunSheetItemEditor } from "./item-editor";
-import type { RunSheetItemView, RunSheetTrack } from "@/lib/types/database";
-import { useDragSensors } from "@/components/ui/use-drag-sensors";
-import { RowMenu, moveItems, type RowMenuItem } from "@/components/ui/row-menu";
 
-const TRACKS: { value: RunSheetTrack; label: string }[] = [
-  { value: "guests", label: "Guests" },
-  { value: "couple", label: "Couple" },
-  { value: "vendors", label: "Vendors" },
-  { value: "other", label: "Other" },
-];
+const PX_PER_MINUTE = 1.2;
+const STORAGE_KEY = "wedplan.run-sheet.view";
+const UNASSIGNED = "unassigned";
 
-/**
- * Parallel columns by track (spec 5, B6 decision 4) rather than one
- * interleaved list, so two things happening at the same time — the band
- * setting up while the photographer is on family portraits — stay legible
- * as two separate threads instead of shuffled together by time.
- *
- * Conflicts surface two ways at once (B6 decision 2): a marker on the
- * specific item, and this summary count at the top of the page.
- */
+type EventOption = { id: string; name: string };
+
 export function RunSheetView({
-  eventId,
-  timeZone,
   items,
+  options,
+  events,
+  timeZone,
+  weddingDate,
+  canAddPeople,
 }: {
-  eventId: string;
+  items: RunSheetItem[];
+  options: RunSheetAssignee[];
+  events: EventOption[];
   timeZone: string;
-  items: RunSheetItemView[];
+  weddingDate: string | null;
+  canAddPeople: boolean;
 }) {
-  const conflictCount = items.filter((i) => i.conflict).length;
-  const [editing, setEditing] = useState<{ item: RunSheetItemView | null; track: RunSheetTrack } | null>(null);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"timeline" | "list">("timeline");
+  const [filter, setFilter] = useState<string>("");
+  const [editor, setEditor] = useState<{ item: RunSheetItem | null; startsAt?: string } | null>(null);
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY) === "list") setView("list");
+    } catch {
+      /* storage can be unavailable; the default is fine */
+    }
+  }, []);
+  function chooseView(next: "timeline" | "list") {
+    setView(next);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const days = useMemo(() => daysWithItems(items.map((i) => ({ id: i.id, startsAt: i.starts_at, endsAt: i.ends_at })), timeZone), [items, timeZone]);
+  const [chosenDay, setChosenDay] = useState<string | null>(null);
+  const day = chosenDay && days.includes(chosenDay) ? chosenDay : defaultDay(days, weddingDate);
+  const dayItems = useMemo(
+    () => (day ? items.filter((i) => dayKeyOf(i.starts_at, timeZone) === day) : []),
+    [items, day, timeZone],
+  );
+
+  const matches = (item: RunSheetItem) =>
+    !filter
+      ? true
+      : filter === UNASSIGNED
+        ? item.assignees.length === 0
+        : item.assignees.some((a) => a.key === filter);
+
+  const usedPeople = useMemo(() => {
+    const seen = new Map<string, RunSheetAssignee>();
+    for (const item of items) for (const a of item.assignees) seen.set(a.key, a);
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [items]);
+
+  function run(action: () => Promise<{ ok: boolean; error?: string }>) {
+    setError(null);
+    startTransition(async () => {
+      const result = await action();
+      if (!result.ok) setError(result.error ?? "Something went wrong");
+      else router.refresh();
+    });
+  }
+
+  function menuFor(item: RunSheetItem) {
+    return [
+      { label: "Edit", onSelect: () => setEditor({ item }) },
+      { label: "Earlier by 15 minutes", onSelect: () => run(() => moveRunSheetItem(item.id, -15)) },
+      { label: "Later by 15 minutes", onSelect: () => run(() => moveRunSheetItem(item.id, 15)) },
+      { label: "Duplicate", onSelect: () => run(() => duplicateRunSheetItem(item.id)) },
+      {
+        label: "Delete",
+        onSelect: () => {
+          if (window.confirm(`Delete "${item.title}"?`)) run(() => deleteRunSheetItem(item.id));
+        },
+      },
+    ];
+  }
+
+  const conflicts = items.filter((i) => i.conflict).length;
 
   return (
     <div className="space-y-4">
-      {conflictCount > 0 ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {pluralise(conflictCount, "item runs")} past a pinned time below — not blocking, just worth a look.
-        </p>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-md border border-line text-sm">
+          {(["timeline", "list"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => chooseView(v)}
+              className={`px-3 py-1.5 ${view === v ? "bg-ink text-white" : "bg-white text-ink"}`}
+            >
+              {v === "timeline" ? "Timeline" : "List"}
+            </button>
+          ))}
+        </div>
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        {TRACKS.map((track) => (
-          <TrackColumn
-            key={track.value}
-            track={track.value}
-            label={track.label}
-            items={items.filter((i) => i.track === track.value)}
-            allItems={items}
-            eventId={eventId}
-            timeZone={timeZone}
-            onEdit={(item) => setEditing({ item, track: track.value })}
-            onAdd={() => setEditing({ item: null, track: track.value })}
-          />
-        ))}
+        {days.length > 1 && view === "timeline" ? (
+          <select
+            aria-label="Day"
+            className="field w-auto"
+            value={day ?? ""}
+            onChange={(e) => setChosenDay(e.target.value)}
+          >
+            {days.map((d) => (
+              <option key={d} value={d}>
+                {new Date(`${d}T12:00:00Z`).toLocaleDateString("en-NZ", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  timeZone: "UTC",
+                })}
+              </option>
+            ))}
+          </select>
+        ) : null}
+
+        <select aria-label="Show" className="field w-auto" value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <option value="">Everyone</option>
+          <option value={UNASSIGNED}>Unassigned</option>
+          {usedPeople.map((p) => (
+            <option key={p.key} value={p.key}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+
+        <button type="button" className="btn-primary ml-auto" onClick={() => setEditor({ item: null })}>
+          Add item
+        </button>
       </div>
 
+      {conflicts > 0 ? (
+        <p className="text-sm text-muted">
+          {pluralise(conflicts, "item")} overlap with something else the same person is doing. Both are kept.
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
+      {pending ? <p className="text-xs text-muted">Saving…</p> : null}
+
+      {items.length === 0 ? (
+        <p className="card p-8 text-center text-sm text-muted">
+          Nothing on the run sheet yet. Add the first item and give it a start and an end.
+        </p>
+      ) : view === "list" ? (
+        <ListView items={items} timeZone={timeZone} matches={matches} menuFor={menuFor} onOpen={(item) => setEditor({ item })} />
+      ) : day ? (
+        <Timeline
+          day={day}
+          items={dayItems}
+          timeZone={timeZone}
+          matches={matches}
+          menuFor={menuFor}
+          onOpen={(item) => setEditor({ item })}
+          onCreate={(startsAt) => setEditor({ item: null, startsAt })}
+        />
+      ) : null}
+
       <RunSheetItemEditor
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        eventId={eventId}
-        timeZone={timeZone}
-        item={editing?.item ?? null}
+        open={editor !== null}
+        onClose={() => setEditor(null)}
+        item={editor?.item ?? null}
+        initialStartsAt={editor?.startsAt}
         allItems={items}
-        defaultTrack={editing?.track}
+        options={options}
+        events={events}
+        timeZone={timeZone}
+        canAddPeople={canAddPeople}
       />
     </div>
   );
 }
 
-function TrackColumn({
-  track,
-  label,
+function Who({ item }: { item: RunSheetItem }) {
+  return item.assignees.length ? <>{item.assignees.map((a) => a.label).join(", ")}</> : <>Unassigned</>;
+}
+
+function ListView({
   items,
-  allItems,
-  eventId,
   timeZone,
-  onEdit,
-  onAdd,
+  matches,
+  menuFor,
+  onOpen,
 }: {
-  track: RunSheetTrack;
-  label: string;
-  items: RunSheetItemView[];
-  allItems: RunSheetItemView[];
-  eventId: string;
+  items: RunSheetItem[];
   timeZone: string;
-  onEdit: (item: RunSheetItemView) => void;
-  onAdd: () => void;
+  matches: (i: RunSheetItem) => boolean;
+  menuFor: (i: RunSheetItem) => { label: string; onSelect: () => void }[];
+  onOpen: (i: RunSheetItem) => void;
 }) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-
-  const sensors = useDragSensors();
-
-  const ids = useMemo(() => items.map((i) => i.id), [items]);
-
-  function onDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    moveRow(
-      items.findIndex((i) => i.id === active.id),
-      items.findIndex((i) => i.id === over.id),
-    );
-  }
-
-  /** Shared by the drag and the ⋯ menu (spec 45), so both land a row in the same place. */
-  function moveRow(from: number, to: number) {
-    if (from < 0 || to < 0 || from === to) return;
-    const dragged = items[from];
-    if (!dragged || dragged.pinned) return; // Pinned items never move on their own.
-
-    const reordered = [...items];
-    reordered.splice(from, 1);
-    reordered.splice(to, 0, dragged);
-    const newPredecessorId = reordered[to - 1]?.id ?? null;
-
-    startTransition(async () => {
-      const result = await reorderRunSheetItem(dragged.id, newPredecessorId);
-      if (result.ok) {
-        setError(null);
-        router.refresh();
-      } else {
-        setError(result.error);
-      }
-    });
-  }
-
+  const shown = items.filter(matches);
+  if (shown.length === 0) return <p className="text-sm text-muted">Nothing matches that filter.</p>;
+  let lastDay = "";
   return (
-    <section className="card space-y-2 p-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">{label}</h2>
-        <button type="button" className="text-xs text-ink hover:underline" onClick={onAdd}>
-          + Add item
-        </button>
-      </div>
-
-      {error ? <p className="text-xs text-red-700">{error}</p> : null}
-
-      {items.length === 0 ? (
-        <p className="text-xs text-muted">Nothing on this track yet.</p>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis]}
-          onDragEnd={onDragEnd}
-        >
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            <ul className="space-y-1.5">
-              {items.map((item, index) => (
-                <RunSheetRow
-                  key={item.id}
-                  item={item}
-                  timeZone={timeZone}
-                  onEdit={() => onEdit(item)}
-                  moves={item.pinned ? [] : moveItems(index, items.length, (to) => moveRow(index, to))}
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
-      )}
-    </section>
+    <ul className="card divide-y divide-line">
+      {shown.map((item) => {
+        const d = dayKeyOf(item.starts_at, timeZone);
+        const heading = d !== lastDay;
+        lastDay = d;
+        return (
+          <li key={item.id}>
+            {heading ? (
+              <div className="bg-paper px-4 py-1 text-xs text-muted">
+                {new Date(`${d}T12:00:00Z`).toLocaleDateString("en-NZ", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  timeZone: "UTC",
+                })}
+              </div>
+            ) : null}
+            <div className="flex items-center gap-2 px-4 py-2">
+              <button type="button" onClick={() => onOpen(item)} className="min-w-0 flex-1 text-left">
+                <span className="text-sm tabular-nums text-muted">
+                  {formatTime(item.starts_at, timeZone)} to {formatTime(item.ends_at, timeZone)}
+                  {item.time_estimated ? " (estimated)" : ""}
+                </span>
+                <span className="block truncate">
+                  {item.title}
+                  {item.conflict ? <span className="ml-2 text-xs text-amber-700">Overlaps</span> : null}
+                </span>
+                <span className="block truncate text-xs text-muted">
+                  <Who item={item} />
+                </span>
+              </button>
+              <RowMenu label={`Actions for ${item.title}`} items={menuFor(item)} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-function RunSheetRow({
-  item,
+function Timeline({
+  day,
+  items,
   timeZone,
-  onEdit,
-  moves,
+  matches,
+  menuFor,
+  onOpen,
+  onCreate,
 }: {
-  item: RunSheetItemView;
+  day: string;
+  items: RunSheetItem[];
   timeZone: string;
-  onEdit: () => void;
-  /** Spec 45: the drag's moves by tap or keyboard. None for a pinned row. */
-  moves: RowMenuItem[];
+  matches: (i: RunSheetItem) => boolean;
+  menuFor: (i: RunSheetItem) => { label: string; onSelect: () => void }[];
+  onOpen: (i: RunSheetItem) => void;
+  onCreate: (startsAtLocal: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: item.id,
-    disabled: item.pinned,
-  });
+  const range = useMemo(() => {
+    const fromItems = axisRange(items.map((i) => ({ id: i.id, startsAt: i.starts_at, endsAt: i.ends_at })));
+    if (fromItems) return fromItems;
+    const w = dayWindow(day, timeZone);
+    return { startMs: w.startMs, endMs: w.startMs + 12 * 3_600_000 };
+  }, [items, day, timeZone]);
+
+  const lanes = useMemo(
+    () => packLanes(items.map((i) => ({ id: i.id, startsAt: i.starts_at, endsAt: i.ends_at }))),
+    [items],
+  );
+
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const height = ((range.endMs - range.startMs) / 60_000) * PX_PER_MINUTE;
+  const hours: number[] = [];
+  for (let t = range.startMs; t < range.endMs; t += 3_600_000) hours.push(t);
+  const y = (ms: number) => ((ms - range.startMs) / 60_000) * PX_PER_MINUTE;
+
+  function tapEmpty(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const minutes = Math.round((event.clientY - rect.top) / PX_PER_MINUTE / 15) * 15;
+    const ms = range.startMs + minutes * 60_000;
+    onCreate(utcToZonedInput(new Date(ms).toISOString(), timeZone));
+  }
 
   return (
-    <li
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-start gap-2 rounded border px-2 py-1.5 text-sm
-        ${isDragging ? "z-10 bg-white opacity-90 shadow-md" : "bg-white"}
-        ${item.conflict ? "border-red-300" : "border-line/60"}`}
-    >
-      <button
-        type="button"
-        aria-label={item.pinned ? `${item.title} is pinned` : `Reorder ${item.title}`}
-        disabled={item.pinned}
-        className="mt-0.5 shrink-0 cursor-grab px-1 text-muted hover:text-ink active:cursor-grabbing disabled:cursor-default disabled:opacity-40"
-        {...attributes}
-        {...listeners}
-      >
-        {item.pinned ? "📌" : "⠿"}
-      </button>
+    <div className="card overflow-x-auto p-2">
+      <div className="relative ml-14 min-w-[320px]" style={{ height }} onClick={tapEmpty}>
+        {hours.map((t) => (
+          <div
+            key={t}
+            className="pointer-events-none absolute left-0 right-0 border-t border-line"
+            style={{ top: y(t) }}
+          >
+            <span className="absolute -left-14 -top-2 w-12 text-right text-xs tabular-nums text-muted">
+              {formatTime(new Date(t), timeZone)}
+            </span>
+          </div>
+        ))}
 
-      <button type="button" onClick={onEdit} className="flex-1 text-left">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="font-medium">{item.title}</span>
-          <span className="shrink-0 text-xs tabular-nums text-muted">
-            {item.starts_at ? formatTime(item.starts_at, timeZone) : "Time TBD"}
-          </span>
-        </span>
-        <span className="block text-xs text-muted">
-          {pluralise(item.duration_minutes, "minute")}
-          {item.location ? ` · ${item.location}` : ""}
-          {item.owner ? ` · ${item.owner}` : ""}
-        </span>
-        {item.conflict ? (
-          <span className="mt-0.5 block text-xs font-medium text-red-700">
-            ⚠ runs past the next pinned time
-          </span>
+        {now !== null && now >= range.startMs && now <= range.endMs ? (
+          <div className="pointer-events-none absolute left-0 right-0 z-10 border-t-2 border-red-500" style={{ top: y(now) }} />
         ) : null}
-      </button>
-      <RowMenu label={`Move ${item.title}`} items={moves} />
-    </li>
+
+        {items.map((item) => {
+          const place = lanes.get(item.id) ?? { lane: 0, lanes: 1, span: 1 };
+          const top = y(Date.parse(item.starts_at));
+          const h = Math.max(((Date.parse(item.ends_at) - Date.parse(item.starts_at)) / 60_000) * PX_PER_MINUTE, 28);
+          const dim = !matches(item);
+          return (
+            <div
+              key={item.id}
+              className={`absolute overflow-hidden rounded border bg-white px-2 py-1 text-xs shadow-sm ${
+                item.conflict ? "border-amber-500" : "border-line"
+              } ${dim ? "opacity-30" : ""}`}
+              style={{
+                top,
+                height: h,
+                left: `${(place.lane / place.lanes) * 100}%`,
+                width: `calc(${(place.span / place.lanes) * 100}% - 4px)`,
+              }}
+            >
+              <div className="flex items-start gap-1">
+                <button type="button" onClick={() => onOpen(item)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate font-medium">{item.title}</span>
+                  <span className="block truncate tabular-nums text-muted">
+                    {formatTime(item.starts_at, timeZone)} to {formatTime(item.ends_at, timeZone)}
+                    {item.time_estimated ? " est." : ""}
+                  </span>
+                  {h > 60 ? (
+                    <span className="block truncate text-muted">
+                      <Who item={item} />
+                    </span>
+                  ) : null}
+                </button>
+                <RowMenu label={`Actions for ${item.title}`} items={menuFor(item)} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

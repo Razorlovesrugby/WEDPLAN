@@ -335,8 +335,11 @@ select pg_temp.expect_fail(
 rollback;
 
 begin;
-insert into public.run_sheet_items (wedding_id, event_id, title, vendor_id, track, duration_minutes)
-values (:w1, 'e1111111-1111-4111-8111-111111111111', 'Flowers arrive', :bloom, 'vendors', 30);
+insert into public.run_sheet_items (id, wedding_id, event_id, title, starts_at, ends_at)
+values ('f0000000-0000-4000-8000-0000000000f1', :w1, 'e1111111-1111-4111-8111-111111111111',
+        'Flowers arrive', '2027-06-12 09:00:00+01', '2027-06-12 09:30:00+01');
+insert into public.run_sheet_item_assignees (wedding_id, item_id, vendor_id)
+values (:w1, 'f0000000-0000-4000-8000-0000000000f1', :bloom);
 
 delete from public.vendors where id = :bloom;
 
@@ -344,7 +347,9 @@ select pg_temp.expect(
   (select count(*)::int from public.run_sheet_items where title = 'Flowers arrive'),
   1,
   'deleting a vendor keeps the run sheet item');
-select pg_temp.expect_true(
-  (select vendor_id is null from public.run_sheet_items where title = 'Flowers arrive'),
-  'with its vendor link nulled rather than the row cascading away');
+select pg_temp.expect(
+  (select count(*)::int from public.run_sheet_item_assignees
+    where item_id = 'f0000000-0000-4000-8000-0000000000f1'),
+  0,
+  'and removes the vendor''s assignment, so nothing points at a vendor that is gone');
 rollback;
