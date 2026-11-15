@@ -256,6 +256,10 @@ type RunSheetItemRelationships = [
   >,
 ];
 
+type RunSheetItemAssigneeRelationships = [
+  Rel<"run_sheet_item_assignees_item_id_wedding_id_fkey", ["item_id", "wedding_id"], "run_sheet_items", ["id", "wedding_id"]>,
+];
+
 type CoachStopRelationships = [
   Rel<"coach_stops_coach_run_id_wedding_id_fkey", ["coach_run_id", "wedding_id"], "coach_runs", ["id", "wedding_id"]>,
 ];
@@ -1248,27 +1252,51 @@ export type BudgetItemSectionRow = {
 export type RunSheetItemRow = {
   id: string;
   wedding_id: string;
-  event_id: string;
+  /** An optional label since spec 50; deleting the event clears it, the item stays. */
+  event_id: string | null;
   title: string;
   notes: string | null;
   location: string | null;
-  /** Free text, for the "Dad" and "the best man" who will never be vendor records. */
+  /** Retired by spec 50: no longer read or written. Dropped in a later migration. */
   owner: string | null;
-  /** The vendor responsible, when there is one (spec 8 Answered, Q10). */
+  /** Retired by spec 50: an assignee row now. */
   vendor_id: string | null;
+  /** Retired by spec 50. */
   track: RunSheetTrack;
+  /** Retired by spec 50: an item with no predecessor is the fixed one. Always false. */
   pinned: boolean;
-  /** Set iff pinned. */
+  /** Retired by spec 50. Always null. */
   pinned_at: string | null;
+  /** Kept equal to the span in minutes. Retired by spec 50 as a source of truth. */
   duration_minutes: number;
-  /** Null for a pinned item, or an unpinned one with no predecessor yet ("time TBD"). */
+  /** "Starts after": this item starts at that item's end plus `offset_minutes`. */
   predecessor_id: string | null;
+  /** The gap after the predecessor ends, 0 to 1440. */
   offset_minutes: number;
   /** Schema-only in this pass — nothing reads it yet. */
   guest_visible: boolean;
   sort_order: number;
+  /** Stored, never computed. An item with a predecessor starts at its end plus the gap. */
+  starts_at: string;
+  ends_at: string;
+  /** True for an item the migration had to give a time; clears when saved. */
+  time_estimated: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type RunSheetAssigneeType = "collaborator" | "guest" | "vendor" | "person";
+
+/** Exactly one of the four ids is set (spec 50 section 6.2). */
+export type RunSheetItemAssigneeRow = {
+  id: string;
+  wedding_id: string;
+  item_id: string;
+  collaborator_user_id: string | null;
+  guest_id: string | null;
+  vendor_id: string | null;
+  person_id: string | null;
+  created_at: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1706,12 +1734,26 @@ export type BudgetItemTaskView = {
   link_source: "direct" | "via_list" | "via_section";
 }
 
-/** `v_run_sheet_items` — every run_sheet_items row plus computed starts_at/ends_at/conflict. See spec 5, part B, section 3. */
-export type RunSheetItemView = RunSheetItemRow & {
-  /** Null when this item is unpinned with no (resolvable) predecessor — "time TBD". */
-  starts_at: string | null;
-  ends_at: string | null;
-  /** True when this item's computed end runs past the next pinned anchor in the same event. Non-blocking. */
+/** `v_run_sheet_items` — the stored times plus an assignee count and the same-assignee overlap flag. Spec 50. */
+export type RunSheetItemView = {
+  id: string;
+  wedding_id: string;
+  event_id: string | null;
+  title: string;
+  notes: string | null;
+  location: string | null;
+  guest_visible: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  starts_at: string;
+  ends_at: string;
+  predecessor_id: string | null;
+  offset_minutes: number;
+  time_estimated: boolean;
+  /** Assignees still shown (a removed guest or person is not counted). */
+  assignee_count: number;
+  /** True when another item overlaps this one in time and shares an assignee. Never blocks. */
   conflict: boolean;
 }
 
@@ -2052,8 +2094,14 @@ export type Database = {
         | "duration_minutes"
         | "offset_minutes"
         | "guest_visible"
-        | "sort_order",
+        | "sort_order"
+        | "time_estimated",
         RunSheetItemRelationships
+      >;
+      run_sheet_item_assignees: Table<
+        RunSheetItemAssigneeRow,
+        "id" | "created_at",
+        RunSheetItemAssigneeRelationships
       >;
       seating_plans: Table<
         SeatingPlanRow,
@@ -2147,6 +2195,38 @@ export type Database = {
           p_partner_name: string | null;
         };
         Returns: string;
+      };
+      /**
+       * Spec 50: creates or updates an item, applies "starts after", replaces its assignees and carries the change
+       * to what follows it, in one transaction. A null `p_offset_minutes` means a typed start. Caller's RLS.
+       */
+      save_run_sheet_item: {
+        Args: {
+          p_wedding_id: string;
+          p_item_id: string | null;
+          p_title: string;
+          p_notes: string | null;
+          p_location: string | null;
+          p_event_id: string | null;
+          p_guest_visible: boolean;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_predecessor_id: string | null;
+          p_offset_minutes: number | null;
+          /** Null leaves the assignees as they are. */
+          p_assignees: { type: RunSheetAssigneeType; id: string }[] | null;
+        };
+        Returns: string;
+      };
+      /** Spec 50: moves an item and everything that follows it by a number of minutes. Caller's RLS. */
+      shift_run_sheet_item: {
+        Args: { p_wedding_id: string; p_item_id: string; p_delta_minutes: number };
+        Returns: undefined;
+      };
+      /** Spec 50: deletes an item; followers keep their times and are re-linked or unlinked. Caller's RLS. */
+      delete_run_sheet_item: {
+        Args: { p_wedding_id: string; p_item_id: string };
+        Returns: undefined;
       };
       /** Spec 40: changes the timezone, keeping planner-entered wall-clock times as typed. Caller's RLS. */
       change_wedding_timezone: {

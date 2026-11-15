@@ -83,7 +83,8 @@ with expected(version, files) as (
     ('0044', 'planner_access.sql'),
     ('0045', 'onboarding_timezone_currency.sql'),
     ('0046', 'registry_use_site_theme.sql'),
-    ('0047', 'rsvp_answers_upsert_keys.sql')
+    ('0047', 'rsvp_answers_upsert_keys.sql'),
+    ('0048', 'run_sheet_one_timeline.sql')
 ),
 applied as (
   select version from supabase_migrations.schema_migrations

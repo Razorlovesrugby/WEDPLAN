@@ -54,7 +54,7 @@ export const AUDIT_AREAS: readonly Area[] = [
   {
     key: "tasks",
     label: "Lists & run sheet",
-    tables: ["lists", "list_sections", "list_items", "run_sheet_items", "saved_views"],
+    tables: ["lists", "list_sections", "list_items", "run_sheet_items", "run_sheet_item_assignees", "saved_views"],
   },
   {
     key: "budget",
@@ -138,6 +138,7 @@ const NOUNS: Record<string, string> = {
   budget_item_lists: "budget link to a list",
   budget_item_sections: "budget link to a section",
   budget_item_tasks: "budget link to a task",
+  run_sheet_item_assignees: "run sheet assignee",
   moodboards: "moodboard",
   moodboard_items: "moodboard item",
   moodboard_shares: "moodboard share link",

@@ -59,7 +59,7 @@ export function EventsEditor({ events, timeZone }: { events: EventRow[]; timeZon
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link href={`/events/${event.id}/run-sheet`} className="btn" prefetch={false}>
+                  <Link href="/run-sheet" className="btn" prefetch={false}>
                     Run sheet →
                   </Link>
                   <Link href={`/events/${event.id}/seating`} className="btn" prefetch={false}>

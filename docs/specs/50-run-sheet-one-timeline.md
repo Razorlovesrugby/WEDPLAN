@@ -532,3 +532,20 @@ which is how two things begin when the ceremony ends.
 4. Timeline, list, picker, filter, editor.
 5. Routes, the events link, registrations (audit, health, verify).
 6. `npm run typecheck && npm test && npm run build`, and say which were run.
+
+## 14. Build status (2026-11-15)
+
+Built on branch `claude/spec-50-run-sheet`, migration `0048_run_sheet_one_timeline.sql`.
+
+**Decisions made while building**
+
+- An item's `event_id` is now optional and `on delete set null`, so deleting an event no longer deletes its run sheet items.
+- `ends_at >= starts_at` (zero-length items are allowed), not strictly greater.
+- No health or verify registrations were added; the assignees table is audited and registered in the planner access list.
+- Moving an item shifts what starts after it by the same amount; a follower cannot start before its predecessor ends or more than 24 hours after.
+
+**Verified**: `npm run typecheck`, `npm test` (108 files, 1455 tests), `npm run build` (with placeholder env vars), `./scripts/verify-migrations.sh` (835 assertions, including the rewritten `04_run_sheet.sql` and the backfill of existing items with their resolved times).
+
+**Not verified**: nothing was opened in a browser, so the timeline layout, dialog and menu are unexercised visually. The migration has not been applied to a live Supabase project.
+
+**Not built**: dragging and resizing blocks on the timeline (section 7 lists it as a shortcut). Moving is "Earlier/Later by 15 minutes" in the item menu, and times are edited in the dialog. The printable per-person view is a separate spec.

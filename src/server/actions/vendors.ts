@@ -478,25 +478,3 @@ export async function createVendorFromBudgetLines(
   return ok({ id: vendor.id, linked: (linked ?? []).length });
 }
 
-// ---------------------------------------------------------------------------
-// The run sheet link (spec 8 Answered, question 10)
-// ---------------------------------------------------------------------------
-
-export async function setRunSheetItemVendor(
-  itemId: string,
-  vendorId: string | null,
-): Promise<ActionResult> {
-  const wedding = await requireWedding();
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("run_sheet_items")
-    .update({ vendor_id: vendorId })
-    .eq("wedding_id", wedding.id)
-    .eq("id", itemId);
-
-  if (error) return fail(error.message);
-  revalidatePath("/run-sheet");
-  revalidateVendors();
-  return ok(undefined);
-}

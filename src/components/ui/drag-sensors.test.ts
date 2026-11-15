@@ -15,7 +15,7 @@ const files = readdirSync(ROOT, { recursive: true, encoding: "utf8" })
 
 describe("drag screens use the shared sensors", () => {
   it("finds the drag screens", () => {
-    expect(files.length).toBeGreaterThanOrEqual(12);
+    expect(files.length).toBeGreaterThanOrEqual(11);
   });
 
   it.each(files.map((file) => [file.slice(ROOT.length + 1), file]))("%s", (_name, file) => {
