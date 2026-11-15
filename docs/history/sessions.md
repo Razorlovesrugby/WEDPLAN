@@ -1,8 +1,27 @@
 # Session history
 
-The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–54), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 55 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
+The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–55), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 56 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
 
 ---
+
+**Session 55 (no spec):** went live; privacy notice and docs. Branch
+`claude/confident-keller-xiwcvn` (no PR opened). A brainstorm of non-feature work, then the
+planner said the app is **live, works, and has real users**, and asked for a check against a
+"don't get sued" checklist (privacy, cookies, embeds, accessibility, consent).
+
+- **Bug fixed: the privacy notice named the wrong couple.** `/privacy` loaded the first wedding
+  ever created and showed that couple to every wedding's guests. It now names no couple and reads
+  no data (a static page). It also says the site is free and run by an individual, names the
+  Google Maps and Spotify embeds (`site/blocks/media.tsx`) and guest photo uploads, and cites
+  NZ's Privacy Act 2020 and Privacy Commissioner instead of the UK/EU.
+- **Checked and fine:** the only cookie is sign-in (no consent banner needed); no analytics; fonts
+  are self-hosted; images checked have alt text.
+- **Deliberately not done** (planner: no charging, no business, region not needed): no terms page,
+  refund policy, business details or storage region.
+- **Docs:** this file rewritten for launch (above); sessions 45–52 and the pre-launch sections
+  moved to `history/sessions.md`; spec index updated to "merged".
+- **Verified:** typecheck, 1411 unit tests, build (CI env). **Not verified:** the page in a
+  browser or on the live site.
 
 **Session 54 (spec 47):** the guest table, built on branch `claude/pensive-euler-natrmu` (merged, PR #96). A brainstorm with mockups, then a spec, six questions (all recommended, plus a Planning
 view), then "Build it all". No migration. Read the spec's §11:
