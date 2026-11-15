@@ -24,6 +24,23 @@
 
 ## Recent sessions
 
+**Session 58 (no spec):** Supabase egress, on branch `claude/admiring-davinci-q406md`.
+The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13 Dec 2026.
+
+- **Cause, confirmed on live by the planner:** all 549 storage objects were `no-cache` (browser
+  PUTs to signed upload URLs sent no `cache-control`, and Storage defaults to it), and every render
+  signed a fresh URL, so no photo was served from cache. The Storage report showed one photo
+  signed twice 27s apart, both downloads cache misses.
+- **Fixed:** uploads now send `max-age=31536000` (`src/lib/storage-cache.ts`); `signPaths()`
+  reuses a batch's signed URLs for half their life via `unstable_cache`, checking the age itself
+  so a stale entry is never handed out. Token lifetimes unchanged (moodboard revocation still 1h).
+- **Existing objects:** `scripts/fix-cache-control.mjs` re-uploads them with the header (dry run
+  by default, `--apply` to write). Not run. Editing `storage.objects.metadata` in SQL is not a fix:
+  it changes the listing, not the header Storage serves.
+- **Check:** egress mid-cycle (~29 Nov); Pro is the fallback before 13 Dec.
+- **Verified:** typecheck, 1461 unit tests, build. **Not verified:** a browser, live egress, the
+  script against real storage.
+
 **Session 57 (spec 49):** RSVP answers, built on branch `claude/funny-goldberg-4u6zsj` (no PR).
 The planner found `rsvp_answers` empty although guests had answered a "do you need transport?"
 question, and asked for the fix, a way to see answers, and a check of everything else:
@@ -56,25 +73,6 @@ no phone view, a bad bottom bar) and asked for it fixed, Apple-style. Read the s
 - **Verified:** typecheck, 1415 unit tests, build, Guests/filters/sheets on an emulated iPhone 13
   with sample data (390px wide throughout). **Not verified:** a real phone, live data, any other
   screen on a phone.
-
-**Session 55 (no spec):** went live; privacy notice and docs. Branch
-`claude/confident-keller-xiwcvn` (no PR opened). A brainstorm of non-feature work, then the
-planner said the app is **live, works, and has real users**, and asked for a check against a
-"don't get sued" checklist (privacy, cookies, embeds, accessibility, consent).
-
-- **Bug fixed: the privacy notice named the wrong couple.** `/privacy` loaded the first wedding
-  ever created and showed that couple to every wedding's guests. It now names no couple and reads
-  no data (a static page). It also says the site is free and run by an individual, names the
-  Google Maps and Spotify embeds (`site/blocks/media.tsx`) and guest photo uploads, and cites
-  NZ's Privacy Act 2020 and Privacy Commissioner instead of the UK/EU.
-- **Checked and fine:** the only cookie is sign-in (no consent banner needed); no analytics; fonts
-  are self-hosted; images checked have alt text.
-- **Deliberately not done** (planner: no charging, no business, region not needed): no terms page,
-  refund policy, business details or storage region.
-- **Docs:** this file rewritten for launch (above); sessions 45–52 and the pre-launch sections
-  moved to `history/sessions.md`; spec index updated to "merged".
-- **Verified:** typecheck, 1411 unit tests, build (CI env). **Not verified:** the page in a
-  browser or on the live site.
 
 ---
 

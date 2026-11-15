@@ -3,6 +3,7 @@
 import { toWebpSet } from "@/lib/site/encode-image";
 import { MAX_UPLOAD_BYTES, SITE_IMAGE_WIDTHS } from "@/lib/site/assets";
 import { confirmSitePhotoUpload, requestSitePhotoUpload } from "@/server/actions/site-photos";
+import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 
 /**
  * One photograph from this browser to storage, returning its asset id.
@@ -39,7 +40,7 @@ export async function uploadSitePhoto(
   const put = await fetch(slot.data.uploadUrl, {
     method: "PUT",
     body: encoded.original.blob,
-    headers: { "content-type": "image/webp" },
+    headers: { "content-type": "image/webp", "cache-control": UPLOAD_CACHE_CONTROL },
   }).catch(() => null);
   if (!put?.ok) return { ok: false, error: "That upload didn't finish. Try again?" };
 
@@ -54,7 +55,7 @@ export async function uploadSitePhoto(
       const sent = await fetch(uploadUrl, {
         method: "PUT",
         body: variant.image.blob,
-        headers: { "content-type": "image/webp" },
+        headers: { "content-type": "image/webp", "cache-control": UPLOAD_CACHE_CONTROL },
       }).catch(() => null);
       if (sent?.ok) arrived.push(edge);
     }),

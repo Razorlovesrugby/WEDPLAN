@@ -27,6 +27,7 @@ import {
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
 import type { SeatingFixtureKind } from "@/lib/types/database";
 import { useSeating } from "./seating-state";
+import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 
 const GRID_CM = 25;
 type Selected = { kind: "table" | "fixture"; id: string } | null;
@@ -832,7 +833,7 @@ function RoomSettings() {
     const put = await fetch(slot.data.uploadUrl, {
       method: "PUT",
       body: encoded.blob,
-      headers: { "content-type": "image/webp" },
+      headers: { "content-type": "image/webp", "cache-control": UPLOAD_CACHE_CONTROL },
     }).catch(() => null);
     if (!put?.ok) {
       setBusy(null);

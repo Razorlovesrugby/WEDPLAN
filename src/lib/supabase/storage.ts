@@ -1,6 +1,8 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "./admin";
 import { SIGNED_URL_TTL_SECONDS, type ImageVariant } from "@/lib/moodboards";
+import { UPLOAD_CACHE_SECONDS, mayReuseSigned, reuseSeconds } from "@/lib/storage-cache";
 
 /**
  * The moodboards bucket.
@@ -17,26 +19,78 @@ import { SIGNED_URL_TTL_SECONDS, type ImageVariant } from "@/lib/moodboards";
 
 export const MOODBOARD_BUCKET = "moodboards";
 
+type SignedBatch = { signedAt: number; entries: [path: string, url: string][] };
+
+/** Signs every path or throws, so a partial or failed batch is never cached. */
+async function signNow(paths: string[], ttlSeconds: number): Promise<SignedBatch> {
+  const signedAt = Date.now();
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.storage
+    .from(MOODBOARD_BUCKET)
+    .createSignedUrls(paths, ttlSeconds);
+  if (error || !data) throw new Error(error?.message ?? "signing failed");
+
+  const entries: [string, string][] = [];
+  for (const entry of data) {
+    if (entry.signedUrl && entry.path) entries.push([entry.path, entry.signedUrl]);
+  }
+  if (entries.length !== paths.length) throw new Error("some paths could not be signed");
+  return { signedAt, entries };
+}
+
+// One cached signer per lifetime, because a cache's revalidate time is fixed.
+const cachedSigners = new Map<number, (paths: string[]) => Promise<SignedBatch>>();
+
+function cachedSigner(ttlSeconds: number) {
+  let signer = cachedSigners.get(ttlSeconds);
+  if (!signer) {
+    signer = unstable_cache((paths: string[]) => signNow(paths, ttlSeconds), ["storage-signed-urls", String(ttlSeconds)], {
+      revalidate: reuseSeconds(ttlSeconds),
+    });
+    cachedSigners.set(ttlSeconds, signer);
+  }
+  return signer;
+}
+
 /**
- * A URL the browser can load, good for an hour.
+ * A URL the browser can load, good for `ttlSeconds`.
  *
  * Signed in batches because a board is forty images and forty round trips is
  * a slow page. Returns a map rather than an array: a partial failure (an
  * object deleted out from under a row) must leave the other thirty-nine
  * rendering, not take the page down.
+ *
+ * The same batch gets the same URLs for the first half of their life
+ * (src/lib/storage-cache.ts): a fresh token is a fresh URL, which the browser
+ * and the CDN cannot answer from cache, and re-signing on every render is what
+ * spent the Free plan's egress. Reuse never stretches a URL past `ttlSeconds`,
+ * so a revoked share's window (SIGNED_URL_TTL_SECONDS) is unchanged.
  */
 export async function signPaths(
   paths: readonly string[],
   ttlSeconds: number = SIGNED_URL_TTL_SECONDS,
 ): Promise<Map<string, string>> {
-  const signed = new Map<string, string>();
-  const unique = [...new Set(paths.filter((path) => path.length > 0))];
-  if (unique.length === 0) return signed;
+  // Sorted, so the same set of photographs is the same cache entry.
+  const unique = [...new Set(paths.filter((path) => path.length > 0))].sort();
+  if (unique.length === 0) return new Map();
 
+  try {
+    const cached = await cachedSigner(ttlSeconds)(unique);
+    if (mayReuseSigned(cached.signedAt, Date.now(), ttlSeconds)) return new Map(cached.entries);
+  } catch {
+    // Not cached: a failed or partial batch. Fall through and sign directly.
+  }
+
+  return signDirect(unique, ttlSeconds);
+}
+
+/** Uncached signing, keeping whatever did sign. */
+async function signDirect(paths: string[], ttlSeconds: number): Promise<Map<string, string>> {
+  const signed = new Map<string, string>();
   const supabase = createAdminClient();
   const { data, error } = await supabase.storage
     .from(MOODBOARD_BUCKET)
-    .createSignedUrls(unique, ttlSeconds);
+    .createSignedUrls(paths, ttlSeconds);
 
   // A bucket that does not exist yet is the local-development case, and a
   // board page that 500s because nobody has run ensure-bucket.mjs is a worse
@@ -61,6 +115,9 @@ export async function signPath(
 /**
  * A URL the browser can PUT to directly, so image bytes never pass through a
  * server action — next.config.mjs caps those at 4MB on purpose.
+ *
+ * The browser must send `cache-control: UPLOAD_CACHE_CONTROL` with its PUT:
+ * without it Storage stores the object as `no-cache` (src/lib/storage-cache.ts).
  */
 export async function createUploadUrl(
   path: string,
@@ -83,7 +140,7 @@ export async function uploadBytes(
   const supabase = createAdminClient();
   const { error } = await supabase.storage
     .from(MOODBOARD_BUCKET)
-    .upload(path, bytes, { contentType, upsert: true });
+    .upload(path, bytes, { contentType, upsert: true, cacheControl: String(UPLOAD_CACHE_SECONDS) });
 
   if (error) return { ok: false, error: error.message };
   return { ok: true };
