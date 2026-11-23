@@ -58,6 +58,9 @@ A stack of cards, newest first. Each one stays until it is dealt with:
 | **Not started** (amber) | a task is 5 minutes past its start and nobody on it has tapped Start | **Call** them, **Mark started**, **Dismiss** |
 | **Running late** (amber) | a helper reports late | **Shift the schedule** (§5.4), **OK** |
 
+A helper's photo (spec 54 §6.10) shows on its alert as a thumbnail that
+opens full size.
+
 Answering a help request writes the answer to that request (spec 54 §9); the
 helper's banner shows it. Every alert action is one activity row, so the
 feed (§5.5) shows who dealt with what.
@@ -102,7 +105,9 @@ Every activity row from every day link and module, newest first: "1:47
 Sione started Programmes at the gate", "2:14 Kiri needs help: Can't find
 someone", "2:16 Mere answered: On my way", "3:02 Lens & Light took 'Aroha's
 whole family'". Filters: **Problems**, **Notes**, **Progress**, and one per
-module.
+module. A row with a helper's photo shows it as a
+thumbnail ("3:58 Tama finished Set up the arbour" with the photo). **Photos**
+is a filter too: every photo helpers sent today, as a grid.
 
 ### 5.6 Module cards
 

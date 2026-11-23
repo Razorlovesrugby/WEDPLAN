@@ -209,6 +209,40 @@ The page polls every 15 seconds while open (the spec 34 pattern), and on
 coming back to the tab. Changed tasks get their badge, and help replies
 appear in the banner.
 
+### 6.10 Photos
+
+Photos go both ways on a task.
+
+**From the couple, on the task.** Any run sheet item can carry reference
+photos and files: how the arbour should look, where the boxes are, a map of
+the car park, the floor plan. They show as a row of thumbnails on the task
+card. Tap one to open it full screen, pinch to zoom, swipe to the next. Files
+that aren't images (a PDF) open in the phone's viewer. Up to 10 per item.
+
+**From the helper, back to the master.** The helper can add a photo:
+
+- **on Done:** "Show it's done" (the arbour set up, the tables laid);
+- **on Need help:** "Show what's wrong";
+- **on Add a note.**
+
+The camera opens straight away. The photo library is offered as well. The
+photo is shrunk on the phone to at most 1600 px on its long side, as a JPEG,
+before it is sent, and it queues offline like every other tap (§6.8), kept on
+the device until sent. It arrives on the master with its activity row (spec
+55), as a thumbnail that opens full size.
+
+**Asking for a photo.** The couple can tick **Ask for a photo when done** on
+an item. The helper's Done button then reads **Done — add a photo**: it opens
+the camera, and **Skip** is always there. A photo is never required to finish
+a task.
+
+**Where photos live.** In the existing private bucket, under
+`run-sheet/<wedding>/<item>/` for the couple's and `day/<wedding>/<link>/`
+for helpers'. They are served by short-lived signed URLs through the link's
+scoped read, and are deleted with the item, or by the couple from the master
+or the after-the-day summary. Helpers' photos stay with the wedding after
+the link expires, so the couple keeps them.
+
 ## 7. Modules
 
 A module is a front end for one job. It is code, not data: adding a module
@@ -317,6 +351,15 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
   "Changed" badge).
 - `run_sheet_items.opens_module text null`, `opens_config jsonb null` (§6.7),
   checked against the key pattern.
+- `run_sheet_item_files (id, wedding_id, item_id, path, mime_type, caption
+  null, sort_order, created_at)`, at most 10 per item (checked in the
+  action), and `run_sheet_items.photo_on_done boolean not null default
+  false`.
+- `day_activity.photo_path text null`, for a helper's photo on `done`, `help`
+  or `note`.
+- Uploads from a day link use a signed upload URL issued by a token-checked
+  action (`requestDayPhotoUpload`) for one path under the link's own prefix,
+  at most 10 MB before shrinking, images only.
 - `day_contacts (id, wedding_id, label, phone, sort_order)`.
 - RLS on every new table keyed to `wedding_id`; planner access per spec 39's
   registry; audit triggers on `day_links`, `day_contacts` and the new
@@ -353,7 +396,10 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
   with the throttle and the expiry check.
 - `src/server/actions/day-links.ts`: for the couple, make, revoke, set
   modules, set expiry and email; for the link, `setTaskState`, `reportLate`,
-  `requestHelp`, `handBack` and `addDayNote`. Each checks the Supabase
+  `requestHelp`, `handBack`, `addDayNote` and `requestDayPhotoUpload`.
+- `src/lib/day-links/photo.ts`: shrinking a photo on the device before
+  upload. Tested where a test can reach it (the size maths); the canvas step
+  is checked on a real phone. Each checks the Supabase
   `error`.
 - `src/server/queries/day-links.ts`, wrapped in `cache()`.
 - `src/components/day-link/`: the shell, Now card, task row, button sheets,
@@ -384,6 +430,9 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
    full site theme, because readability would depend on the theme.
 8. **Changes:** a "Changed" badge on the task (§6.2). Rejected: emailing
    helpers.
+9. **Photos:** both ways (§6.10). The couple adds reference photos and files
+   to a task; helpers can add a photo on Done, Need help or a note, and the
+   couple can ask for one on Done, never require it.
 
 ## 16. Build order
 
@@ -396,6 +445,8 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 4. `/d/[token]`: the shell, first open, My day, the Now card, the task
    screen, before and after the day.
 5. The buttons, their sheets, confirmations and activity rows.
+5a. Photos: reference photos on items (couple), helper photos on Done, Need
+   help and notes, "Ask for a photo when done".
 6. The offline queue, live polling and the Changed badge.
 7. The print sheet with QR codes.
 8. Spec 55's master reads what this writes; specs 52 and 53 plug in their
