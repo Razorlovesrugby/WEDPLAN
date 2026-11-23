@@ -3,6 +3,7 @@
 import { deriveImages, DecodeError } from "@/lib/moodboard-image";
 import { validateUpload } from "@/lib/moodboards";
 import { confirmUpload, requestUploadSlots } from "@/server/actions/moodboards";
+import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 
 /**
  * The browser half of an upload, shared by the board page and the Pinterest
@@ -28,7 +29,7 @@ export type UploadOutcome = {
 async function put(url: string, blob: Blob, contentType: string): Promise<boolean> {
   const response = await fetch(url, {
     method: "PUT",
-    headers: { "content-type": contentType, "x-upsert": "true" },
+    headers: { "content-type": contentType, "x-upsert": "true", "cache-control": UPLOAD_CACHE_CONTROL },
     body: blob,
   });
   return response.ok;

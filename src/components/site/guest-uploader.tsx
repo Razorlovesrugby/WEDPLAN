@@ -11,6 +11,7 @@ import { MAX_UPLOAD_BYTES } from "@/lib/site/assets";
 import { toWebp } from "@/lib/site/encode-image";
 import { PREVIEW_NOT_SAVED } from "@/lib/site/preview-guard";
 import type { GalleryImage } from "@/server/queries/gallery";
+import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 
 /**
  * Guests adding photos, from their own RSVP link (spec 14 §9).
@@ -74,7 +75,7 @@ export function GuestUploader({
       const put = await fetch(slot.data.uploadUrl, {
         method: "PUT",
         body: encoded.blob,
-        headers: { "content-type": "image/webp" },
+        headers: { "content-type": "image/webp", "cache-control": UPLOAD_CACHE_CONTROL },
       }).catch(() => null);
 
       if (!put?.ok) {
