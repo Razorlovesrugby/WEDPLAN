@@ -1,9 +1,9 @@
 # Feature spec: The shot list, and a private link for each vendor
 
-**Status: proposed, not built.** Asked for as research and mockups before any
+**Status: answered, not built.** Asked for as research and mockups before any
 build (2026-11-23). Mockups: the "Shot list & seating mockups" canvas, rows 1
-and 2. The open questions are in §11. Nothing is built until they are answered
-and the planner says to build it (see `docs/specs/README.md`).
+and 2. Every question is answered (§11). Nothing is built until the planner
+says to build it (see `docs/specs/README.md`).
 
 **Depends on:** spec 8 (vendors), spec 9 (share-link token pattern), spec 32
 (audit log), spec 34 (polling for live updates), spec 39 (`people`), spec 45
@@ -85,14 +85,17 @@ people stays, flagged "nobody in this shot".
 
 ### 4.3 Faces to know
 
-Guests gain two optional fields, used only by the shot list:
+Guests gain three optional fields, used only by vendor links:
 
 - `relationship`: free text ("Aroha's grandmother");
-- a photo, uploaded by the couple (see Q2).
+- a photo, uploaded by the couple on the guest's page or from the shot list.
+  Guests never upload their own;
+- `vendor_note`: free text for vendors ("Needs a chair", "Separated from
+  Graham"). It is the only guest note a vendor link ever shows; the existing
+  `notes` stay private to the couple.
 
 The photographer's Faces screen lists everyone in any shot who has a photo or
-a relationship, with the note from their guest record that the couple marks
-as visible to vendors (see Q3), and the shots they are in.
+a relationship, with their vendor note and the shots they are in.
 
 ### 4.4 Order: fewest call-backs
 
@@ -152,7 +155,7 @@ The link opens `/v/<token>` with four tabs:
 What a link shows is set per link: "Shot list" (photographer, videographer)
 and "Run sheet" (everyone). The couple can also make a **wrangler link** that
 shows only one section's Now and All shots tabs, for the family member
-gathering people (see Q4).
+gathering people.
 
 ### 5.1 Writes from the link
 
@@ -200,7 +203,8 @@ Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
   created_at, updated_at)`.
 - `shot_people (id, wedding_id, shot_id, guest_id null, person_id null, role
   text null, sort_order)`, with a check that exactly one of the three is set.
-- `guests.relationship text null`, `guests.photo_path text null`.
+- `guests.relationship text null`, `guests.photo_path text null`,
+  `guests.vendor_note text null`.
 - `vendor_links (id, wedding_id, vendor_id, label, token_hash unique,
   token_encrypted, shows_shots, shows_run_sheet, section_id null (a wrangler
   link), expires_at null, revoked_at null, created_at)`.
@@ -239,30 +243,23 @@ Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
   vendor link the couple made, they are deleted with the guest, and the
   privacy page says so.
 
-## 11. Open questions
+## 11. Answered — 2026-11-23
 
-**Q1. How does the photographer get in?** A private link with no account
-(recommended: the same model as mood-board links, and what the dedicated tools
-do), or a vendor login?
+Every question took its recommendation.
 
-**Q2. Who adds the photos for "Faces to know"?** The couple uploads them
-(recommended), guests add their own on the RSVP form, or no photos
-(relationship text only)?
+1. **Access:** a private link per vendor, no account (§5). Rejected: a
+   vendor login.
+2. **Face photos:** the couple uploads them (§4.3). Rejected: guests
+   uploading their own on the RSVP form.
+3. **Notes vendors see:** a new `vendor_note` per guest, and nothing else
+   (§4.3).
+4. **Wrangler link:** yes, showing one section only (§5).
+5. **Second shooter:** "lead / second" per shot (§4.1). Rejected: a link per
+   shooter.
+6. **Spec 50's per-person print view:** stays. The vendor link is the live
+   version, the print view the paper one.
 
-**Q3. Which guest notes can a vendor see?** A new "show to vendors" note
-field (recommended), or the existing notes, or none?
-
-**Q4. A wrangler link** showing one section only: wanted (recommended), or
-does the photographer's link cover it?
-
-**Q5. Second shooter.** Is "lead / second" per shot enough (recommended), or
-should each shooter have their own link showing only their shots?
-
-**Q6. Does the vendor link replace anything in spec 50's planned per-person
-print view?** Recommended: no. The print view stays for people without a
-phone; the link is the live version.
-
-## 12. Build order (once answered)
+## 12. Build order
 
 1. Migration `0050` and SQL suite assertions (tenancy, the one-of-three check
    on `shot_people`, the token hash, audit firing).

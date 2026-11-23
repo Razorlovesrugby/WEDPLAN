@@ -1,10 +1,10 @@
 # Feature spec: A seating plan that's quicker to work in
 
-**Status: proposed, not built.** Asked for after research into the leading
-seating tools (2026-11-23). Answered so far: no auto-seating; yes to undo and
-version history; every other pattern in §3 goes in. Mockups: the "Shot list &
-seating mockups" canvas, rows 3 and 4. The remaining open questions are in
-§10. Nothing is built until they are answered and the planner says to build
+**Status: answered, not built.** Asked for after research into the leading
+seating tools (2026-11-23). No auto-seating; undo and version history in;
+every other pattern in §3 in. Mockups: the "Shot list & seating mockups"
+canvas, rows 3 and 4 (the auto-seat board is marked "Not doing"). Every
+question is answered (§10). Nothing is built until the planner says to build
 it (see `docs/specs/README.md`).
 
 **Depends on:** spec 33 (the seating plan this improves), spec 32 (audit
@@ -113,6 +113,9 @@ The layout maths is a pure function, `src/lib/seating/template.ts`.
 
 ### D. Seating people
 
+The plan keeps its two views: **Tables** (cards, fastest on a phone) and
+**Room** (the floor plan). Everything below works in both.
+
 - **Seat first:** tap or click an empty chair (on the plan or in the table
   panel) to get a search of unseated guests for this event. Pick one to seat
   them there. Households show together, with "Seat all 3" and "Just Ana".
@@ -142,7 +145,7 @@ The layout maths is a pure function, `src/lib/seating/template.ts`.
   `uses_wheelchair`. A wheelchair place shows as a gap with no chair and
   doesn't count against the table's chairs. A highchair shows as a small
   marker. Both appear on the table panel, the "By table" print and the
-  caterer numbers (see Q2).
+  caterer numbers.
 
 ### G. Colour by fit
 
@@ -166,11 +169,14 @@ A **seating vendor link** (spec 52 §5, with "Seating" switched on) opens
 `/v/<token>/seating` for venue staff:
 
 - **Find a seat:** type two letters to search, and get each match's table,
-  seat, tablemates and their note for vendors (spec 52 Q3).
+  seat, tablemates and their vendor note (spec 52 §4.3).
 - **Arrived:** a tap marks a guest here. Arrived guests show a tick on their
   chair on the couple's plan. The header counts "86 of 112 here".
 - **Move:** move a guest to a spare chair. The link lists spare chairs per
   table.
+- **Walk-ins:** a public link never creates a guest. Staff seat a walk-in by
+  taking a spare chair as a reserved seat with a note ("+1 for Tom Ruru"),
+  the way spec 33 reserves chairs for people who aren't guest records.
 - **Blocked chairs:** the couple can block a chair on the plan (a broken
   chair, a pillar). Blocked chairs show a cross and are never offered as
   spare.
@@ -195,27 +201,22 @@ Migration `0051_seating_workspace.sql` (renumber to follow specs 51 and 52):
   the newest 30. That function is replaced in full in the new migration.
 - RLS and audit triggers on the new tables.
 
-## 10. Open questions
+## 10. Answered — 2026-11-23
 
-**Q1. One view or two?** Keep Tables and Room as two views (recommended:
-Tables is faster on a phone and Room for the layout, and Part D works in
-both), or merge them into one plan with a list beside it?
+Every question took its recommendation.
 
-**Q2. Highchair and wheelchair flags.** Add them as guest fields
-(recommended), or keep using the free-text accessibility note?
+1. **Views:** Tables and Room stay as two views (Part D). Rejected: merging
+   them into one plan.
+2. **Highchair and wheelchair:** guest fields `needs_highchair` and
+   `uses_wheelchair` (Part F).
+3. **Day-of changes:** venue staff with the link can mark arrivals and move
+   guests (Part I).
+4. **Walk-ins:** no guest record from a public link; a reserved seat with a
+   note (Part I).
+5. **Set up the room:** offered only on an empty plan (Part A). Rejected:
+   "Add a layout" around existing tables.
 
-**Q3. Who can make day-of changes?** Venue staff with the link can mark
-arrivals and move guests (recommended), or arrivals only?
-
-**Q4. Walk-ins.** Can venue staff add someone who isn't on the guest list?
-Recommended: no. Staff seat them at a spare chair by writing a name on the
-chair's reserved note, and no guest record is created from a public link.
-
-**Q5. Set up the room on a plan that already has tables.** Offer it only on
-an empty plan (recommended), or also as "Add a layout" that places tables
-around what's there?
-
-## 11. Build order (once answered)
+## 11. Build order
 
 1. Part C first: undo and redo over the existing actions, then automatic
    versions and History. Everything after this gets undo for free.
