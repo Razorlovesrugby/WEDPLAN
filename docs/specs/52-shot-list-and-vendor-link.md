@@ -1,0 +1,277 @@
+# Feature spec: The shot list, and a private link for each vendor
+
+**Status: proposed, not built.** Asked for as research and mockups before any
+build (2026-11-23). Mockups: the "Shot list & seating mockups" canvas, rows 1
+and 2. The open questions are in §11. Nothing is built until they are answered
+and the planner says to build it (see `docs/specs/README.md`).
+
+**Depends on:** spec 8 (vendors), spec 9 (share-link token pattern), spec 32
+(audit log), spec 34 (polling for live updates), spec 39 (`people`), spec 45
+(no-drag), spec 48 (phone), spec 50 (run sheet items and their assignees),
+spec 51 (event types).
+
+## 1. What was asked
+
+1. A shot list for the photographer: which photos, of whom, in what order.
+2. Shots document the people in them, taken from the guest list.
+3. The order to shoot in can be organised.
+4. The photographer can easily mark a photo as taken on the day.
+5. Design for the whole day, not one screen.
+
+## 2. Story
+
+> **As the couple**, before the day, **I want** to list every photo we want,
+> who is in each one and in what order, **so that** the photographer gets
+> everyone without us running the family photos ourselves.
+>
+> **As the photographer**, on the day, **I want** one link on my phone that
+> shows what to shoot now, who to call up and who can go, with one tap to mark
+> it taken, **so that** I never miss a must-have shot or a grandparent.
+
+## 3. What the market does (conclusions only)
+
+- Most couples and photographers use documents or forms. Tools built for it
+  (Group Shot Star, ShotLace, Semuko, My Shot List, StudioBinder, Timeline
+  Pro) share a shape: the couple fills the list through a link, the
+  photographer ticks shots off live, assistants join by a link with no
+  account, the checklist keeps working offline, and some say whether the
+  family formals fit their time slot.
+- Photographers' own advice repeats: name every person in each group, shoot
+  the largest group first, cap formals at about 15–20 groups, have a family
+  wrangler gather people, flag sensitive family situations, and ask the
+  couple for a list of the people who matter most, ideally with photos.
+- What only this app can add: the shots name real guests, sit inside run
+  sheet time slots, and can use mood-board photos as references.
+
+## 4. The model
+
+### 4.1 Sections and shots
+
+A **shot list** belongs to the wedding. It is split into **sections**
+(Getting ready, Ceremony, Family formals, Couple portraits, Reception,
+Details). A new wedding gets those six, empty, and the couple can rename,
+reorder, add or delete sections.
+
+A section can be **linked to a run sheet item** (spec 50). The section then
+takes its time, end time and location from that item, and moves when the item
+moves. An unlinked section has no time ("any time").
+
+A **shot** has:
+
+- a title ("Couple with Aroha's grandparents");
+- a kind: group, moment, detail or portrait;
+- the people in it (§4.2);
+- **must-have** on or off;
+- estimated minutes (default 2 for a group, 0 for the rest);
+- an optional reference image, picked from a mood-board item or uploaded;
+- an optional note for the photographer ("Nan uses a walking stick");
+- an optional "who shoots it": lead or second shooter;
+- a position in its section;
+- its **status on the day**: to do, taken, skipped or later, with the time
+  and who set it.
+
+### 4.2 People in a shot
+
+Each person in a shot is one of:
+
+- a **guest** (the normal case), shown by preferred name;
+- a **person** from `people` (spec 39), for the couple themselves or a
+  planner;
+- a **role** written as text ("Best man", "All the cousins"), for groups that
+  aren't individuals.
+
+A guest who is soft-deleted drops out of every shot. A shot left with no
+people stays, flagged "nobody in this shot".
+
+### 4.3 Faces to know
+
+Guests gain two optional fields, used only by the shot list:
+
+- `relationship`: free text ("Aroha's grandmother");
+- a photo, uploaded by the couple (see Q2).
+
+The photographer's Faces screen lists everyone in any shot who has a photo or
+a relationship, with the note from their guest record that the couple marks
+as visible to vendors (see Q3), and the shots they are in.
+
+### 4.4 Order: fewest call-backs
+
+A **call-back** is someone who steps out of the line-up for a shot and is
+needed again later. The couple is ignored (they are in nearly every shot).
+
+- Every section shows its call-back count under the list.
+- "Suggest an order" finds the order with the fewest call-backs. Ties go to
+  the order that shoots bigger groups earlier, so people can leave sooner.
+  The suggestion is shown first, applied only on "Use this order", and Undo
+  reverts it.
+- For sections of 8 shots or fewer, the search is exhaustive. Above that, it
+  is a greedy pass followed by pairwise swaps until no swap improves it. It
+  is a pure function in `src/lib/shots/order.ts`, unit tested.
+- Rejected: forcing the suggested order. It is advice. The couple's order is
+  what the photographer sees.
+
+### 4.5 Suggest groups from the family
+
+"Suggest groups" asks for each side's parents, siblings, grandparents and
+(optionally) step-parents, chosen from the guest list. From them it proposes
+the standard formals: everyone, each whole family, the couple with
+grandparents, with parents and siblings, with parents, each partner with each
+parent. Step-parents and separated parents are proposed as separate groups,
+never merged. The couple ticks which to add. Nothing is created until they
+add them.
+
+### 4.6 Fits the slot
+
+A linked section shows "8 groups · about 19 minutes of a 45 minute slot".
+Minutes are the shots' estimates plus one minute of changeover per group. Over
+the slot shows in amber. It is advice, never a block.
+
+## 5. The vendor link
+
+Each vendor (spec 8) can have **one private link**, like a mood-board share
+link (spec 9): a random token, stored as a hash and an encrypted copy so the
+couple can copy it again, revocable, with no account needed.
+
+The link opens `/v/<token>` with four tabs:
+
+- **My day:** the run sheet items this vendor is assigned to (spec 50), with
+  the current one highlighted, the sunset time for the venue, and call
+  buttons for the couple's chosen contacts (the wrangler, the venue
+  coordinator).
+- **Now:** the next shot to do in the current section, in large type. It
+  shows who is in it, **call up** (in this shot, not the last), **can go**
+  (in the last shot, not this one and not any later shot), and up next. Its
+  buttons are **Taken** (full width, at least 64 px tall), Undo, Later and
+  Skip. It also shows whether the section is on time or behind its run sheet
+  item.
+- **All shots:** every section and shot. Tap a shot to toggle taken.
+  Filters: left, must-haves, missed (skipped or still to do once its section
+  has ended).
+- **Faces:** §4.3.
+
+What a link shows is set per link: "Shot list" (photographer, videographer)
+and "Run sheet" (everyone). The couple can also make a **wrangler link** that
+shows only one section's Now and All shots tabs, for the family member
+gathering people (see Q4).
+
+### 5.1 Writes from the link
+
+- Only a shot's status can be changed from a link, never its content.
+- Each tap sends the status it sets ("taken"), never "toggle", with the time
+  the tap happened. The server keeps the latest by tap time, so a replayed tap
+  can't undo a newer one.
+- Offline, taps queue on the device and send when the connection returns. A
+  banner says "3 taps waiting to send".
+- Writes are server actions authenticated by the token, like the RSVP form.
+  Audit rows carry `actor_kind = 'public'` and the link's label.
+
+### 5.2 Live progress
+
+The couple's shot list page and the vendor link both poll every 15 seconds
+while open (the spec 34 pattern), so the couple sees "Family formals · 4 of
+12" move during the day.
+
+## 6. The couple's screens
+
+- **`/shots`**, under "The day" in the sidebar: the sections list, the
+  selected section's shots (reorder with up/down buttons as well as drag,
+  per spec 45), and a details panel for the selected shot. It also has the
+  call-back count, "Suggest an order", "Suggest groups" and the slot fit.
+- **Shared with:** each vendor link and wrangler link, with copy and turn off.
+- **On the day:** the same page shows each shot's status, live.
+- **Print:** `/shots/print`, one section per page, people listed per shot,
+  must-haves marked, for a paper backup.
+- **Export:** a `shots` kind on `/api/export/[kind]` (CSV), and in the
+  "Download everything" zip.
+
+## 7. Data
+
+Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
+
+- `shot_sections (id, wedding_id, name, run_sheet_item_id null, location
+  null, sort_order, created_at, updated_at)`; run sheet item `on delete set
+  null`.
+- `create type public.shot_kind as enum ('group','moment','detail','portrait')`
+  and `create type public.shot_status as enum ('todo','taken','skipped','later')`
+  (new types, so the 55P04 rule doesn't apply).
+- `shots (id, wedding_id, section_id, title, kind, must_have, minutes,
+  note, shooter text check in ('lead','second') null, reference_moodboard_item_id
+  null, reference_path null, sort_order, status, status_at, status_by text,
+  created_at, updated_at)`.
+- `shot_people (id, wedding_id, shot_id, guest_id null, person_id null, role
+  text null, sort_order)`, with a check that exactly one of the three is set.
+- `guests.relationship text null`, `guests.photo_path text null`.
+- `vendor_links (id, wedding_id, vendor_id, label, token_hash unique,
+  token_encrypted, shows_shots, shows_run_sheet, section_id null (a wrangler
+  link), expires_at null, revoked_at null, created_at)`.
+- RLS on every table, keyed to `wedding_id`; the token routes read and write
+  through the service role after the token resolves its wedding. Audit
+  triggers on `shots`, `shot_people`, `shot_sections`, `vendor_links`.
+- Photos under `shots/<wedding>/<guest>.<ext>` in the existing private
+  bucket, served by signed URLs with the long cache header (session 58).
+
+## 8. Code
+
+- `src/lib/shots/order.ts`: call-backs, call up / can go, suggested order.
+- `src/lib/shots/formals.ts`: §4.5's group proposals.
+- `src/lib/shots/progress.ts`: missed, behind-schedule, slot fit.
+- `src/server/actions/shots.ts`, `src/server/actions/vendor-links.ts`,
+  `src/server/queries/shots.ts` (wrapped in `cache()`), and
+  `src/server/vendor-link/resolve.ts` (token to wedding, like
+  `src/server/rsvp/resolve.ts`).
+- Screens: `/shots`, `/shots/print`, `/v/[token]` with its four tabs.
+
+## 9. Out of scope
+
+- Photographer accounts, or a photographer seeing several weddings in one
+  place.
+- Uploading the finished photos.
+- Telling guests on their own page that they are in the family photos (a
+  later spec, if wanted).
+- Native apps. The link is a web page that works offline once opened.
+
+## 10. Risks
+
+- **Offline is the hard part.** A queued tap must survive the phone locking
+  and the tab being reloaded. It is the step most likely to need a real phone
+  to prove.
+- **Guest photos are personal data.** They are only ever shown through a
+  vendor link the couple made, they are deleted with the guest, and the
+  privacy page says so.
+
+## 11. Open questions
+
+**Q1. How does the photographer get in?** A private link with no account
+(recommended: the same model as mood-board links, and what the dedicated tools
+do), or a vendor login?
+
+**Q2. Who adds the photos for "Faces to know"?** The couple uploads them
+(recommended), guests add their own on the RSVP form, or no photos
+(relationship text only)?
+
+**Q3. Which guest notes can a vendor see?** A new "show to vendors" note
+field (recommended), or the existing notes, or none?
+
+**Q4. A wrangler link** showing one section only: wanted (recommended), or
+does the photographer's link cover it?
+
+**Q5. Second shooter.** Is "lead / second" per shot enough (recommended), or
+should each shooter have their own link showing only their shots?
+
+**Q6. Does the vendor link replace anything in spec 50's planned per-person
+print view?** Recommended: no. The print view stays for people without a
+phone; the link is the live version.
+
+## 12. Build order (once answered)
+
+1. Migration `0050` and SQL suite assertions (tenancy, the one-of-three check
+   on `shot_people`, the token hash, audit firing).
+2. `src/lib/shots/*` and their tests.
+3. `/shots`: sections, shots, people, reorder, details panel.
+4. Ordering, suggested groups, slot fit.
+5. Vendor links: create, copy, revoke; `/v/[token]` My day and All shots.
+6. The Now tab, offline queue, live polling.
+7. Faces: relationship and photo on guests, the Faces tab.
+8. Print and CSV.
+9. Typecheck, tests, SQL suite, build; a real phone for the Now tab and the
+   offline queue.
