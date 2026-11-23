@@ -1,11 +1,12 @@
-# Feature spec: The shot list, and a private link for each vendor
+# Feature spec: The shot list, and the photographer's front end
 
 **Status: answered, not built.** Asked for as research and mockups before any
 build (2026-11-23). Mockups: the "Shot list & seating mockups" canvas, rows 1
 and 2. Every question is answered (§11). Nothing is built until the planner
 says to build it (see `docs/specs/README.md`).
 
-**Depends on:** spec 8 (vendors), spec 9 (share-link token pattern), spec 32
+**Depends on:** spec 54 (day links, which this plugs into as a module),
+spec 8 (vendors), spec 32
 (audit log), spec 34 (polling for live updates), spec 39 (`people`), spec 45
 (no-drag), spec 48 (phone), spec 50 (run sheet items and their assignees),
 spec 51 (event types).
@@ -85,13 +86,13 @@ people stays, flagged "nobody in this shot".
 
 ### 4.3 Faces to know
 
-Guests gain three optional fields, used only by vendor links:
+Guests gain three optional fields, shown only through day links (spec 54):
 
 - `relationship`: free text ("Aroha's grandmother");
 - a photo, uploaded by the couple on the guest's page or from the shot list.
   Guests never upload their own;
 - `vendor_note`: free text for vendors ("Needs a chair", "Separated from
-  Graham"). It is the only guest note a vendor link ever shows; the existing
+  Graham"). It is the only guest note a day link ever shows; the existing
   `notes` stay private to the couple.
 
 The photographer's Faces screen lists everyone in any shot who has a photo or
@@ -129,50 +130,48 @@ A linked section shows "8 groups · about 19 minutes of a 45 minute slot".
 Minutes are the shots' estimates plus one minute of changeover per group. Over
 the slot shows in amber. It is advice, never a block.
 
-## 5. The vendor link
+## 5. The Shot list module
 
-Each vendor (spec 8) can have **one private link**, like a mood-board share
-link (spec 9): a random token, stored as a hash and an encrypted copy so the
-couple can copy it again, revocable, with no account needed.
+The photographer's front end is the **Shot list module** of their day link
+(spec 54). The link, its token, expiry, live polling and offline queue are
+spec 54's. This spec adds the module.
 
-The link opens `/v/<token>` with four tabs:
+- **Offered to:** vendors, and guests or people acting as wrangler. **On by
+  default** for vendors in the Photography or Videography category.
+- **Config:** an optional section. A link with a section set shows only that
+  section: that is the **wrangler link**, the day link of the family member
+  assigned to the run sheet item the section is linked to, which turns the
+  module on for them, scoped to that section.
 
-- **My day:** the run sheet items this vendor is assigned to (spec 50), with
-  the current one highlighted, the sunset time for the venue, and call
-  buttons for the couple's chosen contacts (the wrangler, the venue
-  coordinator).
+The module adds three tabs beside the link's My day (spec 54 §6), which
+already shows the photographer's run sheet items and day contacts:
+
 - **Now:** the next shot to do in the current section, in large type. It
   shows who is in it, **call up** (in this shot, not the last), **can go**
   (in the last shot, not this one and not any later shot), and up next. Its
   buttons are **Taken** (full width, at least 64 px tall), Undo, Later and
   Skip. It also shows whether the section is on time or behind its run sheet
-  item.
+  item, and the sunset time on sections after 4 pm.
 - **All shots:** every section and shot. Tap a shot to toggle taken.
   Filters: left, must-haves, missed (skipped or still to do once its section
   has ended).
 - **Faces:** §4.3.
 
-What a link shows is set per link: "Shot list" (photographer, videographer)
-and "Run sheet" (everyone). The couple can also make a **wrangler link** that
-shows only one section's Now and All shots tabs, for the family member
-gathering people.
+A run sheet item linked to a section shows "Open the shot list" on My day
+(spec 54 §6.3).
 
-### 5.1 Writes from the link
+### 5.1 The module's writes
 
-- Only a shot's status can be changed from a link, never its content.
+- `setShotStatus` is the module's only write: a shot's status, never its
+  content.
 - Each tap sends the status it sets ("taken"), never "toggle", with the time
   the tap happened. The server keeps the latest by tap time, so a replayed tap
-  can't undo a newer one.
-- Offline, taps queue on the device and send when the connection returns. A
-  banner says "3 taps waiting to send".
-- Writes are server actions authenticated by the token, like the RSVP form.
-  Audit rows carry `actor_kind = 'public'` and the link's label.
+  from the offline queue can't undo a newer one.
 
 ### 5.2 Live progress
 
-The couple's shot list page and the vendor link both poll every 15 seconds
-while open (the spec 34 pattern), so the couple sees "Family formals · 4 of
-12" move during the day.
+The couple's shot list page polls every 15 seconds while open, like the day
+link, so the couple sees "Family formals · 4 of 12" move during the day.
 
 ## 6. The couple's screens
 
@@ -180,7 +179,8 @@ while open (the spec 34 pattern), so the couple sees "Family formals · 4 of
   selected section's shots (reorder with up/down buttons as well as drag,
   per spec 45), and a details panel for the selected shot. It also has the
   call-back count, "Suggest an order", "Suggest groups" and the slot fit.
-- **Shared with:** each vendor link and wrangler link, with copy and turn off.
+- **Shared with:** whose day links have the Shot list module on, and for
+  which section, with a link to spec 54's Day links screen.
 - **On the day:** the same page shows each shot's status, live.
 - **Print:** `/shots/print`, one section per page, people listed per shot,
   must-haves marked, for a paper backup.
@@ -189,7 +189,7 @@ while open (the spec 34 pattern), so the couple sees "Family formals · 4 of
 
 ## 7. Data
 
-Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
+Migration `0051_shot_list.sql` (after spec 51's `0049` and spec 54's `0050`):
 
 - `shot_sections (id, wedding_id, name, run_sheet_item_id null, location
   null, sort_order, created_at, updated_at)`; run sheet item `on delete set
@@ -205,12 +205,12 @@ Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
   text null, sort_order)`, with a check that exactly one of the three is set.
 - `guests.relationship text null`, `guests.photo_path text null`,
   `guests.vendor_note text null`.
-- `vendor_links (id, wedding_id, vendor_id, label, token_hash unique,
-  token_encrypted, shows_shots, shows_run_sheet, section_id null (a wrangler
-  link), expires_at null, revoked_at null, created_at)`.
-- RLS on every table, keyed to `wedding_id`; the token routes read and write
-  through the service role after the token resolves its wedding. Audit
-  triggers on `shots`, `shot_people`, `shot_sections`, `vendor_links`.
+- Linking a section to a run sheet item sets that item's
+  `opens_module = 'shot_list'` and `opens_config = {"section_id": …}`
+  (spec 54 §9).
+- RLS on every table, keyed to `wedding_id`; the module reads and writes
+  through spec 54's token resolution. Audit triggers on `shots`,
+  `shot_people`, `shot_sections`.
 - Photos under `shots/<wedding>/<guest>.<ext>` in the existing private
   bucket, served by signed URLs with the long cache header (session 58).
 
@@ -219,11 +219,12 @@ Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
 - `src/lib/shots/order.ts`: call-backs, call up / can go, suggested order.
 - `src/lib/shots/formals.ts`: §4.5's group proposals.
 - `src/lib/shots/progress.ts`: missed, behind-schedule, slot fit.
-- `src/server/actions/shots.ts`, `src/server/actions/vendor-links.ts`,
-  `src/server/queries/shots.ts` (wrapped in `cache()`), and
-  `src/server/vendor-link/resolve.ts` (token to wedding, like
-  `src/server/rsvp/resolve.ts`).
-- Screens: `/shots`, `/shots/print`, `/v/[token]` with its four tabs.
+- `src/server/actions/shots.ts` and `src/server/queries/shots.ts` (wrapped
+  in `cache()`).
+- The module: `src/lib/day-links/modules/shot-list.ts` (its entry in spec
+  54's registry: offered-to, default-on, config, read, writes) and its three
+  tabs under `/d/[token]`.
+- Screens: `/shots`, `/shots/print`.
 
 ## 9. Out of scope
 
@@ -236,38 +237,40 @@ Migration `0050_shot_list.sql` (renumber if spec 51 has not landed first):
 
 ## 10. Risks
 
-- **Offline is the hard part.** A queued tap must survive the phone locking
+- **Offline is the hard part** (the queue is spec 54's). A queued tap must survive the phone locking
   and the tab being reloaded. It is the step most likely to need a real phone
   to prove.
 - **Guest photos are personal data.** They are only ever shown through a
-  vendor link the couple made, they are deleted with the guest, and the
+  day link the couple made, they are deleted with the guest, and the
   privacy page says so.
 
 ## 11. Answered — 2026-11-23
 
 Every question took its recommendation.
 
-1. **Access:** a private link per vendor, no account (§5). Rejected: a
-   vendor login.
+1. **Access:** a private link, no account: the Shot list module on the
+   photographer's day link (§5, spec 54). Rejected: a vendor login.
 2. **Face photos:** the couple uploads them (§4.3). Rejected: guests
    uploading their own on the RSVP form.
 3. **Notes vendors see:** a new `vendor_note` per guest, and nothing else
    (§4.3).
-4. **Wrangler link:** yes, showing one section only (§5).
+4. **Wrangler link:** yes, the family member's day link with the module
+   scoped to one section (§5).
 5. **Second shooter:** "lead / second" per shot (§4.1). Rejected: a link per
    shooter.
-6. **Spec 50's per-person print view:** stays. The vendor link is the live
+6. **Spec 50's per-person print view:** stays. The day link is the live
    version, the print view the paper one.
 
 ## 12. Build order
 
-1. Migration `0050` and SQL suite assertions (tenancy, the one-of-three check
-   on `shot_people`, the token hash, audit firing).
+0. Spec 54 (day links) first: this spec plugs into it.
+1. Migration `0051` and SQL suite assertions (tenancy, the one-of-three check
+   on `shot_people`, audit firing).
 2. `src/lib/shots/*` and their tests.
 3. `/shots`: sections, shots, people, reorder, details panel.
 4. Ordering, suggested groups, slot fit.
-5. Vendor links: create, copy, revoke; `/v/[token]` My day and All shots.
-6. The Now tab, offline queue, live polling.
+5. The Shot list module in spec 54's registry, and its All shots tab.
+6. The Now tab, and polling on `/shots`.
 7. Faces: relationship and photo on guests, the Faces tab.
 8. Print and CSV.
 9. Typecheck, tests, SQL suite, build; a real phone for the Now tab and the

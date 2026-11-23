@@ -9,7 +9,8 @@ it (see `docs/specs/README.md`).
 
 **Depends on:** spec 33 (the seating plan this improves), spec 32 (audit
 log), spec 45 (no-drag), spec 46 (keyboard shortcuts), spec 51 (seating on
-or off per event), spec 52 (vendor links, for Part I).
+or off per event), spec 52 (vendor notes), spec 54 (day links, which Part I
+plugs into as a module).
 
 ## 1. What was asked
 
@@ -165,8 +166,10 @@ options when anyone invited to the event is unseated.
 
 ## 8. Part I — On the day
 
-A **seating vendor link** (spec 52 §5, with "Seating" switched on) opens
-`/v/<token>/seating` for venue staff:
+Part I is the **Seating module** of a day link (spec 54): on by default for
+vendors in the Venue or Catering category, and switched on by the couple for
+ushers. The link, its token, expiry, polling and offline queue are spec 54's.
+The module adds a Seating tab:
 
 - **Find a seat:** type two letters to search, and get each match's table,
   seat, tablemates and their vendor note (spec 52 §4.3).
@@ -182,12 +185,14 @@ A **seating vendor link** (spec 52 §5, with "Seating" switched on) opens
   spare.
 - **Activity:** the couple's History shows day-of moves and arrivals, from
   the audit log, with who made them (the link's label).
-- **Live:** the couple's plan and the link poll every 15 seconds while open
-  (the spec 34 pattern).
+- **Live:** the couple's plan polls every 15 seconds while open, like the
+  day link.
+- **The module's writes:** `markArrived`, `unmarkArrived`, `moveGuestOnTheDay`
+  and `seatWalkIn` (a reserved seat with a note), and nothing else.
 
 ## 9. Data
 
-Migration `0051_seating_workspace.sql` (renumber to follow specs 51 and 52):
+Migration `0052_seating_workspace.sql` (after specs 51, 54 and 52):
 
 - `guests.needs_highchair boolean not null default false`,
   `guests.uses_wheelchair boolean not null default false`.
@@ -195,8 +200,6 @@ Migration `0051_seating_workspace.sql` (renumber to follow specs 51 and 52):
   (table_id, seat_index))`.
 - `seating_checkins (wedding_id, event_id, guest_id, arrived_at, by_label,
   primary key (event_id, guest_id))`.
-- `vendor_links.shows_seating boolean not null default false` (spec 52's
-  table).
 - A pruning step in `take_seating_snapshot` for automatic snapshots beyond
   the newest 30. That function is replaced in full in the new migration.
 - RLS and audit triggers on the new tables.
@@ -223,6 +226,6 @@ Every question took its recommendation.
 2. Part D (seat first, several at once, chairs on the plan) and Part E.
 3. Parts A and B (template and bulk tables), each one undo step.
 4. Parts F, G and H.
-5. Migration `0051` and Part I (needs spec 52's vendor links).
+5. Migration `0052` and Part I, the Seating module (needs spec 54).
 6. Typecheck, tests, SQL suite, build; an iPad for drag and undo; a phone for
    Part I.
