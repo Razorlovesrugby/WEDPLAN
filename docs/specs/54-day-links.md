@@ -571,6 +571,12 @@ A task's own contact (§10.1) is picked from these or from its assignees.
 the day-before reminder. Guests and vendors already have both. The picker's
 "add a person" asks for a name and, optionally, a phone and email.
 
+The couple enters helpers' numbers themselves. An assignee chip for anyone
+with no phone number shows **Add phone**, which edits it in place on the
+guest, vendor or person it belongs to, and the master's readiness check
+lists anyone still without one (spec 55 §7). Helpers never type their own
+details into a link.
+
 ### 10.8 Questions before the day
 
 A note a helper adds before the day (§6.4) lands on the master's readiness
