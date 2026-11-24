@@ -4,8 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { absoluteUrl } from "@/lib/env";
-import { sendEmail } from "@/lib/email/send";
-import { dayLinkEmail } from "@/lib/email/templates";
 import { decryptToken, encryptToken, generateInviteToken, hashInviteToken } from "@/lib/tokens";
 import { linkExpiry } from "@/lib/day-links/my-day";
 import { defaultModuleKeys } from "@/lib/day-links/modules";
@@ -182,36 +180,6 @@ export async function setDayLinkExpiry(linkId: string, expiresAt: string): Promi
   if (error) return fail(error.message);
   revalidate();
   return ok(undefined);
-}
-
-/** Emails the link to the address the couple knows for them. */
-export async function emailDayLink(linkId: string): Promise<ActionResult<{ delivered: boolean }>> {
-  const wedding = await requireWedding();
-  const supabase = await createClient();
-  const { data: link, error } = await supabase
-    .from("day_links")
-    .select("vendor_id, guest_id, person_id, label, token_encrypted, revoked_at")
-    .eq("id", linkId)
-    .eq("wedding_id", wedding.id)
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (!link || link.revoked_at) return fail("That link is turned off");
-
-  const assignee: DayLinkAssignee = link.vendor_id
-    ? { type: "vendor", id: link.vendor_id }
-    : link.guest_id
-      ? { type: "guest", id: link.guest_id }
-      : { type: "person", id: link.person_id! };
-  const who = await labelFor(supabase, wedding.id, assignee);
-  if (!who?.email) return fail("There's no email address for them. Add one first.");
-
-  const token = decryptToken(link.token_encrypted);
-  if (!token) return fail("That link can't be recovered. Make a new one.");
-
-  const message = dayLinkEmail({ weddingName: wedding.name, helperName: who.name, url: absoluteUrl(`/d/${token}`) });
-  const sent = await sendEmail({ to: who.email, ...message });
-  if (!sent.ok) return fail(sent.error);
-  return ok({ delivered: sent.delivered });
 }
 
 // ---------------------------------------------------------------------------

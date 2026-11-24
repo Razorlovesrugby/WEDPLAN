@@ -2,15 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import * as webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { absoluteUrl, serverEnv } from "@/lib/env";
-import { sendEmail } from "@/lib/email/send";
-import { dayBeforeEmail } from "@/lib/email/templates";
 import { decryptToken } from "@/lib/tokens";
-import { dayBeforeDue, pushDue, type ReminderTask } from "@/lib/day-links/reminders";
+import { pushDue, type ReminderTask } from "@/lib/day-links/reminders";
 import { localDate } from "@/lib/day-links/my-day";
 
 /**
- * The every-minute job for day links (spec 54 §6.15): the day-before email at
- * 6 pm wedding time and the "10 minutes before" push. Called by Supabase
+ * The every-minute job for day links (spec 54 §6.15): the "10 minutes before"
+ * push (there is no email). Called by Supabase
  * `pg_cron` (scripts/ensure-day-cron.mjs), gated by the same bearer secret as
  * the other cron routes. Idempotent: every send is logged first, and a
  * reminder already logged is never sent again.
@@ -18,7 +16,7 @@ import { localDate } from "@/lib/day-links/my-day";
 
 export const dynamic = "force-dynamic";
 
-type Counts = { emails: number; pushes: number; failures: number };
+type Counts = { pushes: number; failures: number };
 
 async function run(request: NextRequest) {
   const env = serverEnv();
@@ -29,7 +27,7 @@ async function run(request: NextRequest) {
 
   const supabase = createAdminClient();
   const now = new Date();
-  const counts: Counts = { emails: 0, pushes: 0, failures: 0 };
+  const counts: Counts = { pushes: 0, failures: 0 };
   const pushReady = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
   if (pushReady) {
     webpush.setVapidDetails(env.VAPID_SUBJECT ?? "mailto:admin@example.com", env.VAPID_PUBLIC_KEY!, env.VAPID_PRIVATE_KEY!);
@@ -46,7 +44,7 @@ async function run(request: NextRequest) {
   const weddingIds = [...new Set(links.map((l) => l.wedding_id))];
   const linkIds = links.map((l) => l.id);
   const [weddings, assignees, subs, logs] = await Promise.all([
-    supabase.from("weddings").select("id, name, timezone, day_before_email").in("id", weddingIds),
+    supabase.from("weddings").select("id, name, timezone").in("id", weddingIds),
     supabase.from("run_sheet_item_assignees").select("item_id, wedding_id, state, vendor_id, guest_id, person_id").in("wedding_id", weddingIds),
     supabase.from("day_push_subscriptions").select("*").in("link_id", linkIds),
     supabase.from("day_reminder_log").select("link_id, dedupe_key").in("link_id", linkIds),
@@ -74,40 +72,6 @@ async function run(request: NextRequest) {
     });
     if (tasks.length === 0) continue;
     const sent = new Set((logs.data ?? []).filter((l) => l.link_id === link.id).map((l) => l.dedupe_key));
-
-    // The day-before email.
-    if (wedding.day_before_email) {
-      const due = dayBeforeDue(tasks, now, wedding.timezone, sent);
-      if (due) {
-        const to = await emailOf(supabase, link);
-        const token = decryptToken(link.token_encrypted);
-        if (to && token) {
-          const claimed = await supabase
-            .from("day_reminder_log")
-            .insert({ link_id: link.id, wedding_id: link.wedding_id, dedupe_key: due.key, kind: "day_before_email" });
-          if (!claimed.error) {
-            const time = (iso: string) =>
-              new Intl.DateTimeFormat("en-NZ", { timeZone: wedding.timezone, hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso));
-            const message = dayBeforeEmail({
-              weddingName: wedding.name,
-              helperName: link.label.split(" ")[0] ?? link.label,
-              url: absoluteUrl(`/d/${token}`),
-              jobs: due.tasks.map((t) => {
-                const full = tasks.find((x) => x.id === t.id);
-                return { time: time(t.startsAt), title: t.title, where: full?.where ?? null };
-              }),
-            });
-            const result = await sendEmail({ to, ...message });
-            if (result.ok) counts.emails += 1;
-            else {
-              counts.failures += 1;
-              // Free the key so the next minute tries again.
-              await supabase.from("day_reminder_log").delete().eq("link_id", link.id).eq("dedupe_key", due.key);
-            }
-          }
-        }
-      }
-    }
 
     // The "10 minutes before" push, only on or after the job's own day.
     if (pushReady) {
@@ -141,18 +105,6 @@ async function run(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, ...counts });
-}
-
-async function emailOf(
-  supabase: ReturnType<typeof createAdminClient>,
-  link: { vendor_id: string | null; guest_id: string | null; person_id: string | null },
-): Promise<string | null> {
-  const { data } = link.vendor_id
-    ? await supabase.from("vendors").select("email").eq("id", link.vendor_id).maybeSingle()
-    : link.guest_id
-      ? await supabase.from("guests").select("email").eq("id", link.guest_id).maybeSingle()
-      : await supabase.from("people").select("email").eq("id", link.person_id!).maybeSingle();
-  return data?.email?.trim() || null;
 }
 
 export const GET = run;

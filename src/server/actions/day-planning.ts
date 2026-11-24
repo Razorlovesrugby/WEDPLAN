@@ -384,15 +384,6 @@ export async function setLinkModules(linkId: string, keys: string[]): Promise<Ac
   return ok(undefined);
 }
 
-export async function setDayBeforeEmail(on: boolean): Promise<ActionResult> {
-  const wedding = await requireWedding();
-  const supabase = await createClient();
-  const { error } = await supabase.from("weddings").update({ day_before_email: on }).eq("id", wedding.id);
-  if (error) return fail(error.message);
-  revalidate();
-  return ok(undefined);
-}
-
 export async function moveInfoSection(sectionId: string, direction: "up" | "down"): Promise<ActionResult> {
   const wedding = await requireWedding();
   const supabase = await createClient();

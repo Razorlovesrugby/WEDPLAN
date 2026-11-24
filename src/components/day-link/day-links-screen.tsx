@@ -7,7 +7,6 @@ import {
   answerHelp,
   deleteDayContact,
   deleteInfoSection,
-  emailDayLink,
   getDayLinkUrl,
   makeDayLink,
   revokeDayLink,
@@ -23,7 +22,6 @@ import {
   resetCue,
   saveGroup,
   sendAnnouncement,
-  setDayBeforeEmail,
   setLinkModules,
 } from "@/server/actions/day-planning";
 import { setDayLinkExpiry } from "@/server/actions/day-links";
@@ -32,7 +30,7 @@ import type { DayLinksOverview, DayLinkPerson } from "@/server/queries/day-links
 
 const INFO_STARTERS = ["Venue and parking", "Wet-weather plan", "First aid and toilets", "Wifi"];
 
-export function DayLinksScreen({ overview, timeZone, dayBeforeEmail }: { overview: DayLinksOverview; timeZone: string; dayBeforeEmail: boolean }) {
+export function DayLinksScreen({ overview, timeZone }: { overview: DayLinksOverview; timeZone: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -128,19 +126,6 @@ export function DayLinksScreen({ overview, timeZone, dayBeforeEmail }: { overvie
               ) : (
                 <>
                   <button className="btn" onClick={() => void copy(p)}>Copy link</button>
-                  <button
-                    className="btn"
-                    disabled={pending || !p.email}
-                    title={p.email ? undefined : "Add an email first"}
-                    onClick={() =>
-                      run(async () => {
-                        const r = await emailDayLink(p.link!.id);
-                        return r.ok ? { ok: true } : r;
-                      }, `Emailed ${p.name}`)
-                    }
-                  >
-                    Send by email
-                  </button>
                   <button
                     className="btn"
                     disabled={pending}
@@ -260,17 +245,6 @@ export function DayLinksScreen({ overview, timeZone, dayBeforeEmail }: { overvie
         ))}
         <GroupEditor group={null} candidates={overview.candidates} disabled={pending}
           onSave={(name, members) => run(() => saveGroup(null, { name, members }), "Group added")} onDelete={() => undefined} />
-      </section>
-
-      <section className="card space-y-2 p-4">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Reminders</h2>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={dayBeforeEmail} disabled={pending} onChange={(e) => run(() => setDayBeforeEmail(e.target.checked))} />
-          Email each helper their jobs at 6 pm the day before (when we have their email)
-        </label>
-        <p className="text-xs text-muted">
-          Helpers can also switch on a reminder 10 minutes before each job from their own page.
-        </p>
       </section>
 
       <section className="card space-y-3 p-4">
