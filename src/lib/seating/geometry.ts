@@ -221,6 +221,21 @@ function banquetRun(raw: unknown, capacity: number): { length: number; width: nu
   return { length: maxX - minX, width: maxY - minY, seats: seats.slice(0, capacity) };
 }
 
+/** A serpentine table's wave: how far its centre line sits from straight at `x` (the table's own frame). */
+export const SERPENTINE_AMPLITUDE_CM = 40;
+export function serpentineWave(x: number, halfLength: number): number {
+  return SERPENTINE_AMPLITUDE_CM * Math.sin((Math.PI * x) / halfLength);
+}
+
+/** The outline of a serpentine table as an SVG path, `grow` cm bigger all round: a band that follows the wave. */
+export function serpentinePath(halfLength: number, halfWidth: number, grow = 0): string {
+  const n = 24;
+  const xs = Array.from({ length: n + 1 }, (_, i) => -halfLength + (2 * halfLength * i) / n);
+  const top = xs.map((x) => `${x.toFixed(1)} ${(serpentineWave(x, halfLength) - halfWidth - grow).toFixed(1)}`);
+  const bottom = [...xs].reverse().map((x) => `${x.toFixed(1)} ${(serpentineWave(x, halfLength) + halfWidth + grow).toFixed(1)}`);
+  return `M ${top.join(" L ")} L ${bottom.join(" L ")} Z`;
+}
+
 export function rotate(p: Point, deg: number): Point {
   const r = (deg * Math.PI) / 180;
   const c = Math.cos(r);
@@ -274,7 +289,7 @@ export function localSeatPositions(t: SizeInput): Point[] {
       // A long table with one S in it: both sides follow y = amplitude * sin(pi * x / hl).
       const top = Math.ceil(n / 2);
       const bottom = n - top;
-      const wave = (x: number) => 40 * Math.sin((Math.PI * x) / hl);
+      const wave = (x: number) => serpentineWave(x, hl);
       return [
         ...spread(top, -hl, hl).map((x) => ({ x, y: wave(x) - hw - o })),
         ...spread(bottom, -hl, hl)

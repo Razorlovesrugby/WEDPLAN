@@ -5,12 +5,13 @@ import { clearTableChairs, deleteSeatingTable, updateSeatingTable } from "@/serv
 import { duplicateSeatingTable, renumberSeatingTable, setChairBlocked } from "@/server/actions/seating-workspace";
 import { trayHouseholds, type TrayMode } from "@/lib/seating/tray";
 import { guestColour } from "@/lib/seating/colour";
-import { localSeatPositions, tableSize, CHAIR_OFFSET_CM } from "@/lib/seating/geometry";
+import { localSeatPositions, serpentinePath, tableSize, CHAIR_OFFSET_CM } from "@/lib/seating/geometry";
 import { guestName, type SeatingTable } from "@/lib/seating/model";
 import type { SeatingTableShape } from "@/lib/types/database";
 import { GuestChip } from "./guest-chip";
 import { useSeating } from "./seating-state";
 import { PICKABLE_SHAPES, SHAPE_LABEL } from "./tables-grid";
+import { TableStyleSection } from "./styles-panel";
 
 /**
  * One table, opened (spec 33 §D.1): its settings, and its chairs drawn round
@@ -70,6 +71,7 @@ function DrawerBody({ table }: { table: SeatingTable }) {
       </div>
 
       <Chairs table={table} />
+      <TableStyleSection table={table} />
 
       <form
         className="mt-4 grid gap-3 sm:grid-cols-2"
@@ -293,6 +295,12 @@ function Chairs({ table }: { table: SeatingTable }) {
       <svg viewBox={`${-w / 2} ${-h / 2} ${w} ${h}`} className="mx-auto block max-h-80 w-full" role="group" aria-label="Chairs">
         {table.shape === "round" ? (
           <circle r={length / 2} fill="#f3efe8" stroke="#b8b0a4" />
+        ) : table.shape === "serpentine" ? (
+          <path d={serpentinePath(length / 2, width / 2)} fill="#f3efe8" stroke="#b8b0a4" />
+        ) : table.shape === "oval" ? (
+          <ellipse rx={length / 2} ry={width / 2} fill="#f3efe8" stroke="#b8b0a4" />
+        ) : table.shape === "half_moon" ? (
+          <path d={`M ${-length / 2} ${width / 2} A ${length / 2} ${length / 2} 0 0 1 ${length / 2} ${width / 2} Z`} fill="#f3efe8" stroke="#b8b0a4" />
         ) : (
           <rect x={-length / 2} y={-width / 2} width={length} height={width} fill="#f3efe8" stroke="#b8b0a4" />
         )}

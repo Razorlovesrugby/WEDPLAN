@@ -18,6 +18,7 @@ import { RulesPanel } from "./rules-panel";
 import { SeatingProvider, useSeating, type SeatingData } from "./seating-state";
 import { RevealPanel, SnapshotsPanel } from "./snapshots-panel";
 import { DayActivityPanel } from "./day-activity-panel";
+import { StylesPanel } from "./styles-panel";
 import { SummaryBar } from "./summary-bar";
 import { TableDrawer } from "./table-drawer";
 import { TablesGrid } from "./tables-grid";
@@ -212,6 +213,7 @@ function Screen({
         </div>
 
         <RulesPanel />
+        <StylesPanel />
         <SnapshotsPanel snapshots={snapshots} collaborators={collaborators} />
         <DayActivityPanel activity={dayActivity} />
         <RevealPanel />

@@ -21,6 +21,7 @@ import {
   FIXTURE_DEFAULTS,
   normaliseDegrees,
   seatPositions,
+  serpentinePath,
   snap,
   tableSize,
   type Point,
@@ -556,6 +557,17 @@ function TableShape({
       })}
       {table.shape === "round" ? (
         <circle r={length / 2} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
+      ) : table.shape === "serpentine" ? (
+        <path d={serpentinePath(length / 2, width / 2)} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
+      ) : table.shape === "oval" ? (
+        <ellipse rx={length / 2} ry={width / 2} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
+      ) : table.shape === "half_moon" ? (
+        <path
+          d={`M ${-length / 2} ${width / 2} A ${length / 2} ${length / 2} 0 0 1 ${length / 2} ${width / 2} Z`}
+          fill={isOver ? "#efe6da" : "#f3efe8"}
+          stroke={stroke}
+          strokeWidth={selected ? 6 : 4}
+        />
       ) : (
         <rect
           x={-length / 2}

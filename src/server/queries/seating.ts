@@ -12,6 +12,7 @@ import type {
 } from "@/lib/seating/model";
 import type { BlockedChair } from "@/lib/seating/model";
 import type { RsvpStatus } from "@/lib/types/database";
+import { parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
 
 export type SeatingPlanData = {
   plan: SeatingPlan | null;
@@ -24,6 +25,12 @@ export type SeatingPlanData = {
   /** Chairs taken out of use (spec 53 Part I). */
   blocked: BlockedChair[];
   colour: ColourContext;
+  /** The wedding's table styles (spec 57 Part C), by name. */
+  styles: TableStyle[];
+  /** The event's live layout, null until anything is placed. */
+  layoutId: string | null;
+  /** The couple's final item counts for that layout. */
+  counts: StoredCount[];
 };
 
 /**
@@ -38,7 +45,7 @@ export type SeatingPlanData = {
 export const getSeatingPlan = cache(async (weddingId: string, eventId: string): Promise<SeatingPlanData> => {
   const supabase = await createClient();
 
-  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins] =
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, layout] =
     await Promise.all([
       supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
@@ -81,6 +88,8 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
         .order("sort_order"),
       supabase.from("seating_chairs_blocked").select("table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
       supabase.from("seating_checkins").select("guest_id, arrived_at, by_label").eq("wedding_id", weddingId).eq("event_id", eventId),
+      supabase.from("seating_table_styles").select("id, name, place, centre").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
+      supabase.from("seating_layouts").select("id").eq("wedding_id", weddingId).eq("event_id", eventId).eq("is_live", true).is("deleted_at", null).maybeSingle(),
     ]);
 
   for (const [what, result] of [
@@ -97,8 +106,22 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     ["questions", questions],
     ["blocked chairs", blocked],
     ["arrivals", checkins],
+    ["table styles", styles],
+    ["the layout", layout],
   ] as const) {
     if (result.error) throw new Error(`Could not load ${what}: ${result.error.message}`);
+  }
+
+  const layoutId = layout.data?.id ?? null;
+  let counts: StoredCount[] = [];
+  if (layoutId) {
+    const stored = await supabase
+      .from("seating_item_counts")
+      .select("item_key, final_count, suggested_chairs, suggested_guests, vendor_id, budget_item_id")
+      .eq("wedding_id", weddingId)
+      .eq("layout_id", layoutId);
+    if (stored.error) throw new Error(`Could not load item counts: ${stored.error.message}`);
+    counts = stored.data ?? [];
   }
 
   const questionRows = (questions.data ?? []).map((q) => ({
@@ -174,6 +197,9 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
       questions: questionRows,
       answers,
     },
+    styles: (styles.data ?? []).map((st) => ({ id: st.id, name: st.name, place: parseStylePlace(st.place), centre: parseStyleCentre(st.centre) })),
+    layoutId,
+    counts,
   };
 });
 

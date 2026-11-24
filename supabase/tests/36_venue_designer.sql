@@ -248,6 +248,12 @@ insert into public.seating_item_counts (wedding_id, layout_id, item_key, final_c
 values (:w1, (select id from public.seating_layouts where event_id = :reception and is_live), 'utensil', 12);
 insert into public.seating_share_links (wedding_id, event_id, token_hash) values (:w1, :reception, 'hash1');
 select pg_temp.expect((select count(*) from public.seating_table_styles), 1, 'a collaborator sees their style');
+-- The upsert setItemFinalCount makes: insert, then update the same row.
+insert into public.seating_item_counts (wedding_id, layout_id, item_key, final_count, suggested_chairs, suggested_guests)
+values (:w1, (select id from public.seating_layouts where event_id = :reception and is_live), 'utensil', 20, 12, 10)
+on conflict (layout_id, item_key) do update set final_count = excluded.final_count, suggested_chairs = excluded.suggested_chairs, suggested_guests = excluded.suggested_guests;
+select pg_temp.expect((select final_count from public.seating_item_counts where item_key = 'utensil'), 20, 'the final-count upsert updates the row');
+select pg_temp.expect((select count(*) from public.seating_item_counts where item_key = 'utensil'), 1, '… and does not add one');
 
 select set_config('request.jwt.claim.sub', :stranger, true);
 select pg_temp.expect((select count(*) from public.seating_table_styles where wedding_id = :w1), 0, 'the second account sees none of its styles');
