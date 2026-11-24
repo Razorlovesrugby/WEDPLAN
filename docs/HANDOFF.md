@@ -24,6 +24,28 @@
 
 ## Recent sessions
 
+**Session 60 (specs 51 and 54, built):** on branch `claude/pensive-mayer-b0d5sr`, asked to "build 51 and 54".
+Migrations **`0049` and `0050` must be applied to live** (nothing has been run against live).
+
+- **51, built whole.** `event_types` (nine seeded per wedding, couple's own, hide/never delete),
+  `events.type_id` + `asks_rsvp` / `has_seating` / `guest_facing` with backfill and checks;
+  `create_wedding()` seeds them; `v_guest_event_invites` drops non-guest-facing events and gains
+  `asks_rsvp`; `v_household_rsvp` and `v_wedding_stats` ignore events that don't ask. App: type
+  select and "What this event needs" switches on `/events`, an Event types panel, RSVP form and
+  reply card skip non-asking events (`RsvpData.invites` is asking-only, `eventInvites` is all),
+  `/guests` columns, `/seating` picker and page, seating export and the guest table reveal,
+  who's-invited. Seating with replies off seats everyone invited. **The backfill ran only on empty
+  tables in the SQL suite** (the seed inserts events after migrations; they take Other through a
+  default-type trigger), so it is untested against real events: check live before relying on it.
+- **54, first part.** See the spec's "Build status" for exactly what is and isn't built: links,
+  helper page `/d/[token]` with Start/Done/Undo/Late/Help/Can't do it/Note/steps/Got it/I'm here,
+  the couple's `/run-sheet/links` and print sheet, task content in the item editor. **Not built:**
+  photos, offline queue, PWA manifest, modules, groups/leads/open tasks, announcements,
+  reminders/push, cues.
+- **Verified:** typecheck, 1503 unit tests, `npm run build`, SQL suite (870 assertions). **Not
+  verified:** a browser (neither the new `/events` form nor `/d/` has been rendered), a real phone,
+  live Supabase, email sending. Next in the build order: 52, 53, 55 (all need the rest of 54).
+
 **Session 59 (specs 51–55, specs only):** event types, shot list, seating, day links and the
 on-the-day master, on branch `claude/events-feature-specs-pba8wb`. **Nothing built**: no
 migration, no app code. Every question in all five specs is answered (mostly "recommended").
@@ -60,23 +82,6 @@ The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13
 - **Check:** egress mid-cycle (~29 Nov); Pro is the fallback before 13 Dec.
 - **Verified:** typecheck, 1461 unit tests, build. **Not verified:** a browser, live egress, the
   script against real storage.
-
-**Session 57 (spec 49):** RSVP answers, built on branch `claude/funny-goldberg-4u6zsj` (no PR).
-The planner found `rsvp_answers` empty although guests had answered a "do you need transport?"
-question, and asked for the fix, a way to see answers, and a check of everything else:
-
-- **Bug fixed: no RSVP question answer was ever saved.** The form's upserts named columns whose
-  only unique indexes were partial, so Postgres rejected every one (42P10) and the action ignored
-  the error. Migration **`0047` must be applied to live** before answers save; answers given
-  before then are gone and guests must answer again. **Rule: check every write's `error`.**
-- **Checked:** all 24 upserts in `src/` against the migrated schema (only these two were broken);
-  three user-facing unchecked writes fixed (coach seat cancel, guest photo removal, seat swap).
-  Spec 49 §11 lists what was left best-effort and why.
-- **Results:** a summary under each question on `/questions` (Yes 36 · No 19 · Left blank ·
-  Not replied yet), each number linking to `/questions/[id]/answers?answer=…`; an answers CSV
-  (`/api/export/answers`, also in the zip).
-- **Verified:** typecheck, 1424 unit tests, build, SQL suite (777 assertions), sample render at
-  1280px and iPhone 13. **Not verified:** live Supabase, real data, a real phone.
 
 ---
 

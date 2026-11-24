@@ -54,6 +54,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 47 | `0047_rsvp_answers_upsert_keys.sql` | Plain unique indexes on `rsvp_answers (question_id, guest_id)` and `(question_id, household_id)`. The RSVP form's upserts need them; with only 0001's partial indexes every answer save failed (42P10) and nothing was stored. No new table. Spec 49. | 1 |
 | 48 | `0048_run_sheet_one_timeline.sql` | Run sheet becomes one timeline: stored `starts_at`/`ends_at`, optional `predecessor_id` + `offset_minutes`, `run_sheet_item_assignees` (four sources), save/shift/delete functions, overlap view. Replaces tracks, pinning, owner text and `vendor_id`. Spec 50. | 1 |
 | 49 | `0049_event_types_and_features.sql` | `event_types` (nine seeded built-ins per wedding), `events.type_id` + `asks_rsvp`/`has_seating`/`guest_facing` with backfill and checks, `seed_event_types()`, `create_wedding()` seeds them, the three RSVP views ignore events that don't ask. Spec 51. | 36, 44, 45, 48 |
+| 50 | `0050_day_links.sql` | `day_links`, `day_link_devices`, append-only `day_activity`, per-assignee task state and "Got it" columns, task content (instructions, address, critical, contact, steps/bring list, ticks), `day_contacts`, `day_info_sections`, phone and email on `people`. Spec 54, first part (see its build status). | 43, 44, 48 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
 import { zonedInputToUtc } from "@/lib/timezone";
-import { addMinutesIso, followerStart, MAX_GAP_MINUTES, spanMinutes, timesProblem } from "@/lib/run-sheet";
+import { addMinutesIso, followerStart, MAX_GAP_MINUTES, MAX_STEPS, spanMinutes, timesProblem } from "@/lib/run-sheet";
 import type { RunSheetAssigneeType } from "@/lib/types/database";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -84,6 +84,17 @@ export async function saveRunSheetItem(input: SaveRunSheetItemInput): Promise<Ac
   const problem = timesProblem(start, end, wedding.timezone);
   if (problem) return fail(problem);
 
+  const before = f.id
+    ? (
+        await supabase
+          .from("run_sheet_items")
+          .select("starts_at, ends_at, location")
+          .eq("id", f.id)
+          .eq("wedding_id", wedding.id)
+          .maybeSingle()
+      ).data
+    : null;
+
   const { data, error } = await supabase.rpc("save_run_sheet_item", {
     p_wedding_id: wedding.id,
     p_item_id: f.id ?? null,
@@ -100,8 +111,127 @@ export async function saveRunSheetItem(input: SaveRunSheetItemInput): Promise<Ac
   });
   if (error) return fail(error.message);
 
+  // "Got it" is cleared when the task's time or place changes (spec 54 §6.11).
+  if (before) {
+    const { data: after } = await supabase
+      .from("run_sheet_items")
+      .select("starts_at, ends_at, location")
+      .eq("id", data as string)
+      .eq("wedding_id", wedding.id)
+      .maybeSingle();
+    if (
+      after &&
+      (Date.parse(after.starts_at) !== Date.parse(before.starts_at) ||
+        Date.parse(after.ends_at) !== Date.parse(before.ends_at) ||
+        (after.location ?? "") !== (before.location ?? ""))
+    ) {
+      const { error: clearError } = await supabase
+        .from("run_sheet_item_assignees")
+        .update({ confirmed_at: null })
+        .eq("item_id", data as string)
+        .eq("wedding_id", wedding.id);
+      if (clearError) return fail(clearError.message);
+    }
+  }
+
   revalidate();
   return ok({ id: data as string });
+}
+
+const contentSchema = z.object({
+  instructions: z.string().trim().max(2000).optional(),
+  address: z.string().trim().max(300).optional(),
+  critical: z.boolean().optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  steps: z.array(z.string().trim().min(1).max(200)).max(MAX_STEPS, `At most ${MAX_STEPS} steps`).default([]),
+  bring: z.array(z.string().trim().min(1).max(200)).max(MAX_STEPS, `At most ${MAX_STEPS} things to bring`).default([]),
+});
+
+export type TaskContentInput = z.input<typeof contentSchema>;
+
+/**
+ * What a task holds for the people helping (spec 54 §10.1): instructions,
+ * address, critical, contact, steps and bring list. Saved right after the item
+ * itself, so unlike the item and its assignees it is not one transaction: a
+ * failure here leaves the item saved and says so.
+ *
+ * Steps are matched to existing ones by position, so a helper's ticks stay
+ * with the step they ticked when the wording is edited. "Got it" is cleared
+ * when the instructions or address change.
+ */
+export async function saveTaskContent(itemId: string, input: TaskContentInput): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const parsed = contentSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check the helper details");
+  const f = parsed.data;
+  const supabase = await createClient();
+
+  const { data: item, error: readError } = await supabase
+    .from("run_sheet_items")
+    .select("instructions, address")
+    .eq("id", itemId)
+    .eq("wedding_id", wedding.id)
+    .maybeSingle();
+  if (readError) return fail(readError.message);
+  if (!item) return fail("That item no longer exists");
+
+  const instructions = f.instructions || null;
+  const address = f.address || null;
+  const { error } = await supabase
+    .from("run_sheet_items")
+    .update({ instructions, address, critical: f.critical ?? false, contact_id: f.contactId ?? null })
+    .eq("id", itemId)
+    .eq("wedding_id", wedding.id);
+  if (error) return fail(`The item saved, but its helper details didn't: ${error.message}`);
+
+  if ((item.instructions ?? null) !== instructions || (item.address ?? null) !== address) {
+    const { error: clearError } = await supabase
+      .from("run_sheet_item_assignees")
+      .update({ confirmed_at: null })
+      .eq("item_id", itemId)
+      .eq("wedding_id", wedding.id);
+    if (clearError) return fail(clearError.message);
+  }
+
+  for (const kind of ["step", "bring"] as const) {
+    const wanted = kind === "step" ? f.steps : f.bring;
+    const { data: existing, error: existingError } = await supabase
+      .from("run_sheet_item_steps")
+      .select("id, text, sort_order")
+      .eq("item_id", itemId)
+      .eq("wedding_id", wedding.id)
+      .eq("kind", kind)
+      .order("sort_order");
+    if (existingError) return fail(existingError.message);
+    const rows = existing ?? [];
+
+    for (const [index, text] of wanted.entries()) {
+      const row = rows[index];
+      if (row) {
+        if (row.text !== text || row.sort_order !== index) {
+          const { error: updateError } = await supabase
+            .from("run_sheet_item_steps")
+            .update({ text, sort_order: index })
+            .eq("id", row.id)
+            .eq("wedding_id", wedding.id);
+          if (updateError) return fail(updateError.message);
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from("run_sheet_item_steps")
+          .insert({ wedding_id: wedding.id, item_id: itemId, kind, text, sort_order: index });
+        if (insertError) return fail(insertError.message);
+      }
+    }
+    const surplus = rows.slice(wanted.length).map((r) => r.id);
+    if (surplus.length > 0) {
+      const { error: deleteError } = await supabase.from("run_sheet_item_steps").delete().in("id", surplus).eq("wedding_id", wedding.id);
+      if (deleteError) return fail(deleteError.message);
+    }
+  }
+
+  revalidate();
+  return ok(undefined);
 }
 
 /**

@@ -11,6 +11,8 @@ import { getPeople } from "./people";
 export type RunSheetData = {
   /** Every item, in order of start, then end, then title. */
   items: RunSheetItem[];
+  /** Who a task can name as its contact (spec 54 §10.6). */
+  contacts: { id: string; label: string; phone: string }[];
   /** Everyone the picker can offer: collaborators, vendors, guests, people. Removed guests and people are left out. */
   options: RunSheetAssignee[];
 };
@@ -27,7 +29,7 @@ function assignee(type: RunSheetAssigneeType, id: string, label: string): RunShe
 export const getRunSheet = cache(async (weddingId: string, currentUserId?: string): Promise<RunSheetData> => {
   const supabase = await createClient();
 
-  const [itemsResult, assigneesResult, guestsResult, vendorsResult, collaborators, people] = await Promise.all([
+  const [itemsResult, assigneesResult, guestsResult, vendorsResult, collaborators, people, contentResult, stepsResult, contactsResult] = await Promise.all([
     supabase
       .from("v_run_sheet_items")
       .select("*")
@@ -45,12 +47,18 @@ export const getRunSheet = cache(async (weddingId: string, currentUserId?: strin
     supabase.from("vendors").select("id, name").eq("wedding_id", weddingId).order("name"),
     getCollaborators(weddingId),
     getPeople(weddingId),
+    supabase.from("run_sheet_items").select("id, instructions, address, critical, contact_id").eq("wedding_id", weddingId),
+    supabase.from("run_sheet_item_steps").select("item_id, kind, text, sort_order").eq("wedding_id", weddingId).order("sort_order"),
+    supabase.from("day_contacts").select("id, label, phone").eq("wedding_id", weddingId).order("sort_order"),
   ]);
 
   if (itemsResult.error) throw new Error(`Could not load the run sheet: ${itemsResult.error.message}`);
   if (assigneesResult.error) throw new Error(`Could not load who is on the run sheet: ${assigneesResult.error.message}`);
   if (guestsResult.error) throw new Error(`Could not load guests: ${guestsResult.error.message}`);
   if (vendorsResult.error) throw new Error(`Could not load vendors: ${vendorsResult.error.message}`);
+  if (contentResult.error) throw new Error(`Could not load task details: ${contentResult.error.message}`);
+  if (stepsResult.error) throw new Error(`Could not load task steps: ${stepsResult.error.message}`);
+  if (contactsResult.error) throw new Error(`Could not load day contacts: ${contactsResult.error.message}`);
 
   const options: RunSheetAssignee[] = [
     ...collaborators.map((c) => assignee("collaborator", c.user_id, collaboratorLabel(c, currentUserId))),
@@ -78,10 +86,23 @@ export const getRunSheet = cache(async (weddingId: string, currentUserId?: strin
     onItem.set(row.item_id, list);
   }
 
-  const items: RunSheetItem[] = ((itemsResult.data ?? []) as RunSheetItemView[]).map((item) => ({
-    ...item,
-    assignees: onItem.get(item.id) ?? [],
-  }));
+  const contentById = new Map((contentResult.data ?? []).map((c) => [c.id, c]));
+  const items: RunSheetItem[] = ((itemsResult.data ?? []) as RunSheetItemView[]).map((item) => {
+    const content = contentById.get(item.id);
+    const own = (stepsResult.data ?? []).filter((s) => s.item_id === item.id);
+    return {
+      ...item,
+      assignees: onItem.get(item.id) ?? [],
+      helper: {
+        instructions: content?.instructions ?? null,
+        address: content?.address ?? null,
+        critical: content?.critical ?? false,
+        contactId: content?.contact_id ?? null,
+        steps: own.filter((s) => s.kind === "step").map((s) => s.text),
+        bring: own.filter((s) => s.kind === "bring").map((s) => s.text),
+      },
+    };
+  });
 
-  return { items, options };
+  return { items, options, contacts: contactsResult.data ?? [] };
 });

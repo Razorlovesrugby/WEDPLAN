@@ -86,6 +86,13 @@ export default function PrivacyPage() {
             invitation was sent, when the link was first opened, and when you first replied.
           </li>
           <li>
+            <strong>Helping on the day.</strong> If the couple gave you a job on the day, your
+            own private link shows your jobs, who else is on them and the day&rsquo;s contacts.
+            It records the buttons you tap (Start, Done, Running late, asking for help, notes and
+            &ldquo;I&rsquo;m here&rdquo;) so the couple can see how the day is going. It never
+            tracks your location, and it stops working a week after the wedding.
+          </li>
+          <li>
             <strong>Email records.</strong> The address an invitation or reminder was sent to,
             and whether it was delivered or failed.
           </li>

@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addPerson } from "@/server/actions/people";
-import { deleteRunSheetItem, saveRunSheetItem } from "@/server/actions/run-sheet";
+import { deleteRunSheetItem, saveRunSheetItem, saveTaskContent } from "@/server/actions/run-sheet";
 import { formatTime } from "@/lib/format";
-import { addMinutesIso, assigneeKey, spanMinutes, type RunSheetAssignee, type RunSheetItem } from "@/lib/run-sheet";
+import { addMinutesIso, assigneeKey, linesOf, MAX_STEPS, spanMinutes, type RunSheetAssignee, type RunSheetItem } from "@/lib/run-sheet";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
 
 const TYPE_LABEL: Record<RunSheetAssignee["type"], string> = {
@@ -27,6 +27,7 @@ export function RunSheetItemEditor({
   allItems,
   options,
   events,
+  contacts,
   timeZone,
   canAddPeople,
 }: {
@@ -38,6 +39,7 @@ export function RunSheetItemEditor({
   allItems: RunSheetItem[];
   options: RunSheetAssignee[];
   events: { id: string; name: string }[];
+  contacts: { id: string; label: string; phone: string }[];
   timeZone: string;
   canAddPeople: boolean;
 }) {
@@ -59,6 +61,13 @@ export function RunSheetItemEditor({
   const [search, setSearch] = useState("");
   const [extra, setExtra] = useState<RunSheetAssignee[]>([]);
   const [newPerson, setNewPerson] = useState("");
+  // What the people helping see (spec 54 §10.1), separate from the private notes.
+  const [instructions, setInstructions] = useState("");
+  const [address, setAddress] = useState("");
+  const [critical, setCritical] = useState(false);
+  const [contactId, setContactId] = useState("");
+  const [stepsText, setStepsText] = useState("");
+  const [bringText, setBringText] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -82,6 +91,12 @@ export function RunSheetItemEditor({
     setSearch("");
     setNewPerson("");
     setExtra([]);
+    setInstructions(item?.helper.instructions ?? "");
+    setAddress(item?.helper.address ?? "");
+    setCritical(item?.helper.critical ?? false);
+    setContactId(item?.helper.contactId ?? "");
+    setStepsText((item?.helper.steps ?? []).join("\n"));
+    setBringText((item?.helper.bring ?? []).join("\n"));
     setError(null);
   }, [open, item, initialStartsAt, timeZone]);
 
@@ -157,7 +172,16 @@ export function RunSheetItemEditor({
           .map((o) => ({ type: o.type, id: o.id })),
       });
       if (!result.ok) return setError(result.error);
+      const content = await saveTaskContent(result.data.id, {
+        instructions,
+        address,
+        critical,
+        contactId: contactId || null,
+        steps: linesOf(stepsText),
+        bring: linesOf(bringText),
+      });
       router.refresh();
+      if (!content.ok) return setError(content.error);
       onClose();
     });
   }
@@ -320,6 +344,51 @@ export function RunSheetItemEditor({
           Notes
           <textarea className="field mt-1" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
         </label>
+
+        <fieldset className="space-y-3 rounded border border-line p-3 text-sm">
+          <legend className="px-1">For the people helping</legend>
+          <p className="text-xs text-muted">
+            Shown on their day link. Your notes above stay private.
+          </p>
+          <label className="block">
+            Instructions
+            <textarea
+              className="field mt-1"
+              rows={3}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              maxLength={2000}
+              placeholder="Two per household, keep a few for latecomers"
+            />
+          </label>
+          <label className="block">
+            Steps (one per line, up to {MAX_STEPS})
+            <textarea className="field mt-1" rows={3} value={stepsText} onChange={(e) => setStepsText(e.target.value)} />
+          </label>
+          <label className="block">
+            What to bring (one per line, up to {MAX_STEPS})
+            <textarea className="field mt-1" rows={2} value={bringText} onChange={(e) => setBringText(e.target.value)} />
+          </label>
+          <label className="block">
+            Address or map link (for Directions)
+            <input className="field mt-1" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />
+          </label>
+          <label className="block">
+            Who to ask if anything&rsquo;s wrong
+            <select className="field mt-1" value={contactId} onChange={(e) => setContactId(e.target.value)}>
+              <option value="">No one</option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label} ({c.phone})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={critical} onChange={(e) => setCritical(e.target.checked)} />
+            Must not slip (helpers see a tag)
+          </label>
+        </fieldset>
 
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={guestVisible} onChange={(e) => setGuestVisible(e.target.checked)} />

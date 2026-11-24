@@ -1,6 +1,6 @@
 # Feature spec: Day links — a live page for everyone with a job on the day
 
-**Status: answered, not built.** Asked for as a
+**Status: first part built (session 60, migration 0050); the rest is not built.** See "Build status" below. Asked for as a
 spec (2026-11-23). The first two rounds are answered (§15, §17). A pass
 against the leading event-staffing and day-of tools (§18) added
 confirmations, check-in, announcements, open tasks, good-to-know, reminders
@@ -843,3 +843,16 @@ Every question took its recommendation.
 9. **The day-before email:** on by default for helpers with an email, sent at
    6 pm in the wedding's timezone by the same `pg_cron` job (§6.15). The
    couple can turn it off.
+
+## Build status (session 60)
+
+**Built** (typechecked, unit-tested, SQL-suite tested, `npm run build`; never opened in a browser or run on live):
+
+- Migration `0050`: day links, devices, append-only activity, per-assignee state and "Got it", task content (instructions, address, critical, contact, steps, bring list, ticks), day contacts, Good to know, phone and email on `people`.
+- `src/lib/day-links/` (`state.ts`, `my-day.ts`, `tint.ts`) with tests; `src/server/day-links/` (token resolve with the shared throttle, the link's scoped read).
+- Couple's side: `/run-sheet/links` (make, copy, email, new link, turn off, phone and email in place, "make links for everyone", day contacts, Good to know, answer help requests), the print sheet with QR codes, and a "For the people helping" section in the run sheet item editor.
+- Helper's side `/d/[token]`: first open, My day (Now/Next up/Earlier today, help banner, I'm here, Got it, contacts, Good to know), the task screen with steps and bring list, Start/Done/Undo, Running late, Need help, Can't do it, Add a note (a question before the day), the 15-second poll, the Changed badge, before/after-the-day phases, the wedding's accent as tint, dark mode. Privacy page names it.
+
+**Not built yet** (each still as specced): reference photos and helper photos (§6.10, step 5a); the offline queue and its strip (§6.8; a tap with no signal shows an error and is not queued); the home-screen manifest and icon (§5.7); modules and their registry (§7); groups, leads, open tasks, handing-over suggestions, the People view, suggested tasks, "Tasks on the day" on guest/vendor/person pages, assign-several (§10.2–§10.4); the assignee chip's menu on the run sheet (the Day links screen does its job) and "See what they see"; announcements (§6.13, with spec 55); the day-before email and web push, and the `pg_cron` script (§6.15); cues (§6.16); `opens_module`, `photo_on_done` and the other columns for the unbuilt parts; reordering Good to know sections.
+
+**Deviations:** saving a task's helper content is a second call after the item's own save, not one transaction (a failure says the item saved but the details didn't). Audit rows for a helper's taps show `actor_kind = 'public'` but not the link's label. "Changed" shows the badge without "was 1:45, now 2:00" (previous times aren't stored). The `/d/` page sets `no-referrer` and is `force-dynamic`.

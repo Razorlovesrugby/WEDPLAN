@@ -27,6 +27,7 @@ type EventOption = { id: string; name: string };
 export function RunSheetView({
   items,
   options,
+  contacts,
   events,
   timeZone,
   weddingDate,
@@ -34,6 +35,7 @@ export function RunSheetView({
 }: {
   items: RunSheetItem[];
   options: RunSheetAssignee[];
+  contacts: { id: string; label: string; phone: string }[];
   events: EventOption[];
   timeZone: string;
   weddingDate: string | null;
@@ -198,6 +200,7 @@ export function RunSheetView({
         initialStartsAt={editor?.startsAt}
         allItems={items}
         options={options}
+        contacts={contacts}
         events={events}
         timeZone={timeZone}
         canAddPeople={canAddPeople}

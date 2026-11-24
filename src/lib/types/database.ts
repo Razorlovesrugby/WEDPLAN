@@ -630,6 +630,9 @@ export type PersonRow = {
   sort_order: number;
   user_id: string | null;
   access: PersonAccess;
+  /** Spec 54 §10.7: so a helper can be called, texted and emailed their link. */
+  phone: string | null;
+  email: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -1304,6 +1307,11 @@ export type RunSheetItemRow = {
   ends_at: string;
   /** True for an item the migration had to give a time; clears when saved. */
   time_estimated: boolean;
+  /** Spec 54 §10.1: what the assignees see, separate from the couple's private `notes`. */
+  instructions: string | null;
+  address: string | null;
+  critical: boolean;
+  contact_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1320,6 +1328,95 @@ export type RunSheetItemAssigneeRow = {
   vendor_id: string | null;
   person_id: string | null;
   created_at: string;
+  /** Spec 54 §6.4: this assignee's own part of the task. */
+  state: TaskState;
+  state_at: string | null;
+  started_at: string | null;
+  done_at: string | null;
+  late_minutes: number | null;
+  handed_back_reason: string | null;
+  seen_at: string | null;
+  confirmed_at: string | null;
+}
+
+export type TaskState = "todo" | "started" | "done" | "handed_back";
+
+export type DayLinkRow = {
+  id: string;
+  wedding_id: string;
+  vendor_id: string | null;
+  guest_id: string | null;
+  person_id: string | null;
+  label: string;
+  token_hash: string;
+  token_encrypted: string;
+  modules: string[];
+  module_config: Record<string, unknown>;
+  expires_at: string;
+  revoked_at: string | null;
+  arrived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DayLinkDeviceRow = {
+  link_id: string;
+  wedding_id: string;
+  device_id: string;
+  first_opened_at: string;
+  last_seen_at: string;
+}
+
+export type DayActivityRow = {
+  id: string;
+  wedding_id: string;
+  link_id: string | null;
+  vendor_id: string | null;
+  guest_id: string | null;
+  person_id: string | null;
+  item_id: string | null;
+  kind: string;
+  payload: Record<string, unknown>;
+  tapped_at: string;
+  received_at: string;
+  answered_at: string | null;
+  answered_by: string | null;
+  answer: string | null;
+}
+
+export type DayContactRow = {
+  id: string;
+  wedding_id: string;
+  label: string;
+  phone: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export type RunSheetItemStepRow = {
+  id: string;
+  wedding_id: string;
+  item_id: string;
+  kind: "step" | "bring";
+  text: string;
+  sort_order: number;
+}
+
+export type RunSheetStepTickRow = {
+  wedding_id: string;
+  step_id: string;
+  assignee_id: string;
+  ticked_at: string;
+}
+
+export type DayInfoSectionRow = {
+  id: string;
+  wedding_id: string;
+  heading: string;
+  body: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1916,7 +2013,31 @@ export type Database = {
         "id" | Timestamps | "timezone" | "reminder_window_days" | "slug"
       >;
       collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
-      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access">;
+      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access" | "phone" | "email">;
+      day_links: Table<
+        DayLinkRow,
+        "id" | Timestamps | "modules" | "module_config" | "revoked_at" | "arrived_at"
+      >;
+      day_link_devices: Table<DayLinkDeviceRow, "first_opened_at" | "last_seen_at">;
+      day_activity: Table<
+        DayActivityRow,
+        | "id"
+        | "link_id"
+        | "vendor_id"
+        | "guest_id"
+        | "person_id"
+        | "item_id"
+        | "payload"
+        | "tapped_at"
+        | "received_at"
+        | "answered_at"
+        | "answered_by"
+        | "answer"
+      >;
+      day_contacts: Table<DayContactRow, "id" | "created_at" | "sort_order">;
+      run_sheet_item_steps: Table<RunSheetItemStepRow, "id" | "sort_order">;
+      run_sheet_step_ticks: Table<RunSheetStepTickRow, "ticked_at">;
+      day_info_sections: Table<DayInfoSectionRow, "id" | Timestamps | "body" | "sort_order">;
       events: Table<
         EventRow,
         | "id"
@@ -2142,12 +2263,25 @@ export type Database = {
         | "offset_minutes"
         | "guest_visible"
         | "sort_order"
-        | "time_estimated",
+        | "time_estimated"
+        | "instructions"
+        | "address"
+        | "critical"
+        | "contact_id",
         RunSheetItemRelationships
       >;
       run_sheet_item_assignees: Table<
         RunSheetItemAssigneeRow,
-        "id" | "created_at",
+        | "id"
+        | "created_at"
+        | "state"
+        | "state_at"
+        | "started_at"
+        | "done_at"
+        | "late_minutes"
+        | "handed_back_reason"
+        | "seen_at"
+        | "confirmed_at",
         RunSheetItemAssigneeRelationships
       >;
       seating_plans: Table<

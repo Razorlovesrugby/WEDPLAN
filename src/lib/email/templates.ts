@@ -352,3 +352,26 @@ export function partnerInviteEmail(options: { weddingName: string; inviterName: 
 
   return { subject: `You've been added to ${weddingName} on WedPlan`, text, html };
 }
+
+/** Spec 54 §10.5: a helper's day link, sent by the couple. Says what it is and what it shows. */
+export function dayLinkEmail(options: { weddingName: string; helperName: string; url: string }) {
+  const { weddingName, helperName, url } = options;
+  const text = [
+    `Hi ${helperName},`,
+    "",
+    `Here is your link for ${weddingName}. It shows your jobs on the day, with a Start and Done button for each, and a way to ask for help.`,
+    "",
+    url,
+    "",
+    "It is only for you, so please don't share it. It stops working a week after the wedding.",
+  ].join("\n");
+
+  const html = layout(`
+    <p style="font-size:18px;margin:0 0 12px">Hi ${escapeHtml(helperName)},</p>
+    <p>Here is your link for ${escapeHtml(weddingName)}. It shows your jobs on the day, with a Start and Done button
+    for each, and a way to ask for help.</p>
+    ${button(url, "See my jobs")}
+    <p style="font-size:13px;color:#6b6560">It&rsquo;s only for you, so please don&rsquo;t share it. It stops working a week after the wedding.</p>`);
+
+  return { subject: `Your jobs for ${weddingName}`, text, html };
+}

@@ -35,7 +35,26 @@ export type RunSheetAssignee = {
   label: string;
 };
 
-export type RunSheetItem = RunSheetItemView & { assignees: RunSheetAssignee[] };
+/** What a task holds for the people helping (spec 54 §10.1). Separate from the couple's private notes. */
+export type HelperContent = {
+  instructions: string | null;
+  address: string | null;
+  critical: boolean;
+  contactId: string | null;
+  steps: string[];
+  bring: string[];
+};
+
+export type RunSheetItem = RunSheetItemView & { assignees: RunSheetAssignee[]; helper: HelperContent };
+
+/** Up to 12 steps and 12 bring items per task (§11). One per line, blanks dropped. */
+export const MAX_STEPS = 12;
+export function linesOf(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 // ---------------------------------------------------------------------------
 // Overlap

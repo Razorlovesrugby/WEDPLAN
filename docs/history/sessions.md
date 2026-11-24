@@ -4,6 +4,23 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 57 (spec 49):** RSVP answers, built on branch `claude/funny-goldberg-4u6zsj` (no PR).
+The planner found `rsvp_answers` empty although guests had answered a "do you need transport?"
+question, and asked for the fix, a way to see answers, and a check of everything else:
+
+- **Bug fixed: no RSVP question answer was ever saved.** The form's upserts named columns whose
+  only unique indexes were partial, so Postgres rejected every one (42P10) and the action ignored
+  the error. Migration **`0047` must be applied to live** before answers save; answers given
+  before then are gone and guests must answer again. **Rule: check every write's `error`.**
+- **Checked:** all 24 upserts in `src/` against the migrated schema (only these two were broken);
+  three user-facing unchecked writes fixed (coach seat cancel, guest photo removal, seat swap).
+  Spec 49 §11 lists what was left best-effort and why.
+- **Results:** a summary under each question on `/questions` (Yes 36 · No 19 · Left blank ·
+  Not replied yet), each number linking to `/questions/[id]/answers?answer=…`; an answers CSV
+  (`/api/export/answers`, also in the zip).
+- **Verified:** typecheck, 1424 unit tests, build, SQL suite (777 assertions), sample render at
+  1280px and iPhone 13. **Not verified:** live Supabase, real data, a real phone.
+
 **Session 56 (spec 48):** the phone experience, built on branch `claude/vibrant-bohr-xd2w8t`
 (no PR). The planner said the live app was poor on a phone (zooming, sideways scroll, Guests with
 no phone view, a bad bottom bar) and asked for it fixed, Apple-style. Read the spec's §2–§4:
