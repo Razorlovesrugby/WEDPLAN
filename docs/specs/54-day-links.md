@@ -1,8 +1,10 @@
 # Feature spec: Day links — a live page for everyone with a job on the day
 
-**Status: answered, not built.** Asked for as a spec (2026-11-23). Every
-question is answered (§15). Nothing is built until the planner says to build
-it (see `docs/specs/README.md`).
+**Status: answered, not built, with five new questions.** Asked for as a
+spec (2026-11-23). The first round is answered (§15). Creating and assigning
+tasks (§10) was added on 2026-11-24 and its questions are in §17. Nothing is
+built until they are answered and the planner says to build it (see
+`docs/specs/README.md`).
 
 **Depends on:** spec 9 (share-link token pattern), spec 32 (audit log),
 spec 34 (polling), spec 39 (`people`), spec 48 (phone), spec 50 (run sheet
@@ -23,6 +25,9 @@ module).
    day (spec 55).
 5. The design stays open to front ends made for one kind of person, like the
    photographer's: new ones plug in without rebuilding the link.
+6. The couple creates tasks on the run sheet, assigns them to people, and
+   says exactly what each task is: what to do, where, with whom, what to
+   bring, and who to ask.
 
 ## 2. Story
 
@@ -198,8 +203,12 @@ From top to bottom:
    - the title;
    - the time ("1:45 – 2:00 · ends in 12 min", or "starts in 25 min");
    - the location, which opens the phone's maps app;
-   - who else is on it (names only);
-   - the couple's notes for the task;
+   - who else is on it (names only), and "You're leading this" when they are
+     the task's lead (§10.2);
+   - the task's **instructions** (§10.1), never the couple's private notes;
+   - its **steps**, as a checklist they tick (§6.3), and **what to bring**;
+   - the couple's photos and files (§6.10);
+   - the task's own contact, when it has one ("Ask Jo if anything's wrong");
    - the **primary button** (§6.4);
    - a row of three secondary buttons: **Running late**, **Need help**,
      **More** (which holds **Can't do it** and **Add a note**).
@@ -216,6 +225,13 @@ A task the couple changed since the person last saw it carries a badge:
 
 Opening any task shows the same card as Now, full screen, with its buttons.
 **Back** returns to My day.
+
+- **Steps** are a checklist. Each helper ticks their own; ticking every step
+  doesn't mark the task done, and Done doesn't tick the steps. A step tick is
+  an activity row (§9), so the master shows "2 of 4 steps".
+- **What to bring** is a plain list, with no ticks.
+- A task in **critical** (§10.1) shows a small "Must not slip" tag, so the
+  helper knows the master is watching it closely.
 
 ### 6.4 The buttons
 
@@ -256,8 +272,10 @@ the planner ✓", with **Undo** on it.
 ### 6.5 Before and after the day
 
 - **Before the day:** the link works as soon as it is made. My day shows
-  "Saturday 6 March" and the jobs, with the buttons disabled and "You can
-  start these on the day".
+  "Saturday 6 March" and the jobs, with Start and Done disabled and "You can
+  start these on the day". **Can't do it** already works, so the couple
+  learns early that someone can't make a task, and the master's readiness
+  check (spec 55 §7) lists it.
 - **The day** starts at midnight before the first event, in the wedding's
   timezone. From then on the buttons work.
 - **After the day:** "Thanks for helping. This link stops working on 13
@@ -380,6 +398,7 @@ shows it in the help banner.
 | --- | --- | --- |
 | `opened` | the link is first opened on a device | none |
 | `started`, `done`, `undone` | §6.4's primary button, and its Undo | the item |
+| `step_done`, `step_undone` | a step ticked or unticked (§6.3) | the item, the step |
 | `late` | Running late | the item, minutes |
 | `help` | Need help | the item (or none), reason, text |
 | `handed_back` | Can't do it | the item, reason |
@@ -392,21 +411,93 @@ row also has `answered_at`, `answered_by` and `answer` for the master's reply.
 A replayed offline tap can never overwrite a newer state: a state change is
 applied only if its `tapped_at` is later than the state's own.
 
-## 10. Making and sending links (the couple)
+## 10. The couple's side: tasks, people and links
 
-- **On the run sheet** (spec 50), each assignee chip shows their link state
-  (no link, made, opened) and their part's state on that item. The chip's
-  menu has **Make their link**, **Copy link**, **Show QR code**, **Send by
-  email** (when an address is known) and **Turn off**.
+Everything here is done by the couple, or a planner login where spec 39
+allows it. It extends spec 50's run sheet editor and screens; nothing there
+is replaced.
+
+### 10.1 What a task holds
+
+Spec 50 gives every run sheet item a title, start and end, "starts after",
+location, notes, an event label, assignees and the guest-visible flag. For
+helpers a task also holds:
+
+| Field | What it is | Who sees it |
+| --- | --- | --- |
+| **Instructions** | what to do, in a few lines ("Two per household, keep a few for latecomers") | the assignees, on their link |
+| **Notes** (spec 50's) | the couple's private notes about the task | the couple and planner only |
+| **Steps** | an ordered checklist, up to 12 ("Collect the boxes from Mere's car", "Set them out at the gate") | the assignees, who tick them |
+| **What to bring** | a short list ("Programmes, the sign, tape") | the assignees |
+| **Where** | spec 50's location, plus an optional address or map link for Directions | the assignees |
+| **Contact for this task** | one of the day contacts (§10.6), or any assignee on the task | the assignees, as a call button |
+| **Photos and files** | up to 10 (§6.10) | the assignees |
+| **Ask for a photo when done** | §6.10 | the assignees |
+| **Critical** | the master raises "not started" at the start time instead of 5 minutes after, and in red (spec 55 §5.1) | the couple; helpers see "Must not slip" |
+| **Opens** | a module the task leads to, such as the shot list (§6.7) | the assignees |
+
+Instructions and notes are separate on purpose: what the couple writes for
+themselves never reaches a helper.
+
+### 10.2 Assigning
+
+- **From the task:** spec 50's assignee picker (one search over collaborators,
+  guests, vendors and people, multi-select, "Both of us", and "add a person"
+  for someone in none of them). Each chosen assignee shows as a chip, with
+  their link state (§10.5).
+- **A lead:** when a task has more than one assignee, one can be marked
+  **lead** from their chip's menu. The lead sees "You're leading this"; the
+  others see "Tama is leading this". The lead is who the master calls first.
+- **Groups:** the couple can save a **group** ("Ushers": Sione, Tama, Rangi,
+  Hemi) and pick it in the assignee picker. Picking a group adds each member
+  as their own assignee, so each has their own Done (see Q2).
+- **From the person:** each guest, vendor and person page has **Tasks on the
+  day**: their tasks in time order, **+ Assign a task** (pick an existing
+  task or create one with this person already on it), and remove.
+- **Several at once:** in spec 50's list view, tasks can be selected and
+  **Assign to…** adds the same people to all of them.
+- **Clashes:** spec 50's soft warning when one person is on two overlapping
+  tasks stays, and is shown in the picker before they are added ("Sione is
+  seating guests then").
+
+### 10.3 The People view
+
+A third view on `/run-sheet`, beside Timeline and List: one row per person
+with a task, their tasks laid along the day, so gaps and clashes show at a
+glance. Each row shows their link state and how many tasks they have. People
+with no task aren't listed; **Unassigned tasks** sits at the top while there
+are any.
+
+### 10.4 Suggested tasks
+
+**+ Task from a suggestion** offers common helper tasks with instructions
+and steps already written, to edit before adding: hand out programmes, seat
+guests for the ceremony, ring bearer, guestbook table, gift table, run the
+music for the walk in, family photo wrangler (linked to the shot list),
+signing witnesses, pack down and load the cars, return hired items. The list
+is code, not data (see Q4).
+
+### 10.5 Links
+
+- Each assignee chip shows their link state (no link, made, opened) and their
+  part's state on that task. The chip's menu has **Make their link**, **Copy
+  link**, **Show QR code**, **Send by email** (when an address is known),
+  **See what they see** (their link in a read-only preview, no taps
+  recorded) and **Turn off**.
+- The first time someone is assigned a task and has no link, the chip offers
+  **Make their link** (see Q5).
 - **Day links** (`/run-sheet/links`) lists everyone assigned anything, one
   row each: their link state, last opened, their modules (switch any offered
   module on or off), and **Make links for everyone without one**.
-- **Day contacts**, on the same screen: who appears as a contact on every link
-  (the planner, the venue coordinator, a family member), each with a phone
-  number.
 - **Print sheet:** one card per person with their name, their jobs and a QR
   code for their link (the `qrcode` package), for handing out on the day.
 - **Guest and vendor pages** show the person's link state and the same menu.
+
+### 10.6 Day contacts
+
+On the Day links screen: who appears as a contact on every link (the
+planner, the venue coordinator, a family member), each with a phone number.
+A task's own contact (§10.1) is picked from these or from its assignees.
 
 ## 11. Data
 
@@ -442,6 +533,23 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
   action (`requestDayPhotoUpload`) for one path under the link's own prefix,
   at most 10 MB before shrinking, images only.
 - `day_contacts (id, wedding_id, label, phone, sort_order)`.
+- `run_sheet_items` gains `instructions text null`, `address text null`,
+  `critical boolean not null default false` and `contact_id uuid null` (a
+  day contact) or `contact_assignee_id uuid null` (an assignee on this
+  task), at most one set.
+- `run_sheet_item_steps (id, wedding_id, item_id, kind text check (kind in
+  ('step','bring')), text, sort_order)`, at most 12 steps and 12 bring items
+  per task (checked in the action).
+- `run_sheet_step_ticks (wedding_id, step_id, assignee_id, ticked_at,
+  primary key (step_id, assignee_id))`.
+- `run_sheet_item_assignees.is_lead boolean not null default false`, with a
+  partial unique index on `(item_id) where is_lead`.
+- `helper_groups (id, wedding_id, name, sort_order)` and
+  `helper_group_members (id, wedding_id, group_id, collaborator_user_id null,
+  guest_id null, vendor_id null, person_id null)`, exactly one set, the same
+  shape as `run_sheet_item_assignees`.
+- Saving a task with its steps and assignees stays **one transaction**,
+  through spec 50's save function, extended.
 - RLS on every new table keyed to `wedding_id`; planner access per spec 39's
   registry; audit triggers on `day_links`, `day_contacts` and the new
   assignee columns (spec 32). `day_activity` is its own record and is not
@@ -483,6 +591,12 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
   is checked on a real phone. Each checks the Supabase
   `error`.
 - `src/server/queries/day-links.ts`, wrapped in `cache()`.
+- `src/lib/run-sheet/suggested-tasks.ts`: §10.4's list.
+- `src/server/actions/run-sheet.ts` extended: instructions, steps, bring
+  list, contact, critical, lead, groups, assign from a person, assign several.
+  The link side adds `tickStep` and `untickStep`.
+- The People view on `/run-sheet`, Tasks on the day on guest, vendor and
+  person pages, and the group editor.
 - `src/components/day-link/`: the shell, Now card, task row, button sheets,
   confirmation, offline strip and tab bar, shared by every module.
 - Screens: `/d/[token]`, `/run-sheet/links`, the print sheet, and the chip
@@ -524,6 +638,9 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
    assignee, the one-of-three check, the key patterns, the state check, audit
    firing).
 2. `src/lib/day-links/*` and tests.
+2a. Tasks (§10.1–§10.4): instructions, steps, bring list, contact, critical,
+   lead, groups, Tasks on the day, assign several, the People view and
+   suggested tasks, all in the couple's run sheet before any link exists.
 3. Making, copying, revoking and emailing links: the run sheet chip and the
    Day links screen.
 4. `/d/[token]`: the shell, first open, My day, the Now card, the task
@@ -538,3 +655,24 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 9. Typecheck, tests, SQL suite, build. On a real phone: open a link, start
    and finish a task, ask for help and see the answer, go offline, tap,
    reconnect.
+
+## 17. Open questions (tasks and assigning)
+
+**Q1. Existing notes.** Run sheet items already have notes, written before
+helpers could see anything. Keep them private and start instructions empty
+(recommended), or copy each item's notes into its instructions?
+
+**Q2. Groups.** Picking a group adds its members one by one, and later changes
+to the group don't touch tasks already assigned (recommended: simple, and
+each person keeps their own Done). Or does a task stay linked to the group,
+so adding an usher to "Ushers" puts them on every usher task?
+
+**Q3. Handing back before the day.** Let helpers tap Can't do it as soon as
+they have the link (recommended, §6.5), or only on the day?
+
+**Q4. Suggested tasks.** A fixed list in the app (recommended), or should
+the couple be able to save their own tasks as reusable suggestions?
+
+**Q5. Making links.** Offer "Make their link" on first assignment
+(recommended), make it automatically, or only from the Day links screen?
+

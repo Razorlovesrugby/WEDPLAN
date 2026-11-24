@@ -55,7 +55,7 @@ A stack of cards, newest first. Each one stays until it is dealt with:
 | --- | --- | --- |
 | **Help** (red) | a helper taps Need help | **Answer** (quick answers: "On my way", "Sorting it", "Call me", or a line of text), **Call**, **I'll take it** (assigns the task to the person answering) |
 | **Handed back** (amber) | a helper taps Can't do it | **Reassign** (pick anyone, who sees it on their link at once), **I'll do it** |
-| **Not started** (amber) | a task is 5 minutes past its start and nobody on it has tapped Start | **Call** them, **Mark started**, **Dismiss** |
+| **Not started** (amber; red for a critical task) | a task is 5 minutes past its start (a critical task: at its start, spec 54 §10.1) and nobody on it has tapped Start | **Call** them, **Mark started**, **Dismiss** |
 | **Running late** (amber) | a helper reports late | **Shift the schedule** (§5.4), **OK** |
 
 A helper's photo (spec 54 §6.10) shows on its alert as a thumbnail that
@@ -71,7 +71,8 @@ and plays a short sound, unless the viewer has turned alerts off (§6).
 ### 5.2 Now
 
 What is happening right now across the run sheet, as cards. Each card shows
-the item's title, its time with "ends in 12 min", its location, and each
+the item's title, its time with "ends in 12 min", its location, its step
+progress ("2 of 4 steps", spec 54 §6.3), the lead first, and each
 assignee's chip with their state (to do, on it, done, late +10, handed back,
 help) in spec 54's state colours and words. Tapping a chip offers **Call**,
 **Text** and **Open their link** (to see what they see).
