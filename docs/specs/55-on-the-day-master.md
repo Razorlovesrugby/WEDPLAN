@@ -1,9 +1,10 @@
 # Feature spec: The on-the-day master
 
-**Status: proposed, not built.** Asked for as a spec (2026-11-23), as the
-other half of spec 54. The open questions are in §11. Nothing is built until
-they are answered and the planner says to build it (see
-`docs/specs/README.md`).
+**Status: answered, not built.** Asked for as a spec (2026-11-23), as the
+other half of spec 54. Every question is answered (§11); announcements, Go
+cues, escalation and the wider readiness check were added on 2026-11-24 from
+spec 54 §18's pass over the leading tools. Nothing is built until the planner
+says to build it (see `docs/specs/README.md`).
 
 **Depends on:** spec 54 (day links, whose writes this shows), spec 50 (run
 sheet, including items that start when another ends), spec 39 (planner
@@ -68,6 +69,11 @@ feed (§5.5) shows who dealt with what.
 When a new Help alert arrives while the master is open, the phone vibrates
 and plays a short sound, unless the viewer has turned alerts off (§6).
 
+**Escalation:** a Help alert nobody has answered after 3 minutes turns
+"Waiting 3 min", sounds again for everyone with the master open, alerts
+switched off or not, and moves to the top. A handed-back task nobody has
+taken 15 minutes before it starts does the same.
+
 ### 5.2 Now
 
 What is happening right now across the run sheet, as cards. Each card shows
@@ -76,6 +82,11 @@ progress ("2 of 4 steps", spec 54 §6.3), the lead first, and each
 assignee's chip with their state (to do, on it, done, late +10, handed back,
 help) in spec 54's state colours and words. Tapping a chip offers **Call**,
 **Text** and **Open their link** (to see what they see).
+
+A **cue** (spec 54 §6.16) shows a countdown from 5 minutes before its start
+and a large **Go** button. Go marks the moment, tells its assignees' links
+"Go now", and writes a `cue_go` activity row. Go can be tapped early or late;
+the timeline records when it actually happened.
 
 ### 5.3 Up next
 
@@ -122,9 +133,25 @@ A module declares its master card in spec 54's registry, beside its tabs.
 
 ### 5.7 People
 
-Everyone with a day link: whether they've opened it, what they're on now, and
-their state. Each has **Call** and **Text**. Before the day, anyone who
-hasn't opened their link is listed first.
+Everyone with a day link: whether they've opened it, whether they've tapped
+I'm here and when (spec 54 §6.12), what they're on now, and their state. Each
+has **Call** and **Text**. Before the day, anyone who hasn't opened their
+link is listed first. On the day, anyone with a task in the next 30 minutes
+who hasn't tapped I'm here is listed first, in amber.
+
+### 5.8 Announcements
+
+**Announce** sits at the top of the master. It asks for:
+
+1. **Who:** everyone with a link, a group (spec 54 §10.2), or one person.
+2. **What:** a line or two ("Ceremony running 10 minutes late").
+3. **Important:** on or off. Important ones stay pinned on helpers' links
+   until they tap OK, got it.
+
+Sent announcements list under Announce with "Seen by 7 of 10" and, for
+important ones, "OK from 5 of 10", each count opening the names. A shift of
+the schedule (§5.4) offers to announce it ("Shifted 6 items by 10 minutes"),
+pre-filled, to everyone whose tasks moved.
 
 ## 6. Alerts per viewer
 
@@ -142,15 +169,21 @@ hasn't opened their link is listed first.
   - items with nobody assigned;
   - assignees without a day link;
   - links made but never opened;
-  - day contacts not set.
+  - tasks not yet confirmed (spec 54 §6.11), with "Confirmed 8 of 10";
+  - tasks handed back before the day, with Reassign;
+  - open tasks with places still free (spec 54 §10.2);
+  - questions from helpers, with Answer (spec 54 §10.8);
+  - helpers with no phone number (they can't be called on the day);
+  - day contacts or Good to know not set (spec 54 §10.6, §10.9).
 
   Each line links to where it's fixed.
 - **On the day** (from midnight before the first event, in the wedding's
   timezone) it is the live screen.
 - **After the day** it becomes a **summary**: every item with who did it and
   when, everything handed back or never done, every help request and its
-  answer, every note, and the modules' summaries. **Download** gives the
-  summary as CSV.
+  answer, every note and photo, every announcement with who saw it, when
+  each cue was actually called, and the modules' summaries. **Download**
+  gives the summary as CSV.
 
 ## 8. Live
 
@@ -171,7 +204,9 @@ specs 51, 54, 52 and 53):
   to `collaborators`), with a check that at most one is set.
 - Master actions write `day_activity` rows (spec 54 §11) with the
   collaborator or planner as actor: `help_answered`, `reassigned`,
-  `marked_started`, `alert_dismissed`, `schedule_shifted`.
+  `marked_started`, `alert_dismissed`, `schedule_shifted`, `cue_go`,
+  `announced`, `question_answered`.
+- Announcements themselves are spec 54's `day_announcements` (spec 54 §11).
 
 ## 10. Code
 
@@ -182,31 +217,27 @@ specs 51, 54, 52 and 53):
   fixed), on top of spec 50's scheduling. Pure and tested.
 - `src/lib/day-master/summary.ts`: the after-the-day summary.
 - `src/server/actions/day-master.ts`: `answerHelp`, `reassignTask`,
-  `markStarted`, `dismissAlert`, `shiftSchedule`, `setDayLead`,
-  `setDayAlerts`. Each checks the Supabase `error`.
+  `markStarted`, `dismissAlert`, `shiftSchedule`, `callCue`, `announce`,
+  `answerQuestion`, `setDayLead`, `setDayAlerts`. Each checks the Supabase `error`.
 - `src/server/queries/day-master.ts`, wrapped in `cache()`.
 - Screens: `/day` in its three modes (readiness, live, summary). The live
   mode reuses spec 54's `src/components/day-link/` cards and states.
 
-## 11. Open questions
+## 11. Answered — 2026-11-24
 
-**Q1. Who gets sound and vibration by default?** Everyone with the master
-open, each able to turn it off for themselves (recommended), or only the day
-lead?
+Every question took its recommendation.
 
-**Q2. Who can shift the schedule?** The couple and the planner (recommended),
-or the planner only?
+1. **Sound and vibration:** for everyone with the master open, each able to
+   turn it off for themselves (§6), except escalations (§5.1). Rejected: the
+   day lead only.
+2. **Shifting the schedule:** the couple and the planner (§5.4). Rejected:
+   the planner only.
+3. **"Not started":** 5 minutes after the start, or at the start for a
+   critical task (§5.1).
+4. **Day lead:** yes (§6).
+5. **Phone tab bar:** on the wedding day only, Live replaces Today.
 
-**Q3. "Not started" alert.** Five minutes after the start (recommended), a
-different time, or no such alert?
-
-**Q4. Day lead.** Wanted (recommended: the couple can hand the day to their
-planner), or does everyone just see everything?
-
-**Q5. On the wedding day, replace Today on the phone tab bar with the
-master?** Recommended: yes, for that day only.
-
-## 12. Build order (once answered)
+## 12. Build order
 
 1. Spec 54 first: the master shows what day links write.
 2. Migration `0053`; SQL suite assertions for the new columns and the day
@@ -215,7 +246,8 @@ master?** Recommended: yes, for that day only.
 4. `/day` live: alerts, Now, Up next, feed, with polling.
 5. Answering, reassigning, marking started, dismissing.
 6. Timeline and shifting, with its preview and Undo.
-7. Module cards, People, alerts per viewer, day lead.
+7. Module cards, People, alerts per viewer, day lead, escalation.
+7a. Announcements with seen and OK counts; Go on cues.
 8. Readiness before the day, summary and CSV after.
 9. Typecheck, tests, SQL suite, build. On two real phones at once: a helper
    asks for help on their link, and the master vibrates, answers, and the

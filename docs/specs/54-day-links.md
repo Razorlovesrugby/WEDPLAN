@@ -1,9 +1,11 @@
 # Feature spec: Day links — a live page for everyone with a job on the day
 
-**Status: answered, not built, with five new questions.** Asked for as a
-spec (2026-11-23). The first round is answered (§15). Creating and assigning
-tasks (§10) was added on 2026-11-24 and its questions are in §17. Nothing is
-built until they are answered and the planner says to build it (see
+**Status: answered, not built, with four new questions.** Asked for as a
+spec (2026-11-23). The first two rounds are answered (§15, §17). A pass
+against the leading event-staffing and day-of tools (§18) added
+confirmations, check-in, announcements, open tasks, good-to-know, reminders
+and cues on 2026-11-24; their questions are in §19. Nothing is built until
+they are answered and the planner says to build it (see
 `docs/specs/README.md`).
 
 **Depends on:** spec 9 (share-link token pattern), spec 32 (audit log),
@@ -278,6 +280,9 @@ the planner ✓", with **Undo** on it.
   check (spec 55 §7) lists it.
 - **The day** starts at midnight before the first event, in the wedding's
   timezone. From then on the buttons work.
+- **More than one day** (welcome drinks on Friday, recovery brunch on
+  Sunday): My day groups tasks by day, opens on today's, and each task's
+  buttons work from midnight before that task's own day.
 - **After the day:** "Thanks for helping. This link stops working on 13
   March." The buttons are disabled.
 
@@ -341,6 +346,58 @@ for helpers'. They are served by short-lived signed URLs through the link's
 scoped read, and are deleted with the item, or by the couple from the master
 or the after-the-day summary. Helpers' photos stay with the wedding after
 the link expires, so the couple keeps them.
+
+### 6.11 Confirming
+
+Each task they haven't seen before has a **Got it** button under its card,
+until the day. Tapping it confirms they know about the task. **Got it to all**
+appears when there are several. The master's readiness check (spec 55 §7)
+shows "Confirmed 8 of 10". Confirming is never required, and a task changed
+after it was confirmed asks again ("Changed since you confirmed").
+
+### 6.12 I'm here
+
+On the day, until they tap it, the top of My day shows **I'm here** ("Tap
+when you arrive"). It records their arrival for the master's People list
+(spec 55 §5.7). There is no location tracking: arriving is a tap, never a
+GPS check.
+
+### 6.13 Announcements
+
+Messages from the master (spec 55 §5.8) to everyone, a group, or one person
+show at the top of My day, newest first, as cards: "Ceremony running 10
+minutes late", "Rain plan: everything moves to the woolshed". Opening the
+page marks them seen. An **important** announcement stays pinned with an
+**OK, got it** button until tapped, and the master sees who has acknowledged
+it.
+
+### 6.14 Good to know
+
+A **Good to know** tab (or section, on a link with no modules) holds what
+every helper needs and nobody wants to ring about: the venue address and
+parking, the wet-weather plan, where the first-aid kit and toilets are, the
+wifi, and the day contacts. The couple writes it once (§10.9). It shows
+before the day too.
+
+### 6.15 Reminders
+
+- **The day before**, a helper with an email address gets one email at 6 pm
+  in the wedding's timezone: "Your jobs tomorrow", with their tasks and their
+  link. The couple can turn this off per wedding (see Q9).
+- **On the day**, a helper who has added the link to their home screen (§5.7)
+  can switch on **Remind me 10 minutes before each job**. It uses web push,
+  which iPhones support only for home-screen web apps; on other phones it
+  works in the browser too. It is off until they switch it on, and their
+  phone asks for permission (see Q6).
+
+### 6.16 Cues
+
+A task the couple marks as a **cue** (the walk-in music, the first dance,
+the speeches) is a moment that has to start exactly on someone's word. From
+5 minutes before it, the assignees' Now card shows **Standby** with a
+countdown, and the page refreshes every 3 seconds instead of every 15. When
+the master taps **Go** (spec 55 §5.2), their card turns to **Go now**, the
+phone vibrates, and the countdown becomes "Started 0:04 ago" (see Q7).
 
 ## 7. Modules
 
@@ -459,6 +516,14 @@ themselves never reaches a helper.
 - **Clashes:** spec 50's soft warning when one person is on two overlapping
   tasks stays, and is shown in the picker before they are added ("Sione is
   seating guests then").
+- **Open tasks:** instead of naming people, a task can be **open to a group**
+  with a number of places ("2 ushers to run the guestbook"). It shows on every
+  group member's link under **Can you help?**, and the first to tap **I'll
+  do it** are assigned, until the places are filled. The couple can still
+  assign anyone directly (see Q8).
+- **Handing over:** a helper's Can't do it sheet (§6.4) can suggest who could
+  take it, from their own group. The suggestion goes to the master with the
+  hand-back; nobody is moved until the couple or planner reassigns.
 
 ### 10.3 The People view
 
@@ -498,6 +563,26 @@ is code, not data (see Q4).
 On the Day links screen: who appears as a contact on every link (the
 planner, the venue coordinator, a family member), each with a phone number.
 A task's own contact (§10.1) is picked from these or from its assignees.
+
+### 10.7 Helpers' details
+
+`people` gains **phone** and **email**, so a helper added as a person (spec
+50 §7.5) can be called from the master, texted, emailed their link and sent
+the day-before reminder. Guests and vendors already have both. The picker's
+"add a person" asks for a name and, optionally, a phone and email.
+
+### 10.8 Questions before the day
+
+A note a helper adds before the day (§6.4) lands on the master's readiness
+check as a **question** ("Where do I park?"), with **Answer**. The answer
+shows on their link like a help answer. On the day, notes go to the live
+feed as before.
+
+### 10.9 Good to know
+
+On the Day links screen, an editor for §6.14: a short list of headed
+sections the couple can add to, reorder and delete, starting with Venue and
+parking, Wet-weather plan, First aid and toilets, and Wifi, each empty.
 
 ## 11. Data
 
@@ -550,6 +635,27 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
   shape as `run_sheet_item_assignees`.
 - Saving a task with its steps and assignees stays **one transaction**,
   through spec 50's save function, extended.
+- `run_sheet_item_assignees.confirmed_at timestamptz null` (§6.11), cleared
+  when the task's time, place or instructions change.
+- `day_links.arrived_at timestamptz null` (§6.12).
+- `day_announcements (id, wedding_id, audience text check (audience in
+  ('everyone','group','link')), group_id null, link_id null, text,
+  important boolean, sent_by, sent_at)` and `day_announcement_reads
+  (announcement_id, link_id, seen_at, acknowledged_at null, primary key
+  (announcement_id, link_id))` (§6.13).
+- `day_info_sections (id, wedding_id, heading, body, sort_order)` (§6.14,
+  §10.9).
+- `day_push_subscriptions (id, wedding_id, link_id, endpoint unique,
+  p256dh, auth, created_at)`, deleted when the link is revoked or expires
+  (§6.15).
+- `run_sheet_items.is_cue boolean not null default false`,
+  `cue_called_at timestamptz null` (§6.16).
+- `run_sheet_items.open_to_group_id uuid null`, `open_places int null check
+  (open_places between 1 and 20)`, both set or neither (§10.2).
+- `people.phone text null`, `people.email text null` (§10.7).
+- New activity kinds (§9): `confirmed`, `arrived`, `claimed`,
+  `announcement_seen`, `announcement_ok`, `question`; the master writes
+  `cue_go`.
 - RLS on every new table keyed to `wedding_id`; planner access per spec 39's
   registry; audit triggers on `day_links`, `day_contacts` and the new
   assignee columns (spec 32). `day_activity` is its own record and is not
@@ -606,8 +712,12 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 
 - Accounts for vendors or helpers, or one person seeing several weddings.
 - Two-way chat. A help request gets one answer back. Notes go one way.
-- Push notifications, texts or emails sent by the app on the day. The Changed
-  badge is how changes reach a helper.
+- Texts sent by the app. Reminders are the day-before email and opt-in web
+  push (§6.15) only.
+- GPS or location tracking of helpers, including geofenced check-in.
+- Shift swaps between helpers without the couple: a helper can suggest
+  someone, never move a task themselves.
+- Hours worked or pay for helpers.
 - Showing the whole run sheet to a helper. They see their own tasks.
 
 ## 15. Answered — 2026-11-23
@@ -641,6 +751,7 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 2a. Tasks (§10.1–§10.4): instructions, steps, bring list, contact, critical,
    lead, groups, Tasks on the day, assign several, the People view and
    suggested tasks, all in the couple's run sheet before any link exists.
+   Phone and email on people (§10.7).
 3. Making, copying, revoking and emailing links: the run sheet chip and the
    Day links screen.
 4. `/d/[token]`: the shell, first open, My day, the Now card, the task
@@ -650,29 +761,70 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
    help and notes, "Ask for a photo when done".
 6. The offline queue, live polling and the Changed badge.
 7. The print sheet with QR codes.
+7a. Got it, I'm here, Good to know, questions before the day, open tasks and
+   handing over (§6.11, §6.12, §6.14, §10.2, §10.8).
+7b. Announcements, with spec 55 §5.8 (§6.13).
+7c. Reminders: the day-before email, then web push (§6.15), each behind its
+   answer in §19.
+7d. Cues, with spec 55's Go (§6.16).
 8. Spec 55's master reads what this writes; specs 52 and 53 plug in their
    modules.
 9. Typecheck, tests, SQL suite, build. On a real phone: open a link, start
    and finish a task, ask for help and see the answer, go offline, tap,
    reconnect.
 
-## 17. Open questions (tasks and assigning)
+## 17. Answered — 2026-11-24 (tasks and assigning)
 
-**Q1. Existing notes.** Run sheet items already have notes, written before
-helpers could see anything. Keep them private and start instructions empty
-(recommended), or copy each item's notes into its instructions?
+Every question took its recommendation.
 
-**Q2. Groups.** Picking a group adds its members one by one, and later changes
-to the group don't touch tasks already assigned (recommended: simple, and
-each person keeps their own Done). Or does a task stay linked to the group,
-so adding an usher to "Ushers" puts them on every usher task?
+1. **Existing notes** stay private; instructions start empty (§10.1).
+   Rejected: copying notes into instructions.
+2. **Groups** add their members one by one; later changes to a group don't
+   touch tasks already assigned (§10.2). Rejected: tasks linked to the group.
+3. **Can't do it before the day:** yes (§6.5).
+4. **Suggested tasks:** a fixed list in the app (§10.4). Rejected: the
+   couple saving their own.
+5. **Making links:** offered on first assignment (§10.5). Rejected: making
+   them automatically.
 
-**Q3. Handing back before the day.** Let helpers tap Can't do it as soon as
-they have the link (recommended, §6.5), or only on the day?
+## 18. What the leading tools do, and where it's covered
 
-**Q4. Suggested tasks.** A fixed list in the app (recommended), or should
-the couple be able to save their own tasks as reusable suggestions?
+Read from the products' own pages and listings (Rosterfy, Connecteam,
+Deputy, SignUpGenius, VolunteerHub, That's The One, TIMED, Timeline Pro,
+EventSync, TMLN, Rundown Studio, Ontime, CueTimer, zkipster). Not tried
+hands-on.
 
-**Q5. Making links.** Offer "Make their link" on first assignment
-(recommended), make it automatically, or only from the Day links screen?
+| Pattern | Seen in | Here |
+| --- | --- | --- |
+| A personal view of only your own items, by link with no login | That's The One, TIMED, EventSync | §3, §6.2 |
+| Accept or confirm an assignment | Connecteam, That's The One | §6.11 |
+| Check in on arrival | Rosterfy, EventSync, zkipster | §6.12 (a tap; no geofence) |
+| Broadcasts to everyone or a role, with who has seen them | EventSync, VolunteerHub, Rosterfy | §6.13, spec 55 §5.8 |
+| Reminders before each item, and the day before | EventSync (10 minutes before), TIMED, SignUpGenius | §6.15 |
+| Open shifts that people claim | Connecteam, SignUpGenius | §10.2 open tasks |
+| Releasing a shift and suggesting a replacement | Connecteam | §10.2 handing over |
+| Checklists with photo proof | Connecteam, Deputy (photo on clock-in) | §6.3 steps, §6.10 photos |
+| Role-specific views of one shared plan | Rundown Studio, Ontime, EventSync (shot list, music queue) | §7 modules |
+| Standby and Go cues with a live countdown | Rundown Studio, Ontime, CueTimer | §6.16, spec 55 §5.2 |
+| Times reflow when the schedule slips | Runsheet, TMLN | spec 55 §5.4 |
+| Comments or questions on an item before the day | Timeline Pro | §10.8 |
+| Works offline | EventSync | §6.8 |
+| An activity log of every change | zkipster | §9, spec 55 §5.5 |
+| Sensitive planner context hidden from roles | EventSync | §10.1 (instructions vs notes), §12 |
 
+## 19. Open questions (from the tools pass)
+
+**Q6. Web push reminders.** Opt-in "Remind me 10 minutes before each job"
+for helpers who add the link to their home screen (recommended). It needs a
+job that runs every minute on the day, which Vercel's cron on the current
+plan can't do: Supabase's `pg_cron` calling a route, or a Vercel plan with
+minute crons. Or no push, and the page alone?
+
+**Q7. Cues.** Standby and Go on tasks marked as cues (recommended), with
+3-second refresh near the cue? Or leave cues to the people in the room?
+
+**Q8. Open tasks.** Let a group claim a task ("2 ushers for the guestbook")
+(recommended), or only ever assign by name?
+
+**Q9. The day-before email.** On by default for helpers with an email
+(recommended), off by default, or not at all?
