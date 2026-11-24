@@ -1617,6 +1617,9 @@ export type SeatingTableRow = {
   /** Null = derived from shape and capacity. */
   width_cm: number | null;
   length_cm: number | null;
+  /** Spec 57: the space and layout it lies in. The database fills both when an insert names neither. */
+  space_id: string;
+  layout_id: string;
   created_at: string;
   updated_at: string;
 };
@@ -1625,6 +1628,8 @@ export type SeatingFixtureRow = {
   id: string;
   wedding_id: string;
   event_id: string;
+  space_id: string;
+  layout_id: string;
   kind: SeatingFixtureKind;
   label: string | null;
   pos_x_cm: number;
@@ -1639,10 +1644,46 @@ export type SeatingFixtureRow = {
 export type SeatAssignmentRow = {
   wedding_id: string;
   event_id: string;
+  /** Filled from the table's layout when an insert doesn't name it. */
+  layout_id: string;
   guest_id: string;
   table_id: string;
   /** Null = at the table, chair not chosen. 0-based, clockwise from the top. */
   seat_index: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 57. An event has one live layout and any number of drafts. */
+export type SeatingLayoutRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  name: string;
+  is_live: boolean;
+  locked_at: string | null;
+  locked_by: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 57. One room of a layout, in centimetres. */
+export type SeatingSpaceRow = {
+  id: string;
+  wedding_id: string;
+  layout_id: string;
+  name: string;
+  sort_order: number;
+  room_width_cm: number;
+  room_depth_cm: number;
+  background_path: string | null;
+  background_w_px: number | null;
+  background_h_px: number | null;
+  calibrated: boolean;
+  background_opacity: number;
+  /** Walls, arcs, openings, markers, areas, labels: shaped by src/lib/seating/drawing.ts. */
+  drawing: Json;
   created_at: string;
   updated_at: string;
 };
@@ -2502,9 +2543,29 @@ export type Database = {
         | "accessible"
         | "sort_order"
         | "rotation_deg"
+        | "space_id"
+        | "layout_id"
       >;
-      seating_fixtures: Table<SeatingFixtureRow, "id" | Timestamps | "rotation_deg">;
-      seat_assignments: Table<SeatAssignmentRow, Timestamps>;
+      seating_fixtures: Table<SeatingFixtureRow, "id" | Timestamps | "rotation_deg" | "space_id" | "layout_id">;
+      seat_assignments: Table<SeatAssignmentRow, Timestamps | "layout_id">;
+      seating_layouts: Table<
+        SeatingLayoutRow,
+        "id" | Timestamps | "is_live" | "locked_at" | "locked_by" | "deleted_at"
+      >;
+      seating_spaces: Table<
+        SeatingSpaceRow,
+        | "id"
+        | Timestamps
+        | "sort_order"
+        | "room_width_cm"
+        | "room_depth_cm"
+        | "calibrated"
+        | "background_opacity"
+        | "drawing"
+        | "background_path"
+        | "background_w_px"
+        | "background_h_px"
+      >;
       seating_rules: Table<SeatingRuleRow, "id" | Timestamps>;
       seating_snapshots: Table<SeatingSnapshotRow, "id" | "created_at" | "automatic">;
       registry_settings: Table<

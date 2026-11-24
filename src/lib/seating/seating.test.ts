@@ -47,6 +47,8 @@ function table(id: string, over: Partial<SeatingTable> = {}): SeatingTable {
     id,
     wedding_id: "w",
     event_id: "e",
+    space_id: "sp",
+    layout_id: "ly",
     label: id,
     shape: "round",
     capacity: 8,
@@ -353,7 +355,7 @@ describe("warnings", () => {
   it("flags overlapping tables and fixtures in the room", () => {
     const tables = [table("t1", { pos_x_cm: 0, pos_y_cm: 0 }), table("t2", { pos_x_cm: 100, pos_y_cm: 0 })];
     const fixtures = [
-      { id: "f", wedding_id: "w", event_id: "e", kind: "dance_floor" as const, label: null, pos_x_cm: 0, pos_y_cm: 100, width_cm: 200, depth_cm: 200, rotation_deg: 0, created_at: "", updated_at: "" },
+      { id: "f", wedding_id: "w", event_id: "e", space_id: "sp", layout_id: "ly", kind: "dance_floor" as const, label: null, pos_x_cm: 0, pos_y_cm: 100, width_cm: 200, depth_cm: 200, rotation_deg: 0, created_at: "", updated_at: "" },
     ];
     const w = computeWarnings({ tables, fixtures, guests: [], assignments: [], rules: [], trayMode: "yes" });
     expect(w.map((x) => x.message)).toEqual([
