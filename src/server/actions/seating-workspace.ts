@@ -180,7 +180,7 @@ export async function applySeatingTemplate(
 // ---------------------------------------------------------------------------
 const bulkSchema = z.object({
   count: z.number().int().min(1).max(40),
-  shape: z.enum(["round", "long", "square", "head"]),
+  shape: z.enum(["round", "long", "square", "head", "sweetheart", "oval", "half_moon", "serpentine"]),
   capacity: z.number().int().min(1).max(60),
 });
 

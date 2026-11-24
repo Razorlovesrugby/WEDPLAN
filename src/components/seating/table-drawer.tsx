@@ -10,7 +10,7 @@ import { guestName, type SeatingTable } from "@/lib/seating/model";
 import type { SeatingTableShape } from "@/lib/types/database";
 import { GuestChip } from "./guest-chip";
 import { useSeating } from "./seating-state";
-import { SHAPE_LABEL } from "./tables-grid";
+import { PICKABLE_SHAPES, SHAPE_LABEL } from "./tables-grid";
 
 /**
  * One table, opened (spec 33 §D.1): its settings, and its chairs drawn round
@@ -113,7 +113,7 @@ function DrawerBody({ table }: { table: SeatingTable }) {
         <label className="text-sm">
           <span className="mb-1 block text-xs text-muted">Shape</span>
           <select className="field" value={form.shape} onChange={(e) => set("shape", e.target.value as SeatingTableShape)}>
-            {Object.entries(SHAPE_LABEL).map(([v, l]) => (
+            {PICKABLE_SHAPES.map((v) => [v, SHAPE_LABEL[v]] as const).map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>

@@ -20,7 +20,20 @@ export type TableGeometryInput = {
   pos_x_cm: number | null;
   pos_y_cm: number | null;
   rotation_deg: number;
+  /** Ceremony rows (spec 57): rows of chairs, and the aisle between the two blocks. */
+  rows_count?: number | null;
+  aisle_cm?: number | null;
+  /** Banquet runs (spec 57): `[{len, turn}]`, read defensively because it is stored as json. */
+  segments?: unknown;
 };
+
+/** A banquet run is straight pieces: each `len` cm long, turned `turn` degrees (clockwise on screen) from the one before. */
+export type BanquetSegment = { len: number; turn: number };
+
+type SizeInput = Pick<
+  TableGeometryInput,
+  "shape" | "capacity" | "ends_seated" | "width_cm" | "length_cm" | "rows_count" | "aisle_cm" | "segments"
+>;
 
 export type RectInput = {
   pos_x_cm: number;
@@ -36,6 +49,10 @@ export const CM_PER_CHAIR = 60;
 export const CHAIR_OFFSET_CM = 35;
 /** Depth of a long or head table. */
 export const LONG_TABLE_DEPTH_CM = 75;
+/** Ceremony rows: a chair's width along a row, and the distance between rows. */
+export const ROW_CHAIR_PITCH_CM = 50;
+export const ROW_PITCH_CM = 55;
+export const DEFAULT_AISLE_CM = 120;
 /** Chair depth plus a walkway, for the optional clearance rings (§C.1, Q6). */
 export const CLEARANCE_CM = 120;
 /** Edges further apart than this aren't "near" (§B.1). */
@@ -50,12 +67,12 @@ function longSideSeats(capacity: number, endsSeated: boolean): number {
  * The table's footprint: `length` along its own x axis, `width` along y.
  * Round and square tables are the same both ways. Explicit sizes win.
  */
-export function tableSize(t: Pick<TableGeometryInput, "shape" | "capacity" | "ends_seated" | "width_cm" | "length_cm">): {
+export function tableSize(t: SizeInput): {
   length: number;
   width: number;
 } {
-  let length: number;
-  let width: number;
+  let length = 0;
+  let width = 0;
   switch (t.shape) {
     case "round": {
       const d = Math.max(90, Math.round((t.capacity * CM_PER_CHAIR) / Math.PI));
@@ -77,6 +94,36 @@ export function tableSize(t: Pick<TableGeometryInput, "shape" | "capacity" | "en
       length = Math.max(120, t.capacity * CM_PER_CHAIR);
       width = LONG_TABLE_DEPTH_CM;
       break;
+    case "sweetheart":
+      length = Math.max(120, t.capacity * CM_PER_CHAIR);
+      width = 60;
+      break;
+    case "oval": {
+      width = t.width_cm ?? 110;
+      length = Math.max(160, Math.round((2 * t.capacity * CM_PER_CHAIR) / Math.PI - width));
+      break;
+    }
+    case "half_moon": {
+      const d = Math.max(120, Math.round((2 * t.capacity * CM_PER_CHAIR) / Math.PI));
+      length = d;
+      width = Math.round(d / 2);
+      break;
+    }
+    case "serpentine":
+      length = Math.max(180, Math.ceil(t.capacity / 2) * CM_PER_CHAIR);
+      width = LONG_TABLE_DEPTH_CM;
+      break;
+    case "rows": {
+      const rows = Math.max(1, t.rows_count ?? 1);
+      const perRow = Math.ceil(t.capacity / rows);
+      length = perRow * ROW_CHAIR_PITCH_CM + (t.aisle_cm ?? DEFAULT_AISLE_CM);
+      width = rows * ROW_PITCH_CM;
+      break;
+    }
+    case "banquet": {
+      const run = banquetRun(t.segments, t.capacity);
+      return { length: t.length_cm ?? run.length, width: t.width_cm ?? run.width };
+    }
   }
   if (t.shape === "round" || t.shape === "square") {
     const explicit = t.length_cm ?? t.width_cm;
@@ -84,6 +131,94 @@ export function tableSize(t: Pick<TableGeometryInput, "shape" | "capacity" | "en
     return { length, width };
   }
   return { length: t.length_cm ?? length, width: t.width_cm ?? width };
+}
+
+/** Reads a banquet run's stored segments, dropping anything that isn't a sane piece. At most 12 pieces. */
+export function readSegments(raw: unknown): BanquetSegment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BanquetSegment[] = [];
+  for (const item of raw.slice(0, 12)) {
+    if (!item || typeof item !== "object") continue;
+    const len = Number((item as { len?: unknown }).len);
+    const turn = Number((item as { turn?: unknown }).turn);
+    if (Number.isFinite(len) && len >= 60 && len <= 5000) out.push({ len, turn: Number.isFinite(turn) ? turn : 0 });
+  }
+  return out;
+}
+
+/**
+ * A banquet run laid out in its own frame, centred on its bounding box: the
+ * bounding box's size, and `capacity` chairs along both sides of every piece,
+ * in order along one side and back along the other. An empty or unreadable
+ * run is one straight piece sized for the capacity.
+ */
+function banquetRun(raw: unknown, capacity: number): { length: number; width: number; seats: Point[] } {
+  let segs = readSegments(raw);
+  if (segs.length === 0) segs = [{ len: Math.max(120, Math.ceil(capacity / 2) * CM_PER_CHAIR), turn: 0 }];
+  const depth = LONG_TABLE_DEPTH_CM;
+  let x = 0;
+  let y = 0;
+  let heading = 0;
+  type Piece = { a: Point; h: number; len: number };
+  const pieces: Piece[] = [];
+  const corners: Point[] = [];
+  for (const seg of segs) {
+    heading += seg.turn;
+    const h = (heading * Math.PI) / 180;
+    const a = { x, y };
+    const b = { x: x + seg.len * Math.cos(h), y: y + seg.len * Math.sin(h) };
+    pieces.push({ a, h, len: seg.len });
+    const nx = -Math.sin(h) * (depth / 2);
+    const ny = Math.cos(h) * (depth / 2);
+    corners.push({ x: a.x + nx, y: a.y + ny }, { x: a.x - nx, y: a.y - ny }, { x: b.x + nx, y: b.y + ny }, { x: b.x - nx, y: b.y - ny });
+    x = b.x;
+    y = b.y;
+  }
+  const minX = Math.min(...corners.map((c) => c.x));
+  const maxX = Math.max(...corners.map((c) => c.x));
+  const minY = Math.min(...corners.map((c) => c.y));
+  const maxY = Math.max(...corners.map((c) => c.y));
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  // How many chairs on each side of each piece: proportional to its length, at least one, summing to `capacity`.
+  const total = pieces.reduce((sum, p) => sum + p.len, 0);
+  const counts = pieces.flatMap((p) => [Math.max(1, Math.round(((capacity / 2) * p.len) / total)), Math.max(1, Math.round(((capacity / 2) * p.len) / total))]);
+  let sum = counts.reduce((a, b) => a + b, 0);
+  while (sum !== capacity && capacity > 0) {
+    if (sum < capacity) {
+      let best = 0;
+      counts.forEach((c, i) => {
+        if (pieces[i >> 1]!.len / c > pieces[best >> 1]!.len / counts[best]!) best = i;
+      });
+      counts[best]!++;
+      sum++;
+    } else {
+      let best = -1;
+      counts.forEach((c, i) => {
+        if (c > 1 && (best < 0 || pieces[i >> 1]!.len / c < pieces[best >> 1]!.len / counts[best]!)) best = i;
+      });
+      if (best < 0) break;
+      counts[best]!--;
+      sum--;
+    }
+  }
+  const off = depth / 2 + CHAIR_OFFSET_CM;
+  const side = (i: number, sign: 1 | -1): Point[] => {
+    const p = pieces[i]!;
+    const n = counts[i * 2 + (sign === 1 ? 0 : 1)]!;
+    return Array.from({ length: n }, (_, k) => {
+      const along = (p.len * (k + 0.5)) / n;
+      return {
+        x: p.a.x + along * Math.cos(p.h) - sign * Math.sin(p.h) * off - cx,
+        y: p.a.y + along * Math.sin(p.h) + sign * Math.cos(p.h) * off - cy,
+      };
+    });
+  };
+  const seats: Point[] = [];
+  for (let i = 0; i < pieces.length; i++) seats.push(...side(i, -1));
+  for (let i = pieces.length - 1; i >= 0; i--) seats.push(...side(i, 1).reverse());
+  return { length: maxX - minX, width: maxY - minY, seats: seats.slice(0, capacity) };
 }
 
 export function rotate(p: Point, deg: number): Point {
@@ -104,7 +239,7 @@ function spread(count: number, from: number, to: number): number[] {
  * seat-index order: clockwise from the top. A head table seats one side only,
  * numbered left to right as the room sees it (Q5).
  */
-export function localSeatPositions(t: Pick<TableGeometryInput, "shape" | "capacity" | "ends_seated" | "width_cm" | "length_cm">): Point[] {
+export function localSeatPositions(t: SizeInput): Point[] {
   const { length, width } = tableSize(t);
   const n = t.capacity;
   const hl = length / 2;
@@ -120,7 +255,52 @@ export function localSeatPositions(t: Pick<TableGeometryInput, "shape" | "capaci
       });
     }
     case "head":
+    case "sweetheart":
       return spread(n, -hl, hl).map((x) => ({ x, y: -hw - o }));
+    case "oval":
+      return Array.from({ length: n }, (_, i) => {
+        const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+        return { x: (hl + o) * Math.cos(a), y: (hw + o) * Math.sin(a) };
+      });
+    case "half_moon": {
+      // The flat side is the bottom of the box; chairs follow the curve, left to right over the top.
+      const r = hl + o;
+      return Array.from({ length: n }, (_, i) => {
+        const a = -Math.PI + (Math.PI * (i + 0.5)) / n;
+        return { x: r * Math.cos(a), y: hw + r * Math.sin(a) };
+      });
+    }
+    case "serpentine": {
+      // A long table with one S in it: both sides follow y = amplitude * sin(pi * x / hl).
+      const top = Math.ceil(n / 2);
+      const bottom = n - top;
+      const wave = (x: number) => 40 * Math.sin((Math.PI * x) / hl);
+      return [
+        ...spread(top, -hl, hl).map((x) => ({ x, y: wave(x) - hw - o })),
+        ...spread(bottom, -hl, hl)
+          .reverse()
+          .map((x) => ({ x, y: wave(x) + hw + o })),
+      ];
+    }
+    case "rows": {
+      const rows = Math.max(1, t.rows_count ?? 1);
+      const perRow = Math.ceil(n / rows);
+      const aisle = t.aisle_cm ?? DEFAULT_AISLE_CM;
+      const left = Math.ceil(perRow / 2);
+      const seats: Point[] = [];
+      for (let r = 0; r < rows && seats.length < n; r++) {
+        const y = -hw + ROW_PITCH_CM * (r + 0.5);
+        for (let c = 0; c < perRow && seats.length < n; c++) {
+          const x = c < left
+            ? -hl + ROW_CHAIR_PITCH_CM * (c + 0.5)
+            : -hl + ROW_CHAIR_PITCH_CM * left + aisle + ROW_CHAIR_PITCH_CM * (c - left + 0.5);
+          seats.push({ x, y });
+        }
+      }
+      return seats;
+    }
+    case "banquet":
+      return banquetRun(t.segments, n).seats;
     case "long": {
       const ends = t.ends_seated && n >= 3 ? 2 : 0;
       const along = n - ends;
@@ -182,6 +362,13 @@ export function tablePolygon(t: TableGeometryInput, grow = 0): Point[] | null {
     return Array.from({ length: 24 }, (_, i) => {
       const a = (2 * Math.PI * i) / 24;
       return { x: t.pos_x_cm! + r * Math.cos(a), y: t.pos_y_cm! + r * Math.sin(a) };
+    });
+  }
+  if (t.shape === "oval") {
+    return Array.from({ length: 24 }, (_, i) => {
+      const a = (2 * Math.PI * i) / 24;
+      const p = rotate({ x: (length / 2 + grow) * Math.cos(a), y: (width / 2 + grow) * Math.sin(a) }, t.rotation_deg);
+      return { x: t.pos_x_cm! + p.x, y: t.pos_y_cm! + p.y };
     });
   }
   return rectCorners(t.pos_x_cm, t.pos_y_cm, length + 2 * grow, width + 2 * grow, t.rotation_deg);
@@ -269,6 +456,23 @@ export const FIXTURE_DEFAULTS: Record<string, { width: number; depth: number; la
   photo_booth: { width: 250, depth: 250, label: "Photo booth" },
   buffet: { width: 400, depth: 90, label: "Buffet" },
   other: { width: 150, depth: 150, label: "Other" },
+  lounge: { width: 300, depth: 200, label: "Lounge" },
+  kids_area: { width: 300, depth: 300, label: "Kids' area" },
+  floral_arch: { width: 200, depth: 60, label: "Floral arch" },
+  garland: { width: 300, depth: 20, label: "Garland" },
+  aisle_flowers: { width: 40, depth: 40, label: "Aisle flowers" },
+  candles: { width: 60, depth: 20, label: "Candles" },
+  plant: { width: 60, depth: 60, label: "Plant" },
+  sign: { width: 60, depth: 10, label: "Sign" },
+  lantern: { width: 30, depth: 30, label: "Lantern" },
+  drape: { width: 300, depth: 15, label: "Drape" },
+  marquee: { width: 900, depth: 1500, label: "Marquee" },
+  tree: { width: 300, depth: 300, label: "Tree" },
+  path: { width: 150, depth: 800, label: "Path" },
+  pool: { width: 400, depth: 800, label: "Pool" },
+  garden_bed: { width: 300, depth: 120, label: "Garden bed" },
+  slope: { width: 500, depth: 500, label: "Slope" },
+  custom: { width: 100, depth: 100, label: "Item" },
 };
 
 /**

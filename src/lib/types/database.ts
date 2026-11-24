@@ -384,7 +384,17 @@ export type VendorStage =
 export type EstimateSource = "entered" | "allocation" | "none";
 export type ReminderDueSource = "list_item" | "payment";
 export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
-export type SeatingTableShape = "round" | "long" | "square" | "head";
+export type SeatingTableShape =
+  | "round"
+  | "long"
+  | "square"
+  | "head"
+  | "sweetheart"
+  | "rows"
+  | "oval"
+  | "half_moon"
+  | "serpentine"
+  | "banquet";
 export type SeatingFixtureKind =
   | "dance_floor"
   | "bar"
@@ -396,7 +406,24 @@ export type SeatingFixtureKind =
   | "entrance"
   | "photo_booth"
   | "buffet"
-  | "other";
+  | "other"
+  | "lounge"
+  | "kids_area"
+  | "floral_arch"
+  | "garland"
+  | "aisle_flowers"
+  | "candles"
+  | "plant"
+  | "sign"
+  | "lantern"
+  | "drape"
+  | "marquee"
+  | "tree"
+  | "path"
+  | "pool"
+  | "garden_bed"
+  | "slope"
+  | "custom";
 export type SeatingRuleKind = "together" | "apart" | "near" | "avoid_table" | "accessible";
 export type MoodboardShareChannel = "link" | "public_site" | "rsvp";
 export type MoodboardItemOrigin = "upload" | "clip" | "pinterest";

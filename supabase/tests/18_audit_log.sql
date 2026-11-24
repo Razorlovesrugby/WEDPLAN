@@ -295,6 +295,7 @@ declare
     'list_templates',        -- shared across weddings, no wedding_id
     'household_slug_aliases', -- derived from a household's name
     'seating_snapshots',     -- itself a saved copy; auditing it would duplicate the payload
+    'seating_share_links',   -- credential hashes (spec 57)
     'planner_table_access',  -- static registry written only by migration; closed to every session
     'day_activity',          -- its own append-only record (spec 54 §11)
     'day_link_devices',      -- which phones opened a link; bookkeeping
