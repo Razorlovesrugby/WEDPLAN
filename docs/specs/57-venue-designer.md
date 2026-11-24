@@ -511,25 +511,36 @@ applied.
   path and size, `calibrated`; plus `background_opacity`, `drawing jsonb`
   (walls, arcs, openings, markers, areas, labels, kept dimensions; checked by
   `src/lib/seating/drawing.ts` and a 256 KB size check).
-- `seating_tables` and `seating_fixtures` gain `space_id` (not null after
-  backfill); `seat_assignments` gains `layout_id`, and its one-seat-per-guest
-  rule becomes one per guest per layout.
+- `seating_tables` and `seating_fixtures` gain `space_id` and `layout_id` (not
+  null after backfill, with composite foreign keys so an item lies in a space
+  of its own layout and event); `seat_assignments` gains `layout_id`, kept
+  consistent with its table's, and a unique `(guest_id, layout_id)`. The
+  `(guest_id, event_id)` primary key stays until drafts exist; the drafts
+  migration replaces it.
+- **Triggers (as built):** BEFORE INSERT triggers fill `space_id` and
+  `layout_id` (the event's live layout and its first space) and a seat's
+  `layout_id`, so actions that know only `event_id` work unchanged;
+  `seating_live_layout(event)` makes the live layout and its space on demand.
+  `seating_plans` stays authoritative for the room size and background, and a
+  trigger copies them to the event's first space; the drafts-era migration
+  drops it.
 - **Backfill:** for each existing `seating_plans` row, one live layout named
   "Main" and one space named after the event, copying the room columns; every
   table, fixture and seat gets those ids. The old room columns on
   `seating_plans` stay, unused, until a later migration drops them after live
   is checked.
-- `seating_plans` (still one per event) keeps `reveal_at` and gains the
-  event-level settings: `colour_by_question_id`, `service_style`, `menu jsonb`
-  (F.2, checked by `service.ts`, 64 KB), `settings jsonb` (Part I).
-- Every read outside the designer filters to the live layout: the site's "your
-  table" (`seating-public.ts`), day links (`seating-module.ts`), the master
-  (`day-master.ts`), print and CSV. `seating_state()` and
-  `restore_seating_state()` take a layout id; the payload becomes version 2
-  and version 1 entries restore into the live layout.
+- **Still to do in the drafts migration:** every read outside the designer
+  filters to the live layout: the site's "your table" (`seating-public.ts`),
+  day links (`seating-module.ts`), the master (`day-master.ts`), print and CSV;
+  `seating_state()` and `restore_seating_state()` take a layout id. Until then
+  an event has one layout, so nothing needs the filter.
 
 **`0057_venue_designer.sql`:**
 
+- `seating_plans` (still one per event) gains the event-level settings:
+  `colour_by text` (`parseColourBy`'s form: `side`, `fit`, `dietary`, `tag:<id>`,
+  `q:<id>`), `service_style`, `menu jsonb` (F.2, checked by `service.ts`, 64 KB),
+  `settings jsonb` (Part I).
 - `seating_tables` gains `rows_count`, `aisle_cm` (rows only), `segments jsonb`
   (banquet only), `style_id`, `style_changes jsonb`, `platter_counts jsonb`.
 - `seating_fixtures` gains `quantity integer not null default 1`, `vendor_id`,
@@ -537,10 +548,15 @@ applied.
 - **`seating_table_styles`** (wedding-wide; `place`, `centre`, item suppliers
   and budget links as checked jsonb; soft-deleted), **`seating_custom_items`**
   (the couple's décor), **`seating_marquees`** (templates),
-  **`seating_item_counts`** (the final numbers per layout and item),
+  **`seating_item_counts`** (the final number per layout and item, plus the
+  suggestions it was typed against, the supplier and the budget line),
   **`seating_share_links`** (event, token hash, passcode hash, expiry,
-  revoked). Each has `wedding_id`, RLS by `is_collaborator`, and the audit
-  trigger.
+  revoked; not audited, because it holds credential hashes). Each has
+  `wedding_id`, RLS by `is_collaborator`, and planner access.
+- **State version 2:** `seating_state()` adds the spaces (with drawings), the
+  plan's colour-by, service style, menu and settings, and every column above;
+  `restore_seating_state()` accepts versions 1 and 2, puts spaces back, and drops
+  a style, vendor or space that is gone instead of failing.
 - `seat_assignments` gains `decline_kept_at`, `own_plate jsonb` (per course id),
   `kids_meal jsonb` (per course id, overriding the child default).
 
@@ -600,25 +616,59 @@ and must be named if not done.
 
 ## Build status
 
-Built on branch `claude/visual-seating-plan-gkbppo` (migrations `0055` to `0058`).
-Typechecked, unit-tested (1696), SQL-suite tested (990 assertions) and built;
-**never opened in a browser or run on live**, and nothing is applied to live.
+Built on branch `claude/visual-seating-plan-gkbppo`, migrations `0055` to
+`0058`. Typechecked, unit-tested (1696), SQL-suite tested (990 assertions, 68
+of them new), single-transaction migration check passed, and `npm run build`
+passes. **Never opened in a browser or run on live; nothing is applied to
+live.** The table close-up was rendered for six shapes in headless Chromium;
+no other screen was.
 
-| Part | State |
+### Built
+
+- **Data (§15):** all four migrations, with the backfill tested on legacy
+  data (nothing lost, no audit rows, no `updated_at` changes), state version 2
+  with version 1 still restoring, and tests for tenancy, the shape rules, the
+  restore round trip and the dietary rules.
+- **A:** chairs show initials (first names from 150% zoom, bare dots below
+  60%), a red dot for a dietary note and a dashed orange outline for a guest
+  who can't come; Colour by gains Dietary needs and is the plan's, saved
+  through an undoable step; sweetheart, oval, half-moon and serpentine tables
+  can be added and drawn as themselves in the room and the table drawer.
+- **C:** styles (create, edit, delete, per table or for all), the close-up in
+  the table drawer for every shape but ceremony rows, totals by chairs and by
+  guests, typed final numbers with the "Seating changed since you set this"
+  flag, CSV.
+- **Libraries, tested, no screen yet:** `drawing.ts` (B), `service.ts` (F),
+  `plan-settings.ts` (I), and geometry for ceremony rows and banquet runs.
+
+### Differences from the spec
+
+- Item totals are by item type across all styles (`place:charger`), with the
+  styles' notes listed under each, not one row per style.
+- The CSV is built in the browser, not a `seating-items` kind on
+  `/api/export/[kind]`; no supplier or budget line is shown yet.
+- The shape picker offers eight shapes; ceremony rows and banquet runs need
+  their own creation screens.
+- Every seat still has its `(guest, event)` key and no read filters by layout,
+  because no draft can exist yet.
+- Dietary dots use the free-text note; no screen edits the structured tags.
+
+### Not built
+
+| Part | What is missing |
 | --- | --- |
-| §15 data, step 1 (`0055`, `0056`) | Built. Layouts and spaces exist and the backfill is tested on legacy data. `seat_assignments` keeps its (guest, event) key beside the new one per guest per layout. |
-| §15 data, step 2 (`0057`, `0058`) | Built. State version 2 carries every new column; version 1 still restores. |
-| A, canvas | Partly: chairs show initials, a dietary dot and a declined outline; first names from 150% zoom, bare dots below 60%; Colour by (now including Dietary needs) is the plan's; sweetheart, oval, half-moon and serpentine tables can be added and are drawn as themselves. **Not built:** the new layout (event, layout and space tabs, Library, Venue and Guests panels, right panel), the Show layers, the in-canvas legend, the "Free the seat?" card, ceremony rows, banquet runs and the décor and marquee library UI. |
-| B, drawing | Library only (`drawing.ts`: walls, arcs, openings, areas, snapping, measuring). No tools, PDF upload, marquees or four-step strip. |
-| C, table styles | Built: styles, a style per table, the close-up in the table drawer (every shape but ceremony rows), totals by chairs and by guests, typed final numbers with "Seating changed since you set this", CSV. Differences: items total by type across styles (`place:charger`), not per style; the CSV downloads in the browser, not through `/api/export`; costs are not shown. **Not built:** the per-table changes editor (the data and drawing support it), suppliers and budget-line following, vendor pages, couple's own décor and the kids' starter style. |
-| D, lock | Storage only (`locked_at`, `locked_by`). No action, check or button. |
-| E, exports and share | Not built (`seating_share_links` exists; its read function does not). |
-| F, service | Library only (`service.ts`: menu, platters, own plates, kids' meals). No menu editor, service-style switch, platter screen or kitchen summary. |
-| G, layouts | Schema only. Nothing filters reads by layout yet, and no screen makes a draft. |
-| H, dietary needs | Table only. No editor, no RSVP change, no dots from tags (the dot uses the free-text note). |
-| I, settings | Library only (`plan-settings.ts`). No sheet; the walkway colours and shared-dish hints are not drawn. |
+| A | Event, layout and space tabs; the Library, Venue and Guests panels and the new right panel; the Show layers; the in-canvas legend; the "Free the seat?" card; unnamed plus-ones' label; ceremony rows, banquet runs, décor and marquee placement, the couple's own décor |
+| B | Every drawing tool and screen: the starting choices, PDF upload, fade, walls and curves, doors and windows, marquees, areas, text, measure, kept dimensions |
+| C | The per-table changes editor; suppliers and budget-line following; vendor pages; the kids' starter style |
+| D | The lock: no action, server check or button (the columns exist) |
+| E | The caterer, venue, florist and hire exports; PNG; the share link and its page and `/privacy` line; the entrance board sizes |
+| F | The menu editor, service-style switch, platter screen, own-plate and kids' meal controls, room-on-the-table hints, the kitchen summary |
+| G | Draft layouts: making, switching, swapping, deleting; the seat key change and layout filtering on every read |
+| H | The dietary editor (guest, guest table, seating panel); the RSVP change; dots from tags |
+| I | The settings sheet; walkway colours from the thresholds |
 
-What the remaining build must do first: the drafts migration (drop the (guest,
-event) seat key, filter every seating read to the live layout, drop the
-`seating_plans` room trigger once the room lives on spaces), then A, B, F, H, E
-in that order of value.
+### Order for the rest
+
+The drafts migration first (drop the `(guest, event)` seat key, filter every
+read to the live layout, drop the room trigger once the room lives on spaces),
+then A and B (one canvas, then drawing), F and H, then E and D.
