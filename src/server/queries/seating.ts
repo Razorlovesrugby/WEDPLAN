@@ -35,8 +35,9 @@ export type SeatingPlanData = {
 export const getSeatingPlan = cache(async (weddingId: string, eventId: string): Promise<SeatingPlanData> => {
   const supabase = await createClient();
 
-  const [plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions] =
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions] =
     await Promise.all([
+      supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase
         .from("seating_tables")
@@ -78,6 +79,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     ]);
 
   for (const [what, result] of [
+    ["the event", event],
     ["the room", plan],
     ["tables", tables],
     ["fixtures", fixtures],
@@ -116,6 +118,9 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     }
   }
 
+  // Spec 51 §4.4: an event with replies off has no yeses to seat from, so
+  // everyone invited counts as coming.
+  const asksRsvp = event.data?.asks_rsvp ?? true;
   const inviteByGuest = new Map((invites.data ?? []).map((i) => [i.guest_id, i]));
 
   const seatingGuests: SeatingGuest[] = (guests.data ?? []).map((g) => {
@@ -136,7 +141,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
       tagIds: (g.guest_tags ?? []).map((t: { tag_id: string }) => t.tag_id),
       invited: invite?.invited ?? false,
       excluded: invite?.excluded_from_counts ?? false,
-      rsvp: rsvp?.status ?? null,
+      rsvp: asksRsvp ? (rsvp?.status ?? null) : "yes",
     };
   });
 

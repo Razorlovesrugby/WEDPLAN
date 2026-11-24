@@ -53,6 +53,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 46 | `0046_registry_use_site_theme.sql` | `registry_settings.use_site_theme` (default off): the registry page follows the invitation's theme. Spec 44. | 39 |
 | 47 | `0047_rsvp_answers_upsert_keys.sql` | Plain unique indexes on `rsvp_answers (question_id, guest_id)` and `(question_id, household_id)`. The RSVP form's upserts need them; with only 0001's partial indexes every answer save failed (42P10) and nothing was stored. No new table. Spec 49. | 1 |
 | 48 | `0048_run_sheet_one_timeline.sql` | Run sheet becomes one timeline: stored `starts_at`/`ends_at`, optional `predecessor_id` + `offset_minutes`, `run_sheet_item_assignees` (four sources), save/shift/delete functions, overlap view. Replaces tracks, pinning, owner text and `vendor_id`. Spec 50. | 1 |
+| 49 | `0049_event_types_and_features.sql` | `event_types` (nine seeded built-ins per wedding), `events.type_id` + `asks_rsvp`/`has_seating`/`guest_facing` with backfill and checks, `seed_event_types()`, `create_wedding()` seeds them, the three RSVP views ignore events that don't ask. Spec 51. | 36, 44, 45, 48 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

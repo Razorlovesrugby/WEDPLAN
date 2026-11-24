@@ -60,7 +60,13 @@ export async function getHouseholdSeating(
   const tableIds = [...new Set(seats.map((s) => s.table_id))];
   const [{ data: plans }, { data: events }, { data: tables }, { data: shared }] = await Promise.all([
     supabase.from("seating_plans").select("event_id, reveal_at").eq("wedding_id", weddingId).in("event_id", eventIds),
-    supabase.from("events").select("id, name, sort_order").eq("wedding_id", weddingId).in("id", eventIds),
+    supabase
+      .from("events")
+      .select("id, name, sort_order")
+      .eq("wedding_id", weddingId)
+      .eq("has_seating", true)
+      .eq("guest_facing", true)
+      .in("id", eventIds),
     supabase.from("seating_tables").select("id, label").eq("wedding_id", weddingId).in("id", tableIds),
     supabase
       .from("seat_assignments")

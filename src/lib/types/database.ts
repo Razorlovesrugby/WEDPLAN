@@ -655,6 +655,29 @@ export type EventRow = {
   guest_note: string | null;
   /** The dress code this event wears (spec 25 §4). */
   dress_code_id: string | null;
+  /** Spec 51. The type only presets the switches below at creation. */
+  type_id: string;
+  /** Guests are asked to reply. A main event must ask. */
+  asks_rsvp: boolean;
+  /** Has a seating plan. */
+  has_seating: boolean;
+  /** Offered to guests at all. Off = "just us". */
+  guest_facing: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EventTypeRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  builtin_key: string | null;
+  asks_rsvp: boolean;
+  has_seating: boolean;
+  guest_facing: boolean;
+  is_main: boolean;
+  sort_order: number;
+  hidden_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1513,6 +1536,8 @@ export type GuestEventInviteView = {
    * not since answered Yes. They stay `invited`; they just aren't counted.
    */
   excluded_from_counts: boolean;
+  /** Spec 51: the event asks guests to reply. */
+  asks_rsvp: boolean;
 }
 
 export type HouseholdView = {
@@ -1894,7 +1919,29 @@ export type Database = {
       people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access">;
       events: Table<
         EventRow,
-        "id" | Timestamps | "is_public" | "is_main" | "sort_order" | "guest_note" | "dress_code_id"
+        | "id"
+        | Timestamps
+        | "is_public"
+        | "is_main"
+        | "sort_order"
+        | "guest_note"
+        | "dress_code_id"
+        | "type_id"
+        | "asks_rsvp"
+        | "has_seating"
+        | "guest_facing"
+      >;
+      event_types: Table<
+        EventTypeRow,
+        | "id"
+        | Timestamps
+        | "builtin_key"
+        | "asks_rsvp"
+        | "has_seating"
+        | "guest_facing"
+        | "is_main"
+        | "sort_order"
+        | "hidden_at"
       >;
       households: Table<
         HouseholdRow,

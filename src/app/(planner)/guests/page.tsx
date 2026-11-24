@@ -25,7 +25,7 @@ export default async function GuestsPage({
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
 
-  const [guests, everyone, tags, events, households, cutLines, collaborators, invites, invitationIds, saveTheDateOpens] =
+  const [guests, everyone, tags, allEvents, households, cutLines, collaborators, invites, invitationIds, saveTheDateOpens] =
     await Promise.all([
     listGuests(wedding.id, filters),
     // The same cached read as the line above: the reply bars and household
@@ -41,6 +41,8 @@ export default async function GuestsPage({
     listSaveTheDateOpens(wedding.id),
   ]);
 
+  // Spec 51: events that don't ask for replies have no RSVP column, count or filter.
+  const events = allEvents.filter((event) => event.asks_rsvp && event.guest_facing);
   const replyCounts = Object.fromEntries(
     events.map((event) => [event.id, eventReplyCounts(event.id, invites, everyone)]),
   );

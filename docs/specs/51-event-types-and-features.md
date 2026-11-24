@@ -1,6 +1,6 @@
 # Feature spec: Event types, and only the features an event needs
 
-**Status: answered, not built.** Asked for as a spec (2026-11-23). Every
+**Status: built (migration 0049).** Asked for as a spec (2026-11-23). Every
 question is answered (§9), and custom event types were added the same day.
 Nothing is built until the planner says to build it (see
 `docs/specs/README.md`).

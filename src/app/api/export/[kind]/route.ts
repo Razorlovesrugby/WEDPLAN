@@ -128,7 +128,7 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
     const events = await getEvents(wedding.id);
     const only = searchParams.get("event");
     const withTables = await getEventIdsWithSeating(wedding.id);
-    const chosen = events.filter((e) => (only ? e.id === only : withTables.has(e.id)));
+    const chosen = events.filter((e) => e.has_seating && (only ? e.id === only : withTables.has(e.id)));
     const rows = (
       await Promise.all(chosen.map(async (e) => seatingCsvRows(e.name, await getSeatingPlan(wedding.id, e.id))))
     ).flat();
@@ -193,7 +193,7 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
      */
     const invites = await listInvites(wedding.id);
     const invitedPairs = new Set(
-      invites.filter((row) => row.invited).map((row) => `${row.guest_id}:${row.event_id}`),
+      invites.filter((row) => row.invited && row.asks_rsvp).map((row) => `${row.guest_id}:${row.event_id}`),
     );
     const attending = guests.filter((guest) =>
       guest.rsvps.some((r) => r.status === "yes" && invitedPairs.has(`${guest.id}:${r.event_id}`)),

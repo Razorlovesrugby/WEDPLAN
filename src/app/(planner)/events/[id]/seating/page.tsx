@@ -22,6 +22,26 @@ export default async function EventSeatingPage({
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
 
+  if (!event.has_seating) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <nav className="text-sm text-muted">
+          <Link href="/events" className="hover:underline">
+            Events
+          </Link>
+        </nav>
+        <h1 className="font-serif text-2xl">{event.name} — seating</h1>
+        <p className="card p-6 text-sm">
+          Seating is off for this event.{" "}
+          <Link href="/events" className="underline">
+            Turn it on
+          </Link>{" "}
+          under Edit → What this event needs. Any plan you made before is kept.
+        </p>
+      </div>
+    );
+  }
+
   const [data, snapshots, collaborators] = await Promise.all([
     getSeatingPlan(wedding.id, id),
     listSeatingSnapshots(wedding.id, id),
