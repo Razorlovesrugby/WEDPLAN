@@ -40,7 +40,7 @@ export function readiness(input: ReadinessInput): ReadinessLine[] {
   });
   const unconfirmed = input.tasks.total - input.tasks.confirmed;
   return [
-    line("unassigned", "Tasks with nobody assigned", unassigned.map((i) => i.title), "/run-sheet"),
+    line("unassigned", "Jobs with nobody assigned", unassigned.map((i) => i.title), "/run-sheet/people"),
     line("no_link", "People without a day link", noLink.map((h) => h.name), "/run-sheet/links"),
     line("unopened", "Links made but never opened", unopened.map((h) => h.name), "/run-sheet/links"),
     {
@@ -51,8 +51,8 @@ export function readiness(input: ReadinessInput): ReadinessLine[] {
       names: [],
       href: "/run-sheet/links",
     },
-    line("handed_back", "Tasks handed back, needing someone", handedBack.map((i) => i.title), "/run-sheet/links"),
-    line("open_places", "Open tasks with places still free", open.map((i) => `${i.title} (${i.openPlaces})`), "/run-sheet"),
+    line("handed_back", "Jobs handed back, needing someone", handedBack.map((i) => i.title), "/run-sheet/links"),
+    line("open_places", "Open jobs with places still free", open.map((i) => `${i.title} (${i.openPlaces})`), "/run-sheet/people"),
     { key: "questions", label: "Questions from helpers to answer", count: input.questions, ok: input.questions === 0, names: [], href: "/run-sheet/links" },
     line("no_phone", "Helpers with no phone number", noPhone.map((h) => h.name), "/run-sheet/links"),
     { key: "contacts", label: "Day contacts set", count: input.contacts, ok: input.contacts > 0, names: [], href: "/run-sheet/links" },

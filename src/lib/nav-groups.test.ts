@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { NAV_GROUPS, activeHref, activeTabId, moreGroupsFor, navGroupsFor, tabsFor } from "./nav-groups";
-import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, TASKS_TABS } from "./nav-tabs";
+import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, RUN_SHEET_TABS, TASKS_TABS } from "./nav-tabs";
 import { PLANNER_NAV_HREFS } from "./planner-routes";
 
 const PLANNER_DIR = join(process.cwd(), "src/app/(planner)");
@@ -57,6 +57,10 @@ describe("which entry a path lights", () => {
     ["/guests/rank", "/guests"],
     ["/seating", "/events"],
     ["/events/x/run-sheet", "/events"],
+    ["/run-sheet", "/run-sheet"],
+    ["/run-sheet/people", "/run-sheet"],
+    ["/run-sheet/links", "/run-sheet"],
+    ["/run-sheet/links/preview/x", "/run-sheet"],
     ["/questions", "/site"],
     ["/invitations/save-the-date", "/site"],
     ["/invitations", "/invitations"],
@@ -73,6 +77,17 @@ describe("which entry a path lights", () => {
 
   it("doesn't treat a prefix of a word as a match", () => {
     expect(activeHref("/sitemap")).toBeNull();
+  });
+});
+
+describe("the day's group (spec 56)", () => {
+  it("lists Events, Run sheet, Shot list, On the day in working order", () => {
+    const day = NAV_GROUPS.find((group) => group.id === "day")!;
+    expect(day.entries.map((entry) => entry.label)).toEqual(["Events", "Run sheet", "Shot list", "On the day"]);
+  });
+
+  it("lets a planner reach the run sheet", () => {
+    expect(hrefs(navGroupsFor("planner"))).toContain("/run-sheet");
   });
 });
 
@@ -130,6 +145,7 @@ describe("section views", () => {
   it.each([
     ["guests", GUESTS_TABS],
     ["tasks", TASKS_TABS],
+    ["run sheet", RUN_SHEET_TABS],
     ["design", DESIGN_TABS],
     ["registry", REGISTRY_TABS],
   ] as const)("every %s view is a real page", (_name, tabs) => {

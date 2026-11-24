@@ -50,6 +50,7 @@ export const PLANNER_NAV_HREFS: ReadonlySet<string> = new Set([
   "/guests",
   "/vendors",
   "/events",
+  "/run-sheet",
   "/lists",
   "/moodboards",
   "/day",

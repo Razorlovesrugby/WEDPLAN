@@ -4,8 +4,8 @@ import { formatTime } from "@/lib/format";
 import { TasksOnTheDayControls } from "./tasks-on-the-day-controls";
 
 /**
- * "Tasks on the day" for one guest, vendor or helper (spec 54 §10.2): their
- * tasks in time order, a way to assign another or remove one, and the state of
+ * "Jobs on the day" for one guest, vendor or helper (spec 54 §10.2): their
+ * jobs in time order, a way to assign another or remove one, and the state of
  * their day link.
  */
 export async function TasksOnTheDay({
@@ -33,8 +33,8 @@ export async function TasksOnTheDay({
 
   return (
     <section className="card space-y-2 p-4" aria-labelledby="tasks-on-the-day">
-      <h2 id="tasks-on-the-day" className="text-sm font-medium uppercase tracking-wide text-muted">Tasks on the day</h2>
-      {tasks.length === 0 ? <p className="text-sm text-muted">No tasks yet.</p> : null}
+      <h2 id="tasks-on-the-day" className="text-sm font-medium uppercase tracking-wide text-muted">Jobs on the day</h2>
+      {tasks.length === 0 ? <p className="text-sm text-muted">No jobs yet.</p> : null}
       <ul className="space-y-1 text-sm">
         {tasks.map((t) => (
           <li key={t.id} className="flex flex-wrap items-center justify-between gap-2">
@@ -53,7 +53,8 @@ export async function TasksOnTheDay({
         hasLink={Boolean(link.data)}
       />
       <p className="text-xs text-muted">
-        New task? <Link href="/run-sheet" className="underline">Add it on the run sheet</Link>, then assign it here.{" "}
+        New job? <Link href="/run-sheet" className="underline">Add it on the run sheet</Link>, then assign it here.{" "}
+        <Link href={`/run-sheet/people?who=${assignee.type}:${assignee.id}`} className="underline">See on the run sheet</Link>{" · "}
         <Link href="/run-sheet/links" className="underline">Day links</Link>
       </p>
     </section>

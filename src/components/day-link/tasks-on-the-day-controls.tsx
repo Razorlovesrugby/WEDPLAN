@@ -38,8 +38,8 @@ export function TasksOnTheDayControls(
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <select className="field w-auto" aria-label="Assign a task" value={chosen} onChange={(e) => setChosen(e.target.value)}>
-          <option value="">+ Assign a task…</option>
+        <select className="field w-auto" aria-label="Assign a job" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+          <option value="">+ Assign a job…</option>
           {props.options.map((o) => (
             <option key={o.id} value={o.id}>{o.label}</option>
           ))}

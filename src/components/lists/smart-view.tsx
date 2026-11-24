@@ -28,6 +28,7 @@ export function SmartView({
   people = [],
   currentUserId,
   timezone,
+  emptyText,
 }: {
   view: "today" | "scheduled" | "flagged" | "all" | "mine";
   items: ItemWithList[];
@@ -38,11 +39,13 @@ export function SmartView({
   currentUserId?: string;
   /** The wedding's timezone, so "today" and "overdue" are its own (spec 40 §7.2). */
   timezone: string;
+  /** Shown instead of the view's usual empty message, e.g. when a Who filter matches nothing. */
+  emptyText?: string;
 }) {
   const [hideCompleted, setHideCompleted] = useHideCompleted(`view:${view}`);
 
   if (items.length === 0 && overdueItems.length === 0) {
-    return <p className="card p-6 text-sm text-muted">{EMPTY_COPY[view]}</p>;
+    return <p className="card p-6 text-sm text-muted">{emptyText ?? EMPTY_COPY[view]}</p>;
   }
 
   // Sinks done items to the bottom (spec 10) — a no-op for "today",
