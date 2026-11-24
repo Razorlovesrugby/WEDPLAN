@@ -423,6 +423,9 @@ export type WeddingRow = {
   currency: string;
   /** Spec 54 §6.15: the day-before email to helpers, on by default. */
   day_before_email: boolean;
+  /** Spec 55 §6: who answers on the day. At most one of the two is set. */
+  day_lead_person_id: string | null;
+  day_lead_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -620,6 +623,8 @@ export type CollaboratorRow = {
   role: CollaboratorRole;
   /** A typed name for the assign picker and every place an assignee renders — falls back to the role label when unset (spec 15 §2). */
   display_name: string | null;
+  /** Spec 55 §6: vibrate and sound on the day. */
+  day_alerts: boolean;
   created_at: string;
 }
 
@@ -635,6 +640,8 @@ export type PersonRow = {
   /** Spec 54 §10.7: so a helper can be called, texted and emailed their link. */
   phone: string | null;
   email: string | null;
+  /** Spec 55 §6: vibrate and sound on the day. */
+  day_alerts: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -2160,10 +2167,10 @@ export type Database = {
         WeddingRow,
         // `slug` is optional on insert: 0015's trigger derives one from the
         // name when it is absent, so callers that do not care never set it.
-        "id" | Timestamps | "timezone" | "reminder_window_days" | "slug" | "day_before_email"
+        "id" | Timestamps | "timezone" | "reminder_window_days" | "slug" | "day_before_email" | "day_lead_person_id" | "day_lead_user_id"
       >;
-      collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
-      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access" | "phone" | "email">;
+      collaborators: Table<CollaboratorRow, "id" | "created_at" | "role" | "day_alerts">;
+      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access" | "phone" | "email" | "day_alerts">;
       day_links: Table<
         DayLinkRow,
         "id" | Timestamps | "modules" | "module_config" | "revoked_at" | "arrived_at"
@@ -2556,6 +2563,8 @@ export type Database = {
         };
         Returns: { outcome: "ok" | "unavailable" | "sold_out" | "busy"; claim_id: string | null; remaining: number }[];
       };
+      /** Spec 55 §6: the caller's own "alerts on the day" switch (collaborator or planner). */
+      set_my_day_alerts: { Args: { p_wedding_id: string; p_on: boolean }; Returns: undefined };
       /** Spec 53 Part C: the plan as one jsonb, and its hash (timestamps left out). */
       seating_state: { Args: { p_event_id: string }; Returns: Record<string, unknown> };
       seating_state_hash: { Args: { p_event_id: string }; Returns: string };

@@ -58,6 +58,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 51 | `0051_day_links_rest.sql` | Rest of spec 54's schema: reference photos (`run_sheet_item_files`), helper photo path, groups and members, leads and open tasks (`claim_open_task()`), announcements and their reads, push subscriptions, the reminder log, cues, module columns, `weddings.day_before_email`. Specs 52, 53, 55 move up one number. | 50 |
 | 52 | `0052_shot_list.sql` | `shot_sections`, `shots`, `shot_people`, the `shot_kind` / `shot_status` enums, and `guests.relationship` / `photo_path` / `vendor_note`. Spec 52. | 43, 44, 48, 50 |
 | 53 | `0053_seating_workspace.sql` | `seating_state()` / `seating_state_hash()` / `restore_seating_state()` (undo and redo guard), `take_seating_snapshot` pruned to the newest 30 automatic and `restore_seating_snapshot` rebuilt on them, `guests.needs_highchair` / `uses_wheelchair`, `seating_chairs_blocked`, `seating_checkins`. Spec 53. | 36, 44, 52 |
+| 54 | `0054_day_master.sql` | `collaborators.day_alerts`, `people.day_alerts`, `weddings.day_lead_person_id` / `day_lead_user_id` (one at most), `v_wedding_basics` gains the day lead, `set_my_day_alerts()`. Spec 55. | 43, 44, 45, 50 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

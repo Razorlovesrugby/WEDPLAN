@@ -13,10 +13,11 @@ import { NavIcon } from "./nav-icon";
  * every other place; it is a link to `/menu`, so it still works before the
  * page's JavaScript has loaded.
  */
-export function TabBar({ viewer, badges = {} }: { viewer: Viewer; badges?: Record<string, number> }) {
+export function TabBar({ viewer, badges = {}, liveDay = false }: { viewer: Viewer; badges?: Record<string, number>; liveDay?: boolean }) {
   const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
-  const tabs = tabsFor(viewer);
+  // On the wedding day only, Live replaces Today (spec 55 Q5).
+  const tabs: { id: string; label: string; href: string }[] = tabsFor(viewer).map((tab) => (liveDay && tab.id === "home" ? { id: "home", label: "Live", href: "/day" } : tab));
   const groups = moreGroupsFor(viewer);
   const current = sheetOpen ? "more" : activeTabId(pathname, viewer);
   const moreBadge = groups.flatMap((g) => g.entries).reduce((sum, e) => sum + (badges[e.href] ?? 0), 0);
@@ -36,7 +37,7 @@ export function TabBar({ viewer, badges = {} }: { viewer: Viewer; badges?: Recor
       >
         <ul className="mx-auto flex max-w-xl">
           {tabs.map((tab) => {
-            const active = current === tab.id;
+            const active = current === tab.id || (liveDay && tab.id === "home" && pathname.startsWith("/day"));
             const badge = badges[tab.href] ?? 0;
             return (
               <li key={tab.id} className="flex-1">

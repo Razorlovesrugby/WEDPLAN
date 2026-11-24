@@ -4,6 +4,7 @@ import { AccountMenu } from "@/components/shell/account-menu";
 import { CommandPalette, PaletteButton } from "@/components/shell/command-palette";
 import { ShellFrame } from "@/components/shell/shell-frame";
 import { Sidebar } from "@/components/shell/sidebar";
+import { todayInZone } from "@/lib/timezone";
 import { TabBar } from "@/components/shell/tab-bar";
 import { getCurrentWedding, getSessionUser, getViewerKind } from "@/server/queries/wedding";
 import { daysUntil, formatDate } from "@/lib/format";
@@ -61,7 +62,7 @@ export default async function PlannerLayout({ children }: { children: React.Reac
       <CommandPalette viewer={navViewer} />
 
       <Suspense fallback={null}>
-        <TabBar viewer={navViewer} badges={badges} />
+        <TabBar viewer={navViewer} badges={badges} liveDay={Boolean(wedding?.wedding_date && wedding.wedding_date === todayInZone(wedding.timezone))} />
       </Suspense>
     </ShellFrame>
   );

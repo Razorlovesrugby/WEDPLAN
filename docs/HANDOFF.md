@@ -24,6 +24,24 @@
 
 ## Recent sessions
 
+**Session 61 (specs 52, 53, 55, built):** on branch `claude/pensive-mayer-b0d5sr`, after "do the next tasks and
+specs". Migrations **`0052`, `0053`, `0054` must be applied to live** (with `0049`–`0051` from session 60). The specs
+named `0051`–`0053`; each shifted up because 54 used two numbers, and each spec's file says what it became.
+
+- **52 (shot list):** `/shots` (sections, shots, people, call-back ordering, suggested groups, slot fit, faces, print,
+  CSV) and the Shot list day-link module (Now / All shots / Faces, offline taps, latest-tap-wins).
+- **53 (seating workspace):** undo/redo for every seating write through whole-plan state with a hash guard, automatic
+  versions and History, seat-first and select-several, room template, bulk tables, duplicate and renumber, highchair
+  and wheelchair, Colour by Fit, the Seating day-link module (find a seat, arrived, move, walk-in, blocked chairs).
+- **55 (the master):** `/day` readiness / live / summary, alerts with escalation, shifting with a preview and undo,
+  announcements, People, module cards, day lead and alerts switch, Live on the phone tab bar on the day.
+- **Verified:** typecheck, 1601 unit tests, `npm run build`, SQL suite (918 assertions); the helper page (session 60)
+  and the master's Live screen were rendered in headless Chromium with sample data. **Not verified:** `/shots`, the
+  seating changes, the shot list and seating module tabs, the readiness and summary modes, any of it on a phone or an
+  iPad, push, or live Supabase. The spec 55 acceptance check (two real phones) hasn't been done.
+- **Every spec's "Build status" lists what differs.** The larger ones: seating undo is whole-plan (refused if anything
+  changed); "Show" and meal colours reach only the table drawer's chairs; the master's own writes aren't queued offline.
+
 **Session 60 (specs 51 and 54, built):** on branch `claude/pensive-mayer-b0d5sr`, asked to "build 51 and 54".
 Migrations **`0049` and `0050` must be applied to live** (nothing has been run against live).
 
@@ -66,23 +84,6 @@ migration, no app code. Every question in all five specs is answered (mostly "re
 - **Mockups:** a private claude.ai design canvas ("Shot list & seating mockups"). The last row
   is the chosen look; earlier rows are marked superseded.
 - **Verified:** nothing (specs only).
-
-**Session 58 (no spec):** Supabase egress, on branch `claude/admiring-davinci-q406md`.
-The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13 Dec 2026.
-
-- **Cause, confirmed on live by the planner:** all 549 storage objects were `no-cache` (browser
-  PUTs to signed upload URLs sent no `cache-control`, and Storage defaults to it), and every render
-  signed a fresh URL, so no photo was served from cache. The Storage report showed one photo
-  signed twice 27s apart, both downloads cache misses.
-- **Fixed:** uploads now send `max-age=31536000` (`src/lib/storage-cache.ts`); `signPaths()`
-  reuses a batch's signed URLs for half their life via `unstable_cache`, checking the age itself
-  so a stale entry is never handed out. Token lifetimes unchanged (moodboard revocation still 1h).
-- **Existing objects:** `scripts/fix-cache-control.mjs` re-uploads them with the header (dry run
-  by default, `--apply` to write). Not run. Editing `storage.objects.metadata` in SQL is not a fix:
-  it changes the listing, not the header Storage serves.
-- **Check:** egress mid-cycle (~29 Nov); Pro is the fallback before 13 Dec.
-- **Verified:** typecheck, 1461 unit tests, build. **Not verified:** a browser, live egress, the
-  script against real storage.
 
 ---
 

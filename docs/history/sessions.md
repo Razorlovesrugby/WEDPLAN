@@ -4,6 +4,23 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 58 (no spec):** Supabase egress, on branch `claude/admiring-davinci-q406md`.
+The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13 Dec 2026.
+
+- **Cause, confirmed on live by the planner:** all 549 storage objects were `no-cache` (browser
+  PUTs to signed upload URLs sent no `cache-control`, and Storage defaults to it), and every render
+  signed a fresh URL, so no photo was served from cache. The Storage report showed one photo
+  signed twice 27s apart, both downloads cache misses.
+- **Fixed:** uploads now send `max-age=31536000` (`src/lib/storage-cache.ts`); `signPaths()`
+  reuses a batch's signed URLs for half their life via `unstable_cache`, checking the age itself
+  so a stale entry is never handed out. Token lifetimes unchanged (moodboard revocation still 1h).
+- **Existing objects:** `scripts/fix-cache-control.mjs` re-uploads them with the header (dry run
+  by default, `--apply` to write). Not run. Editing `storage.objects.metadata` in SQL is not a fix:
+  it changes the listing, not the header Storage serves.
+- **Check:** egress mid-cycle (~29 Nov); Pro is the fallback before 13 Dec.
+- **Verified:** typecheck, 1461 unit tests, build. **Not verified:** a browser, live egress, the
+  script against real storage.
+
 **Session 57 (spec 49):** RSVP answers, built on branch `claude/funny-goldberg-4u6zsj` (no PR).
 The planner found `rsvp_answers` empty although guests had answered a "do you need transport?"
 question, and asked for the fix, a way to see answers, and a check of everything else:

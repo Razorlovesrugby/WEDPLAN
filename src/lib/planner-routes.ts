@@ -19,6 +19,7 @@ export const PLANNER_ROUTES = [
   "lists",
   "menu",
   "moodboards",
+  "day",
   "run-sheet",
   "shots",
   "seating",
@@ -51,4 +52,6 @@ export const PLANNER_NAV_HREFS: ReadonlySet<string> = new Set([
   "/events",
   "/lists",
   "/moodboards",
+  "/day",
+  "/shots",
 ]);
