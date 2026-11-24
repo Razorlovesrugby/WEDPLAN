@@ -1,12 +1,11 @@
 # Feature spec: Day links — a live page for everyone with a job on the day
 
-**Status: answered, not built, with four new questions.** Asked for as a
+**Status: answered, not built.** Asked for as a
 spec (2026-11-23). The first two rounds are answered (§15, §17). A pass
 against the leading event-staffing and day-of tools (§18) added
 confirmations, check-in, announcements, open tasks, good-to-know, reminders
-and cues on 2026-11-24; their questions are in §19. Nothing is built until
-they are answered and the planner says to build it (see
-`docs/specs/README.md`).
+and cues on 2026-11-24; their questions are answered too (§19). Nothing is
+built until the planner says to build it (see `docs/specs/README.md`).
 
 **Depends on:** spec 9 (share-link token pattern), spec 32 (audit log),
 spec 34 (polling), spec 39 (`people`), spec 48 (phone), spec 50 (run sheet
@@ -383,12 +382,12 @@ before the day too.
 
 - **The day before**, a helper with an email address gets one email at 6 pm
   in the wedding's timezone: "Your jobs tomorrow", with their tasks and their
-  link. The couple can turn this off per wedding (see Q9).
+  link. The couple can turn this off per wedding.
 - **On the day**, a helper who has added the link to their home screen (§5.7)
   can switch on **Remind me 10 minutes before each job**. It uses web push,
   which iPhones support only for home-screen web apps; on other phones it
   works in the browser too. It is off until they switch it on, and their
-  phone asks for permission (see Q6).
+  phone asks for permission.
 
 ### 6.16 Cues
 
@@ -397,7 +396,7 @@ the speeches) is a moment that has to start exactly on someone's word. From
 5 minutes before it, the assignees' Now card shows **Standby** with a
 countdown, and the page refreshes every 3 seconds instead of every 15. When
 the master taps **Go** (spec 55 §5.2), their card turns to **Go now**, the
-phone vibrates, and the countdown becomes "Started 0:04 ago" (see Q7).
+phone vibrates, and the countdown becomes "Started 0:04 ago".
 
 ## 7. Modules
 
@@ -507,7 +506,7 @@ themselves never reaches a helper.
   others see "Tama is leading this". The lead is who the master calls first.
 - **Groups:** the couple can save a **group** ("Ushers": Sione, Tama, Rangi,
   Hemi) and pick it in the assignee picker. Picking a group adds each member
-  as their own assignee, so each has their own Done (see Q2).
+  as their own assignee, so each has their own Done.
 - **From the person:** each guest, vendor and person page has **Tasks on the
   day**: their tasks in time order, **+ Assign a task** (pick an existing
   task or create one with this person already on it), and remove.
@@ -520,7 +519,7 @@ themselves never reaches a helper.
   with a number of places ("2 ushers to run the guestbook"). It shows on every
   group member's link under **Can you help?**, and the first to tap **I'll
   do it** are assigned, until the places are filled. The couple can still
-  assign anyone directly (see Q8).
+  assign anyone directly.
 - **Handing over:** a helper's Can't do it sheet (§6.4) can suggest who could
   take it, from their own group. The suggestion goes to the master with the
   hand-back; nobody is moved until the couple or planner reassigns.
@@ -540,7 +539,7 @@ and steps already written, to edit before adding: hand out programmes, seat
 guests for the ceremony, ring bearer, guestbook table, gift table, run the
 music for the walk in, family photo wrangler (linked to the shot list),
 signing witnesses, pack down and load the cars, return hired items. The list
-is code, not data (see Q4).
+is code, not data.
 
 ### 10.5 Links
 
@@ -550,7 +549,7 @@ is code, not data (see Q4).
   **See what they see** (their link in a read-only preview, no taps
   recorded) and **Turn off**.
 - The first time someone is assigned a task and has no link, the chip offers
-  **Make their link** (see Q5).
+  **Make their link**.
 - **Day links** (`/run-sheet/links`) lists everyone assigned anything, one
   row each: their link state, last opened, their modules (switch any offered
   module on or off), and **Make links for everyone without one**.
@@ -659,6 +658,12 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 - `run_sheet_items.open_to_group_id uuid null`, `open_places int null check
   (open_places between 1 and 20)`, both set or neither (§10.2).
 - `people.phone text null`, `people.email text null` (§10.7).
+- **The every-minute job** (§6.15, §19) is a `pg_cron` schedule calling a
+  route with a secret header. It is created by a script
+  (`scripts/ensure-day-cron.mjs`), not a migration, because `pg_cron` doesn't
+  exist on the bare Postgres the SQL suite runs on (the same reason the
+  storage bucket is made by `scripts/ensure-bucket.mjs`). The route does the
+  work; the job only calls it.
 - New activity kinds (§9): `confirmed`, `arrived`, `claimed`,
   `announcement_seen`, `announcement_ok`, `question`; the master writes
   `cue_go`.
@@ -824,22 +829,17 @@ hands-on.
 | An activity log of every change | zkipster | §9, spec 55 §5.5 |
 | Sensitive planner context hidden from roles | EventSync | §10.1 (instructions vs notes), §12 |
 
-## 19. Open questions (from the tools pass)
+## 19. Answered — 2026-11-24 (from the tools pass)
 
-**Q6. Web push reminders.** Opt-in "Remind me 10 minutes before each job"
-for helpers who add the link to their home screen (recommended). It needs a
-job that runs every minute on the day, which Vercel's cron on the current
-plan can't do: Supabase's `pg_cron` calling a route, or a Vercel plan with
-minute crons. Or no push, and the page alone?
+Every question took its recommendation.
 
-**Q7. Cues.** Standby and Go on tasks marked as cues (recommended), with
-3-second refresh near the cue? Or leave cues to the people in the room?
-
-**Q8. Open tasks.** Let a group claim a task ("2 ushers for the guestbook")
-(recommended), or only ever assign by name?
-
-**Q9. The day-before email.** On by default for helpers with an email
-(recommended), off by default, or not at all? Sending at 6 pm in each
-wedding's own timezone needs a job that runs at least hourly; the existing
-weekly reminders cron can't. The same minute-level job from Q6 would cover
-it.
+6. **Web push reminders:** yes, opt-in, for helpers who add the link to
+   their home screen (§6.15). The every-minute job is Supabase `pg_cron`
+   calling a token-protected route, like the existing cron routes, so no
+   Vercel plan change is needed. Rejected: no push.
+7. **Cues:** yes, Standby and Go with 3-second refresh from 5 minutes before
+   (§6.16, spec 55 §5.2).
+8. **Open tasks:** yes, a group can claim a task (§10.2).
+9. **The day-before email:** on by default for helpers with an email, sent at
+   6 pm in the wedding's timezone by the same `pg_cron` job (§6.15). The
+   couple can turn it off.

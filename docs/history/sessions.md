@@ -1,8 +1,24 @@
 # Session history
 
-The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–55), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 56 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
+The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–56), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 56 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
 
 ---
+
+**Session 56 (spec 48):** the phone experience, built on branch `claude/vibrant-bohr-xd2w8t`
+(no PR). The planner said the live app was poor on a phone (zooming, sideways scroll, Guests with
+no phone view, a bad bottom bar) and asked for it fixed, Apple-style. Read the spec's §2–§4:
+
+- **Bug fixed: Guests zoomed out on phones.** The guest table's `sr-only` labels escaped its
+  scroller and made the page 746px wide. Every sideways scroller is now `relative`, and the shell
+  has `overflow-x: clip`. **Rule: a sideways scroller must be `relative`.**
+- **No zoom:** 16px inputs on touch screens and below `md:`; `touch-action: manipulation`.
+- **Tab bar** is `PHONE_TABS` in `nav-groups.ts` (Today · Tasks · Guests · Website) plus More, a
+  bottom sheet; `/menu` is its no-JS fallback. `TAB_BAR`/group tabs from spec 41 are gone.
+- **Guests on a phone** are cards (`phoneCards()` in `guests-table.tsx`); a mark opens
+  `InviteCell` with `layout="sheet"`. The table is `md:` up only.
+- **Verified:** typecheck, 1415 unit tests, build, Guests/filters/sheets on an emulated iPhone 13
+  with sample data (390px wide throughout). **Not verified:** a real phone, live data, any other
+  screen on a phone.
 
 **Session 55 (no spec):** went live; privacy notice and docs. Branch
 `claude/confident-keller-xiwcvn` (no PR opened). A brainstorm of non-feature work, then the

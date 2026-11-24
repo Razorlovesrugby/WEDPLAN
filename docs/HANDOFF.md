@@ -24,6 +24,26 @@
 
 ## Recent sessions
 
+**Session 59 (specs 51–55, specs only):** event types, shot list, seating, day links and the
+on-the-day master, on branch `claude/events-feature-specs-pba8wb`. **Nothing built**: no
+migration, no app code. Every question in all five specs is answered (mostly "recommended").
+
+- **51:** event types are rows per wedding (nine seeded built-ins plus the couple's own, edited
+  the same way); a type only presets an event's switches (guests reply, seating, guest-facing,
+  main).
+- **54 is the foundation** for 52, 53 and 55: one private, phone-first link per run sheet
+  assignee, with an Apple-inspired look for day links only (§5), modules for per-role front ends
+  (shot list, seating), and every tap an activity row for 55's master. Its §10 adds what a task
+  holds (instructions separate from private notes, steps, bring list, contact, critical, lead,
+  groups, open tasks). §18 maps patterns from the leading event-staffing tools.
+- **Build order:** 51 → 54 → 52 → 53 → 55. Migrations `0049`–`0053` in that order.
+- **Traps the specs record:** `pg_cron` for 54's every-minute reminders is set up by a script,
+  not a migration (the SQL suite's Postgres has no `pg_cron`); `people` has no phone or email
+  until 54 adds them.
+- **Mockups:** a private claude.ai design canvas ("Shot list & seating mockups"). The last row
+  is the chosen look; earlier rows are marked superseded.
+- **Verified:** nothing (specs only).
+
 **Session 58 (no spec):** Supabase egress, on branch `claude/admiring-davinci-q406md`.
 The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13 Dec 2026.
 
@@ -57,22 +77,6 @@ question, and asked for the fix, a way to see answers, and a check of everything
   (`/api/export/answers`, also in the zip).
 - **Verified:** typecheck, 1424 unit tests, build, SQL suite (777 assertions), sample render at
   1280px and iPhone 13. **Not verified:** live Supabase, real data, a real phone.
-
-**Session 56 (spec 48):** the phone experience, built on branch `claude/vibrant-bohr-xd2w8t`
-(no PR). The planner said the live app was poor on a phone (zooming, sideways scroll, Guests with
-no phone view, a bad bottom bar) and asked for it fixed, Apple-style. Read the spec's §2–§4:
-
-- **Bug fixed: Guests zoomed out on phones.** The guest table's `sr-only` labels escaped its
-  scroller and made the page 746px wide. Every sideways scroller is now `relative`, and the shell
-  has `overflow-x: clip`. **Rule: a sideways scroller must be `relative`.**
-- **No zoom:** 16px inputs on touch screens and below `md:`; `touch-action: manipulation`.
-- **Tab bar** is `PHONE_TABS` in `nav-groups.ts` (Today · Tasks · Guests · Website) plus More, a
-  bottom sheet; `/menu` is its no-JS fallback. `TAB_BAR`/group tabs from spec 41 are gone.
-- **Guests on a phone** are cards (`phoneCards()` in `guests-table.tsx`); a mark opens
-  `InviteCell` with `layout="sheet"`. The table is `md:` up only.
-- **Verified:** typecheck, 1415 unit tests, build, Guests/filters/sheets on an emulated iPhone 13
-  with sample data (390px wide throughout). **Not verified:** a real phone, live data, any other
-  screen on a phone.
 
 ---
 
