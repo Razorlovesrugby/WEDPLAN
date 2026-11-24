@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addPerson, removePerson, renamePerson, restorePerson } from "@/server/actions/people";
 import { InlineText } from "@/components/guests/inline-text";
 import { PlannerAccess } from "@/components/settings/planner-access";
+import type { PersonLoad } from "@/lib/people";
 import type { PersonRow } from "@/lib/types/database";
 
 /**
@@ -16,11 +18,14 @@ import type { PersonRow } from "@/lib/types/database";
 export function PeopleEditor({
   people,
   emails = {},
+  loads = {},
   canGrantAccess = false,
 }: {
   people: PersonRow[];
   /** Email of each person who has a login, keyed by person id. */
   emails?: Record<string, string>;
+  /** Jobs on the day and open tasks per person id (spec 56 §7); a person with neither has no entry. */
+  loads?: Record<string, PersonLoad>;
   /** Only the couple may give or take away a login. */
   canGrantAccess?: boolean;
 }) {
@@ -78,6 +83,7 @@ export function PeopleEditor({
                     className="text-sm"
                   />
                 </span>
+                <PersonLoadLinks id={p.id} load={loads[p.id]} />
                 {p.access === "none" ? (
                   <button
                     type="button"
@@ -129,5 +135,25 @@ export function PeopleEditor({
         </details>
       ) : null}
     </div>
+  );
+}
+
+/** "2 jobs on the day · 3 tasks", each a link to that person's view of it; nothing at all when both are zero. */
+function PersonLoadLinks({ id, load }: { id: string; load?: PersonLoad }) {
+  if (!load || (load.jobs === 0 && load.tasks === 0)) return null;
+  return (
+    <span className="text-xs text-muted">
+      {load.jobs > 0 ? (
+        <Link href={`/run-sheet/people?who=person:${id}`} className="underline">
+          {load.jobs} {load.jobs === 1 ? "job" : "jobs"} on the day
+        </Link>
+      ) : null}
+      {load.jobs > 0 && load.tasks > 0 ? " · " : null}
+      {load.tasks > 0 ? (
+        <Link href={`/lists?view=all&who=p:${id}`} className="underline">
+          {load.tasks} {load.tasks === 1 ? "task" : "tasks"}
+        </Link>
+      ) : null}
+    </span>
   );
 }

@@ -1,5 +1,5 @@
 import { navGroupsFor, type Viewer } from "./nav-groups";
-import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, TASKS_TABS } from "./nav-tabs";
+import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, RUN_SHEET_TABS, TASKS_TABS } from "./nav-tabs";
 
 /**
  * ⌘K (spec 46): go anywhere, find anything, make something. Pure, so the
@@ -37,6 +37,7 @@ export function goCommands(viewer: Viewer): Command[] {
   }
   const subViews: [string, readonly { href: string; label: string }[]][] = [
     ["Tasks", TASKS_TABS],
+    ["Run sheet", RUN_SHEET_TABS],
     ["Guest list", GUESTS_TABS],
     ["Design", DESIGN_TABS],
     ["Registry", REGISTRY_TABS],

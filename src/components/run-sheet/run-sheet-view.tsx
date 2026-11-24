@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RowMenu } from "@/components/ui/row-menu";
 import { formatTime, pluralise } from "@/lib/format";
@@ -16,17 +17,23 @@ import {
   type RunSheetItem,
   type HelperGroup,
 } from "@/lib/run-sheet";
+import { runSheetHref, UNASSIGNED_WHO, type RunSheetParams } from "@/lib/run-sheet/view-params";
 import { deleteRunSheetItem, duplicateRunSheetItem, moveRunSheetItem } from "@/server/actions/run-sheet";
 import { RunSheetItemEditor } from "./item-editor";
 import { PeopleView } from "./people-view";
 
 const PX_PER_MINUTE = 1.2;
-const STORAGE_KEY = "wedplan.run-sheet.view";
-const UNASSIGNED = "unassigned";
 
 type EventOption = { id: string; name: string };
 
+/**
+ * The run sheet's Schedule and Who's doing what tabs (spec 56). What is shown
+ * comes from the address (`params`), not from state, so every view can be
+ * linked to; the day picker is the only thing held here.
+ */
 export function RunSheetView({
+  mode,
+  params,
   items,
   options,
   contacts,
@@ -37,6 +44,8 @@ export function RunSheetView({
   weddingDate,
   canAddPeople,
 }: {
+  mode: "schedule" | "people";
+  params: RunSheetParams;
   items: RunSheetItem[];
   options: RunSheetAssignee[];
   contacts: { id: string; label: string; phone: string }[];
@@ -50,39 +59,28 @@ export function RunSheetView({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"timeline" | "list" | "people">("timeline");
-  const [filter, setFilter] = useState<string>("");
   const [editor, setEditor] = useState<{ item: RunSheetItem | null; startsAt?: string } | null>(null);
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved === "list" || saved === "people") setView(saved);
-    } catch {
-      /* storage can be unavailable; the default is fine */
-    }
-  }, []);
-  function chooseView(next: "timeline" | "list" | "people") {
-    setView(next);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      /* ignore */
-    }
-  }
+  const { view, who: filter, event: eventId } = params;
+  const eventName = eventId ? (events.find((e) => e.id === eventId)?.name ?? "this event") : null;
+  // The schedule can be narrowed to one event; the people view always shows the whole wedding.
+  const shown = useMemo(
+    () => (mode === "schedule" && eventId ? items.filter((i) => i.event_id === eventId) : items),
+    [mode, eventId, items],
+  );
 
-  const days = useMemo(() => daysWithItems(items.map((i) => ({ id: i.id, startsAt: i.starts_at, endsAt: i.ends_at })), timeZone), [items, timeZone]);
+  const days = useMemo(() => daysWithItems(shown.map((i) => ({ id: i.id, startsAt: i.starts_at, endsAt: i.ends_at })), timeZone), [shown, timeZone]);
   const [chosenDay, setChosenDay] = useState<string | null>(null);
   const day = chosenDay && days.includes(chosenDay) ? chosenDay : defaultDay(days, weddingDate);
   const dayItems = useMemo(
-    () => (day ? items.filter((i) => dayKeyOf(i.starts_at, timeZone) === day) : []),
-    [items, day, timeZone],
+    () => (day ? shown.filter((i) => dayKeyOf(i.starts_at, timeZone) === day) : []),
+    [shown, day, timeZone],
   );
 
   const matches = (item: RunSheetItem) =>
     !filter
       ? true
-      : filter === UNASSIGNED
+      : filter === UNASSIGNED_WHO
         ? item.assignees.length === 0
         : item.assignees.some((a) => a.key === filter);
 
@@ -118,24 +116,29 @@ export function RunSheetView({
 
   const conflicts = items.filter((i) => i.conflict).length;
 
+  const here = mode === "schedule" ? "/run-sheet" : "/run-sheet/people";
+  const goTo = (next: Partial<RunSheetParams>) => router.replace(runSheetHref(here, { ...params, ...next }));
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-md border border-line text-sm">
-          {(["timeline", "list", "people"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              onClick={() => chooseView(v)}
-              className={`px-3 py-1.5 ${view === v ? "bg-ink text-white" : "bg-white text-ink"}`}
-            >
-              {v === "timeline" ? "Timeline" : v === "list" ? "List" : "People"}
-            </button>
-          ))}
-        </div>
+        {mode === "schedule" ? (
+          <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-md border border-line text-sm">
+            {(["hours", "list"] as const).map((v) => (
+              <Link
+                key={v}
+                href={runSheetHref(here, { ...params, view: v })}
+                replace
+                aria-current={view === v ? "true" : undefined}
+                className={`px-3 py-1.5 ${view === v ? "bg-ink text-white" : "bg-white text-ink"}`}
+              >
+                {v === "hours" ? "By the hour" : "List"}
+              </Link>
+            ))}
+          </div>
+        ) : null}
 
-        {days.length > 1 && view === "timeline" ? (
+        {mode === "schedule" && days.length > 1 && view === "hours" ? (
           <select
             aria-label="Day"
             className="field w-auto"
@@ -155,24 +158,38 @@ export function RunSheetView({
           </select>
         ) : null}
 
-        <select aria-label="Show" className="field w-auto" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="">Everyone</option>
-          <option value={UNASSIGNED}>Unassigned</option>
-          {usedPeople.map((p) => (
-            <option key={p.key} value={p.key}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        {mode === "schedule" ? (
+          <select aria-label="Show" className="field w-auto" value={filter} onChange={(e) => goTo({ who: e.target.value })}>
+            <option value="">Everyone</option>
+            <option value={UNASSIGNED_WHO}>Unassigned</option>
+            {usedPeople.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        ) : canAddPeople ? (
+          <Link href="/settings#people" className="text-sm underline">
+            Add or edit people
+          </Link>
+        ) : null}
 
         <button type="button" className="btn-primary ml-auto" onClick={() => setEditor({ item: null })}>
-          Add item
+          Add job
         </button>
       </div>
 
-      {conflicts > 0 ? (
+      {eventName ? (
         <p className="text-sm text-muted">
-          {pluralise(conflicts, "item")} overlap with something else the same person is doing. Both are kept.
+          Showing {eventName} &middot;{" "}
+          <Link href={runSheetHref(here, { ...params, event: null })} replace className="underline">
+            Show all
+          </Link>
+        </p>
+      ) : null}
+      {mode === "schedule" && conflicts > 0 ? (
+        <p className="text-sm text-muted">
+          {pluralise(conflicts, "job")} overlap with something else the same person is doing. Both are kept.
         </p>
       ) : null}
       {error ? (
@@ -184,12 +201,23 @@ export function RunSheetView({
 
       {items.length === 0 ? (
         <p className="card p-8 text-center text-sm text-muted">
-          Nothing on the run sheet yet. Add the first item and give it a start and an end.
+          Nothing on the run sheet yet. Add the first job and give it a start and an end.
         </p>
-      ) : view === "people" ? (
-        <PeopleView items={items} options={options} linkStates={linkStates} timeZone={timeZone} onOpen={(item) => setEditor({ item })} />
+      ) : mode === "people" ? (
+        <PeopleView
+          items={items}
+          options={options}
+          linkStates={linkStates}
+          timeZone={timeZone}
+          highlight={filter}
+          onOpen={(item) => setEditor({ item })}
+        />
+      ) : shown.length === 0 ? (
+        <p className="card p-8 text-center text-sm text-muted">
+          {eventName} has no jobs yet. Add one and it starts under this event.
+        </p>
       ) : view === "list" ? (
-        <ListView items={items} timeZone={timeZone} matches={matches} menuFor={menuFor} onOpen={(item) => setEditor({ item })} />
+        <ListView items={shown} timeZone={timeZone} matches={matches} menuFor={menuFor} onOpen={(item) => setEditor({ item })} />
       ) : day ? (
         <Timeline
           day={day}
@@ -215,6 +243,7 @@ export function RunSheetView({
         events={events}
         timeZone={timeZone}
         canAddPeople={canAddPeople}
+        defaultEventId={mode === "schedule" && eventId ? eventId : undefined}
       />
     </div>
   );

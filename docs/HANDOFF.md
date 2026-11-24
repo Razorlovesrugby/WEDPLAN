@@ -24,6 +24,21 @@
 
 ## Recent sessions
 
+**Session 62 (spec 56, built):** on branch `claude/blissful-carson-0c4i5s`, asked to find a way through tasks, the run
+sheet and who's doing what, then "Let's build". **No migration; nothing to apply to live.**
+
+- **Sidebar:** "The day" is Events, Run sheet, Shot list, On the day (Run sheet is its own entry and a planner login
+  sees it). The run sheet has three tabs: Schedule `/run-sheet`, Who's doing what `/run-sheet/people` (new route),
+  Day links `/run-sheet/links`; ⌘K lists them. By the hour / List is `?view=list`, the Show filter `?who=`, and an
+  event's "Run sheet →" opens `?event=<id>`. The browser-remembered view is gone. Run sheet entries are "jobs" on
+  planner screens (the helper page is unchanged); readiness's Fix links point at the right tab.
+- **People:** Settings → People shows "N jobs on the day · N tasks" as links; guest and vendor pages say "Jobs on the
+  day" and link to that person's row; All tasks has a Who filter (`?who=p:<id>` or `u:<id>`, the assign picker's
+  encoding, not the spec's first draft of `person:<id>`).
+- **Verified:** typecheck, 1622 unit tests, `npm run build`. **Not verified:** any of it in a browser, on a phone or
+  against live Supabase; the SQL suite wasn't run (no migration). The new routes and the `?who=` / `?event=` links
+  have never been rendered with real data.
+
 **Session 61 (specs 52, 53, 55, built):** on branch `claude/pensive-mayer-b0d5sr`, after "do the next tasks and
 specs". Migrations **`0052`, `0053`, `0054` must be applied to live** (with `0049`–`0051` from session 60). The specs
 named `0051`–`0053`; each shifted up because 54 used two numbers, and each spec's file says what it became.
@@ -64,26 +79,6 @@ Migrations **`0049` and `0050` must be applied to live** (nothing has been run a
 - **Verified:** typecheck, unit tests, `npm run build`, SQL suite (885 assertions), and the helper page
   rendered in headless Chromium at 390 px (light, dark) with sample data. **Not
   verified:** the `/events` form, the couple's Day links screen, a real phone, push, live Supabase, email sending. Next in the build order: 52, 53, 55.
-
-**Session 59 (specs 51–55, specs only):** event types, shot list, seating, day links and the
-on-the-day master, on branch `claude/events-feature-specs-pba8wb`. **Nothing built**: no
-migration, no app code. Every question in all five specs is answered (mostly "recommended").
-
-- **51:** event types are rows per wedding (nine seeded built-ins plus the couple's own, edited
-  the same way); a type only presets an event's switches (guests reply, seating, guest-facing,
-  main).
-- **54 is the foundation** for 52, 53 and 55: one private, phone-first link per run sheet
-  assignee, with an Apple-inspired look for day links only (§5), modules for per-role front ends
-  (shot list, seating), and every tap an activity row for 55's master. Its §10 adds what a task
-  holds (instructions separate from private notes, steps, bring list, contact, critical, lead,
-  groups, open tasks). §18 maps patterns from the leading event-staffing tools.
-- **Build order:** 51 → 54 → 52 → 53 → 55. Migrations `0049`–`0053` in that order.
-- **Traps the specs record:** `pg_cron` for 54's every-minute reminders is set up by a script,
-  not a migration (the SQL suite's Postgres has no `pg_cron`); `people` has no phone or email
-  until 54 adds them.
-- **Mockups:** a private claude.ai design canvas ("Shot list & seating mockups"). The last row
-  is the chosen look; earlier rows are marked superseded.
-- **Verified:** nothing (specs only).
 
 ---
 
@@ -139,6 +134,7 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/w` | Public site, thin and noindex |
 | `/lists` | Sidebar of lists + smart views (Today, Scheduled, Flagged, All, Assigned to me) |
 | `/lists/[id]` | One list: sections, inline add/edit/tick/flag/date/assign, sub-items, drag reorder (within a section) |
+| `/run-sheet`, `/run-sheet/people`, `/run-sheet/links` | The run sheet's three tabs (spec 56): Schedule (By the hour / List, `?view=`, `?who=`, `?event=`), Who's doing what, Day links |
 | `/timeline` | Every dated item, chronological, week/month/quarter zoom, drag-to-reschedule (snaps to the zoom's bucket) |
 | `/calendar` | Month grid of the same dated items, color-coded, drag-to-reschedule, overdue/due-soon marked |
 | `/board` | Kanban — Not started / In progress / Done, drag between columns |

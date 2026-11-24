@@ -123,3 +123,22 @@ export function personIdForUser(
   if (!userId) return null;
   return people.find((p) => p.user_id === userId && !p.deleted_at)?.id ?? null;
 }
+
+/** How much one person has: jobs on the day (the run sheet) and open planning tasks (spec 56 §7). */
+export type PersonLoad = { jobs: number; tasks: number };
+
+/**
+ * Each person's load, keyed by person id. A person with neither has no entry,
+ * so callers read `loads[id] ?? { jobs: 0, tasks: 0 }`. `openTasks` are
+ * planning items not yet done; the caller filters those at the query.
+ */
+export function personLoads(
+  jobAssignments: readonly { person_id: string | null }[],
+  openTasks: readonly { assigned_person_id: string | null }[],
+): Record<string, PersonLoad> {
+  const loads: Record<string, PersonLoad> = {};
+  const at = (id: string) => (loads[id] ??= { jobs: 0, tasks: 0 });
+  for (const row of jobAssignments) if (row.person_id) at(row.person_id).jobs += 1;
+  for (const row of openTasks) if (row.assigned_person_id) at(row.assigned_person_id).tasks += 1;
+  return loads;
+}

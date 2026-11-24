@@ -139,6 +139,13 @@ describe("readiness", () => {
     expect(by("open_places").names).toEqual(["Guestbook (2)"]);
     expect(by("confirmed").label).toBe("Confirmed 8 of 10");
   });
+  it("sends each gap to the run sheet view where it is fixed (spec 56 §6.3)", () => {
+    expect(by("unassigned").href).toBe("/run-sheet/people");
+    expect(by("open_places").href).toBe("/run-sheet/people");
+    for (const key of ["no_link", "unopened", "no_phone", "handed_back", "questions", "confirmed"]) {
+      expect(by(key).href, key).toBe("/run-sheet/links");
+    }
+  });
   it("says whether the day is ready", () => {
     expect(readinessSummary(lines).ready).toBe(false);
     const clean = readiness({ items: [{ id: "a", title: "A", assigneeCount: 1, handedBack: false, openPlaces: 0 }], helpers: [], tasks: { total: 1, confirmed: 1 }, questions: 0, contacts: 1, infoSections: 1 });

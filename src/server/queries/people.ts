@@ -2,7 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { personLoads, type PersonLoad } from "@/lib/people";
 import type { PersonRow } from "@/lib/types/database";
+import { getLists } from "./lists";
 
 /**
  * Everyone a task can be handed to who isn't one of the two collaborators
@@ -38,4 +40,29 @@ export const getPersonEmails = cache(async (people: readonly PersonRow[]): Promi
     }),
   );
   return out;
+});
+
+/**
+ * Jobs on the day and open planning tasks per person, for the People list in
+ * Settings (spec 56 §7). Tasks in archived lists don't count, as in every
+ * other task view.
+ */
+export const getPersonLoads = cache(async (weddingId: string): Promise<Record<string, PersonLoad>> => {
+  const supabase = await createClient();
+  const listIds = (await getLists(weddingId)).map((list) => list.id);
+  const [jobs, tasks] = await Promise.all([
+    supabase.from("run_sheet_item_assignees").select("person_id").eq("wedding_id", weddingId).not("person_id", "is", null),
+    listIds.length === 0
+      ? Promise.resolve({ data: [], error: null })
+      : supabase
+          .from("list_items")
+          .select("assigned_person_id")
+          .eq("wedding_id", weddingId)
+          .not("assigned_person_id", "is", null)
+          .neq("status", "done")
+          .in("list_id", listIds),
+  ]);
+  if (jobs.error) throw new Error(`Could not count people's jobs: ${jobs.error.message}`);
+  if (tasks.error) throw new Error(`Could not count people's tasks: ${tasks.error.message}`);
+  return personLoads(jobs.data ?? [], tasks.data ?? []);
 });

@@ -1,7 +1,7 @@
 # Feature spec: Finding your way through tasks, the run sheet and who's doing what
 
-**Status: answered (§9), not built.** Asked for as a spec (2026-11-24); every question answered the same day.
-Nothing is built until the planner says to build it (see `docs/specs/README.md`).
+**Status: built (2026-11-24); see Build status at the end.** Asked for as a spec, every question answered the same day,
+then "Let's build".
 
 No feature is removed. Every screen stays; the only things taken away are the run sheet header's "Day links →"
 button (the Day links tab replaces it) and the browser remembering the run sheet's last view (the URL holds it).
@@ -118,12 +118,13 @@ with no phone" → `/run-sheet/links`; "Open tasks with places still free" → `
 ## 7. People: one click to their day
 
 - **Settings → People:** each person's row shows "N jobs on the day · N tasks" (zero hidden), linking to
-  `/run-sheet/people?who=person:<id>` and `/lists?view=all&who=person:<id>`. A line above the list: "Helpers for
+  `/run-sheet/people?who=person:<id>` and `/lists?view=all&who=p:<id>`. A line above the list: "Helpers for
   the day are added here or straight from a job."
 - **Who's doing what:** a "Add or edit people" link to `/settings#people`.
 - **Guest and vendor pages:** "Tasks on the day" becomes "Jobs on the day" and gains "See on the run sheet" →
   `/run-sheet/people?who=<type>:<id>`.
-- **Planning tasks by person:** the Tasks smart view "All" takes `?who=` (a collaborator or person) with a "Who"
+- **Planning tasks by person:** the Tasks smart view "All" takes `?who=` (the assign picker's value: `u:<user id>` for
+  a collaborator, `p:<person id>` for a person) with a "Who"
   select beside it; "Assigned to me" stays as it is. The filtering is a pure function in `src/lib/lists/`.
 
 ## 8. Phone
@@ -157,3 +158,18 @@ No migration. Verify with typecheck, unit tests and build, and render `/run-shee
 
 Someone who has never used the app, given "make sure the best man has a link for the day" and "see what Mere
 is doing at 3pm", finds both from the sidebar without help, and from ⌘K by typing "who" or "links".
+
+## 12. Build status
+
+Built as specified, with these differences. No migration.
+
+- The Who filter on All tasks uses the assign picker's encoding (`u:` / `p:`), not `person:<id>` (§7).
+- Settings → People counts a person's **open** tasks (not done, not in an archived list); the link goes to All, which
+  also lists their done ones.
+- `?who=` on Who's doing what marks and scrolls to the person; if they have no jobs it says so.
+- The day picker on Schedule is still local state, not in the URL.
+- Only run sheet screens, the item editor, readiness and the "Jobs on the day" panels say "job"; the On the day
+  master, Day links screen and shot list keep their existing words for now.
+
+**Verified:** typecheck, 1622 unit tests, `npm run build`. **Not verified:** any screen in a browser, on a phone or
+against live Supabase.

@@ -79,7 +79,7 @@ export function EventsEditor({
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link href="/run-sheet" className="btn" prefetch={false}>
+                  <Link href={`/run-sheet?event=${event.id}`} className="btn" prefetch={false}>
                     Run sheet →
                   </Link>
                   {event.has_seating ? (

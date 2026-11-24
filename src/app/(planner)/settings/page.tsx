@@ -2,7 +2,7 @@ import { getCollaborators, getSessionUser, requireWedding } from "@/server/queri
 import Link from "next/link";
 import { WeddingBasicsForm } from "@/components/settings/wedding-basics-form";
 import { PeopleEditor } from "@/components/settings/people-editor";
-import { getPeople, getPersonEmails } from "@/server/queries/people";
+import { getPeople, getPersonEmails, getPersonLoads } from "@/server/queries/people";
 import { AccountSection } from "@/components/settings/account-section";
 import { getPartnerAccount } from "@/server/queries/partner";
 import { currencyOptions } from "@/lib/onboarding";
@@ -11,7 +11,11 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const wedding = await requireWedding();
-  const [collaborators, people] = await Promise.all([getCollaborators(wedding.id), getPeople(wedding.id)]);
+  const [collaborators, people, loads] = await Promise.all([
+    getCollaborators(wedding.id),
+    getPeople(wedding.id),
+    getPersonLoads(wedding.id),
+  ]);
 
   const personEmails = await getPersonEmails(people).catch(() => ({}) as Record<string, string>);
   const user = await getSessionUser();
@@ -79,7 +83,10 @@ export default async function SettingsPage() {
           tasks, vendors and the day, and can look at the guest list &mdash; not the budget, and not
           your registry, site settings or this page.
         </p>
-        <PeopleEditor people={people} emails={personEmails} canGrantAccess />
+        <p className="text-sm text-muted">
+          Helpers for the day are added here, or straight from a job on the run sheet.
+        </p>
+        <PeopleEditor people={people} emails={personEmails} loads={loads} canGrantAccess />
       </section>
 
       <section aria-labelledby="download" className="card space-y-2 p-4">
