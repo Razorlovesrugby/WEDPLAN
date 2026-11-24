@@ -1619,6 +1619,13 @@ export type SeatingPlanRow = {
   calibrated: boolean;
   /** When guests may see their table on their own page. Null = never. */
   reveal_at: string | null;
+  /** Spec 57: the plan's "Colour chairs by", in `parseColourBy`'s form; null = nothing. */
+  colour_by: string | null;
+  service_style: "plated" | "shared" | "buffet" | "roaming";
+  /** Courses and dishes, shaped by src/lib/seating/service.ts. */
+  menu: Json;
+  /** Thresholds, shaped by src/lib/seating/plan-settings.ts. */
+  settings: Json;
   created_at: string;
   updated_at: string;
 };
@@ -2559,6 +2566,10 @@ export type Database = {
         | "room_width_cm"
         | "room_depth_cm"
         | "calibrated"
+        | "colour_by"
+        | "service_style"
+        | "menu"
+        | "settings"
       >;
       seating_tables: Table<
         SeatingTableRow,

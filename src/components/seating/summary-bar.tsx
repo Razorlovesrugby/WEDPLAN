@@ -5,6 +5,7 @@ import { pluralise } from "@/lib/format";
 import { colourLegend, parseColourBy, serialiseColourBy } from "@/lib/seating/colour";
 import { FIT_LABELS, fitCounts, type FitState } from "@/lib/seating/fit";
 import { declinedSeatedGuestIds } from "@/lib/seating/warnings";
+import { setSeatingColourBy } from "@/server/actions/seating-workspace";
 import { useSeating } from "./seating-state";
 
 /**
@@ -13,7 +14,7 @@ import { useSeating } from "./seating-state";
  * who has declined to the tray. Nothing here is ever removed automatically.
  */
 export function SummaryBar() {
-  const { summary, warnings, colourBy, setColourBy, data, move, openTable, assignments } = useSeating();
+  const { summary, warnings, colourBy, setColourBy, data, move, openTable, assignments, eventId, track, setError } = useSeating();
   const [showWarnings, setShowWarnings] = useState(false);
   const declined = declinedSeatedGuestIds(warnings);
   const legend = colourLegend(colourBy, data.colour);
@@ -86,10 +87,17 @@ export function SummaryBar() {
           <select
             className="field w-auto py-1"
             value={serialiseColourBy(colourBy)}
-            onChange={(e) => setColourBy(parseColourBy(e.target.value))}
+            onChange={(e) => {
+              const next = e.target.value;
+              setColourBy(parseColourBy(next));
+              void track("Changed the colours", () => setSeatingColourBy(eventId, next)).then((r) => {
+                if (!r.ok) setError(r.error);
+              });
+            }}
           >
             <option value="">Nothing</option>
             <option value="side">Side</option>
+            <option value="dietary">Dietary needs</option>
             <option value="fit">Fit: does the seat suit them</option>
             {data.colour.tags.map((t) => (
               <option key={t.id} value={`tag:${t.id}`}>

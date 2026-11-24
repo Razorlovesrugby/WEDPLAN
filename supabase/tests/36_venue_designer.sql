@@ -110,6 +110,15 @@ select pg_temp.expect((select count(*) from public.seating_table_styles where we
 select pg_temp.expect_error(format(
   'insert into public.seating_plans (wedding_id, event_id, service_style) values (%L, %L, ''banquet'')', :w1, :reception),
   '23514', 'a service style is one of the four');
+
+-- The upsert the colour-by action makes (an unchecked always-failing upsert once lost every RSVP answer).
+insert into public.seating_plans (wedding_id, event_id, colour_by) values (:w1, :reception, 'dietary')
+  on conflict (event_id) do update set colour_by = excluded.colour_by;
+insert into public.seating_plans (wedding_id, event_id, colour_by) values (:w1, :reception, 'q:abc')
+  on conflict (event_id) do update set colour_by = excluded.colour_by;
+select pg_temp.expect((select count(*) from public.seating_plans where event_id = :reception and colour_by = 'q:abc'), 1,
+  'the colour-by upsert inserts, then updates');
+select pg_temp.expect((select count(*) from public.seating_layouts where event_id = :reception), 1, '… and makes one layout');
 rollback;
 
 -- ---------------------------------------------------------------------------

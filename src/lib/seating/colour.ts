@@ -15,6 +15,8 @@ export type ColourBy =
   | { kind: "side" }
   /** Spec 53 Part G: how well each seated guest's seat suits them. */
   | { kind: "fit" }
+  /** Spec 57: who has a dietary need and who hasn't. */
+  | { kind: "dietary" }
   | { kind: "tag"; tagId: string }
   | { kind: "question"; questionId: string };
 
@@ -31,11 +33,13 @@ export const PALETTE = [
 ] as const;
 
 export const NO_ANSWER_COLOUR = "#c9c4bb";
+export const DIETARY_COLOUR = "#b0532b";
 
 /** `side`, `tag:<id>`, `q:<id>`, or anything else for none — the URL form. */
 export function parseColourBy(raw: string | null | undefined): ColourBy {
   if (raw === "side") return { kind: "side" };
   if (raw === "fit") return { kind: "fit" };
+  if (raw === "dietary") return { kind: "dietary" };
   if (raw?.startsWith("tag:") && raw.length > 4) return { kind: "tag", tagId: raw.slice(4) };
   if (raw?.startsWith("q:") && raw.length > 2) return { kind: "question", questionId: raw.slice(2) };
   return { kind: "none" };
@@ -47,6 +51,8 @@ export function serialiseColourBy(c: ColourBy): string {
       return "side";
     case "fit":
       return "fit";
+    case "dietary":
+      return "dietary";
     case "tag":
       return `tag:${c.tagId}`;
     case "question":
@@ -76,6 +82,11 @@ export function colourLegend(c: ColourBy, ctx: ColourContext): ColourKeyEntry[] 
   switch (c.kind) {
     case "fit":
       return (["green", "amber", "red"] as const).map((s) => ({ label: FIT_LABELS[s], colour: FIT_COLOURS[s] }));
+    case "dietary":
+      return [
+        { label: "Dietary need", colour: DIETARY_COLOUR },
+        { label: "None", colour: NO_ANSWER_COLOUR },
+      ];
     case "side":
       return [
         ...SIDES.map((s, i) => ({ label: sideLabel(s, ctx.collaborators), colour: PALETTE[i]! })),
@@ -112,6 +123,8 @@ export function guestColour(g: SeatingGuest, c: ColourBy, ctx: ColourContext): C
       const state = ctx.fit?.[g.id];
       return state ? { label: FIT_LABELS[state], colour: FIT_COLOURS[state] } : null;
     }
+    case "dietary":
+      return (g.dietary ?? "").trim() !== "" ? legend[0]! : legend[1]!;
     case "side": {
       const i = g.side ? SIDES.indexOf(g.side) : -1;
       return i >= 0 ? legend[i]! : fallback;

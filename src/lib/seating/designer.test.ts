@@ -14,6 +14,9 @@ import {
 import { localSeatPositions, readSegments, tableSize, tablePolygon, seatPositions, FIXTURE_DEFAULTS, polygonsOverlap } from "./geometry";
 import { classifyWalkway, DEFAULT_SETTINGS, parseSettings } from "./plan-settings";
 import { computeService, parseMenu, typedPlatters, type ServiceSeat, type ServiceTable } from "./service";
+import { chairDetail, chairMarks, initials, readableText } from "./chairs";
+import { colourLegend, guestColour, parseColourBy, serialiseColourBy } from "./colour";
+import type { SeatingGuest } from "./model";
 import { computeItems, effectiveStyle, itemsCsv, mergeFinal, parseStyleChanges, parseStyleCentre, parseStylePlace, type ItemTable, type TableStyle } from "./items";
 
 const wall = (id: string, a: [number, number], b: [number, number], over: Partial<Wall> = {}): Wall => ({ id, a, b, thick: 20, bulge: 0, ...over });
@@ -433,5 +436,56 @@ describe("table styles and item totals", () => {
     expect(parseStyleChanges({})).toBeNull();
     expect(parseStyleChanges({ place: { glasses: { on: false } } })).toEqual({ place: { glasses: { on: false } } });
     expect(parseStyleChanges("x")).toBeNull();
+  });
+});
+
+describe("what a chair shows", () => {
+  const g = (over: Partial<SeatingGuest> = {}): SeatingGuest => ({
+    id: "g", householdId: "h", householdName: "H", firstName: "Aroha", lastName: "Ngata", preferredName: null, ageBand: "adult", side: null,
+    dietary: null, accessibility: null, plusOneFor: null, tagIds: [], invited: true, excluded: false, rsvp: "yes",
+    needsHighchair: false, usesWheelchair: false, arrivedAt: null, ...over,
+  });
+
+  it("steps from dots to initials to names as you zoom in", () => {
+    expect(chairDetail(0.3)).toBe("dot");
+    expect(chairDetail(0.59)).toBe("dot");
+    expect(chairDetail(0.6)).toBe("initials");
+    expect(chairDetail(1)).toBe("initials");
+    expect(chairDetail(1.49)).toBe("initials");
+    expect(chairDetail(1.5)).toBe("name");
+  });
+
+  it("makes initials from the name the guest goes by", () => {
+    expect(initials(g())).toBe("AN");
+    expect(initials(g({ preferredName: "Ro" }))).toBe("RN");
+    expect(initials(g({ lastName: null }))).toBe("A");
+    expect(initials(g({ firstName: "élodie", lastName: "øien" }))).toBe("ÉØ");
+    expect(initials(g({ firstName: "", lastName: null }))).toBe("");
+  });
+
+  it("marks a dietary note and a guest who can't come", () => {
+    expect(chairMarks(g())).toEqual({ dietary: false, declined: false });
+    expect(chairMarks(g({ dietary: "  " })).dietary).toBe(false);
+    expect(chairMarks(g({ dietary: "Shellfish" })).dietary).toBe(true);
+    expect(chairMarks(g({ rsvp: "no" })).declined).toBe(true);
+    expect(chairMarks(g({ excluded: true })).declined).toBe(true);
+    expect(chairMarks(g({ rsvp: null })).declined).toBe(false);
+  });
+
+  it("writes dark on light chairs and light on dark ones", () => {
+    expect(readableText("#ffffff")).toBe("#1a1a1a");
+    expect(readableText("#c9c4bb")).toBe("#1a1a1a");
+    expect(readableText("#2f6f4f")).toBe("#ffffff");
+    expect(readableText("#6b6560")).toBe("#ffffff");
+    expect(readableText("nonsense")).toBe("#1a1a1a");
+  });
+
+  it("colours chairs by dietary needs", () => {
+    expect(parseColourBy("dietary")).toEqual({ kind: "dietary" });
+    expect(serialiseColourBy({ kind: "dietary" })).toBe("dietary");
+    const ctx = { collaborators: [], tags: [], questions: [], answers: {} };
+    expect(colourLegend({ kind: "dietary" }, ctx).map((e) => e.label)).toEqual(["Dietary need", "None"]);
+    expect(guestColour(g({ dietary: "Nuts" }), { kind: "dietary" }, ctx)!.label).toBe("Dietary need");
+    expect(guestColour(g(), { kind: "dietary" }, ctx)!.label).toBe("None");
   });
 });
