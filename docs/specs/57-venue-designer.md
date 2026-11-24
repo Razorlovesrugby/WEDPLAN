@@ -1,8 +1,8 @@
 # Feature spec: The venue designer: draw the room, style the tables, seat the guests
 
-**Status: answered, not built.** Every question answered 2026-11-24 (40,
-8 follow-ups and 3 last ones; see **Answered**). Nothing is
-built until the planner says to build it (see `docs/specs/README.md`).
+**Status: answered, partly built** (see **Build status** at the end). Every
+question answered 2026-11-24 (40, 8 follow-ups and 3 last ones; see
+**Answered**).
 
 **Mockups:** the private claude.ai design canvas "Venue designer mockups"
 (<https://claude.ai/artifact/9wUV92RjgVdvH4BHQcbpUk>), five boards: (1) the
@@ -597,3 +597,28 @@ and must be named if not done.
   per space bounds it.
 - **Scope:** ten build steps. Each step is usable on its own, in the order
   above.
+
+## Build status
+
+Built on branch `claude/visual-seating-plan-gkbppo` (migrations `0055` to `0058`).
+Typechecked, unit-tested (1696), SQL-suite tested (990 assertions) and built;
+**never opened in a browser or run on live**, and nothing is applied to live.
+
+| Part | State |
+| --- | --- |
+| §15 data, step 1 (`0055`, `0056`) | Built. Layouts and spaces exist and the backfill is tested on legacy data. `seat_assignments` keeps its (guest, event) key beside the new one per guest per layout. |
+| §15 data, step 2 (`0057`, `0058`) | Built. State version 2 carries every new column; version 1 still restores. |
+| A, canvas | Partly: chairs show initials, a dietary dot and a declined outline; first names from 150% zoom, bare dots below 60%; Colour by (now including Dietary needs) is the plan's; sweetheart, oval, half-moon and serpentine tables can be added and are drawn as themselves. **Not built:** the new layout (event, layout and space tabs, Library, Venue and Guests panels, right panel), the Show layers, the in-canvas legend, the "Free the seat?" card, ceremony rows, banquet runs and the décor and marquee library UI. |
+| B, drawing | Library only (`drawing.ts`: walls, arcs, openings, areas, snapping, measuring). No tools, PDF upload, marquees or four-step strip. |
+| C, table styles | Built: styles, a style per table, the close-up in the table drawer (every shape but ceremony rows), totals by chairs and by guests, typed final numbers with "Seating changed since you set this", CSV. Differences: items total by type across styles (`place:charger`), not per style; the CSV downloads in the browser, not through `/api/export`; costs are not shown. **Not built:** the per-table changes editor (the data and drawing support it), suppliers and budget-line following, vendor pages, couple's own décor and the kids' starter style. |
+| D, lock | Storage only (`locked_at`, `locked_by`). No action, check or button. |
+| E, exports and share | Not built (`seating_share_links` exists; its read function does not). |
+| F, service | Library only (`service.ts`: menu, platters, own plates, kids' meals). No menu editor, service-style switch, platter screen or kitchen summary. |
+| G, layouts | Schema only. Nothing filters reads by layout yet, and no screen makes a draft. |
+| H, dietary needs | Table only. No editor, no RSVP change, no dots from tags (the dot uses the free-text note). |
+| I, settings | Library only (`plan-settings.ts`). No sheet; the walkway colours and shared-dish hints are not drawn. |
+
+What the remaining build must do first: the drafts migration (drop the (guest,
+event) seat key, filter every seating read to the live layout, drop the
+`seating_plans` room trigger once the room lives on spaces), then A, B, F, H, E
+in that order of value.

@@ -24,6 +24,36 @@
 
 ## Recent sessions
 
+**Session 63 (spec 57, partly built):** on branch `claude/visual-seating-plan-gkbppo`, asked to design the venue
+designer (spec 57, 40 questions answered) and then "build it all". **Only part of it is built.** Migrations **`0055`
+to `0058` must be applied to live** (apply `0055` on its own, then `0056`–`0058`; `scripts/verify-migrations-single-tx.sh`
+passes). The next free migration number is `0059`. This session numbered its spec 57 because another session took 56.
+
+- **Built and verified by the SQL suite:** layouts and spaces (`0056`: every event with seating gets one live layout
+  and one space; the backfill was run on a throwaway cluster against legacy data and wrote no audit rows), the storage
+  for styles, décor, marquees, item counts, share links, service style and menu, plan settings and structured dietary
+  needs (`0057`, `0058`), and `seating_state()` / `restore_seating_state()` as version 2 (version 1 History entries
+  still restore).
+- **Built and unit-tested:** `src/lib/seating/` drawing, service (platters, own plates, kids' meals), items (styles and
+  totals), plan-settings, chairs, and geometry for sweetheart, oval, half-moon, serpentine, ceremony rows and banquet runs.
+- **Built in the app:** chairs in the Room view show initials, a dietary dot and a declined outline; Colour by gains
+  Dietary needs and is saved on the plan (undoable); sweetheart, oval, half-moon and serpentine tables can be added;
+  table styles (panel on the seating page, a close-up in each table's drawer, totals with the couple's final numbers,
+  CSV). The close-up was rendered for six shapes in headless Chromium.
+- **Not built:** space tabs, the Library, the Venue tab and every drawing tool (walls, doors, areas, marquees, PDF
+  upload); the declined-guest "Free the seat?" card; the dietary editor and the RSVP change; supplier and budget-line
+  linking and the per-table changes editor; the menu, platters and own-plate screens; draft layouts (and with them the
+  move of `seat_assignments` to one seat per guest per layout, and filtering every read to the live layout); the lock;
+  the settings sheet; the venue, florist, hire and caterer exports; the share link; the entrance board sizes.
+- **Verified:** typecheck, 1696 unit tests, SQL suite (990 assertions), the single-transaction migration check,
+  `npm run build`. **Not verified:** the Room view, the styles panel and the drawer in a browser, a phone or iPad,
+  live Supabase. Nothing has been applied to live.
+- **Traps for whoever builds the rest:** `seating_plans` still owns the room size and a trigger copies it to the
+  event's first space, so drop that trigger and the plan's room columns in the migration that moves the room onto
+  spaces. While every event has one layout, nothing filters reads by layout; the drafts migration must, in every query
+  and action that reads tables, fixtures or seats (`src/server/queries/seating*.ts`, `day-master.ts`, the three
+  seating action files). The state functions already scope to the live layout.
+
 **Session 62 (spec 56, built):** on branch `claude/blissful-carson-0c4i5s`, asked to find a way through tasks, the run
 sheet and who's doing what, then "Let's build". **No migration; nothing to apply to live.**
 
@@ -56,29 +86,6 @@ named `0051`–`0053`; each shifted up because 54 used two numbers, and each spe
   iPad, push, or live Supabase. The spec 55 acceptance check (two real phones) hasn't been done.
 - **Every spec's "Build status" lists what differs.** The larger ones: seating undo is whole-plan (refused if anything
   changed); "Show" and meal colours reach only the table drawer's chairs; the master's own writes aren't queued offline.
-
-**Session 60 (specs 51 and 54, built):** on branch `claude/pensive-mayer-b0d5sr`, asked to "build 51 and 54".
-Migrations **`0049` and `0050` must be applied to live** (nothing has been run against live).
-
-- **51, built whole.** `event_types` (nine seeded per wedding, couple's own, hide/never delete),
-  `events.type_id` + `asks_rsvp` / `has_seating` / `guest_facing` with backfill and checks;
-  `create_wedding()` seeds them; `v_guest_event_invites` drops non-guest-facing events and gains
-  `asks_rsvp`; `v_household_rsvp` and `v_wedding_stats` ignore events that don't ask. App: type
-  select and "What this event needs" switches on `/events`, an Event types panel, RSVP form and
-  reply card skip non-asking events (`RsvpData.invites` is asking-only, `eventInvites` is all),
-  `/guests` columns, `/seating` picker and page, seating export and the guest table reveal,
-  who's-invited. Seating with replies off seats everyone invited. **The backfill ran only on empty
-  tables in the SQL suite** (the seed inserts events after migrations; they take Other through a
-  default-type trigger), so it is untested against real events: check live before relying on it.
-- **54, built** (migrations `0050` + `0051`; specs 52/53/55's migrations move up one number). Helper
-  page, couple's Day links screen, People view, photos, offline queue, groups/leads/open tasks,
-  announcements, cues, reminders (day-before email and web push), manifest/icon, tab bar and module
-  slot. The module registry is empty until 52/53 add theirs. **Setup you must do:** VAPID keys
-  (`npx web-push generate-vapid-keys`), `node scripts/ensure-day-cron.mjs`, the storage bucket. See the
-  spec's Build status for deviations and what is still missing.
-- **Verified:** typecheck, unit tests, `npm run build`, SQL suite (885 assertions), and the helper page
-  rendered in headless Chromium at 390 px (light, dark) with sample data. **Not
-  verified:** the `/events` form, the couple's Day links screen, a real phone, push, live Supabase, email sending. Next in the build order: 52, 53, 55.
 
 ---
 
