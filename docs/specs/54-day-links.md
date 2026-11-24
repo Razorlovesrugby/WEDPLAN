@@ -216,7 +216,7 @@ From top to bottom:
    location. Tap one to open it.
 5. **Earlier today:** done and past tasks, folded, with their final state.
 6. **Contacts:** call and text buttons for the day contacts the couple chose
-   (§10).
+   (§10.6).
 
 A task the couple changed since the person last saw it carries a badge:
 "Changed: was 1:45, now 2:00", until they open it.
