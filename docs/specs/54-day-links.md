@@ -700,7 +700,13 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 - `src/lib/run-sheet/suggested-tasks.ts`: §10.4's list.
 - `src/server/actions/run-sheet.ts` extended: instructions, steps, bring
   list, contact, critical, lead, groups, assign from a person, assign several.
-  The link side adds `tickStep` and `untickStep`.
+  The link side adds `tickStep`, `untickStep`, `confirmTasks`, `markArrived`,
+  `claimOpenTask`, `markAnnouncementSeen`, `acknowledgeAnnouncement`,
+  `savePushSubscription` and `removePushSubscription`.
+- `src/lib/day-links/reminders.ts`: who is due a day-before email or a
+  10-minute push, from tasks, timezone and subscriptions. Pure and tested.
+- The send side reuses `src/lib/email/send.ts` for email and adds a web push
+  sender (`web-push` with VAPID keys held as server environment variables).
 - The People view on `/run-sheet`, Tasks on the day on guest, vendor and
   person pages, and the group editor.
 - `src/components/day-link/`: the shell, Now card, task row, button sheets,
@@ -827,4 +833,7 @@ minute crons. Or no push, and the page alone?
 (recommended), or only ever assign by name?
 
 **Q9. The day-before email.** On by default for helpers with an email
-(recommended), off by default, or not at all?
+(recommended), off by default, or not at all? Sending at 6 pm in each
+wedding's own timezone needs a job that runs at least hourly; the existing
+weekly reminders cron can't. The same minute-level job from Q6 would cover
+it.
