@@ -48,11 +48,13 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     id: "day",
     label: "The day",
-    // Seating stays here, reached through each event (spec 41 Q3).
+    // In the order you work: events, the day laid out, its shots, then running it (spec 56).
+    // Seating stays under Events, reached through each event (spec 41 Q3).
     entries: [
-      { href: "/day", label: "On the day", matchPrefixes: ["/day"] },
-      { href: "/events", label: "Events & run sheet", matchPrefixes: ["/events", "/run-sheet", "/seating"] },
+      { href: "/events", label: "Events", matchPrefixes: ["/events", "/seating"] },
+      { href: "/run-sheet", label: "Run sheet", matchPrefixes: ["/run-sheet"] },
       { href: "/shots", label: "Shot list", matchPrefixes: ["/shots"] },
+      { href: "/day", label: "On the day", matchPrefixes: ["/day"] },
     ],
   },
   {

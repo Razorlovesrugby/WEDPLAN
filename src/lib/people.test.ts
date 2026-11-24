@@ -9,6 +9,7 @@ import {
   itemAssigneeValue,
   parseAssignee,
   personIdForUser,
+  personLoads,
 } from "./people";
 
 const U1 = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -122,5 +123,19 @@ describe("personIdForUser", () => {
     expect(personIdForUser(people, U1)).toBeNull();
     expect(personIdForUser(people, undefined)).toBeNull();
     expect(personIdForUser([{ id: P1, user_id: U2, deleted_at: "x" }], U2)).toBeNull();
+  });
+});
+
+describe("personLoads", () => {
+  it("counts jobs and open tasks per person, ignoring unassigned rows", () => {
+    const loads = personLoads(
+      [{ person_id: P1 }, { person_id: P1 }, { person_id: null }, { person_id: "p2" }],
+      [{ assigned_person_id: P1 }, { assigned_person_id: null }, { assigned_person_id: "p3" }],
+    );
+    expect(loads).toEqual({ [P1]: { jobs: 2, tasks: 1 }, p2: { jobs: 1, tasks: 0 }, p3: { jobs: 0, tasks: 1 } });
+  });
+
+  it("is empty when nobody has anything", () => {
+    expect(personLoads([], [])).toEqual({});
   });
 });

@@ -1,5 +1,6 @@
-import Link from "next/link";
 import { DayLinksScreen } from "@/components/day-link/day-links-screen";
+import { SubTabs } from "@/components/sub-tabs";
+import { RUN_SHEET_TABS } from "@/lib/nav-tabs";
 import { getDayLinksOverview } from "@/server/queries/day-links";
 import { requireWedding } from "@/server/queries/wedding";
 
@@ -11,11 +12,7 @@ export default async function DayLinksPage() {
 
   return (
     <div className="max-w-3xl space-y-5">
-      <nav className="text-sm text-muted">
-        <Link href="/run-sheet" className="hover:underline">
-          Run sheet
-        </Link>
-      </nav>
+      <SubTabs tabs={RUN_SHEET_TABS} />
       <h1 className="font-serif text-2xl">Day links</h1>
       <p className="text-sm text-muted">
         Everyone you&rsquo;ve given a job to who has no login gets their own link: their jobs, a Start and Done button

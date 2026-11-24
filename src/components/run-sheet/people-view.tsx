@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatTime } from "@/lib/format";
 import { axisRange, type RunSheetAssignee, type RunSheetItem } from "@/lib/run-sheet";
@@ -10,21 +10,24 @@ import { makeDayLink } from "@/server/actions/day-links";
 const STATE_LABEL = { made: "Link made", opened: "Link opened" } as const;
 
 /**
- * Spec 54 §10.3: one row per person with a task, their tasks along the day,
+ * Spec 54 §10.3: one row per person with a job, their jobs along the day,
  * so gaps and clashes show at a glance, with their link state. Unassigned
- * tasks sit at the top while there are any.
+ * jobs sit at the top while there are any. `highlight` (an assignee key from
+ * `?who=`, spec 56) scrolls to that person's row and marks it.
  */
 export function PeopleView({
   items,
   options,
   linkStates,
   timeZone,
+  highlight = "",
   onOpen,
 }: {
   items: RunSheetItem[];
   options: RunSheetAssignee[];
   linkStates: Record<string, "made" | "opened">;
   timeZone: string;
+  highlight?: string;
   onOpen: (item: RunSheetItem) => void;
 }) {
   const router = useRouter();
@@ -51,6 +54,9 @@ export function PeopleView({
       people.set(a.key, row);
     }
   }
+  useEffect(() => {
+    if (highlight) document.getElementById(`person-${highlight}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlight]);
   const rows = [...people.values()].sort((a, b) => a.who.label.localeCompare(b.who.label));
   const canLink = (a: RunSheetAssignee) => a.type !== "collaborator";
   const assignable = options.filter(canLink);
@@ -78,7 +84,7 @@ export function PeopleView({
     startTransition(async () => {
       const r = await assignToItems([...picked], { type: person.type as "vendor" | "guest" | "person", id: person.id });
       if (!r.ok) return setError(r.error);
-      setMessage(`${person.label} is on ${r.data.added} more ${r.data.added === 1 ? "task" : "tasks"}`);
+      setMessage(`${person.label} is on ${r.data.added} more ${r.data.added === 1 ? "job" : "jobs"}`);
       setAssigning(false);
       setPicked(new Set());
       router.refresh();
@@ -91,7 +97,7 @@ export function PeopleView({
       {message ? <p role="status" className="text-sm text-muted">{message}</p> : null}
       <div>
         <button type="button" className="btn" onClick={() => setAssigning((v) => !v)}>
-          Assign someone to several tasks…
+          Assign someone to several jobs…
         </button>
       </div>
       {assigning ? (
@@ -122,7 +128,7 @@ export function PeopleView({
 
       {unassigned.length > 0 ? (
         <div className="card p-3">
-          <div className="text-sm font-medium">Unassigned tasks ({unassigned.length})</div>
+          <div className="text-sm font-medium">Unassigned jobs ({unassigned.length})</div>
           <ul className="mt-1 space-y-1 text-sm">
             {unassigned.map((i) => (
               <li key={i.id}>
@@ -135,14 +141,24 @@ export function PeopleView({
         </div>
       ) : null}
 
-      {rows.length === 0 ? <p className="card p-6 text-center text-sm text-muted">Nobody is on a task yet.</p> : null}
+      {highlight && highlight !== "unassigned" && !people.has(highlight) ? (
+        <p className="text-sm text-muted">
+          {options.find((o) => o.key === highlight)?.label ?? "That person"} isn&rsquo;t on a job yet. Use
+          &ldquo;Assign someone to several jobs&rdquo; to put them on some.
+        </p>
+      ) : null}
+      {rows.length === 0 ? <p className="card p-6 text-center text-sm text-muted">Nobody is on a job yet.</p> : null}
       {range
         ? rows.map(({ who: person, tasks }) => (
-            <div key={person.key} className="card p-3">
+            <div
+              key={person.key}
+              id={`person-${person.key}`}
+              className={`card p-3 ${highlight === person.key ? "ring-2 ring-ink" : ""}`}
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <span className="font-medium">{person.label}</span>
                 <span className="text-xs text-muted">
-                  {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+                  {tasks.length} {tasks.length === 1 ? "job" : "jobs"}
                   {canLink(person) ? ` · ${linkStates[person.key] ? STATE_LABEL[linkStates[person.key]!] : "No link"}` : ""}
                   {canLink(person) && !linkStates[person.key] ? (
                     <>
