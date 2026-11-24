@@ -25,6 +25,7 @@ import {
 } from "@/lib/day-links/my-day";
 import { activeModules, tabBar } from "@/lib/day-links/modules";
 import {
+  afterFlush,
   enqueue,
   flushQueue,
   parseQueue,
@@ -216,7 +217,13 @@ export function MyDayView({
     flushing.current = true;
     try {
       const result = await flushQueue(current, (op) => sendOp(token, op));
-      saveQueue(result.remaining);
+      let stored: QueuedOp[] = [];
+      try {
+        stored = parseQueue(localStorage.getItem(queueKey));
+      } catch {
+        stored = current;
+      }
+      saveQueue(afterFlush(stored, current, result.remaining));
       if (result.rejected.length > 0) setError(result.rejected[0]!.error);
       if (result.sent > 0 && result.remaining.length === 0) {
         setAllSent(true);
@@ -331,7 +338,8 @@ export function MyDayView({
           setError(outcome.error);
           return false;
         }
-        saveQueue(enqueue(waiting, op));
+        // Re-read: a flush may have changed the stored queue while we waited on the network.
+        saveQueue(enqueue(parseQueue(localStorage.getItem(queueKey)), op));
         setToast({ text: `${done} · saved, will send when you're back online`, undo });
         return true;
       } finally {

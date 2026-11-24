@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_QUEUE, enqueue, flushQueue, parseQueue, serialiseQueue, waitingLabel, type QueuedOp } from "./offline-queue";
+import { MAX_QUEUE, afterFlush, enqueue, flushQueue, parseQueue, serialiseQueue, waitingLabel, type QueuedOp } from "./offline-queue";
 
 const op = (id: string): QueuedOp => ({ id, name: "setTaskState", args: ["item", "done"], tappedAt: "2027-03-06T01:00:00Z", label: id });
 
@@ -50,5 +50,17 @@ describe("waitingLabel", () => {
   it("pluralises", () => {
     expect(waitingLabel(1)).toBe("Offline · 1 change waiting to send");
     expect(waitingLabel(3)).toBe("Offline · 3 changes waiting to send");
+  });
+});
+
+describe("afterFlush", () => {
+  it("keeps a tap made while the flush was running", () => {
+    const attempted = [op("a")];
+    const stored = [op("a"), op("b")];
+    expect(afterFlush(stored, attempted, []).map((o) => o.id)).toEqual(["b"]);
+  });
+  it("keeps what the flush left behind", () => {
+    const attempted = [op("a"), op("b")];
+    expect(afterFlush([op("a"), op("b"), op("c")], attempted, [op("b")]).map((o) => o.id)).toEqual(["b", "c"]);
   });
 });

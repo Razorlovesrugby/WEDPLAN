@@ -112,12 +112,14 @@ export const getMasterData = cache(async (wedding: { id: string; timezone: strin
   const supabase = await createClient();
   const weddingId = wedding.id;
   const user = await getSessionUser();
-  const [items, assigneeRows, steps, ticks, activity, dismissedRows, overview, collaborators, people, guests, vendors, shotSections, shots, checkins, seatAssign, files] = await Promise.all([
+  const [items, assigneeRows, steps, ticks, recentActivity, importantActivity, dismissedRows, overview, collaborators, people, guests, vendors, shotSections, shots, checkins, seatAssign, files] = await Promise.all([
     supabase.from("run_sheet_items").select("id, title, starts_at, ends_at, location, critical, predecessor_id, is_cue, cue_called_at, open_to_group_id, open_places").eq("wedding_id", weddingId).order("starts_at"),
     supabase.from("run_sheet_item_assignees").select("*").eq("wedding_id", weddingId),
     supabase.from("run_sheet_item_steps").select("id, item_id, kind").eq("wedding_id", weddingId).eq("kind", "step"),
     supabase.from("run_sheet_step_ticks").select("step_id, assignee_id").eq("wedding_id", weddingId),
     supabase.from("day_activity").select("*").eq("wedding_id", weddingId).order("tapped_at", { ascending: false }).limit(300),
+    // Alerts and the summary must never lose a request to a busy feed: these kinds are read whole, not from the newest 300.
+    supabase.from("day_activity").select("*").eq("wedding_id", weddingId).in("kind", ["help", "question", "late", "note", "handed_back", "help_answered", "question_answered"]).order("tapped_at", { ascending: false }).limit(3000),
     supabase.from("day_activity").select("payload").eq("wedding_id", weddingId).eq("kind", "alert_dismissed").limit(1000),
     getDayLinksOverview(weddingId),
     supabase.from("collaborators").select("user_id, display_name, role, day_alerts").eq("wedding_id", weddingId),
@@ -131,9 +133,16 @@ export const getMasterData = cache(async (wedding: { id: string; timezone: strin
     Promise.resolve(null),
   ]);
   void files;
-  for (const [what, r] of [["tasks", items], ["assignees", assigneeRows], ["steps", steps], ["ticks", ticks], ["activity", activity], ["dismissals", dismissedRows], ["collaborators", collaborators], ["helpers", people], ["guests", guests], ["vendors", vendors], ["shot sections", shotSections], ["shots", shots], ["arrivals", checkins], ["seats", seatAssign]] as const) {
+  for (const [what, r] of [["tasks", items], ["assignees", assigneeRows], ["steps", steps], ["ticks", ticks], ["activity", recentActivity], ["requests", importantActivity], ["dismissals", dismissedRows], ["collaborators", collaborators], ["helpers", people], ["guests", guests], ["vendors", vendors], ["shot sections", shotSections], ["shots", shots], ["arrivals", checkins], ["seats", seatAssign]] as const) {
     if (r.error) throw new Error(`Could not load ${what}: ${r.error.message}`);
   }
+
+  const seenIds = new Set<string>();
+  const activity = {
+    data: [...(importantActivity.data ?? []), ...(recentActivity.data ?? [])]
+      .filter((a) => (seenIds.has(a.id) ? false : (seenIds.add(a.id), true)))
+      .sort((a, b) => Date.parse(b.tapped_at) - Date.parse(a.tapped_at)),
+  };
 
   // Names and phones, by assignee reference.
   const label = (c: { display_name: string | null; role: string }) => c.display_name?.trim() || (c.role === "owner" ? "The couple" : "Partner");

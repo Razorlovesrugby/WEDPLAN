@@ -209,9 +209,10 @@ export function SeatingProvider({
   const step = useCallback(
     (direction: "undo" | "redo") => {
       const from = direction === "undo" ? undoStack : redoStack;
-      const entry = from.current.at(-1);
-      if (!entry) return;
       queue.current = queue.current.then(async () => {
+        // Read the entry here, in turn, so two quick presses never take the same one.
+        const entry = from.current.at(-1);
+        if (!entry) return;
         const payload = direction === "undo" ? entry.before : entry.after;
         const expected = direction === "undo" ? entry.afterHash : entry.beforeHash;
         const result = await restoreSeatingState(eventId, payload, expected).catch(() => null);

@@ -53,7 +53,7 @@ export async function resolveDayLink(rawToken: string): Promise<ResolveDayLinkRe
     await recordAttempt(ipHash, false);
     return { ok: false, reason: "not_found" };
   }
-  await recordAttempt(ipHash, true);
+  // Successes aren't recorded: the throttle counts failures only, and a row per tap and per poll would grow without bound.
 
   if (link.revoked_at) return { ok: false, reason: "off" };
   if (new Date(link.expires_at) <= new Date()) return { ok: false, reason: "expired" };

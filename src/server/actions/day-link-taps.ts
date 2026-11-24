@@ -7,6 +7,7 @@ import { HELP_REASONS, LATE_CHOICES, clampTapTime, nextState, tapIsNewer, type T
 import { assigneeColumn, resolveDayLink, type ResolvedDayLink } from "@/server/day-links/resolve";
 import { createUploadUrl } from "@/lib/supabase/storage";
 import { PHOTO_MAX_BYTES } from "@/lib/day-links/photo";
+import { isPushEndpoint } from "@/lib/day-links/push-endpoint";
 import type { RunSheetItemAssigneeRow } from "@/lib/types/database";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -171,7 +172,8 @@ export async function setTaskState(
   const { row, item } = mine;
   const { ctx, supabase } = auth;
 
-  if (!buttonsWork({ startsAt: item.starts_at }, new Date(), ctx.wedding.timezone)) {
+  // Undo works before the day too (a hand-back can be made then, so it must be undoable).
+  if (action !== "undo" && !buttonsWork({ startsAt: item.starts_at }, new Date(), ctx.wedding.timezone)) {
     return fail("You can start these on the day.");
   }
 
@@ -554,8 +556,20 @@ export async function savePushSubscription(token: string, subscription: { endpoi
   const auth = await authorise(token);
   if (!isAuthorised(auth)) return auth;
   const parsed = pushSchema.safeParse(subscription);
-  if (!parsed.success) return fail("That subscription isn't valid.");
+  if (!parsed.success || !isPushEndpoint(parsed.data.endpoint)) return fail("That subscription isn't valid.");
   const { ctx, supabase } = auth;
+  // One link can't take over another live link's subscription.
+  const { data: existing, error: existingError } = await supabase
+    .from("day_push_subscriptions")
+    .select("link_id")
+    .eq("endpoint", parsed.data.endpoint)
+    .maybeSingle();
+  if (existingError) return fail(existingError.message);
+  if (existing && existing.link_id !== ctx.link.id) {
+    const { data: owner } = await supabase.from("day_links").select("revoked_at, expires_at").eq("id", existing.link_id).maybeSingle();
+    const live = owner && !owner.revoked_at && new Date(owner.expires_at) > new Date();
+    if (live) return fail("That device is already set up for someone else's link.");
+  }
   const { error } = await supabase
     .from("day_push_subscriptions")
     .upsert({ ...parsed.data, wedding_id: ctx.wedding.id, link_id: ctx.link.id }, { onConflict: "endpoint" });

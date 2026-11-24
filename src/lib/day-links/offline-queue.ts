@@ -83,6 +83,17 @@ export async function flushQueue(
   return { sent, rejected, remaining: [] };
 }
 
+/**
+ * The queue after a flush, merged with whatever was added while it ran: only
+ * the taps the flush finished with (sent or rejected) are removed from the
+ * stored queue, so a tap made mid-flush is never lost.
+ */
+export function afterFlush(stored: readonly QueuedOp[], attempted: readonly QueuedOp[], remaining: readonly QueuedOp[]): QueuedOp[] {
+  const keep = new Set(remaining.map((op) => op.id));
+  const finished = new Set(attempted.filter((op) => !keep.has(op.id)).map((op) => op.id));
+  return stored.filter((op) => !finished.has(op.id));
+}
+
 export function waitingLabel(count: number): string {
   return count === 1 ? "Offline · 1 change waiting to send" : `Offline · ${count} changes waiting to send`;
 }

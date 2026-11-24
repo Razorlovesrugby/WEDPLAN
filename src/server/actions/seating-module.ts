@@ -225,6 +225,18 @@ export async function moveGuestOnTheDay(token: string, guestId: string, tableId:
     if (blocked.data) return fail("That chair is out of use.");
   }
 
+  if (!chair) {
+    // A table with no chair chosen still has to have room: seated guests and blocked chairs against the usable seats.
+    const [assigned, blockedChairs] = await Promise.all([
+      supabase.from("seat_assignments").select("guest_id").eq("table_id", tableId),
+      supabase.from("seating_chairs_blocked").select("seat_index").eq("table_id", tableId),
+    ]);
+    if (assigned.error) return fail(assigned.error.message);
+    if (blockedChairs.error) return fail(blockedChairs.error.message);
+    const others = (assigned.data ?? []).filter((a) => a.guest_id !== guestId).length;
+    if (others + (blockedChairs.data ?? []).length >= table.capacity - table.reserved_seats) return fail(`${table.label} is full.`);
+  }
+
   const { error } = await supabase
     .from("seat_assignments")
     .upsert(

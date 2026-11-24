@@ -64,7 +64,7 @@ export function SeatingModuleScreen({ token }: ModuleScreenProps) {
         }
       }
       try {
-        localStorage.setItem(queueKey, serialiseQueue(enqueue(waiting, op)));
+        localStorage.setItem(queueKey, serialiseQueue(enqueue(parseQueue(localStorage.getItem(queueKey)), op)));
         window.dispatchEvent(new Event("dl-queue"));
         setMessage("Saved, will send when you're back online");
         return true;

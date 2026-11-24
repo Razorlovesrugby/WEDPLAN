@@ -246,6 +246,22 @@ export async function removeAssignee(itemId: string, assignee: Assignee): Promis
 export async function setLead(itemId: string, assignee: Assignee | null): Promise<ActionResult> {
   const wedding = await requireWedding();
   const supabase = await createClient();
+  // Check the new lead is on the task before touching the current one.
+  let target: { id: string } | null = null;
+  if (assignee) {
+    const who = assigneeSchema.safeParse(assignee);
+    if (!who.success) return fail("Unknown person");
+    const { data, error } = await supabase
+      .from("run_sheet_item_assignees")
+      .select("id")
+      .eq("item_id", itemId)
+      .eq("wedding_id", wedding.id)
+      .eq(columnOf(who.data), who.data.id)
+      .maybeSingle();
+    if (error) return fail(error.message);
+    if (!data) return fail("They aren't on this task");
+    target = data;
+  }
   const { error: clearError } = await supabase
     .from("run_sheet_item_assignees")
     .update({ is_lead: false })
@@ -253,18 +269,9 @@ export async function setLead(itemId: string, assignee: Assignee | null): Promis
     .eq("wedding_id", wedding.id)
     .eq("is_lead", true);
   if (clearError) return fail(clearError.message);
-  if (assignee) {
-    const who = assigneeSchema.safeParse(assignee);
-    if (!who.success) return fail("Unknown person");
-    const { data, error } = await supabase
-      .from("run_sheet_item_assignees")
-      .update({ is_lead: true })
-      .eq("item_id", itemId)
-      .eq("wedding_id", wedding.id)
-      .eq(columnOf(who.data), who.data.id)
-      .select("id");
+  if (target) {
+    const { error } = await supabase.from("run_sheet_item_assignees").update({ is_lead: true }).eq("id", target.id).eq("wedding_id", wedding.id);
     if (error) return fail(error.message);
-    if (!data?.length) return fail("They aren't on this task");
   }
   revalidate();
   return ok(undefined);

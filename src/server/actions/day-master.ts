@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding, getSessionUser } from "@/server/queries/wedding";
+import { clearConfirmedForMoved, snapshotTimes } from "@/server/day-links/confirmations";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -165,8 +166,11 @@ export async function shiftSchedule(itemId: string, deltaMinutes: number, scope:
     if (error) return fail(error.message);
     if ((count ?? 0) > 0) return fail("Items start after this one, so they move with it.");
   }
+  const before = await snapshotTimes(wedding.id);
   const { error } = await supabase.rpc("shift_run_sheet_item", { p_wedding_id: wedding.id, p_item_id: itemId, p_delta_minutes: delta.data });
   if (error) return fail(error.message);
+  const cleared = await clearConfirmedForMoved(wedding.id, before);
+  if (cleared) return fail(cleared);
   const problem = await logActivity(wedding.id, await actor(wedding.id), "schedule_shifted", itemId, { minutes: delta.data, text: summary.slice(0, 200) });
   if (problem) return fail(problem);
   revalidate();

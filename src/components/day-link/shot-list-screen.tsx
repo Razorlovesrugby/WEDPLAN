@@ -106,7 +106,7 @@ export function ShotListScreen({ token, tab }: ModuleScreenProps) {
         }
       }
       try {
-        localStorage.setItem(queueKey, serialiseQueue(enqueue(waiting, op)));
+        localStorage.setItem(queueKey, serialiseQueue(enqueue(parseQueue(localStorage.getItem(queueKey)), op)));
         window.dispatchEvent(new Event("dl-queue"));
       } catch {
         setError("Couldn't keep that tap on this phone. Try again.");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWedding } from "@/server/queries/wedding";
+import { clearConfirmedForMoved, snapshotTimes } from "@/server/day-links/confirmations";
 import { zonedInputToUtc } from "@/lib/timezone";
 import { addMinutesIso, followerStart, MAX_GAP_MINUTES, MAX_STEPS, spanMinutes, timesProblem } from "@/lib/run-sheet";
 import type { RunSheetAssigneeType } from "@/lib/types/database";
@@ -219,6 +220,11 @@ export async function saveTaskContent(itemId: string, input: TaskContentInput): 
     for (const [index, text] of wanted.entries()) {
       const row = rows[index];
       if (row) {
+        // A step whose wording changes isn't the step a helper ticked: its ticks go.
+        if (row.text !== text) {
+          const { error: tickError } = await supabase.from("run_sheet_step_ticks").delete().eq("step_id", row.id).eq("wedding_id", wedding.id);
+          if (tickError) return fail(tickError.message);
+        }
         if (row.text !== text || row.sort_order !== index) {
           const { error: updateError } = await supabase
             .from("run_sheet_item_steps")
@@ -271,12 +277,15 @@ export async function moveRunSheetItem(itemId: string, deltaMinutes: number): Pr
   );
   if (problem) return fail(problem);
 
+  const before = await snapshotTimes(wedding.id);
   const { error } = await supabase.rpc("shift_run_sheet_item", {
     p_wedding_id: wedding.id,
     p_item_id: itemId,
     p_delta_minutes: delta.data,
   });
   if (error) return fail(error.message);
+  const cleared = await clearConfirmedForMoved(wedding.id, before);
+  if (cleared) return fail(cleared);
 
   revalidate();
   return ok(undefined);
