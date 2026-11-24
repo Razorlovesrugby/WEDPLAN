@@ -9,6 +9,7 @@ import {
   listVendorNotes,
   listVendorTasks,
 } from "@/server/queries/vendors";
+import { TasksOnTheDay } from "@/components/day-link/tasks-on-the-day";
 import { VendorDetail } from "@/components/vendors/vendor-detail";
 
 export const metadata = { title: "Vendor" };
@@ -43,6 +44,7 @@ export default async function VendorPage({ params }: { params: Promise<{ id: str
         tasks={tasks}
         showMoney={showMoney}
       />
+      <TasksOnTheDay weddingId={wedding.id} assignee={{ type: "vendor", id }} timeZone={wedding.timezone} />
     </div>
   );
 }

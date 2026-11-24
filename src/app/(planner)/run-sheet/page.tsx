@@ -8,7 +8,7 @@ export const metadata = { title: "Run sheet" };
 export default async function RunSheetPage() {
   const wedding = await requireWedding();
   const user = await getSessionUser();
-  const [{ items, options, contacts }, events, kind] = await Promise.all([
+  const [{ items, options, contacts, groups, linkStates }, events, kind] = await Promise.all([
     getRunSheet(wedding.id, user?.id),
     getEvents(wedding.id),
     getViewerKind(),
@@ -26,6 +26,8 @@ export default async function RunSheetPage() {
         items={items}
         options={options}
         contacts={contacts}
+        groups={groups}
+        linkStates={linkStates}
         events={events.map((e) => ({ id: e.id, name: e.name }))}
         timeZone={wedding.timezone}
         weddingDate={wedding.wedding_date}

@@ -307,7 +307,7 @@ export async function answerHelp(activityId: string, answer: string): Promise<Ac
     .update({ answer: clean, answered_at: new Date().toISOString(), answered_by: user.user?.id ?? null })
     .eq("id", activityId)
     .eq("wedding_id", wedding.id)
-    .eq("kind", "help");
+    .in("kind", ["help", "question"]);
   if (error) return fail(error.message);
   revalidate();
   return ok(undefined);

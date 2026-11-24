@@ -142,6 +142,9 @@ const contentSchema = z.object({
   instructions: z.string().trim().max(2000).optional(),
   address: z.string().trim().max(300).optional(),
   critical: z.boolean().optional(),
+  photoOnDone: z.boolean().optional(),
+  isCue: z.boolean().optional(),
+  opensModule: z.string().regex(/^[a-z_]{1,40}$/).nullable().optional(),
   contactId: z.string().uuid().nullable().optional(),
   steps: z.array(z.string().trim().min(1).max(200)).max(MAX_STEPS, `At most ${MAX_STEPS} steps`).default([]),
   bring: z.array(z.string().trim().min(1).max(200)).max(MAX_STEPS, `At most ${MAX_STEPS} things to bring`).default([]),
@@ -179,7 +182,15 @@ export async function saveTaskContent(itemId: string, input: TaskContentInput): 
   const address = f.address || null;
   const { error } = await supabase
     .from("run_sheet_items")
-    .update({ instructions, address, critical: f.critical ?? false, contact_id: f.contactId ?? null })
+    .update({
+      instructions,
+      address,
+      critical: f.critical ?? false,
+      contact_id: f.contactId ?? null,
+      photo_on_done: f.photoOnDone ?? false,
+      is_cue: f.isCue ?? false,
+      opens_module: f.opensModule ?? null,
+    })
     .eq("id", itemId)
     .eq("wedding_id", wedding.id);
   if (error) return fail(`The item saved, but its helper details didn't: ${error.message}`);

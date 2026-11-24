@@ -89,8 +89,9 @@ export default function PrivacyPage() {
             <strong>Helping on the day.</strong> If the couple gave you a job on the day, your
             own private link shows your jobs, who else is on them and the day&rsquo;s contacts.
             It records the buttons you tap (Start, Done, Running late, asking for help, notes and
-            &ldquo;I&rsquo;m here&rdquo;) so the couple can see how the day is going. It never
-            tracks your location, and it stops working a week after the wedding.
+            &ldquo;I&rsquo;m here&rdquo;) so the couple can see how the day is going. Any photo you add when you finish a job, ask for help or leave a note is kept with the
+            wedding. If you switch on the reminder 10 minutes before each job, your phone's push address is kept
+            until you switch it off. It never tracks your location, and it stops working a week after the wedding.
           </li>
           <li>
             <strong>Email records.</strong> The address an invitation or reminder was sent to,

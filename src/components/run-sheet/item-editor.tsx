@@ -4,8 +4,13 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addPerson } from "@/server/actions/people";
 import { deleteRunSheetItem, saveRunSheetItem, saveTaskContent } from "@/server/actions/run-sheet";
+import { makeDayLink } from "@/server/actions/day-links";
+import { confirmItemFile, deleteItemFile, requestItemFileUpload, setItemOpen, setLead } from "@/server/actions/day-planning";
+import { DAY_MODULES } from "@/lib/day-links/modules";
+import { SUGGESTED_TASKS } from "@/lib/run-sheet/suggested-tasks";
+import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 import { formatTime } from "@/lib/format";
-import { addMinutesIso, assigneeKey, linesOf, MAX_STEPS, spanMinutes, type RunSheetAssignee, type RunSheetItem } from "@/lib/run-sheet";
+import { addMinutesIso, assigneeKey, linesOf, MAX_STEPS, spanMinutes, type HelperGroup, type RunSheetAssignee, type RunSheetItem } from "@/lib/run-sheet";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
 
 const TYPE_LABEL: Record<RunSheetAssignee["type"], string> = {
@@ -28,6 +33,8 @@ export function RunSheetItemEditor({
   options,
   events,
   contacts,
+  helperGroups,
+  linkStates,
   timeZone,
   canAddPeople,
 }: {
@@ -40,6 +47,8 @@ export function RunSheetItemEditor({
   options: RunSheetAssignee[];
   events: { id: string; name: string }[];
   contacts: { id: string; label: string; phone: string }[];
+  helperGroups: HelperGroup[];
+  linkStates: Record<string, "made" | "opened">;
   timeZone: string;
   canAddPeople: boolean;
 }) {
@@ -61,6 +70,8 @@ export function RunSheetItemEditor({
   const [search, setSearch] = useState("");
   const [extra, setExtra] = useState<RunSheetAssignee[]>([]);
   const [newPerson, setNewPerson] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   // What the people helping see (spec 54 §10.1), separate from the private notes.
   const [instructions, setInstructions] = useState("");
   const [address, setAddress] = useState("");
@@ -68,6 +79,13 @@ export function RunSheetItemEditor({
   const [contactId, setContactId] = useState("");
   const [stepsText, setStepsText] = useState("");
   const [bringText, setBringText] = useState("");
+  const [photoOnDone, setPhotoOnDone] = useState(false);
+  const [isCue, setIsCue] = useState(false);
+  const [opensModule, setOpensModule] = useState("");
+  const [leadKey, setLeadKey] = useState("");
+  const [openGroupId, setOpenGroupId] = useState("");
+  const [openPlaces, setOpenPlaces] = useState(1);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +115,12 @@ export function RunSheetItemEditor({
     setContactId(item?.helper.contactId ?? "");
     setStepsText((item?.helper.steps ?? []).join("\n"));
     setBringText((item?.helper.bring ?? []).join("\n"));
+    setPhotoOnDone(item?.helper.photoOnDone ?? false);
+    setIsCue(item?.helper.isCue ?? false);
+    setOpensModule(item?.helper.opensModule ?? "");
+    setLeadKey(item?.assignees.find((a) => a.isLead)?.key ?? "");
+    setOpenGroupId(item?.helper.openGroupId ?? "");
+    setOpenPlaces(item?.helper.openPlaces ?? 1);
     setError(null);
   }, [open, item, initialStartsAt, timeZone]);
 
@@ -135,7 +159,7 @@ export function RunSheetItemEditor({
     const name = newPerson.trim();
     if (!name) return;
     startTransition(async () => {
-      const result = await addPerson(name);
+      const result = await addPerson(name, { phone: newPhone, email: newEmail });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -149,6 +173,8 @@ export function RunSheetItemEditor({
       setExtra((was) => [...was, who]);
       setChosen((was) => new Set(was).add(who.key));
       setNewPerson("");
+      setNewPhone("");
+      setNewEmail("");
     });
   }
 
@@ -179,11 +205,61 @@ export function RunSheetItemEditor({
         contactId: contactId || null,
         steps: linesOf(stepsText),
         bring: linesOf(bringText),
+        photoOnDone,
+        isCue,
+        opensModule: opensModule || null,
       });
+      if (content.ok) {
+        const lead = everyone.find((o) => o.key === leadKey && chosen.has(o.key));
+        const leadResult = await setLead(
+          result.data.id,
+          lead && lead.type !== "collaborator" ? { type: lead.type, id: lead.id } : null,
+        );
+        if (!leadResult.ok) return setError(leadResult.error);
+        const openResult = await setItemOpen(result.data.id, openGroupId || null, openGroupId ? openPlaces : null);
+        if (!openResult.ok) return setError(openResult.error);
+      }
       router.refresh();
       if (!content.ok) return setError(content.error);
       onClose();
     });
+  }
+
+  function applySuggestion(key: string) {
+    const t = SUGGESTED_TASKS.find((x) => x.key === key);
+    if (!t) return;
+    setTitle(t.title);
+    setInstructions(t.instructions);
+    setStepsText(t.steps.join("\n"));
+    setBringText(t.bring.join("\n"));
+    if (t.opensModule) setOpensModule(t.opensModule);
+    if (times) setEndInput(utcToZonedInput(addMinutesIso(times.start, t.minutes), timeZone));
+  }
+
+  function addGroup(groupId: string) {
+    const group = helperGroups.find((g) => g.id === groupId);
+    if (group) setChosen((was) => new Set([...was, ...group.memberKeys]));
+  }
+
+  async function uploadFile(file: File) {
+    if (!item) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const slot = await requestItemFileUpload(item.id, file.type, file.size);
+      if (!slot.ok) return setError(slot.error);
+      const put = await fetch(slot.data.uploadUrl, {
+        method: "PUT",
+        headers: { "content-type": file.type, "cache-control": UPLOAD_CACHE_CONTROL },
+        body: file,
+      });
+      if (!put.ok) return setError("The upload didn't go through. Try again.");
+      const saved = await confirmItemFile(item.id, slot.data.path, file.type);
+      if (!saved.ok) return setError(saved.error);
+      router.refresh();
+    } finally {
+      setUploading(false);
+    }
   }
 
   function remove() {
@@ -214,6 +290,20 @@ export function RunSheetItemEditor({
         className="max-h-[90vh] space-y-3 overflow-y-auto p-5"
       >
         <h2 className="font-serif text-lg">{item ? "Edit item" : "New item"}</h2>
+
+        {!item ? (
+          <label className="block text-sm">
+            Start from a suggestion (optional)
+            <select className="field mt-1" value="" onChange={(e) => applySuggestion(e.target.value)}>
+              <option value="">Choose a common helper task…</option>
+              {SUGGESTED_TASKS.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="block text-sm">
           Title
@@ -285,6 +375,16 @@ export function RunSheetItemEditor({
                 Both of us
               </button>
             ) : null}
+            {helperGroups.length > 0 ? (
+              <select className="field w-auto" value="" aria-label="Add a group" onChange={(e) => addGroup(e.target.value)}>
+                <option value="">Add a group…</option>
+                {helperGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <input
               className="field w-auto flex-1"
               placeholder="Search people"
@@ -307,8 +407,37 @@ export function RunSheetItemEditor({
               </div>
             ))}
           </div>
+          {everyone.some((o) => chosen.has(o.key) && o.type !== "collaborator") ? (
+            <ul className="space-y-1 text-xs text-muted">
+              {everyone
+                .filter((o) => chosen.has(o.key) && o.type !== "collaborator")
+                .map((o) => (
+                  <li key={o.key} className="flex items-center gap-2">
+                    <span>
+                      {o.label}: {linkStates[o.key] === "opened" ? "link opened" : linkStates[o.key] === "made" ? "link made" : "no link"}
+                    </span>
+                    {!linkStates[o.key] ? (
+                      <button
+                        type="button"
+                        className="underline"
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            const r = await makeDayLink({ type: o.type as "vendor" | "guest" | "person", id: o.id });
+                            if (!r.ok) return setError(r.error);
+                            router.refresh();
+                          })
+                        }
+                      >
+                        Make their link
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+            </ul>
+          ) : null}
           {canAddPeople ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 className="field flex-1"
                 placeholder="Add someone not listed"
@@ -316,6 +445,8 @@ export function RunSheetItemEditor({
                 onChange={(e) => setNewPerson(e.target.value)}
                 maxLength={80}
               />
+              <input className="field w-32" placeholder="Phone" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} maxLength={40} aria-label="Phone (optional)" />
+              <input className="field w-40" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} maxLength={200} aria-label="Email (optional)" />
               <button type="button" className="btn" onClick={add} disabled={pending || !newPerson.trim()}>
                 Add
               </button>
@@ -384,6 +515,112 @@ export function RunSheetItemEditor({
               ))}
             </select>
           </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={photoOnDone} onChange={(e) => setPhotoOnDone(e.target.checked)} />
+            Ask for a photo when done (never required)
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={isCue} onChange={(e) => setIsCue(e.target.checked)} />
+            A cue: Standby from 5 minutes before, then Go on your word
+          </label>
+          {DAY_MODULES.length > 0 ? (
+            <label className="block">
+              Opens
+              <select className="field mt-1" value={opensModule} onChange={(e) => setOpensModule(e.target.value)}>
+                <option value="">Nothing</option>
+                {DAY_MODULES.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {chosen.size > 1 ? (
+            <label className="block">
+              Leading this
+              <select className="field mt-1" value={leadKey} onChange={(e) => setLeadKey(e.target.value)}>
+                <option value="">No one in particular</option>
+                {everyone
+                  .filter((o) => chosen.has(o.key) && o.type !== "collaborator")
+                  .map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          ) : null}
+          {helperGroups.length > 0 ? (
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <label className="block">
+                Open to a group (they tap &ldquo;I&rsquo;ll do it&rdquo;)
+                <select className="field mt-1" value={openGroupId} onChange={(e) => setOpenGroupId(e.target.value)}>
+                  <option value="">Not open</option>
+                  {helperGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {openGroupId ? (
+                <label className="block">
+                  Places
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    className="field mt-1 w-20"
+                    value={openPlaces}
+                    onChange={(e) => setOpenPlaces(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
+          <div>
+            <div>Photos and files they see (up to 10)</div>
+            {item ? (
+              <>
+                <ul className="mt-1 space-y-1">
+                  {item.helper.files.map((f) => (
+                    <li key={f.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{f.mime === "application/pdf" ? "PDF" : "Photo"}{f.caption ? ` · ${f.caption}` : ""}</span>
+                      <button
+                        type="button"
+                        className="btn text-red-700"
+                        disabled={pending}
+                        onClick={() =>
+                          startTransition(async () => {
+                            const r = await deleteItemFile(f.id);
+                            if (!r.ok) return setError(r.error);
+                            router.refresh();
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="mt-1 block text-sm"
+                  disabled={uploading || item.helper.files.length >= 10}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadFile(file);
+                  }}
+                />
+                {uploading ? <p className="text-xs text-muted">Uploading…</p> : null}
+              </>
+            ) : (
+              <p className="text-xs text-muted">Save the task first, then add photos.</p>
+            )}
+          </div>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={critical} onChange={(e) => setCritical(e.target.checked)} />
             Must not slip (helpers see a tag)

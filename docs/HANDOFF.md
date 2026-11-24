@@ -37,14 +37,15 @@ Migrations **`0049` and `0050` must be applied to live** (nothing has been run a
   who's-invited. Seating with replies off seats everyone invited. **The backfill ran only on empty
   tables in the SQL suite** (the seed inserts events after migrations; they take Other through a
   default-type trigger), so it is untested against real events: check live before relying on it.
-- **54, first part.** See the spec's "Build status" for exactly what is and isn't built: links,
-  helper page `/d/[token]` with Start/Done/Undo/Late/Help/Can't do it/Note/steps/Got it/I'm here,
-  the couple's `/run-sheet/links` and print sheet, task content in the item editor. **Not built:**
-  photos, offline queue, PWA manifest, modules, groups/leads/open tasks, announcements,
-  reminders/push, cues.
-- **Verified:** typecheck, 1503 unit tests, `npm run build`, SQL suite (870 assertions). **Not
-  verified:** a browser (neither the new `/events` form nor `/d/` has been rendered), a real phone,
-  live Supabase, email sending. Next in the build order: 52, 53, 55 (all need the rest of 54).
+- **54, built** (migrations `0050` + `0051`; specs 52/53/55's migrations move up one number). Helper
+  page, couple's Day links screen, People view, photos, offline queue, groups/leads/open tasks,
+  announcements, cues, reminders (day-before email and web push), manifest/icon, tab bar and module
+  slot. The module registry is empty until 52/53 add theirs. **Setup you must do:** VAPID keys
+  (`npx web-push generate-vapid-keys`), `node scripts/ensure-day-cron.mjs`, the storage bucket. See the
+  spec's Build status for deviations and what is still missing.
+- **Verified:** typecheck, unit tests, `npm run build`, SQL suite (885 assertions), and the helper page
+  rendered in headless Chromium at 390 px (light, dark) with sample data. **Not
+  verified:** the `/events` form, the couple's Day links screen, a real phone, push, live Supabase, email sending. Next in the build order: 52, 53, 55.
 
 **Session 59 (specs 51–55, specs only):** event types, shot list, seating, day links and the
 on-the-day master, on branch `claude/events-feature-specs-pba8wb`. **Nothing built**: no

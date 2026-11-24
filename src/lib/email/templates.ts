@@ -375,3 +375,38 @@ export function dayLinkEmail(options: { weddingName: string; helperName: string;
 
   return { subject: `Your jobs for ${weddingName}`, text, html };
 }
+
+/** Spec 54 §6.15: the 6 pm email the day before, with the helper's jobs and their link. */
+export function dayBeforeEmail(options: {
+  weddingName: string;
+  helperName: string;
+  url: string;
+  jobs: { time: string; title: string; where: string | null }[];
+}) {
+  const { weddingName, helperName, url, jobs } = options;
+  const lines = jobs.map((j) => `${j.time}  ${j.title}${j.where ? ` (${j.where})` : ""}`);
+  const text = [
+    `Hi ${helperName},`,
+    "",
+    `Your ${jobs.length === 1 ? "job" : "jobs"} tomorrow at ${weddingName}:`,
+    "",
+    ...lines,
+    "",
+    "Your link, with the details and a Start and Done button for each:",
+    url,
+  ].join("\n");
+
+  const rows = jobs
+    .map(
+      (j) =>
+        `<li style="margin:4px 0"><strong>${escapeHtml(j.time)}</strong> ${escapeHtml(j.title)}${j.where ? ` <span style="color:#6b6560">(${escapeHtml(j.where)})</span>` : ""}</li>`,
+    )
+    .join("");
+  const html = layout(`
+    <p style="font-size:18px;margin:0 0 12px">Hi ${escapeHtml(helperName)},</p>
+    <p>Your ${jobs.length === 1 ? "job" : "jobs"} tomorrow at ${escapeHtml(weddingName)}:</p>
+    <ul style="padding-left:20px">${rows}</ul>
+    ${button(url, "Open my jobs")}`);
+
+  return { subject: `Your ${jobs.length === 1 ? "job" : "jobs"} tomorrow at ${weddingName}`, text, html };
+}

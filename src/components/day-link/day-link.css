@@ -12,6 +12,7 @@
   --dl-red: #ff3b30;
   --dl-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   --dl-tint: var(--dl-tint-light);
+  --dl-on-tint: #ffffff;
   background: var(--dl-bg);
   color: var(--dl-text);
   min-height: 100dvh;
@@ -36,6 +37,7 @@
     --dl-red: #ff453a;
     --dl-shadow: none;
     --dl-tint: var(--dl-tint-dark);
+    --dl-on-tint: #000000;
   }
 }
 .dl-wrap { max-width: 34rem; margin: 0 auto; padding: 0 16px; }
@@ -57,7 +59,7 @@
 .dl-btn {
   display: flex; align-items: center; justify-content: center; width: 100%;
   min-height: 56px; border-radius: 16px; border: 0; font: inherit; font-weight: 600;
-  background: var(--dl-tint); color: #fff; cursor: pointer; padding: 0 16px;
+  background: var(--dl-tint); color: var(--dl-on-tint); cursor: pointer; padding: 0 16px; white-space: nowrap;
 }
 .dl-btn:disabled { opacity: 0.4; cursor: default; }
 .dl-btn.outline { background: transparent; color: var(--dl-tint); box-shadow: inset 0 0 0 2px var(--dl-tint); }
@@ -67,7 +69,7 @@
 .dl-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
 .dl-link { color: var(--dl-tint); background: none; border: 0; font: inherit; padding: 0; text-decoration: none; cursor: pointer; }
 .dl-banner { border-radius: 16px; padding: 12px 16px; margin-top: 16px; background: color-mix(in srgb, var(--dl-red) 14%, var(--dl-card)); }
-.dl-ul { margin: 8px 0 0; padding-left: 20px; }
+.dl-ul { margin: 8px 0 0; padding-left: 20px; list-style: disc; }
 .dl-step { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 .dl-step input { width: 24px; height: 24px; accent-color: var(--dl-tint); flex: none; }
 .dl-sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
@@ -82,3 +84,17 @@
 @keyframes dl-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dl-sheet, .dl-toast { animation: none; } }
 @media (prefers-reduced-transparency: reduce) { .dl-bar { background: var(--dl-bg); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+.dl-strip { position: sticky; top: 0; z-index: 20; text-align: center; font-size: 0.8125rem; font-weight: 600; padding: 6px 12px; background: var(--dl-orange); color: #000; }
+.dl-strip.ok { background: var(--dl-green); }
+.dl-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; padding-bottom: env(safe-area-inset-bottom); background: color-mix(in srgb, var(--dl-card) 80%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: 0.5px solid var(--dl-sep); }
+.dl-tabs button { flex: 1; min-height: 49px; background: none; border: 0; font: inherit; font-size: 0.75rem; font-weight: 500; color: var(--dl-text-2); }
+.dl-tabs button.on { color: var(--dl-tint); }
+.dl-cue { border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 1.25rem; margin-bottom: 10px; }
+.dl-cue.standby { background: color-mix(in srgb, var(--dl-orange) 22%, transparent); color: var(--dl-orange); }
+.dl-cue.go { background: var(--dl-green); color: #000; }
+.dl-thumbs { display: flex; gap: 8px; overflow-x: auto; margin-top: 12px; align-items: center; }
+.dl-thumbs img { height: 72px; width: 72px; object-fit: cover; border-radius: 12px; flex: none; }
+.dl-viewer { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
+.dl-viewer-close { align-self: flex-end; color: #fff; background: none; border: 0; font: inherit; padding: 16px; min-height: 44px; }
+.dl-viewer-strip { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; touch-action: pan-x pinch-zoom; }
+.dl-viewer-strip img { flex: none; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: center; }

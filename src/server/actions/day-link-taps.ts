@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buttonsWork, dayPhase } from "@/lib/day-links/my-day";
 import { HELP_REASONS, LATE_CHOICES, clampTapTime, nextState, tapIsNewer, type TaskAction } from "@/lib/day-links/state";
 import { assigneeColumn, resolveDayLink, type ResolvedDayLink } from "@/server/day-links/resolve";
+import { createUploadUrl } from "@/lib/supabase/storage";
+import { PHOTO_MAX_BYTES } from "@/lib/day-links/photo";
 import type { RunSheetItemAssigneeRow } from "@/lib/types/database";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -69,7 +71,7 @@ async function myRow({ ctx, supabase }: Authorised, itemId: string) {
 
 async function activity(
   { ctx, supabase }: Authorised,
-  entry: { itemId: string | null; kind: string; payload?: Record<string, unknown>; tappedAt: string },
+  entry: { itemId: string | null; kind: string; payload?: Record<string, unknown>; tappedAt: string; photoPath?: string | null },
 ): Promise<string | null> {
   const { error } = await supabase.from("day_activity").insert({
     wedding_id: ctx.wedding.id,
@@ -81,8 +83,16 @@ async function activity(
     kind: entry.kind,
     payload: entry.payload ?? {},
     tapped_at: entry.tappedAt,
+    photo_path: entry.photoPath ?? null,
   });
   return error?.message ?? null;
+}
+
+/** A photo path is only ever one this link was given: under its own prefix. */
+function ownPhoto({ ctx }: Authorised, path: string | null | undefined): string | null | "invalid" {
+  if (!path) return null;
+  const prefix = `day/${ctx.wedding.id}/${ctx.link.id}/`;
+  return path.startsWith(prefix) && /^[A-Za-z0-9/_.-]+$/.test(path) && !path.includes("..") ? path : "invalid";
 }
 
 const ACTIVITY_KIND: Record<TaskAction, string> = {
@@ -149,9 +159,12 @@ export async function setTaskState(
   itemId: string,
   action: "start" | "done" | "undo",
   tappedAtInput?: string,
+  photoPath?: string | null,
 ): Promise<ActionResult<TaskStateResult>> {
   const auth = await authorise(token);
   if (!isAuthorised(auth)) return auth;
+  const photo = ownPhoto(auth, photoPath);
+  if (photo === "invalid") return fail("That photo isn't yours.");
   if (!idSchema.safeParse(itemId).success) return fail("Unknown job");
   const mine = await myRow(auth, itemId);
   if (!mine.ok) return fail(mine.error);
@@ -191,7 +204,7 @@ export async function setTaskState(
   // Someone else's tap (another phone) moved it first: report where it is.
   if (!updated?.length) return ok({ applied: false, state: row.state });
 
-  const problem = await activity(auth, { itemId, kind: ACTIVITY_KIND[action], tappedAt });
+  const problem = await activity(auth, { itemId, kind: ACTIVITY_KIND[action], tappedAt, photoPath: action === "done" ? photo : null });
   if (problem) return fail(problem);
   return ok({ applied: true, state: target });
 }
@@ -220,9 +233,11 @@ export async function reportLate(token: string, itemId: string, minutes: number,
 }
 
 /** Need help (§6.4): an alert on the master until someone answers it. */
-export async function requestHelp(token: string, itemId: string | null, reason: string, text: string, tappedAtInput?: string): Promise<ActionResult> {
+export async function requestHelp(token: string, itemId: string | null, reason: string, text: string, tappedAtInput?: string, photoPath?: string | null): Promise<ActionResult> {
   const auth = await authorise(token);
   if (!isAuthorised(auth)) return auth;
+  const photo = ownPhoto(auth, photoPath);
+  if (photo === "invalid") return fail("That photo isn't yours.");
   const cleanReason = z.string().trim().min(1).max(80).safeParse(reason);
   if (!cleanReason.success) return fail("Pick a reason");
   const cleanText = z.string().trim().max(500).safeParse(text ?? "");
@@ -237,13 +252,14 @@ export async function requestHelp(token: string, itemId: string | null, reason: 
     kind: "help",
     payload: { reason: cleanReason.data, text: cleanText.data, quick: (HELP_REASONS as readonly string[]).includes(cleanReason.data) },
     tappedAt: clampTapTime(tappedAtInput),
+    photoPath: photo,
   });
   if (problem) return fail(problem);
   return ok(undefined);
 }
 
 /** Can't do it (§6.4, §6.5): works before the day too, so the couple learns early. */
-export async function handBack(token: string, itemId: string, reason: string, tappedAtInput?: string): Promise<ActionResult<TaskStateResult>> {
+export async function handBack(token: string, itemId: string, reason: string, tappedAtInput?: string, suggestion?: string): Promise<ActionResult<TaskStateResult>> {
   const auth = await authorise(token);
   if (!isAuthorised(auth)) return auth;
   if (!idSchema.safeParse(itemId).success) return fail("Unknown job");
@@ -267,15 +283,17 @@ export async function handBack(token: string, itemId: string, reason: string, ta
   if (error) return fail(error.message);
   if (!updated?.length) return ok({ applied: false, state: row.state });
 
-  const problem = await activity(auth, { itemId, kind: "handed_back", payload: { reason: cleanReason.data }, tappedAt });
+  const problem = await activity(auth, { itemId, kind: "handed_back", payload: { reason: cleanReason.data, suggested: suggestion?.trim().slice(0, 80) || undefined }, tappedAt });
   if (problem) return fail(problem);
   return ok({ applied: true, state: target });
 }
 
 /** Add a note (§6.4). Before the day it is a question for the readiness check (§10.8). */
-export async function addDayNote(token: string, itemId: string | null, text: string, tappedAtInput?: string): Promise<ActionResult> {
+export async function addDayNote(token: string, itemId: string | null, text: string, tappedAtInput?: string, photoPath?: string | null): Promise<ActionResult> {
   const auth = await authorise(token);
   if (!isAuthorised(auth)) return auth;
+  const photo = ownPhoto(auth, photoPath);
+  if (photo === "invalid") return fail("That photo isn't yours.");
   const clean = textSchema.safeParse(text);
   if (!clean.success) return fail("Write a short note");
   let started = false;
@@ -292,6 +310,7 @@ export async function addDayNote(token: string, itemId: string | null, text: str
     kind: started ? "note" : "question",
     payload: { text: clean.data },
     tappedAt: clampTapTime(tappedAtInput),
+    photoPath: photo,
   });
   if (problem) return fail(problem);
   return ok(undefined);
@@ -403,5 +422,155 @@ export async function markArrived(token: string, tappedAtInput?: string): Promis
   if (error) return fail(error.message);
   const problem = await activity(auth, { itemId: null, kind: "arrived", tappedAt });
   if (problem) return fail(problem);
+  return ok(undefined);
+}
+
+const photoRequestSchema = z.object({
+  contentType: z.string().max(100),
+  byteSize: z.number().int().min(1),
+});
+
+/**
+ * A signed upload URL for one photo under this link's own prefix (§11). The
+ * path is made here from ids the server has checked, never taken from the
+ * client. Images only, at most 10 MB before the phone shrinks it.
+ */
+export async function requestDayPhotoUpload(
+  token: string,
+  contentType: string,
+  byteSize: number,
+): Promise<ActionResult<{ path: string; uploadUrl: string }>> {
+  const auth = await authorise(token);
+  if (!isAuthorised(auth)) return auth;
+  const parsed = photoRequestSchema.safeParse({ contentType, byteSize });
+  if (!parsed.success) return fail("That photo can't be sent.");
+  if (!parsed.data.contentType.toLowerCase().startsWith("image/")) return fail("Photos only, please.");
+  if (parsed.data.byteSize > PHOTO_MAX_BYTES) return fail("That photo is too big. Anything under 10 MB is fine.");
+
+  const path = `day/${auth.ctx.wedding.id}/${auth.ctx.link.id}/${crypto.randomUUID()}.jpg`;
+  const upload = await createUploadUrl(path);
+  if (!upload) return fail("Photos can't be sent right now.");
+  return ok({ path, uploadUrl: upload.signedUrl });
+}
+
+/** "I'll do it" on an open task (§10.2): the first to tap are assigned, until the places are filled. */
+export async function claimOpenTask(token: string, itemId: string, tappedAtInput?: string): Promise<ActionResult<{ result: string }>> {
+  const auth = await authorise(token);
+  if (!isAuthorised(auth)) return auth;
+  if (!idSchema.safeParse(itemId).success) return fail("Unknown job");
+  const { ctx, supabase } = auth;
+  const { data, error } = await supabase.rpc("claim_open_task", {
+    p_wedding_id: ctx.wedding.id,
+    p_item_id: itemId,
+    p_vendor_id: ctx.assignee.type === "vendor" ? ctx.assignee.id : null,
+    p_guest_id: ctx.assignee.type === "guest" ? ctx.assignee.id : null,
+    p_person_id: ctx.assignee.type === "person" ? ctx.assignee.id : null,
+  });
+  if (error) return fail(error.message);
+  const result = String(data);
+  if (result === "full" || result === "not_open") return fail("Someone else got there first.");
+  if (result === "not_in_group") return fail("That job isn't open to you.");
+  if (result === "claimed") {
+    const problem = await activity(auth, { itemId, kind: "claimed", tappedAt: clampTapTime(tappedAtInput) });
+    if (problem) return fail(problem);
+  }
+  return ok({ result });
+}
+
+/** Opening the page marks announcements seen; "OK, got it" acknowledges (§6.13). */
+export async function markAnnouncementsSeen(token: string, ids: string[]): Promise<ActionResult> {
+  const auth = await authorise(token);
+  if (!isAuthorised(auth)) return auth;
+  const parsed = z.array(idSchema).max(50).safeParse(ids);
+  if (!parsed.success) return fail("Unknown announcement");
+  const { ctx, supabase } = auth;
+  if (parsed.data.length === 0) return ok(undefined);
+
+  // Only announcements of this wedding that were sent to this link.
+  const { data: valid, error: readError } = await supabase
+    .from("day_announcements")
+    .select("id")
+    .eq("wedding_id", ctx.wedding.id)
+    .in("id", parsed.data);
+  if (readError) return fail(readError.message);
+  const { data: existing, error: existingError } = await supabase
+    .from("day_announcement_reads")
+    .select("announcement_id")
+    .eq("link_id", ctx.link.id)
+    .in("announcement_id", parsed.data);
+  if (existingError) return fail(existingError.message);
+  const had = new Set((existing ?? []).map((r) => r.announcement_id));
+  const fresh = (valid ?? []).map((a) => a.id).filter((id) => !had.has(id));
+  if (fresh.length === 0) return ok(undefined);
+
+  const { error } = await supabase
+    .from("day_announcement_reads")
+    .upsert(fresh.map((id) => ({ announcement_id: id, link_id: ctx.link.id, wedding_id: ctx.wedding.id })), {
+      onConflict: "announcement_id,link_id",
+      ignoreDuplicates: true,
+    });
+  if (error) return fail(error.message);
+  for (const id of fresh) {
+    const problem = await activity(auth, { itemId: null, kind: "announcement_seen", payload: { announcement_id: id }, tappedAt: new Date().toISOString() });
+    if (problem) return fail(problem);
+  }
+  return ok(undefined);
+}
+
+export async function acknowledgeAnnouncement(token: string, id: string, tappedAtInput?: string): Promise<ActionResult> {
+  const auth = await authorise(token);
+  if (!isAuthorised(auth)) return auth;
+  if (!idSchema.safeParse(id).success) return fail("Unknown announcement");
+  const { ctx, supabase } = auth;
+  const { data: valid, error: readError } = await supabase
+    .from("day_announcements")
+    .select("id")
+    .eq("id", id)
+    .eq("wedding_id", ctx.wedding.id)
+    .maybeSingle();
+  if (readError) return fail(readError.message);
+  if (!valid) return fail("Unknown announcement");
+
+  const tappedAt = clampTapTime(tappedAtInput);
+  const { error } = await supabase
+    .from("day_announcement_reads")
+    .upsert(
+      { announcement_id: id, link_id: ctx.link.id, wedding_id: ctx.wedding.id, acknowledged_at: tappedAt },
+      { onConflict: "announcement_id,link_id" },
+    );
+  if (error) return fail(error.message);
+  const problem = await activity(auth, { itemId: null, kind: "announcement_ok", payload: { announcement_id: id }, tappedAt });
+  if (problem) return fail(problem);
+  return ok(undefined);
+}
+
+const pushSchema = z.object({
+  endpoint: z.string().url().max(1000),
+  p256dh: z.string().min(1).max(200),
+  auth: z.string().min(1).max(100),
+});
+
+export async function savePushSubscription(token: string, subscription: { endpoint: string; p256dh: string; auth: string }): Promise<ActionResult> {
+  const auth = await authorise(token);
+  if (!isAuthorised(auth)) return auth;
+  const parsed = pushSchema.safeParse(subscription);
+  if (!parsed.success) return fail("That subscription isn't valid.");
+  const { ctx, supabase } = auth;
+  const { error } = await supabase
+    .from("day_push_subscriptions")
+    .upsert({ ...parsed.data, wedding_id: ctx.wedding.id, link_id: ctx.link.id }, { onConflict: "endpoint" });
+  if (error) return fail(error.message);
+  return ok(undefined);
+}
+
+export async function removePushSubscription(token: string, endpoint: string): Promise<ActionResult> {
+  const auth = await authorise(token);
+  if (!isAuthorised(auth)) return auth;
+  const { error } = await auth.supabase
+    .from("day_push_subscriptions")
+    .delete()
+    .eq("endpoint", endpoint)
+    .eq("link_id", auth.ctx.link.id);
+  if (error) return fail(error.message);
   return ok(undefined);
 }

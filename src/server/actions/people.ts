@@ -22,10 +22,14 @@ function revalidatePeople() {
   revalidatePath("/");
 }
 
-export async function addPerson(name: string): Promise<ActionResult<{ id: string }>> {
+export async function addPerson(name: string, contact?: { phone?: string; email?: string }): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   const clean = cleanPersonName(name);
   if (!clean) return fail("Give them a name (up to 80 characters)");
+
+  const phone = contact?.phone?.trim().slice(0, 40) || null;
+  const email = contact?.email?.trim().slice(0, 200) || null;
+  if (email && !z.string().email().safeParse(email).success) return fail("That doesn't look like an email");
 
   const supabase = await createClient();
   const { data: last } = await supabase
@@ -38,7 +42,7 @@ export async function addPerson(name: string): Promise<ActionResult<{ id: string
 
   const { data, error } = await supabase
     .from("people")
-    .insert({ wedding_id: wedding.id, name: clean, sort_order: (last?.sort_order ?? 0) + 1 })
+    .insert({ wedding_id: wedding.id, name: clean, sort_order: (last?.sort_order ?? 0) + 1, phone, email })
     .select("id")
     .single();
   if (error) return fail(error.message);

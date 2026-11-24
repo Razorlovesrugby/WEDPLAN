@@ -121,3 +121,41 @@ describe("linkExpiry", () => {
     expect(linkExpiry(null, null, TZ)).toBeNull();
   });
 });
+
+import { CUE_POLL_MS, POLL_MS, countdown, cueState, pollInterval } from "./my-day";
+
+describe("cues", () => {
+  const cue = (over: Partial<{ isCue: boolean; cueCalledAt: string | null; state: "todo" | "started" | "done" | "handed_back" }> = {}) => ({
+    startsAt: at("14:00"),
+    isCue: true,
+    cueCalledAt: null,
+    state: "todo" as const,
+    ...over,
+  });
+  it("is quiet until five minutes before", () => {
+    expect(cueState(cue(), new Date(at("13:50"))).kind).toBe("none");
+    expect(cueState(cue(), new Date(at("13:55")))).toEqual({ kind: "standby", secondsToStart: 300 });
+  });
+  it("stays on standby past the start until the master says go", () => {
+    expect(cueState(cue(), new Date(at("14:01")))).toEqual({ kind: "standby", secondsToStart: -60 });
+  });
+  it("turns to Go on the master's word and counts since", () => {
+    const state = cueState(cue({ cueCalledAt: at("14:00") }), new Date(`2027-03-06T14:00:04+13:00`));
+    expect(state).toEqual({ kind: "go", secondsSince: 4 });
+  });
+  it("lets Go lapse after two minutes", () => {
+    expect(cueState(cue({ cueCalledAt: at("14:00") }), new Date(at("14:05"))).kind).toBe("none");
+  });
+  it("ignores plain tasks and finished cues", () => {
+    expect(cueState(cue({ isCue: false }), new Date(at("13:58"))).kind).toBe("none");
+    expect(cueState(cue({ state: "done" }), new Date(at("13:58"))).kind).toBe("none");
+  });
+  it("polls every 3 seconds only while a cue is live", () => {
+    expect(pollInterval([cue()], new Date(at("13:30")))).toBe(POLL_MS);
+    expect(pollInterval([cue()], new Date(at("13:57")))).toBe(CUE_POLL_MS);
+  });
+  it("formats the countdown", () => {
+    expect(countdown(272)).toBe("4:32");
+    expect(countdown(-5)).toBe("0:00");
+  });
+});

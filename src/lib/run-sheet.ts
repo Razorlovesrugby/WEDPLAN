@@ -33,6 +33,8 @@ export type RunSheetAssignee = {
   type: RunSheetAssigneeType;
   id: string;
   label: string;
+  /** Marked the lead of the task they're on (spec 54 §10.2). Only set on an item's own assignees. */
+  isLead?: boolean;
 };
 
 /** What a task holds for the people helping (spec 54 §10.1). Separate from the couple's private notes. */
@@ -43,7 +45,17 @@ export type HelperContent = {
   contactId: string | null;
   steps: string[];
   bring: string[];
+  photoOnDone: boolean;
+  isCue: boolean;
+  cueCalledAt: string | null;
+  opensModule: string | null;
+  openGroupId: string | null;
+  openPlaces: number | null;
+  files: { id: string; url: string | null; mime: string; caption: string | null }[];
 };
+
+/** A saved group of helpers (spec 54 §10.2): `memberKeys` are `type:id` assignee keys. */
+export type HelperGroup = { id: string; name: string; memberKeys: string[] };
 
 export type RunSheetItem = RunSheetItemView & { assignees: RunSheetAssignee[]; helper: HelperContent };
 

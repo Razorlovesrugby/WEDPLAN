@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { guestName } from "@/lib/format";
 import { assigneeColumn, type ResolvedDayLink } from "./resolve";
 import type { TaskState } from "@/lib/day-links/state";
+import { activeModules } from "@/lib/day-links/modules";
+import { signPaths } from "@/lib/supabase/storage";
 
 /**
  * Everything one day link may read (spec 54 §12): the person's own tasks, the
@@ -34,7 +36,21 @@ export type DayTask = {
   steps: { id: string; text: string; ticked: boolean }[];
   bring: string[];
   contact: { label: string; phone: string } | null;
+  /** Ask for a photo when done (§6.10). */
+  photoOnDone: boolean;
+  isCue: boolean;
+  cueCalledAt: string | null;
+  opensModule: string | null;
+  isLead: boolean;
+  /** Who is leading, when it isn't this person and the task has several. */
+  leadName: string | null;
+  /** The couple's reference photos and files, signed for reading. */
+  files: { id: string; url: string; mime: string; caption: string | null }[];
 };
+
+export type OpenTask = { id: string; title: string; startsAt: string; endsAt: string; places: number; groupName: string };
+
+export type DayAnnouncement = { id: string; text: string; important: boolean; sentAt: string; acknowledged: boolean };
 
 export type DayHelp = {
   id: string;
@@ -51,6 +67,14 @@ export type MyDayData = {
   info: { id: string; heading: string; body: string }[];
   help: DayHelp[];
   arrivedAt: string | null;
+  /** "Can you help?": open tasks in this person's groups with places left (§10.2). */
+  openTasks: OpenTask[];
+  /** Newest first; an important one stays until acknowledged (§6.13). */
+  announcements: DayAnnouncement[];
+  /** Names from this person's groups, for suggesting a replacement when handing back (§10.2). */
+  groupMates: string[];
+  /** The module keys on this link that the registry knows. */
+  modules: string[];
   /** Everything the page polls for changes against. */
   loadedAt: string;
 };
@@ -68,11 +92,35 @@ export async function loadMyDay({ link, assignee, wedding }: ResolvedDayLink): P
 
   const itemIds = [...new Set((rows ?? []).map((r) => r.item_id))];
 
+  const myGroups = await supabase
+    .from("helper_group_members")
+    .select("group_id")
+    .eq("wedding_id", wedding.id)
+    .eq(column, assignee.id);
+  if (myGroups.error) throw new Error(`Could not load groups: ${myGroups.error.message}`);
+  const groupIds = [...new Set((myGroups.data ?? []).map((g) => g.group_id))];
+
+  const [files, groups, groupMembers, openItems, announcementRows, reads] = await Promise.all([
+    itemIds.length
+      ? supabase.from("run_sheet_item_files").select("id, item_id, path, mime_type, caption, sort_order").eq("wedding_id", wedding.id).in("item_id", itemIds).order("sort_order")
+      : Promise.resolve({ data: [], error: null }),
+    groupIds.length ? supabase.from("helper_groups").select("id, name").eq("wedding_id", wedding.id).in("id", groupIds) : Promise.resolve({ data: [], error: null }),
+    groupIds.length ? supabase.from("helper_group_members").select("*").eq("wedding_id", wedding.id).in("group_id", groupIds) : Promise.resolve({ data: [], error: null }),
+    groupIds.length
+      ? supabase.from("run_sheet_items").select("id, title, starts_at, ends_at, open_to_group_id, open_places").eq("wedding_id", wedding.id).in("open_to_group_id", groupIds).gt("open_places", 0)
+      : Promise.resolve({ data: [], error: null }),
+    supabase.from("day_announcements").select("id, audience, group_id, link_id, text, important, sent_at").eq("wedding_id", wedding.id).order("sent_at", { ascending: false }).limit(50),
+    supabase.from("day_announcement_reads").select("announcement_id, acknowledged_at").eq("link_id", link.id),
+  ]);
+  for (const [what, r] of [["photos", files], ["groups", groups], ["group members", groupMembers], ["open tasks", openItems], ["announcements", announcementRows], ["announcement reads", reads]] as const) {
+    if (r.error) throw new Error(`Could not load ${what}: ${r.error.message}`);
+  }
+
   const [items, steps, others, contacts, info, help] = await Promise.all([
     itemIds.length
       ? supabase
           .from("run_sheet_items")
-          .select("id, title, starts_at, ends_at, location, address, instructions, critical, contact_id, updated_at")
+          .select("id, title, starts_at, ends_at, location, address, instructions, critical, contact_id, updated_at, photo_on_done, is_cue, cue_called_at, opens_module")
           .eq("wedding_id", wedding.id)
           .in("id", itemIds)
       : Promise.resolve({ data: [], error: null }),
@@ -94,7 +142,7 @@ export async function loadMyDay({ link, assignee, wedding }: ResolvedDayLink): P
       .select("id, item_id, payload, tapped_at, answered_at, answer")
       .eq("wedding_id", wedding.id)
       .eq("link_id", link.id)
-      .eq("kind", "help")
+      .in("kind", ["help", "question"])
       .order("tapped_at", { ascending: false })
       .limit(10),
   ]);
@@ -104,10 +152,14 @@ export async function loadMyDay({ link, assignee, wedding }: ResolvedDayLink): P
 
   // Names only, for the others on each task.
   const otherRows = (others.data ?? []).filter((r) => r.id !== undefined && !rows?.some((mine) => mine.id === r.id));
-  const guestIds = otherRows.map((r) => r.guest_id).filter((x): x is string => !!x);
-  const vendorIds = otherRows.map((r) => r.vendor_id).filter((x): x is string => !!x);
-  const personIds = otherRows.map((r) => r.person_id).filter((x): x is string => !!x);
-  const collabIds = otherRows.map((r) => r.collaborator_user_id).filter((x): x is string => !!x);
+  const mateRows = (groupMembers.data ?? []).filter(
+    (m) => !(m[column] === assignee.id),
+  );
+  const named = [...otherRows, ...mateRows];
+  const guestIds = named.map((r) => r.guest_id).filter((x): x is string => !!x);
+  const vendorIds = named.map((r) => r.vendor_id).filter((x): x is string => !!x);
+  const personIds = named.map((r) => r.person_id).filter((x): x is string => !!x);
+  const collabIds = named.map((r) => r.collaborator_user_id).filter((x): x is string => !!x);
   const [g, v, p, c] = await Promise.all([
     guestIds.length ? supabase.from("guests").select("id, first_name, last_name, preferred_name").in("id", guestIds) : Promise.resolve({ data: [] }),
     vendorIds.length ? supabase.from("vendors").select("id, name").in("id", vendorIds) : Promise.resolve({ data: [] }),
@@ -120,11 +172,28 @@ export async function loadMyDay({ link, assignee, wedding }: ResolvedDayLink): P
   for (const x of p.data ?? []) nameOf.set(`p:${x.id}`, x.name);
   for (const x of c.data ?? []) nameOf.set(`c:${x.user_id}`, x.display_name?.trim() || (x.role === "owner" ? "The couple" : "Your partner"));
   const othersByItem = new Map<string, string[]>();
+  const leadByItem = new Map<string, string>();
   for (const r of otherRows) {
     const key = r.guest_id ? `g:${r.guest_id}` : r.vendor_id ? `v:${r.vendor_id}` : r.person_id ? `p:${r.person_id}` : r.collaborator_user_id ? `c:${r.collaborator_user_id}` : null;
     const name = key ? nameOf.get(key) : undefined;
     if (!name) continue;
     othersByItem.set(r.item_id, [...(othersByItem.get(r.item_id) ?? []), name]);
+    if (r.is_lead) leadByItem.set(r.item_id, name);
+  }
+  const mateNames = [
+    ...new Set(
+      mateRows
+        .map((m) => (m.guest_id ? nameOf.get(`g:${m.guest_id}`) : m.vendor_id ? nameOf.get(`v:${m.vendor_id}`) : m.person_id ? nameOf.get(`p:${m.person_id}`) : undefined))
+        .filter((x): x is string => !!x),
+    ),
+  ];
+
+  const signed = await signPaths((files.data ?? []).map((f) => f.path));
+  const filesByItem = new Map<string, DayTask["files"]>();
+  for (const f of files.data ?? []) {
+    const url = signed.get(f.path);
+    if (!url) continue;
+    filesByItem.set(f.item_id, [...(filesByItem.get(f.item_id) ?? []), { id: f.id, url, mime: f.mime_type, caption: f.caption }]);
   }
 
   const myRowIds = (rows ?? []).map((r) => r.id);
@@ -167,18 +236,47 @@ export async function loadMyDay({ link, assignee, wedding }: ResolvedDayLink): P
         .map((s) => ({ id: s.id, text: s.text, ticked: ticked.has(`${row.id}:${s.id}`) })),
       bring: mine.filter((s) => s.kind === "bring").map((s) => s.text),
       contact: contact ? { label: contact.label, phone: contact.phone } : null,
+      photoOnDone: item.photo_on_done,
+      isCue: item.is_cue,
+      cueCalledAt: item.cue_called_at,
+      opensModule: item.opens_module,
+      isLead: row.is_lead,
+      leadName: row.is_lead ? null : (leadByItem.get(item.id) ?? null),
+      files: filesByItem.get(item.id) ?? [],
     });
   }
   tasks.sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 
+  const groupName = new Map((groups.data ?? []).map((g) => [g.id, g.name]));
+  const myItemIds = new Set(itemIds);
+  const openTasks: OpenTask[] = (openItems.data ?? [])
+    .filter((i) => !myItemIds.has(i.id) && i.open_to_group_id)
+    .map((i) => ({
+      id: i.id,
+      title: i.title,
+      startsAt: i.starts_at,
+      endsAt: i.ends_at,
+      places: i.open_places ?? 0,
+      groupName: groupName.get(i.open_to_group_id!) ?? "your group",
+    }));
+
+  const acknowledged = new Map((reads.data ?? []).map((r) => [r.announcement_id, !!r.acknowledged_at]));
+  const announcements: DayAnnouncement[] = (announcementRows.data ?? [])
+    .filter((a) => a.audience === "everyone" || (a.audience === "group" && a.group_id && groupIds.includes(a.group_id)) || (a.audience === "link" && a.link_id === link.id))
+    .map((a) => ({ id: a.id, text: a.text, important: a.important, sentAt: a.sent_at, acknowledged: acknowledged.get(a.id) ?? false }));
+
   return {
+    openTasks,
+    announcements,
+    groupMates: mateNames,
+    modules: activeModules(link.modules).map((m) => m.key),
     tasks,
     contacts: contacts.data ?? [],
     info: info.data ?? [],
     help: (help.data ?? []).map((h) => ({
       id: h.id,
       itemId: h.item_id,
-      reason: String((h.payload as { reason?: string }).reason ?? "Help"),
+      reason: String((h.payload as { reason?: string; text?: string }).reason ?? (h.payload as { text?: string }).text ?? "Help"),
       tappedAt: h.tapped_at,
       answeredAt: h.answered_at,
       answer: h.answer,

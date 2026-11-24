@@ -132,3 +132,47 @@ export function linkExpiry(lastEventEnd: string | null, weddingDate: string | nu
   const at = zonedInputToUtc(`${addDay(base, 8)}T00:00`, timeZone);
   return at ? new Date(at) : null;
 }
+
+// ---------------------------------------------------------------------------
+// Cues (spec 54 §6.16)
+// ---------------------------------------------------------------------------
+
+export const CUE_STANDBY_MINUTES = 5;
+/** How long "Go now" stays up after the master's word. */
+export const CUE_GO_VISIBLE_SECONDS = 120;
+export const POLL_MS = 15_000;
+export const CUE_POLL_MS = 3_000;
+
+export type CueState =
+  | { kind: "none" }
+  | { kind: "standby"; secondsToStart: number }
+  | { kind: "go"; secondsSince: number };
+
+/** Standby from five minutes before a cue starts; Go from the master's word. */
+export function cueState(
+  task: { startsAt: string; isCue: boolean; cueCalledAt: string | null; state: TaskState },
+  now: Date,
+): CueState {
+  if (!task.isCue || task.state === "done" || task.state === "handed_back") return { kind: "none" };
+  const t = now.getTime();
+  if (task.cueCalledAt) {
+    const since = Math.max(0, Math.round((t - Date.parse(task.cueCalledAt)) / 1000));
+    return since <= CUE_GO_VISIBLE_SECONDS ? { kind: "go", secondsSince: since } : { kind: "none" };
+  }
+  const toStart = Math.round((Date.parse(task.startsAt) - t) / 1000);
+  return toStart <= CUE_STANDBY_MINUTES * 60 ? { kind: "standby", secondsToStart: toStart } : { kind: "none" };
+}
+
+/** The page refreshes every 3 seconds while any of its cues is in standby or go. */
+export function pollInterval(
+  tasks: readonly { startsAt: string; isCue: boolean; cueCalledAt: string | null; state: TaskState }[],
+  now: Date,
+): number {
+  return tasks.some((task) => cueState(task, now).kind !== "none") ? CUE_POLL_MS : POLL_MS;
+}
+
+/** "4:32", for the countdown. Negative counts as zero. */
+export function countdown(seconds: number): string {
+  const s = Math.max(0, seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}

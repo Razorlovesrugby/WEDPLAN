@@ -55,6 +55,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 48 | `0048_run_sheet_one_timeline.sql` | Run sheet becomes one timeline: stored `starts_at`/`ends_at`, optional `predecessor_id` + `offset_minutes`, `run_sheet_item_assignees` (four sources), save/shift/delete functions, overlap view. Replaces tracks, pinning, owner text and `vendor_id`. Spec 50. | 1 |
 | 49 | `0049_event_types_and_features.sql` | `event_types` (nine seeded built-ins per wedding), `events.type_id` + `asks_rsvp`/`has_seating`/`guest_facing` with backfill and checks, `seed_event_types()`, `create_wedding()` seeds them, the three RSVP views ignore events that don't ask. Spec 51. | 36, 44, 45, 48 |
 | 50 | `0050_day_links.sql` | `day_links`, `day_link_devices`, append-only `day_activity`, per-assignee task state and "Got it" columns, task content (instructions, address, critical, contact, steps/bring list, ticks), `day_contacts`, `day_info_sections`, phone and email on `people`. Spec 54, first part (see its build status). | 43, 44, 48 |
+| 51 | `0051_day_links_rest.sql` | Rest of spec 54's schema: reference photos (`run_sheet_item_files`), helper photo path, groups and members, leads and open tasks (`claim_open_task()`), announcements and their reads, push subscriptions, the reminder log, cues, module columns, `weddings.day_before_email`. Specs 52, 53, 55 move up one number. | 50 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

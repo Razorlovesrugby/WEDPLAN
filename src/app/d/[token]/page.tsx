@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dayLinkTints } from "@/lib/day-links/tint";
 import { resolveTheme, themeTokens } from "@/lib/theme/presets";
+import { serverEnv } from "@/lib/env";
 import { loadMyDay } from "@/server/day-links/my-day";
 import { resolveDayLink } from "@/server/day-links/resolve";
 import { MyDayView } from "@/components/day-link/my-day-view";
@@ -9,12 +10,17 @@ import "@/components/day-link/day-link.css";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "My day",
-  robots: { index: false, follow: false },
-  appleWebApp: { capable: true, title: "My day", statusBarStyle: "default" },
-  referrer: "no-referrer",
-};
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  return {
+    title: "My day",
+    robots: { index: false, follow: false },
+    referrer: "no-referrer",
+    manifest: `/d/${token}/manifest.webmanifest`,
+    icons: { apple: `/d/${token}/icon?size=192` },
+    appleWebApp: { capable: true, title: "My day", statusBarStyle: "default" },
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -64,6 +70,7 @@ export default async function DayLinkPage({ params }: { params: Promise<{ token:
         helperName={helperName}
         wedding={{ name: context.wedding.name, timeZone: context.wedding.timezone, date: context.wedding.wedding_date }}
         initial={data}
+        vapidKey={serverEnv().VAPID_PUBLIC_KEY && serverEnv().VAPID_PRIVATE_KEY ? serverEnv().VAPID_PUBLIC_KEY! : null}
       />
     </div>
   );

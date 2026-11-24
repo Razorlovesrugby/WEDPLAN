@@ -21,7 +21,7 @@ export default async function DayLinksPage() {
         Everyone you&rsquo;ve given a job to who has no login gets their own link: their jobs, a Start and Done button
         for each, and a way to ask for help. Times are the venue&rsquo;s ({wedding.timezone}).
       </p>
-      <DayLinksScreen overview={overview} timeZone={wedding.timezone} />
+      <DayLinksScreen overview={overview} timeZone={wedding.timezone} dayBeforeEmail={wedding.day_before_email} />
     </div>
   );
 }
