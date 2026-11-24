@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { guestName } from "@/lib/format";
+import { guestName, sideLabel } from "@/lib/format";
 import { signPaths } from "@/lib/supabase/storage";
 import { DEFAULT_SECTIONS, personKey, type ShotItem, type ShotPerson, type ShotSectionItem } from "@/lib/shots/model";
 
@@ -12,12 +12,16 @@ export type ShotGuestOption = {
   vendorNote: string | null;
   photoUrl: string | null;
   side: string | null;
+  householdId: string | null;
 };
 
 export type ShotListData = {
   sections: ShotSectionItem[];
   guests: ShotGuestOption[];
   people: { id: string; name: string }[];
+  /** Households and sides a whole group of guests can be added from (spec 58 §3.3). */
+  households: { id: string; name: string }[];
+  sides: { side: string; label: string }[];
   /** Run sheet items a section can be linked to. */
   items: { id: string; title: string; startsAt: string; endsAt: string; location: string | null }[];
   /** Day links with the Shot list module on, and for which section. */
@@ -37,21 +41,23 @@ export const getShotList = cache(async (weddingId: string): Promise<ShotListData
     if (error) throw new Error(`Could not start the shot list: ${error.message}`);
   }
 
-  const [sections, shots, shotPeople, guests, people, items, links] = await Promise.all([
+  const [sections, shots, shotPeople, guests, people, items, links, households, collaborators] = await Promise.all([
     supabase.from("shot_sections").select("*").eq("wedding_id", weddingId).order("sort_order").order("created_at"),
     supabase.from("shots").select("*").eq("wedding_id", weddingId).order("sort_order").order("created_at"),
     supabase.from("shot_people").select("*").eq("wedding_id", weddingId).order("sort_order"),
     supabase
       .from("guests")
-      .select("id, first_name, last_name, preferred_name, relationship, vendor_note, photo_path, side")
+      .select("id, first_name, last_name, preferred_name, relationship, vendor_note, photo_path, side, household_id")
       .eq("wedding_id", weddingId)
       .is("deleted_at", null)
       .order("first_name"),
     supabase.from("people").select("id, name").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
     supabase.from("run_sheet_items").select("id, title, starts_at, ends_at, location").eq("wedding_id", weddingId).order("starts_at"),
     supabase.from("day_links").select("id, label, modules, module_config").eq("wedding_id", weddingId).is("revoked_at", null),
+    supabase.from("households").select("id, display_name").eq("wedding_id", weddingId).is("deleted_at", null).order("rank"),
+    supabase.from("collaborators").select("role, display_name").eq("wedding_id", weddingId),
   ]);
-  for (const [what, r] of [["sections", sections], ["shots", shots], ["shot people", shotPeople], ["guests", guests], ["helpers", people], ["tasks", items], ["links", links]] as const) {
+  for (const [what, r] of [["sections", sections], ["shots", shots], ["shot people", shotPeople], ["guests", guests], ["helpers", people], ["tasks", items], ["links", links], ["households", households], ["names", collaborators]] as const) {
     if (r.error) throw new Error(`Could not load ${what}: ${r.error.message}`);
   }
 
@@ -63,6 +69,7 @@ export const getShotList = cache(async (weddingId: string): Promise<ShotListData
     vendorNote: g.vendor_note,
     photoUrl: g.photo_path ? (signed.get(g.photo_path) ?? null) : null,
     side: g.side,
+    householdId: g.household_id,
   }));
   const nameOfGuest = new Map(guestOptions.map((g) => [g.id, g.name]));
   const nameOfPerson = new Map((people.data ?? []).map((p) => [p.id, p.name]));
@@ -119,6 +126,10 @@ export const getShotList = cache(async (weddingId: string): Promise<ShotListData
     }),
     guests: guestOptions,
     people: people.data ?? [],
+    households: (households.data ?? []).map((h) => ({ id: h.id, name: h.display_name })),
+    sides: (["partner_a", "partner_b", "both", "other"] as const)
+      .filter((side) => guestOptions.some((g) => g.side === side))
+      .map((side) => ({ side, label: `${sideLabel(side, collaborators.data ?? [])}'s side` })),
     items: (items.data ?? []).map((i) => ({ id: i.id, title: i.title, startsAt: i.starts_at, endsAt: i.ends_at, location: i.location })),
     sharedWith: (links.data ?? [])
       .filter((l) => l.modules.includes("shot_list"))

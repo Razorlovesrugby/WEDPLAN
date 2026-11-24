@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createUploadUrl, removePaths } from "@/lib/supabase/storage";
 import { DEFAULT_MINUTES } from "@/lib/shots/model";
+import { inputKey, mergePeople } from "@/lib/shots/people";
 import { requireWedding } from "@/server/queries/wedding";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -212,6 +213,90 @@ export async function saveShot(shotId: string | null, sectionId: string, input: 
   if (!people.ok) return people;
   revalidate();
   return ok({ id: id! });
+}
+
+/**
+ * A copy of a shot straight after the original (spec 58 §3.1): same title,
+ * kind, people, minutes, note and shooter. Not must-have, not taken, no
+ * reference image. Guests deleted since are left out.
+ */
+export async function duplicateShot(shotId: string): Promise<ActionResult<{ id: string }>> {
+  const wedding = await requireWedding();
+  if (!idSchema.safeParse(shotId).success) return fail("Unknown shot");
+  const supabase = await createClient();
+  const { data: shot, error } = await supabase.from("shots").select("*").eq("id", shotId).eq("wedding_id", wedding.id).maybeSingle();
+  if (error) return fail(error.message);
+  if (!shot) return fail("That shot no longer exists");
+  const [links, siblings, guests] = await Promise.all([
+    supabase.from("shot_people").select("guest_id, person_id, role").eq("shot_id", shotId).eq("wedding_id", wedding.id).order("sort_order"),
+    supabase.from("shots").select("id").eq("section_id", shot.section_id).eq("wedding_id", wedding.id).order("sort_order").order("created_at"),
+    supabase.from("guests").select("id").eq("wedding_id", wedding.id).is("deleted_at", null),
+  ]);
+  for (const r of [links, siblings, guests]) if (r.error) return fail(r.error.message);
+  const live = new Set((guests.data ?? []).map((g) => g.id));
+  const people: ShotPersonInput[] = (links.data ?? []).flatMap((l): ShotPersonInput[] =>
+    l.guest_id ? (live.has(l.guest_id) ? [{ kind: "guest", id: l.guest_id }] : []) : l.person_id ? [{ kind: "person", id: l.person_id }] : l.role ? [{ kind: "role", role: l.role }] : [],
+  );
+  const { data: created, error: insertError } = await supabase
+    .from("shots")
+    .insert({
+      wedding_id: wedding.id,
+      section_id: shot.section_id,
+      title: shot.title,
+      kind: shot.kind,
+      must_have: false,
+      minutes: shot.minutes,
+      note: shot.note,
+      shooter: shot.shooter,
+      sort_order: (siblings.data?.length ?? 0) + 1000,
+    })
+    .select("id")
+    .single();
+  if (insertError) return fail(insertError.message);
+  const written = await writePeople(created.id, wedding.id, people);
+  if (!written.ok) {
+    await supabase.from("shots").delete().eq("id", created.id).eq("wedding_id", wedding.id);
+    return written;
+  }
+  const order = (siblings.data ?? []).map((r) => r.id);
+  order.splice(order.indexOf(shotId) + 1, 0, created.id);
+  const ordered = await writeOrder("shots", order, wedding.id);
+  if (!ordered.ok) return ordered;
+  return ok({ id: created.id });
+}
+
+/** Adds the same people to every ticked shot, skipping anyone already in it (spec 58 §3.5). One insert, so all or none. */
+export async function addPeopleToShots(shotIds: string[], people: ShotPersonInput[]): Promise<ActionResult<{ added: number }>> {
+  const wedding = await requireWedding();
+  const ids = z.array(idSchema).min(1).max(200).safeParse(shotIds);
+  const who = z.array(personInput).min(1).max(60).safeParse(people);
+  if (!ids.success || !who.success) return fail("Pick at least one shot and one person");
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("shot_people").select("shot_id, guest_id, person_id, role, sort_order").in("shot_id", ids.data).eq("wedding_id", wedding.id);
+  if (error) return fail(error.message);
+  const { data: owned, error: ownedError } = await supabase.from("shots").select("id").in("id", ids.data).eq("wedding_id", wedding.id);
+  if (ownedError) return fail(ownedError.message);
+  const rows = (owned ?? []).flatMap((s) => {
+    const there = (data ?? []).filter((r) => r.shot_id === s.id);
+    const have = there.map((r): ShotPersonInput => (r.guest_id ? { kind: "guest", id: r.guest_id } : r.person_id ? { kind: "person", id: r.person_id } : { kind: "role", role: r.role ?? "" }));
+    const haveKeys = new Set(have.map(inputKey));
+    const fresh = mergePeople(have, who.data).filter((p) => !haveKeys.has(inputKey(p)));
+    const start = there.reduce((m, r) => Math.max(m, r.sort_order), -1) + 1;
+    return fresh.map((p, i) => ({
+      wedding_id: wedding.id,
+      shot_id: s.id,
+      guest_id: p.kind === "guest" ? p.id : null,
+      person_id: p.kind === "person" ? p.id : null,
+      role: p.kind === "role" ? p.role : null,
+      sort_order: start + i,
+    }));
+  });
+  if (rows.length > 0) {
+    const { error: insertError } = await supabase.from("shot_people").insert(rows);
+    if (insertError) return fail(insertError.message);
+  }
+  revalidate();
+  return ok({ added: rows.length });
 }
 
 export async function deleteShot(shotId: string): Promise<ActionResult> {
