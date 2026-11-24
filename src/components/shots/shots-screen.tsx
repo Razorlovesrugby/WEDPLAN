@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
+  addPeopleToShots,
   addShotProposals,
   applyShotOrder,
   confirmGuestPhoto,
   confirmShotReference,
   deleteSection,
   deleteShot,
+  duplicateShot,
   moveSection,
   moveShot,
   moveShotToSection,
@@ -25,6 +27,8 @@ import {
 } from "@/server/actions/shots";
 import { callBacks, suggestOrder, type OrderShot } from "@/lib/shots/order";
 import { suggestFormals, type FamilySide, type Who } from "@/lib/shots/formals";
+import { PeopleChooser } from "./people-chooser";
+import { recentPeople } from "@/lib/shots/people";
 import { counts, slotFit } from "@/lib/shots/progress";
 import { DEFAULT_MINUTES, KIND_LABEL, personKey, type ShotItem, type ShotSectionItem } from "@/lib/shots/model";
 import type { ShotKind } from "@/lib/types/database";
@@ -33,7 +37,7 @@ import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 
 const STATUS_LABEL = { todo: "To do", taken: "Taken", skipped: "Skipped", later: "Later" } as const;
 
-type Editing = { shot: ShotItem | null; sectionId: string };
+type Editing = { shot: ShotItem | null; sectionId: string; selectTitle?: boolean };
 
 function fmt(iso: string, timeZone: string) {
   return new Intl.DateTimeFormat("en-NZ", { timeZone, hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso));
@@ -53,6 +57,21 @@ export function ShotsScreen({ data, timeZone }: { data: ShotListData; timeZone: 
   const [editing, setEditing] = useState<Editing | null>(null);
   const [panel, setPanel] = useState<"order" | "groups" | "faces" | null>(null);
   const [previous, setPrevious] = useState<{ sectionId: string; ids: string[] } | null>(null);
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState(false);
+  const [openAfter, setOpenAfter] = useState<string | null>(null);
+
+  // A duplicate opens for editing once the refreshed list holds it (spec 58 §3.1).
+  useEffect(() => {
+    if (!openAfter) return;
+    for (const sec of data.sections) {
+      const found = sec.shots.find((x) => x.id === openAfter);
+      if (found) {
+        setEditing({ shot: found, sectionId: sec.id, selectTitle: true });
+        setOpenAfter(null);
+      }
+    }
+  }, [data.sections, openAfter]);
 
   // Live progress on the day (§5.2).
   useEffect(() => {
@@ -165,12 +184,26 @@ export function ShotsScreen({ data, timeZone }: { data: ShotListData; timeZone: 
         {panel === "groups" ? <GroupsPanel data={data} disabled={pending} onAdd={(proposals) => { run(() => addShotProposals(section.id, proposals), `Added ${proposals.length} ${proposals.length === 1 ? "group" : "groups"}`); setPanel(null); }} /> : null}
         {panel === "faces" ? <FacesPanel data={data} section={section} onError={setError} onDone={() => router.refresh()} /> : null}
 
+        {section.shots.some((x) => ticked.has(x.id)) ? (
+          <div className="card flex flex-wrap items-center gap-2 p-3 text-sm">
+            <span>{section.shots.filter((x) => ticked.has(x.id)).length} ticked</span>
+            <button className="btn-primary" onClick={() => setBulk(true)}>Add people to ticked shots</button>
+            <button className="btn" onClick={() => setTicked(new Set())}>Untick all</button>
+          </div>
+        ) : null}
         {section.shots.length === 0 ? <p className="card p-6 text-center text-sm text-muted">No shots here yet. Add one, or try Suggest groups.</p> : null}
         <ol className="space-y-2">
           {section.shots.map((s, i) => (
             <li key={s.id} className="card space-y-1 p-3 text-sm">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span>
+                  <input
+                    type="checkbox"
+                    className="mr-2 align-middle"
+                    aria-label={`Tick ${s.title}`}
+                    checked={ticked.has(s.id)}
+                    onChange={(e) => setTicked((t) => { const n = new Set(t); if (e.target.checked) n.add(s.id); else n.delete(s.id); return n; })}
+                  />
                   <span className="mr-2 text-muted">{i + 1}.</span>
                   <strong>{s.mustHave ? "★ " : ""}{s.title}</strong>{" "}
                   <span className="text-xs text-muted">{KIND_LABEL[s.kind]}{s.shooter ? ` · ${s.shooter} shooter` : ""}</span>
@@ -185,6 +218,7 @@ export function ShotsScreen({ data, timeZone }: { data: ShotListData; timeZone: 
                 <button className="btn" aria-label="Move up" disabled={pending || i === 0} onClick={() => run(() => moveShot(s.id, "up"))}>↑</button>
                 <button className="btn" aria-label="Move down" disabled={pending || i === section.shots.length - 1} onClick={() => run(() => moveShot(s.id, "down"))}>↓</button>
                 <button className="btn" onClick={() => setEditing({ shot: s, sectionId: s.sectionId })}>Edit</button>
+                <button className="btn" disabled={pending} onClick={() => run(async () => { const r = await duplicateShot(s.id); if (r.ok) setOpenAfter(r.data.id); return r; })}>Duplicate</button>
                 {s.status !== "todo" ? <button className="btn" disabled={pending} onClick={() => run(() => setShotStatusAsCouple(s.id, "todo"))}>Reset</button> : <button className="btn" disabled={pending} onClick={() => run(() => setShotStatusAsCouple(s.id, "taken"))}>Mark taken</button>}
               </div>
             </li>
@@ -201,6 +235,17 @@ export function ShotsScreen({ data, timeZone }: { data: ShotListData; timeZone: 
         </section>
       </div>
 
+      {bulk ? (
+        <BulkAdd
+          data={data}
+          shotIds={section.shots.filter((x) => ticked.has(x.id)).map((x) => x.id)}
+          section={section}
+          pending={pending}
+          onClose={() => setBulk(false)}
+          onApply={(people) => run(async () => { const r = await addPeopleToShots(section.shots.filter((x) => ticked.has(x.id)).map((x) => x.id), people); if (r.ok) { setBulk(false); setTicked(new Set()); } return r; }, "People added")}
+        />
+      ) : null}
+
       {editing ? (
         <ShotEditor
           data={data}
@@ -215,6 +260,7 @@ export function ShotsScreen({ data, timeZone }: { data: ShotListData; timeZone: 
             }, "Saved")
           }
           onDelete={() => editing.shot && window.confirm("Delete this shot?") && run(async () => { const r = await deleteShot(editing.shot!.id); if (r.ok) setEditing(null); return r; })}
+          onDuplicate={() => editing.shot && run(async () => { const r = await duplicateShot(editing.shot!.id); if (r.ok) { setEditing(null); setOpenAfter(r.data.id); } return r; })}
           onMove={(sectionId) => editing.shot && run(async () => { const r = await moveShotToSection(editing.shot!.id, sectionId); if (r.ok) setEditing(null); return r; })}
           onError={setError}
           onDone={() => router.refresh()}
@@ -399,6 +445,7 @@ function ShotEditor({
   onSave,
   onDelete,
   onMove,
+  onDuplicate,
   onError,
   onDone,
 }: {
@@ -409,6 +456,7 @@ function ShotEditor({
   onSave: (input: { sectionId: string; value: Parameters<typeof saveShot>[2] }) => void;
   onDelete: () => void;
   onMove: (sectionId: string) => void;
+  onDuplicate: () => void;
   onError: (e: string) => void;
   onDone: () => void;
 }) {
@@ -422,15 +470,18 @@ function ShotEditor({
   const [people, setPeople] = useState<ShotPersonInput[]>(
     (shot?.people ?? []).map((p) => (p.kind === "role" ? { kind: "role" as const, role: p.role } : { kind: p.kind, id: p.id })),
   );
-  const [search, setSearch] = useState("");
-  const [role, setRole] = useState("");
   const [busy, setBusy] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing.selectTitle) titleRef.current?.select(); }, [editing.selectTitle]);
 
-  const labelOf = (p: ShotPersonInput) => (p.kind === "role" ? p.role : p.kind === "guest" ? (data.guests.find((g) => g.id === p.id)?.name ?? "Removed") : (data.people.find((x) => x.id === p.id)?.name ?? "Removed"));
-  const has = (key: string) => people.some((p) => personKey(p.kind, p.kind === "role" ? p.role : p.id) === key);
-  const matches = search.trim()
-    ? data.guests.filter((g) => !has(personKey("guest", g.id)) && g.name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 6)
-    : [];
+  const sec = data.sections.find((x) => x.id === editing.sectionId);
+  const siblings = sec?.shots ?? [];
+  const index = shot ? siblings.findIndex((x) => x.id === shot.id) : siblings.length;
+  const above = index > 0 ? siblings[index - 1]! : null;
+  const copyFrom = [
+    ...siblings.filter((x) => x.id !== shot?.id).map((x) => ({ id: x.id, label: x.title, people: x.people })),
+    ...data.sections.filter((x) => x.id !== editing.sectionId).flatMap((x) => x.shots.map((y) => ({ id: y.id, label: `${x.name}: ${y.title}`, people: y.people }))),
+  ];
 
   async function uploadReference(file: File) {
     if (!shot) return;
@@ -458,7 +509,7 @@ function ShotEditor({
         }}
       >
         <h2 className="font-serif text-lg">{shot ? "Edit shot" : "New shot"}</h2>
-        <label className="block">Title <input className="field mt-1" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} autoFocus placeholder="The couple with Aroha's grandparents" /></label>
+        <label className="block">Title <input ref={titleRef} className="field mt-1" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} autoFocus placeholder="The couple with Aroha's grandparents" /></label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">Kind
             <select className="field mt-1" value={kind} onChange={(e) => { const k = e.target.value as ShotKind; setKind(k); if (!shot) setMinutes(DEFAULT_MINUTES[k]); }}>
@@ -476,28 +527,14 @@ function ShotEditor({
           </select>
         </label>
 
-        <fieldset className="space-y-2">
-          <legend>People in it</legend>
-          <div className="flex flex-wrap gap-1.5">
-            {people.map((p, i) => (
-              <button key={i} type="button" className="rounded-full border border-line px-2 py-0.5 text-xs" onClick={() => setPeople(people.filter((_, j) => j !== i))}>{labelOf(p)} ×</button>
-            ))}
-          </div>
-          <input className="field" aria-label="Add a guest" placeholder="Add a guest…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          {matches.map((g) => (
-            <button key={g.id} type="button" className="block text-left underline" onClick={() => { setPeople([...people, { kind: "guest", id: g.id }]); setSearch(""); }}>{g.name}{g.relationship ? ` · ${g.relationship}` : ""}</button>
-          ))}
-          <div className="flex gap-2">
-            <select className="field" aria-label="Add a helper" value="" onChange={(e) => e.target.value && !has(personKey("person", e.target.value)) && setPeople([...people, { kind: "person", id: e.target.value }])}>
-              <option value="">Add the couple or a helper…</option>
-              {data.people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <input className="field flex-1" aria-label="Add a role" placeholder="Or a role: Best man, All the cousins" value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} />
-            <button type="button" className="btn" disabled={!role.trim()} onClick={() => { if (!has(personKey("role", role.trim()))) setPeople([...people, { kind: "role", role: role.trim() }]); setRole(""); }}>Add</button>
-          </div>
-        </fieldset>
+        <PeopleChooser
+          data={data}
+          people={people}
+          onChange={setPeople}
+          previous={above && above.people.length > 0 ? above : null}
+          recent={recentPeople(siblings, index)}
+          copyFrom={copyFrom}
+        />
 
         <label className="block">Note for the photographer <textarea className="field mt-1" rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Nan uses a walking stick" /></label>
 
@@ -529,10 +566,29 @@ function ShotEditor({
 
         <div className="flex items-center gap-2 pt-1">
           {shot ? <button type="button" className="btn text-red-700" disabled={pending} onClick={onDelete}>Delete</button> : null}
+          {shot ? <button type="button" className="btn" disabled={pending} onClick={onDuplicate}>Duplicate</button> : null}
           <button type="button" className="btn ml-auto" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary" disabled={pending || !title.trim()}>{pending ? "Saving…" : "Save"}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function BulkAdd({ data, shotIds, section, pending, onClose, onApply }: { data: ShotListData; shotIds: string[]; section: ShotSectionItem; pending: boolean; onClose: () => void; onApply: (people: ShotPersonInput[]) => void }) {
+  const [people, setPeople] = useState<ShotPersonInput[]>([]);
+  const copyFrom = data.sections.flatMap((x) => x.shots.filter((y) => !shotIds.includes(y.id)).map((y) => ({ id: y.id, label: x.id === section.id ? y.title : `${x.name}: ${y.title}`, people: y.people })));
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[92vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-t-xl bg-white p-5 text-sm sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-serif text-lg">Add people to {shotIds.length} {shotIds.length === 1 ? "shot" : "shots"}</h2>
+        <p className="text-muted">Anyone already in a shot is skipped.</p>
+        <PeopleChooser data={data} people={people} onChange={setPeople} recent={[]} copyFrom={copyFrom} />
+        <div className="flex gap-2 pt-1">
+          <button type="button" className="btn ml-auto" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-primary" disabled={pending || people.length === 0} onClick={() => onApply(people)}>{pending ? "Adding…" : "Add"}</button>
+        </div>
+      </div>
     </div>
   );
 }

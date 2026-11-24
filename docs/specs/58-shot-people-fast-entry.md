@@ -1,7 +1,6 @@
 # Feature spec: Fast people entry on the shot list
 
-**Status: proposed.** Asked for 2026-11-24. Nothing is built until the planner
-says to build it (see `docs/specs/README.md`). Open questions are in §7.
+**Status: built** (see Build status). Asked for and answered 2026-11-24.
 
 **Depends on:** spec 52 (the shot list, `shots`, `shot_people`, the shot
 editor in `src/components/shots/shots-screen.tsx`), spec 45 (no-drag), spec 46
@@ -54,9 +53,9 @@ At the top of "People in it", when the shot has no people yet:
 Under the chips, one row of tap-to-add buttons, each one tap, each hidden once
 that person is in the shot:
 
-1. **Couple**: the `people` entries of the wedding's couple (spec 39).
-2. **Recent**: the people from the last three shots edited, most recent first,
-   at most 8.
+1. **Couple and helpers**: one button per `people` entry (spec 39).
+2. **Recent**: the people of the three shots just above this one in the
+   section (the last three for a new shot), nearest first, at most 8.
 3. **Whole household**: a drop-down of the guest list's households and sides
    ("Aroha's side", "The Smith household"). Choosing one adds every non-deleted
    guest in it. Guests who declined are included, since the photo may be taken
@@ -80,8 +79,8 @@ skipping any already in it. One server action, all or none.
 - A person is never in a shot twice (the existing `shot_people` key,
   `personKey`). Every copy and add path skips duplicates.
 - A guest soft-deleted since the source shot was saved is skipped, not copied.
-- "Recent" and "Copy people from…" read only what the page already loaded;
-  there is no extra query.
+- "Recent" and "Copy people from…" read only what the page already loaded.
+  The query adds each guest's household, the households and the side names.
 - Everything works with buttons and keys; nothing needs drag (spec 45). On a
   phone each tap target is at least 44 px (spec 48).
 - Every write is a server action returning `ActionResult`, and its Supabase
@@ -94,8 +93,8 @@ skipping any already in it. One server action, all or none.
   editor and both actions use it.
 - `src/server/actions/shots.ts`: `duplicateShot(shotId)`,
   `addPeopleToShots(shotIds, people)`.
-- `src/server/queries/shots.ts`: also return each guest's `household_id` and
-  household name.
+- `src/server/queries/shots.ts`: also returns each guest's household, the
+  households, and the sides in use, named after the partners.
 - `src/components/shots/shots-screen.tsx`: the editor additions above.
   The file is already 538 lines; the new chooser goes in its own component
   file.
@@ -108,17 +107,13 @@ skipping any already in it. One server action, all or none.
 - Changing the photographer's day-link module: it only reads the result.
 - Copying the reference image or status.
 
-## 7. Open questions
+## 7. Answered — 2026-11-24
 
-1. **Duplicate and must-have.** Should a copy keep must-have on? Recommended:
-   no, a copy is usually a variation, and a duplicated must-have inflates the
-   must-have count. The title and people are what is being reused.
-2. **Bulk add (§3.5).** Include it now, or only duplicate, copy-from and quick
-   picks first? Recommended: include it; family formals are where the same
-   five people join ten shots.
-3. **Households.** Is "household" the right grouping, or do you also want
-   guest "tags" or relationship text ("Smith family") as groups? Recommended:
-   households and sides only, since they exist already and need no new data.
+All three took their recommendation.
+
+1. A duplicate is not must-have (§3.1).
+2. Bulk add is included (§3.5).
+3. Groups are households and sides only (§3.3).
 
 ## 8. Build order
 
@@ -128,3 +123,13 @@ skipping any already in it. One server action, all or none.
 4. Editor: quick picks and the open checklist.
 5. Bulk add on the section list.
 6. Typecheck, tests, build; a real browser and phone for the editor.
+
+## Build status
+
+**Built:** `src/lib/shots/people.ts` with tests, `duplicateShot` and
+`addPeopleToShots`, the query additions, and `people-chooser.tsx` used by the
+shot editor and the bulk dialog; Duplicate on rows and in the editor.
+
+**Verified:** typecheck, 1705 unit tests, build (with placeholder Supabase
+env). **Not verified:** a browser, a phone, live Supabase, the SQL suite (no
+schema change). The two new actions have never run against a database.
