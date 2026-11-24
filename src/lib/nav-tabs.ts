@@ -17,6 +17,13 @@ export const TASKS_TABS: readonly SubTab[] = [
   { href: "/timeline", label: "Timeline" },
 ];
 
+/** The run sheet's three views (spec 56 §6.2). The schedule's By the hour / List toggle is `?view=`, not a tab. */
+export const RUN_SHEET_TABS: readonly SubTab[] = [
+  { href: "/run-sheet", label: "Schedule" },
+  { href: "/run-sheet/people", label: "Who's doing what" },
+  { href: "/run-sheet/links", label: "Day links" },
+];
+
 /**
  * Design (spec 42 §5.2): everything guests see, eight tabs, all kept (Q7).
  * Registry links out to the registry's own Page & address screen, which stays

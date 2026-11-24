@@ -37,6 +37,7 @@ export function RunSheetItemEditor({
   linkStates,
   timeZone,
   canAddPeople,
+  defaultEventId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -51,6 +52,8 @@ export function RunSheetItemEditor({
   linkStates: Record<string, "made" | "opened">;
   timeZone: string;
   canAddPeople: boolean;
+  /** The event a new job starts under, when the run sheet is showing one event (spec 56). */
+  defaultEventId?: string;
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -92,7 +95,7 @@ export function RunSheetItemEditor({
     setTitle(item?.title ?? "");
     setNotes(item?.notes ?? "");
     setLocation(item?.location ?? "");
-    setEventId(item?.event_id ?? "");
+    setEventId(item?.event_id ?? defaultEventId ?? "");
     setGuestVisible(item?.guest_visible ?? false);
     const start = item ? utcToZonedInput(item.starts_at, timeZone) : (initialStartsAt ?? "");
     setStartInput(start);
@@ -122,7 +125,7 @@ export function RunSheetItemEditor({
     setOpenGroupId(item?.helper.openGroupId ?? "");
     setOpenPlaces(item?.helper.openPlaces ?? 1);
     setError(null);
-  }, [open, item, initialStartsAt, timeZone]);
+  }, [open, item, initialStartsAt, timeZone, defaultEventId]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -179,8 +182,8 @@ export function RunSheetItemEditor({
   }
 
   function save() {
-    if (!title.trim()) return setError("Give the item a title");
-    if (!times) return setError("Give the item a start and an end");
+    if (!title.trim()) return setError("Give the job a title");
+    if (!times) return setError("Give the job a start and an end");
     startTransition(async () => {
       const result = await saveRunSheetItem({
         id: item?.id ?? null,
@@ -289,13 +292,13 @@ export function RunSheetItemEditor({
         }}
         className="max-h-[90vh] space-y-3 overflow-y-auto p-5"
       >
-        <h2 className="font-serif text-lg">{item ? "Edit item" : "New item"}</h2>
+        <h2 className="font-serif text-lg">{item ? "Edit job" : "New job"}</h2>
 
         {!item ? (
           <label className="block text-sm">
             Start from a suggestion (optional)
             <select className="field mt-1" value="" onChange={(e) => applySuggestion(e.target.value)}>
-              <option value="">Choose a common helper task…</option>
+              <option value="">Choose a common helper job…</option>
               {SUGGESTED_TASKS.map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.title}
@@ -618,7 +621,7 @@ export function RunSheetItemEditor({
                 {uploading ? <p className="text-xs text-muted">Uploading…</p> : null}
               </>
             ) : (
-              <p className="text-xs text-muted">Save the task first, then add photos.</p>
+              <p className="text-xs text-muted">Save the job first, then add photos.</p>
             )}
           </div>
           <label className="flex items-center gap-2">
@@ -629,7 +632,7 @@ export function RunSheetItemEditor({
 
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={guestVisible} onChange={(e) => setGuestVisible(e.target.checked)} />
-          Show guests this item
+          Show guests this job
         </label>
 
         {error ? (

@@ -4,6 +4,26 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 59 (specs 51–55, specs only):** event types, shot list, seating, day links and the
+on-the-day master, on branch `claude/events-feature-specs-pba8wb`. **Nothing built**: no
+migration, no app code. Every question in all five specs is answered (mostly "recommended").
+
+- **51:** event types are rows per wedding (nine seeded built-ins plus the couple's own, edited
+  the same way); a type only presets an event's switches (guests reply, seating, guest-facing,
+  main).
+- **54 is the foundation** for 52, 53 and 55: one private, phone-first link per run sheet
+  assignee, with an Apple-inspired look for day links only (§5), modules for per-role front ends
+  (shot list, seating), and every tap an activity row for 55's master. Its §10 adds what a task
+  holds (instructions separate from private notes, steps, bring list, contact, critical, lead,
+  groups, open tasks). §18 maps patterns from the leading event-staffing tools.
+- **Build order:** 51 → 54 → 52 → 53 → 55. Migrations `0049`–`0053` in that order.
+- **Traps the specs record:** `pg_cron` for 54's every-minute reminders is set up by a script,
+  not a migration (the SQL suite's Postgres has no `pg_cron`); `people` has no phone or email
+  until 54 adds them.
+- **Mockups:** a private claude.ai design canvas ("Shot list & seating mockups"). The last row
+  is the chosen look; earlier rows are marked superseded.
+- **Verified:** nothing (specs only).
+
 **Session 58 (no spec):** Supabase egress, on branch `claude/admiring-davinci-q406md`.
 The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13 Dec 2026.
 

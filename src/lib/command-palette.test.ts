@@ -22,6 +22,16 @@ describe("go to", () => {
     }
   });
 
+  it("offers the run sheet's views, so \"who\" and \"links\" find them (spec 56)", () => {
+    for (const viewer of ["couple", "planner"] as const) {
+      const commands = goCommands(viewer);
+      const whoDoes = commands.find((command) => command.href === "/run-sheet/people")!;
+      const links = commands.find((command) => command.href === "/run-sheet/links")!;
+      expect(matchScore(whoDoes, "who")).toBeGreaterThan(0);
+      expect(matchScore(links, "links")).toBeGreaterThan(0);
+    }
+  });
+
   it("finds Settings by what's in it", () => {
     const settings = goCommands("couple").find((command) => command.href === "/settings")!;
     expect(matchScore(settings, "timez")).toBeGreaterThan(0);
