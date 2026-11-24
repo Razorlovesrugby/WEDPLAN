@@ -4,6 +4,29 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 60 (specs 51 and 54, built):** on branch `claude/pensive-mayer-b0d5sr`, asked to "build 51 and 54".
+Migrations **`0049` and `0050` must be applied to live** (nothing has been run against live).
+
+- **51, built whole.** `event_types` (nine seeded per wedding, couple's own, hide/never delete),
+  `events.type_id` + `asks_rsvp` / `has_seating` / `guest_facing` with backfill and checks;
+  `create_wedding()` seeds them; `v_guest_event_invites` drops non-guest-facing events and gains
+  `asks_rsvp`; `v_household_rsvp` and `v_wedding_stats` ignore events that don't ask. App: type
+  select and "What this event needs" switches on `/events`, an Event types panel, RSVP form and
+  reply card skip non-asking events (`RsvpData.invites` is asking-only, `eventInvites` is all),
+  `/guests` columns, `/seating` picker and page, seating export and the guest table reveal,
+  who's-invited. Seating with replies off seats everyone invited. **The backfill ran only on empty
+  tables in the SQL suite** (the seed inserts events after migrations; they take Other through a
+  default-type trigger), so it is untested against real events: check live before relying on it.
+- **54, built** (migrations `0050` + `0051`; specs 52/53/55's migrations move up one number). Helper
+  page, couple's Day links screen, People view, photos, offline queue, groups/leads/open tasks,
+  announcements, cues, reminders (day-before email and web push), manifest/icon, tab bar and module
+  slot. The module registry is empty until 52/53 add theirs. **Setup you must do:** VAPID keys
+  (`npx web-push generate-vapid-keys`), `node scripts/ensure-day-cron.mjs`, the storage bucket. See the
+  spec's Build status for deviations and what is still missing.
+- **Verified:** typecheck, unit tests, `npm run build`, SQL suite (885 assertions), and the helper page
+  rendered in headless Chromium at 390 px (light, dark) with sample data. **Not
+  verified:** the `/events` form, the couple's Day links screen, a real phone, push, live Supabase, email sending. Next in the build order: 52, 53, 55.
+
 **Session 59 (specs 51–55, specs only):** event types, shot list, seating, day links and the
 on-the-day master, on branch `claude/events-feature-specs-pba8wb`. **Nothing built**: no
 migration, no app code. Every question in all five specs is answered (mostly "recommended").

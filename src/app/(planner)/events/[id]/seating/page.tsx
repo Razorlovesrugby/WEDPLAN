@@ -71,7 +71,7 @@ export default async function EventSeatingPage({
         snapshots={snapshots}
         dayActivity={dayActivity}
         collaborators={collaborators.map((c) => ({ user_id: c.user_id, display_name: c.display_name, role: c.role }))}
-        initialColourBy={parseColourBy(colour)}
+        initialColourBy={parseColourBy(colour ?? data.plan?.colour_by)}
       />
     </div>
   );

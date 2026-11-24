@@ -384,7 +384,17 @@ export type VendorStage =
 export type EstimateSource = "entered" | "allocation" | "none";
 export type ReminderDueSource = "list_item" | "payment";
 export type RunSheetTrack = "guests" | "couple" | "vendors" | "other";
-export type SeatingTableShape = "round" | "long" | "square" | "head";
+export type SeatingTableShape =
+  | "round"
+  | "long"
+  | "square"
+  | "head"
+  | "sweetheart"
+  | "rows"
+  | "oval"
+  | "half_moon"
+  | "serpentine"
+  | "banquet";
 export type SeatingFixtureKind =
   | "dance_floor"
   | "bar"
@@ -396,7 +406,24 @@ export type SeatingFixtureKind =
   | "entrance"
   | "photo_booth"
   | "buffet"
-  | "other";
+  | "other"
+  | "lounge"
+  | "kids_area"
+  | "floral_arch"
+  | "garland"
+  | "aisle_flowers"
+  | "candles"
+  | "plant"
+  | "sign"
+  | "lantern"
+  | "drape"
+  | "marquee"
+  | "tree"
+  | "path"
+  | "pool"
+  | "garden_bed"
+  | "slope"
+  | "custom";
 export type SeatingRuleKind = "together" | "apart" | "near" | "avoid_table" | "accessible";
 export type MoodboardShareChannel = "link" | "public_site" | "rsvp";
 export type MoodboardItemOrigin = "upload" | "clip" | "pinterest";
@@ -1592,6 +1619,13 @@ export type SeatingPlanRow = {
   calibrated: boolean;
   /** When guests may see their table on their own page. Null = never. */
   reveal_at: string | null;
+  /** Spec 57: the plan's "Colour chairs by", in `parseColourBy`'s form; null = nothing. */
+  colour_by: string | null;
+  service_style: "plated" | "shared" | "buffet" | "roaming";
+  /** Courses and dishes, shaped by src/lib/seating/service.ts. */
+  menu: Json;
+  /** Thresholds, shaped by src/lib/seating/plan-settings.ts. */
+  settings: Json;
   created_at: string;
   updated_at: string;
 };
@@ -1617,6 +1651,19 @@ export type SeatingTableRow = {
   /** Null = derived from shape and capacity. */
   width_cm: number | null;
   length_cm: number | null;
+  /** Spec 57: the space and layout it lies in. The database fills both when an insert names neither. */
+  space_id: string;
+  layout_id: string;
+  /** Ceremony rows only: rows of chairs, and the aisle between the two blocks. */
+  rows_count: number | null;
+  aisle_cm: number | null;
+  /** Banquet runs only: `[{len, turn}]`, read by `readSegments`. */
+  segments: Json | null;
+  style_id: string | null;
+  /** Changes over the style, shaped by `parseStyleChanges`. */
+  style_changes: Json | null;
+  /** Platter counts typed by the couple: `{ dishId: { n, at } }`. */
+  platter_counts: Json | null;
   created_at: string;
   updated_at: string;
 };
@@ -1625,6 +1672,8 @@ export type SeatingFixtureRow = {
   id: string;
   wedding_id: string;
   event_id: string;
+  space_id: string;
+  layout_id: string;
   kind: SeatingFixtureKind;
   label: string | null;
   pos_x_cm: number;
@@ -1632,6 +1681,11 @@ export type SeatingFixtureRow = {
   width_cm: number;
   depth_cm: number;
   rotation_deg: number;
+  /** Décor: how many this placed item stands for ("aisle flowers x 12"). */
+  quantity: number;
+  vendor_id: string | null;
+  custom_item_id: string | null;
+  marquee_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1639,10 +1693,149 @@ export type SeatingFixtureRow = {
 export type SeatAssignmentRow = {
   wedding_id: string;
   event_id: string;
+  /** Filled from the table's layout when an insert doesn't name it. */
+  layout_id: string;
   guest_id: string;
   table_id: string;
   /** Null = at the table, chair not chosen. 0-based, clockwise from the top. */
   seat_index: number | null;
+  /** "Keep for now" on a declined guest's seat. */
+  decline_kept_at: string | null;
+  /** Per course id: true = own plate. */
+  own_plate: Json;
+  /** Per course id: false = this child shares. */
+  kids_meal: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 57. An event has one live layout and any number of drafts. */
+export type SeatingLayoutRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  name: string;
+  is_live: boolean;
+  locked_at: string | null;
+  locked_by: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 57. One room of a layout, in centimetres. */
+export type SeatingSpaceRow = {
+  id: string;
+  wedding_id: string;
+  layout_id: string;
+  name: string;
+  sort_order: number;
+  room_width_cm: number;
+  room_depth_cm: number;
+  background_path: string | null;
+  background_w_px: number | null;
+  background_h_px: number | null;
+  calibrated: boolean;
+  background_opacity: number;
+  /** Walls, arcs, openings, markers, areas, labels: shaped by src/lib/seating/drawing.ts. */
+  drawing: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Spec 57 Part C. Wedding-wide; soft-deleted. */
+export type SeatingTableStyleRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  /** Shaped by src/lib/seating/items.ts (`parseStylePlace`). */
+  place: Json;
+  centre: Json;
+  colour: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingCustomItemRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  shape: "rect" | "round";
+  width_cm: number;
+  depth_cm: number;
+  colour: string | null;
+  vendor_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingMarqueeRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  width_cm: number;
+  length_cm: number;
+  pole_spacing_cm: number | null;
+  middle_poles: boolean;
+  rounded_ends: boolean;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** The couple's final number for an item, per layout. */
+export type SeatingItemCountRow = {
+  wedding_id: string;
+  layout_id: string;
+  item_key: string;
+  final_count: number | null;
+  suggested_chairs: number | null;
+  suggested_guests: number | null;
+  vendor_id: string | null;
+  budget_item_id: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SeatingShareLinkRow = {
+  id: string;
+  wedding_id: string;
+  event_id: string;
+  token_hash: string;
+  passcode_hash: string | null;
+  label: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type DietaryTag =
+  | "vegetarian"
+  | "vegan"
+  | "gluten_free"
+  | "dairy_free"
+  | "nut"
+  | "peanut"
+  | "shellfish"
+  | "fish"
+  | "egg"
+  | "soy"
+  | "sesame"
+  | "halal"
+  | "kosher"
+  | "other";
+
+/** Spec 57 Part H: structured dietary needs beside the free-text `guests.dietary`. */
+export type GuestDietaryNeedRow = {
+  wedding_id: string;
+  guest_id: string;
+  tag: DietaryTag;
+  other_text: string | null;
+  is_allergy: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -2491,6 +2684,10 @@ export type Database = {
         | "room_width_cm"
         | "room_depth_cm"
         | "calibrated"
+        | "colour_by"
+        | "service_style"
+        | "menu"
+        | "settings"
       >;
       seating_tables: Table<
         SeatingTableRow,
@@ -2502,9 +2699,59 @@ export type Database = {
         | "accessible"
         | "sort_order"
         | "rotation_deg"
+        | "space_id"
+        | "layout_id"
+        | "rows_count"
+        | "aisle_cm"
+        | "segments"
+        | "style_id"
+        | "style_changes"
+        | "platter_counts"
       >;
-      seating_fixtures: Table<SeatingFixtureRow, "id" | Timestamps | "rotation_deg">;
-      seat_assignments: Table<SeatAssignmentRow, Timestamps>;
+      seating_fixtures: Table<
+        SeatingFixtureRow,
+        "id" | Timestamps | "rotation_deg" | "space_id" | "layout_id" | "quantity" | "vendor_id" | "custom_item_id" | "marquee_id"
+      >;
+      seat_assignments: Table<
+        SeatAssignmentRow,
+        Timestamps | "layout_id" | "decline_kept_at" | "own_plate" | "kids_meal"
+      >;
+      seating_table_styles: Table<SeatingTableStyleRow, "id" | Timestamps | "place" | "centre" | "colour" | "deleted_at">;
+      seating_custom_items: Table<
+        SeatingCustomItemRow,
+        "id" | Timestamps | "shape" | "width_cm" | "depth_cm" | "colour" | "vendor_id" | "deleted_at"
+      >;
+      seating_marquees: Table<
+        SeatingMarqueeRow,
+        "id" | Timestamps | "pole_spacing_cm" | "middle_poles" | "rounded_ends" | "deleted_at"
+      >;
+      seating_item_counts: Table<
+        SeatingItemCountRow,
+        Timestamps | "final_count" | "suggested_chairs" | "suggested_guests" | "vendor_id" | "budget_item_id" | "updated_by"
+      >;
+      seating_share_links: Table<
+        SeatingShareLinkRow,
+        "id" | "created_at" | "passcode_hash" | "label" | "expires_at" | "revoked_at" | "created_by"
+      >;
+      guest_dietary_needs: Table<GuestDietaryNeedRow, Timestamps | "other_text" | "is_allergy">;
+      seating_layouts: Table<
+        SeatingLayoutRow,
+        "id" | Timestamps | "is_live" | "locked_at" | "locked_by" | "deleted_at"
+      >;
+      seating_spaces: Table<
+        SeatingSpaceRow,
+        | "id"
+        | Timestamps
+        | "sort_order"
+        | "room_width_cm"
+        | "room_depth_cm"
+        | "calibrated"
+        | "background_opacity"
+        | "drawing"
+        | "background_path"
+        | "background_w_px"
+        | "background_h_px"
+      >;
       seating_rules: Table<SeatingRuleRow, "id" | Timestamps>;
       seating_snapshots: Table<SeatingSnapshotRow, "id" | "created_at" | "automatic">;
       registry_settings: Table<

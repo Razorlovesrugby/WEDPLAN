@@ -17,7 +17,7 @@ import { fail, ok, type ActionResult } from "./result";
  */
 
 const uuid = z.string().uuid();
-const shapeSchema = z.enum(["round", "long", "square", "head"]);
+const shapeSchema = z.enum(["round", "long", "square", "head", "sweetheart", "oval", "half_moon", "serpentine"]);
 const fixtureKindSchema = z.enum([
   "dance_floor",
   "bar",
@@ -93,7 +93,7 @@ export async function createSeatingTable(
   if (readError) return fail(readError.message);
 
   const shape = shapeSchema.catch("round").parse(fields.shape);
-  const capacity = z.coerce.number().int().min(1).max(60).catch(shape === "head" ? 6 : 8).parse(fields.capacity ?? undefined);
+  const capacity = z.coerce.number().int().min(1).max(60).catch(shape === "head" ? 6 : shape === "sweetheart" ? 2 : 8).parse(fields.capacity ?? undefined);
   const label = fields.label?.trim() || nextTableLabel((existing ?? []).map((t) => t.label));
   const sortOrder = Math.max(0, ...(existing ?? []).map((t) => t.sort_order)) + 1;
   const placed = Number.isFinite(fields.pos_x_cm) && Number.isFinite(fields.pos_y_cm);

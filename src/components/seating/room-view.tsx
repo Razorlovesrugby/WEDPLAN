@@ -14,12 +14,14 @@ import {
   updateSeatingRoom,
 } from "@/server/actions/seating";
 import { toWebp } from "@/lib/site/encode-image";
+import { chairDetail, chairFirstName, chairMarks, initials, readableText, type ChairDetail } from "@/lib/seating/chairs";
 import { guestColour } from "@/lib/seating/colour";
 import {
   CLEARANCE_CM,
   FIXTURE_DEFAULTS,
   normaliseDegrees,
   seatPositions,
+  serpentinePath,
   snap,
   tableSize,
   type Point,
@@ -59,6 +61,8 @@ export function RoomView() {
 
   useEffect(() => setFixtures(data.fixtures), [data.fixtures]);
   useEffect(() => setView(fit(roomW, roomD)), [roomW, roomD]);
+  // 1 when the whole room fits; 2 when the view is half as wide.
+  const detail = chairDetail(fit(roomW, roomD).w / view.w);
 
   const placed = tables.filter((t) => t.pos_x_cm !== null);
   const unplaced = tables.filter((t) => t.pos_x_cm === null);
@@ -377,6 +381,7 @@ export function RoomView() {
               selected={selectedTable?.id === t.id}
               rings={rings}
               fontSize={Math.max(14, view.w / 70)}
+              detail={detail}
               onPointerDown={(e) => onItemPointerDown(e, { kind: "table", id: t.id })}
             />
           ))}
@@ -459,12 +464,14 @@ function TableShape({
   selected,
   rings,
   fontSize,
+  detail,
   onPointerDown,
 }: {
   table: SeatingTable;
   selected: boolean;
   rings: boolean;
   fontSize: number;
+  detail: ChairDetail;
   onPointerDown: (e: RPointerEvent) => void;
 }) {
   const { occupancy, warningsByTable, assignments, guestById, colourBy, data, held } = useSeating();
@@ -509,10 +516,58 @@ function TableShape({
         const gid = byChair.get(i);
         const g = gid ? guestById.get(gid) : undefined;
         const c = g ? guestColour(g, colourBy, data.colour)?.colour ?? "#6b6560" : "#ffffff";
-        return <circle key={i} cx={p.x} cy={p.y} r={20} fill={c} stroke="#8a8580" strokeWidth={2} />;
+        const marks = g ? chairMarks(g) : null;
+        const reach = Math.hypot(p.x, p.y) || 1;
+        return (
+          <g key={i}>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={20}
+              fill={c}
+              stroke={marks?.declined ? "#c2410c" : "#8a8580"}
+              strokeWidth={marks?.declined ? 3 : 2}
+              strokeDasharray={marks?.declined ? "6 4" : undefined}
+            />
+            {g && detail !== "dot" ? (
+              <g transform={`translate(${p.x} ${p.y}) rotate(${-table.rotation_deg})`} style={{ pointerEvents: "none" }}>
+                <text textAnchor="middle" dominantBaseline="central" fontSize={15} fontWeight={600} fill={readableText(c)}>
+                  {initials(g)}
+                </text>
+                {detail === "name" ? (
+                  <text
+                    x={(p.x / reach) * 36}
+                    y={(p.y / reach) * 36}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize={13}
+                    fill="#1a1a1a"
+                    stroke="#ffffff"
+                    strokeWidth={4}
+                    paintOrder="stroke"
+                  >
+                    {chairFirstName(g)}
+                  </text>
+                ) : null}
+              </g>
+            ) : null}
+            {marks?.dietary ? <circle cx={p.x + 14} cy={p.y - 14} r={6} fill="#c81e1e" stroke="#ffffff" strokeWidth={1.5} style={{ pointerEvents: "none" }} /> : null}
+          </g>
+        );
       })}
       {table.shape === "round" ? (
         <circle r={length / 2} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
+      ) : table.shape === "serpentine" ? (
+        <path d={serpentinePath(length / 2, width / 2)} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
+      ) : table.shape === "oval" ? (
+        <ellipse rx={length / 2} ry={width / 2} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
+      ) : table.shape === "half_moon" ? (
+        <path
+          d={`M ${-length / 2} ${width / 2} A ${length / 2} ${length / 2} 0 0 1 ${length / 2} ${width / 2} Z`}
+          fill={isOver ? "#efe6da" : "#f3efe8"}
+          stroke={stroke}
+          strokeWidth={selected ? 6 : 4}
+        />
       ) : (
         <rect
           x={-length / 2}

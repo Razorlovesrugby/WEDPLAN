@@ -180,7 +180,7 @@ export async function applySeatingTemplate(
 // ---------------------------------------------------------------------------
 const bulkSchema = z.object({
   count: z.number().int().min(1).max(40),
-  shape: z.enum(["round", "long", "square", "head"]),
+  shape: z.enum(["round", "long", "square", "head", "sweetheart", "oval", "half_moon", "serpentine"]),
   capacity: z.number().int().min(1).max(60),
 });
 
@@ -321,6 +321,25 @@ export async function setChairBlocked(eventId: string, tableId: string, seatInde
     const { error } = await supabase.from("seating_chairs_blocked").delete().eq("table_id", tableId).eq("seat_index", chair.data).eq("wedding_id", wedding.id);
     if (error) return fail(error.message);
   }
+  revalidate(eventId);
+  return ok(undefined);
+}
+
+/**
+ * The plan's "Colour chairs by" (spec 57 Q8: one setting for the plan, shared
+ * by every collaborator and the exports). `raw` is `parseColourBy`'s form; an
+ * empty string is "Nothing".
+ */
+export async function setSeatingColourBy(eventId: string, raw: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
+  const colour = raw.trim();
+  if (colour.length > 80) return fail("That colour setting is too long");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("seating_plans")
+    .upsert({ wedding_id: wedding.id, event_id: eventId, colour_by: colour === "" ? null : colour }, { onConflict: "event_id" });
+  if (error) return fail(error.message);
   revalidate(eventId);
   return ok(undefined);
 }

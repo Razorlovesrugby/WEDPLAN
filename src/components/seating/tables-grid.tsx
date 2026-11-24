@@ -14,7 +14,20 @@ export const SHAPE_LABEL: Record<SeatingTableShape, string> = {
   long: "Long",
   square: "Square",
   head: "Head table",
+  sweetheart: "Sweetheart",
+  oval: "Oval",
+  half_moon: "Half-moon",
+  serpentine: "Serpentine",
+  rows: "Ceremony rows",
+  banquet: "Banquet run",
 };
+
+/**
+ * The shapes the Add table form and a table's shape picker offer. Ceremony
+ * rows and banquet runs carry extra fields (rows, pieces), so they are made
+ * from the room designer's library, not switched to from a plain table.
+ */
+export const PICKABLE_SHAPES = ["round", "long", "square", "head", "sweetheart", "oval", "half_moon", "serpentine"] as const satisfies readonly SeatingTableShape[];
 
 /** A small drawing of the shape, for the card header. */
 export function ShapeIcon({ shape }: { shape: SeatingTableShape }) {
@@ -23,12 +36,19 @@ export function ShapeIcon({ shape }: { shape: SeatingTableShape }) {
       {shape === "round" ? <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" /> : null}
       {shape === "square" ? <rect x="3" y="3" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" /> : null}
       {shape === "long" ? <rect x="1.5" y="6" width="17" height="8" fill="none" stroke="currentColor" strokeWidth="1.5" /> : null}
-      {shape === "head" ? (
+      {shape === "head" || shape === "sweetheart" ? (
         <>
           <rect x="1.5" y="8" width="17" height="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
           <path d="M4 5h12" stroke="currentColor" strokeWidth="1.5" />
         </>
       ) : null}
+      {shape === "oval" ? <ellipse cx="10" cy="10" rx="8.5" ry="5.5" fill="none" stroke="currentColor" strokeWidth="1.5" /> : null}
+      {shape === "half_moon" ? <path d="M2 14a8 8 0 0 1 16 0z" fill="none" stroke="currentColor" strokeWidth="1.5" /> : null}
+      {shape === "serpentine" ? <path d="M1.5 12c4-8 7 8 17 0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /> : null}
+      {shape === "rows" ? (
+        <path d="M3 5h5M12 5h5M3 9h5M12 9h5M3 13h5M12 13h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      ) : null}
+      {shape === "banquet" ? <path d="M3 4v12h14V4" fill="none" stroke="currentColor" strokeWidth="3" /> : null}
     </svg>
   );
 }
@@ -134,7 +154,7 @@ function TableCard({ table }: { table: SeatingTable }) {
 
 function AddTable() {
   const { eventId, refresh, setError, track } = useSeating();
-  const [shape, setShape] = useState<SeatingTableShape>("round");
+  const [shape, setShape] = useState<(typeof PICKABLE_SHAPES)[number]>("round");
   const [capacity, setCapacity] = useState(8);
   const [count, setCount] = useState(1);
   const [pending, startTransition] = useTransition();
@@ -159,13 +179,13 @@ function AddTable() {
         <select
           value={shape}
           onChange={(e) => {
-            const next = e.target.value as SeatingTableShape;
+            const next = e.target.value as (typeof PICKABLE_SHAPES)[number];
             setShape(next);
             if (next === "head" && capacity === 8) setCapacity(6);
           }}
           className="field"
         >
-          {Object.entries(SHAPE_LABEL).map(([value, label]) => (
+          {PICKABLE_SHAPES.map((value) => [value, SHAPE_LABEL[value]] as const).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>

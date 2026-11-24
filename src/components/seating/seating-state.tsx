@@ -8,6 +8,7 @@ import { guestName, type BlockedChair } from "@/lib/seating/model";
 import { computeFit } from "@/lib/seating/fit";
 import { undoRedoFor, isTypingTarget } from "@/lib/shortcuts";
 import type { ColourBy, ColourContext } from "@/lib/seating/colour";
+import type { StoredCount, TableStyle } from "@/lib/seating/items";
 import type {
   SeatingAssignment,
   SeatingFixture,
@@ -38,6 +39,9 @@ export type SeatingData = {
   guests: SeatingGuest[];
   blocked: BlockedChair[];
   colour: ColourContext;
+  styles: TableStyle[];
+  layoutId: string | null;
+  counts: StoredCount[];
 };
 
 /** Who's picked up for tap-to-place (§A.3): a guest or a household, until put down. */
