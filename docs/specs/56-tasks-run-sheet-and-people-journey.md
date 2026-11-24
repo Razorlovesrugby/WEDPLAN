@@ -1,7 +1,10 @@
 # Feature spec: Finding your way through tasks, the run sheet and who's doing what
 
-**Status: open questions (§9), not built.** Asked for as a spec (2026-11-24). Nothing is built until the planner
-answers §9 and says to build it (see `docs/specs/README.md`).
+**Status: answered (§9), not built.** Asked for as a spec (2026-11-24); every question answered the same day.
+Nothing is built until the planner says to build it (see `docs/specs/README.md`).
+
+No feature is removed. Every screen stays; the only things taken away are the run sheet header's "Day links →"
+button (the Day links tab replaces it) and the browser remembering the run sheet's last view (the URL holds it).
 
 **Depends on:** spec 1 (lists and the planning timeline), spec 13 and spec 41 (navigation), spec 39 (people),
 spec 48 (phone tab bar), spec 50 (run sheet), spec 54 (day links), spec 55 (on the day). No migration.
@@ -68,7 +71,7 @@ never on the tab bar until the wedding day itself (spec 55).
 | The run sheet's flat view | **List** | (unchanged) |
 | The run sheet's per-person view | **Who's doing what** | "People" |
 
-The helper's own page (`/d/[token]`) keeps its wording; a helper only ever sees one kind of task (§9 Q1).
+The helper's own page (`/d/[token]`) keeps its wording; a helper only ever sees one kind of task.
 
 ## 6. The day, regrouped
 
@@ -110,10 +113,7 @@ The run sheet gets a `SubTabs` row like Tasks and Guest list (`RUN_SHEET_TABS` i
 `src/lib/day-master/readiness.ts`'s Fix links use the new URLs: "Tasks with nobody assigned" →
 `/run-sheet/people` (unassigned are first there); "People without a day link", "Links never opened", "Helpers
 with no phone" → `/run-sheet/links`; "Open tasks with places still free" → `/run-sheet/people`. Their labels say
-"jobs" per §5.
-
-Each run sheet tab shows one line under the tabs while readiness has anything left before the day:
-"3 things to sort before the day · Check" → `/day`. It isn't shown on the day itself or after (§9 Q3).
+"jobs" per §5. Readiness stays only on `/day`; the run sheet tabs don't repeat it.
 
 ## 7. People: one click to their day
 
@@ -124,8 +124,7 @@ Each run sheet tab shows one line under the tabs while readiness has anything le
 - **Guest and vendor pages:** "Tasks on the day" becomes "Jobs on the day" and gains "See on the run sheet" →
   `/run-sheet/people?who=<type>:<id>`.
 - **Planning tasks by person:** the Tasks smart view "All" takes `?who=` (a collaborator or person) with a "Who"
-  select beside it; "Assigned to me" stays as it is. The filtering is a pure function in `src/lib/lists/`
-  (§9 Q4).
+  select beside it; "Assigned to me" stays as it is. The filtering is a pure function in `src/lib/lists/`.
 
 ## 8. Phone
 
@@ -133,18 +132,14 @@ The tab bar is unchanged (Today · Tasks · Guests · Website · More; Live repl
 More lists "The day" in the §6.1 order, so the run sheet is two taps (More → Run sheet) and the sub-tabs scroll
 sideways like the other sections' (spec 48).
 
-## 9. Open questions
+## 9. Answered (2026-11-24)
 
-1. **What to call a run sheet entry.** (a) "job" in planner screens, helper page unchanged *(recommended — the
-   Day links screen already says "people with jobs")*; (b) "job" everywhere, helper page included; (c) keep
-   "item" and "task".
-2. **Where groups, day contacts, Good to know, cues and announcements live.** (a) Stay on Day links
-   *(recommended: smallest change; the tab makes the screen findable)*; (b) a fourth tab, "Day info".
-3. **The readiness line on the run sheet tabs (§6.3).** (a) Yes, before the day only *(recommended)*; (b) no.
-4. **Planning tasks by person (§7 last point).** (a) Build it *(recommended: it's the planning half of "who's
-   doing what")*; (b) leave planning at "Assigned to me".
-5. **Order of "The day".** (a) Events, Run sheet, Shot list, On the day *(recommended: working order)*;
-   (b) On the day first, as the readiness check is where you'd start.
+1. **A run sheet entry is a "job"** in planner screens; the helper's page keeps its wording. Rejected: "job" on
+   the helper's page too.
+2. **Groups, day contacts, Good to know, cues and announcements stay on Day links.** Rejected: a "Day info" tab.
+3. **No readiness line on the run sheet tabs** (against the recommendation); readiness stays on `/day`.
+4. **Planning tasks get the "Who" filter** on All (§7).
+5. **"The day" is in working order:** Events, Run sheet, Shot list, On the day.
 
 ## 10. Build order (once answered)
 
@@ -152,8 +147,8 @@ sideways like the other sections' (spec 48).
    `/run-sheet/*` and the palette listing.
 2. `/run-sheet/people` route; `?view=`, `?who=`, `?event=` on the run sheet, read on the server and passed in;
    remove the localStorage view.
-3. Wording per §5; Events' Run sheet button; readiness hrefs and the readiness line.
-4. People links (§7) and, if Q4 is (a), the `?who=` filter on "All".
+3. Wording per §5; Events' Run sheet button; readiness hrefs.
+4. People links and the `?who=` filter on "All" (§7).
 
 No migration. Verify with typecheck, unit tests and build, and render `/run-sheet`, `/run-sheet/people` and
 `/run-sheet/links` in headless Chromium at 1280 px and 390 px.
