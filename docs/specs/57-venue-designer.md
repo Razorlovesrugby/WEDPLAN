@@ -1,7 +1,7 @@
 # Feature spec: The venue designer: draw the room, style the tables, seat the guests
 
-**Status: answered, not built.** 40 questions plus 8 follow-ups answered
-2026-11-24 (see **Answered**); three smaller questions remain in §14. Nothing is
+**Status: answered, not built.** Every question answered 2026-11-24 (40,
+8 follow-ups and 3 last ones; see **Answered**). Nothing is
 built until the planner says to build it (see `docs/specs/README.md`).
 
 **Mockups:** the private claude.ai design canvas "Venue designer mockups"
@@ -49,7 +49,9 @@ meal · Q36 RSVP questions stay as the couple sets them · Q37 nobody has their
 own plate by default · Q38 no dish-against-allergy warnings · Q39 "serves" set
 per dish from the caterer · Q40 the shared menu lives on the event's plan ·
 thresholds (walkways, table room, décor sizes) editable per plan · long tables
-get two of each dish from a length the couple sets.
+get two of each dish from a length the couple sets · a linked budget line
+follows the final number automatically · existing free-text dietary notes stay
+as they are · the share link always shows dietary needs.
 
 Rejected: live co-editing with presence; floor-plan templates shared across
 weddings; 3D views; auto-seating (spec 53); prices on style items.
@@ -301,7 +303,9 @@ florist and hire exports (E.2) use the final numbers, falling back to "Not set".
 - An item with a supplier appears on that vendor's page (spec 8) as "From the
   seating plan: *item*, *final number*".
 - An item can be linked to a budget line with a manual quantity (spec 6.1). How
-  the line's quantity follows the final number is §14 Q1.
+  Whenever the item's final number changes, the line's quantity changes to
+  match, recorded in the line's history (spec 32). Clearing the final number
+  leaves the line's quantity as it was. Unlinking stops it following.
 
 ## 8. Part D — Locking the room
 
@@ -349,7 +353,11 @@ Colour by is the plan's choice.
 
 **Share** creates a view-only link to the event's live layout. Whoever has it
 sees everything the designer shows (every space, names, colour-by answers,
-dietary needs) and can open any of the exports, but changes nothing. Options:
+dietary needs and allergies, always) and can open any of the exports, but
+changes nothing. The Share dialog says so: "Anyone with this link sees guests'
+names and dietary needs." The privacy notice (`/privacy`) gains a line that a
+couple may share guests' names and dietary needs with their suppliers by
+link. Options:
 a passcode (4–12 characters) and an expiry date. Links can be listed, copied and
 revoked. The page is `/p/[token]`, has no account, reads through a security
 definer function that checks the token, passcode and expiry, and is marked
@@ -456,7 +464,8 @@ free-text detail beside them.
   asks otherwise is unchanged.
 - Shown as the dots in A.2, in the exports, and in the day-link Seating module
   (spec 53 Part I).
-- Existing free-text notes are untouched. How they become tags is §14 Q2.
+- Existing free-text notes are left exactly as they are, untagged, until
+  someone edits that guest's dietary needs. Nothing reads the text into tags.
 
 ## 13. Part I — Plan settings
 
@@ -473,20 +482,7 @@ can be changed per plan:
 
 ## 14. Open questions
 
-1. **Budget line and final number.** When a style item is linked to a budget
-   line: does the line's quantity follow the final number automatically
-   whenever it changes, or only when the couple presses "Update budget"?
-   Recommendation: follow automatically, with the change in the budget line's
-   history (spec 32), since the final number is already the couple's own.
-2. **Existing free-text dietary notes.** Live guests already have notes.
-   Options: leave them as detail, untagged, until someone tags them; or show a
-   one-time "Tag dietary notes" list of every guest with a note and no tags.
-   (No automatic reading of the text into tags either way.)
-3. **The share link shows names and allergies to anyone holding it.** The
-   privacy notice (`/privacy`, which says where guests' data goes) would need a line that a couple can share
-   dietary needs with their vendors by link. Confirm the share link may include
-   dietary needs, or should it hide them unless the couple ticks "Include
-   dietary needs"?
+None.
 
 ## 15. Data — migrations `0055` to `0058`
 
@@ -577,7 +573,7 @@ wrong passcode, an expired and a revoked link; the dietary upsert.
 7. **Part F** menu, course styles, platters, own plates, kids' meals.
 8. **Part G** layouts.
 9. **Part D** lock; **Part I** settings.
-10. **Part E** exports, entrance board, PNG, share link.
+10. **Part E** exports, entrance board, PNG, share link and its `/privacy` line.
 
 ## 17. Verification, honestly
 
@@ -593,7 +589,8 @@ and must be named if not done.
 - **The layout/space move is the largest change to seating since spec 33.** It
   touches every seating read. Step 1 ships alone and must change nothing a
   person can see.
-- **Share links expose guest names and dietary needs** outside the app (§14 Q3).
+- **Share links expose guest names and dietary needs** outside the app, by
+  the couple's choice; revoke and expiry are the controls.
 - **Canvas performance** at 200 guests with décor, walls and curves: chairs draw
   as one group per table; names become dots below 60% zoom.
 - **Undo payload size:** a layout with several traced spaces; the 256 KB check
