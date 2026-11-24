@@ -98,3 +98,4 @@
 .dl-viewer-close { align-self: flex-end; color: #fff; background: none; border: 0; font: inherit; padding: 16px; min-height: 44px; }
 .dl-viewer-strip { flex: 1; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; touch-action: pan-x pinch-zoom; }
 .dl-viewer-strip img { flex: none; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: center; }
+.dl:has(.dl-tabs) { padding-bottom: calc(env(safe-area-inset-bottom) + 72px); }

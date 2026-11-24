@@ -94,6 +94,12 @@ export default function PrivacyPage() {
             until you switch it off. It never tracks your location, and it stops working a week after the wedding.
           </li>
           <li>
+            <strong>Photos for the photographer.</strong> If the couple add your photo and how you
+            are related to them so the photographer can recognise you, they are shown only to
+            photographers and helpers the couple give a private link, and are no longer shown if your
+            record is removed.
+          </li>
+          <li>
             <strong>Email records.</strong> The address an invitation or reminder was sent to,
             and whether it was delivered or failed.
           </li>

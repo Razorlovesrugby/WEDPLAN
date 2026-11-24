@@ -820,6 +820,11 @@ export type GuestRow = {
    */
   unable_to_attend_at: string | null;
   unable_to_attend_via: "save_the_date" | "planner" | null;
+  /** Spec 52 §4.3: faces to know, shown only through day links. */
+  relationship: string | null;
+  photo_path: string | null;
+  /** The only guest note a day link ever shows. */
+  vendor_note: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -1351,6 +1356,50 @@ export type RunSheetItemAssigneeRow = {
   seen_at: string | null;
   confirmed_at: string | null;
   is_lead: boolean;
+}
+
+export type ShotKind = "group" | "moment" | "detail" | "portrait";
+export type ShotStatus = "todo" | "taken" | "skipped" | "later";
+
+export type ShotSectionRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  run_sheet_item_id: string | null;
+  location: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ShotRow = {
+  id: string;
+  wedding_id: string;
+  section_id: string;
+  title: string;
+  kind: ShotKind;
+  must_have: boolean;
+  minutes: number;
+  note: string | null;
+  shooter: "lead" | "second" | null;
+  reference_moodboard_item_id: string | null;
+  reference_path: string | null;
+  sort_order: number;
+  status: ShotStatus;
+  status_at: string | null;
+  status_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ShotPersonRow = {
+  id: string;
+  wedding_id: string;
+  shot_id: string;
+  guest_id: string | null;
+  person_id: string | null;
+  role: string | null;
+  sort_order: number;
 }
 
 export type TaskState = "todo" | "started" | "done" | "handed_back";
@@ -2118,6 +2167,24 @@ export type Database = {
         | "photo_path"
       >;
       day_contacts: Table<DayContactRow, "id" | "created_at" | "sort_order">;
+      shot_sections: Table<ShotSectionRow, "id" | Timestamps | "run_sheet_item_id" | "location" | "sort_order">;
+      shots: Table<
+        ShotRow,
+        | "id"
+        | Timestamps
+        | "kind"
+        | "must_have"
+        | "minutes"
+        | "note"
+        | "shooter"
+        | "reference_moodboard_item_id"
+        | "reference_path"
+        | "sort_order"
+        | "status"
+        | "status_at"
+        | "status_by"
+      >;
+      shot_people: Table<ShotPersonRow, "id" | "guest_id" | "person_id" | "role" | "sort_order">;
       helper_groups: Table<HelperGroupRow, "id" | "created_at" | "sort_order">;
       helper_group_members: Table<
         HelperGroupMemberRow,

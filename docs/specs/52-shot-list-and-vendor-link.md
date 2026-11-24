@@ -1,6 +1,6 @@
 # Feature spec: The shot list, and the photographer's front end
 
-**Status: answered, not built.** Asked for as research and mockups before any
+**Status: built, session 61 (migration `0052`; see Build status at the end).** Asked for as research and mockups before any
 build (2026-11-23). Mockups: the "Shot list & seating mockups" canvas, rows 1
 and 2. Every question is answered (§11). Nothing is built until the planner
 says to build it (see `docs/specs/README.md`).
@@ -279,3 +279,11 @@ Every question took its recommendation.
 8. Print and CSV.
 9. Typecheck, tests, SQL suite, build; a real phone for the Now tab and the
    offline queue.
+
+## Build status (session 61)
+
+**Built:** migration `0052`; `src/lib/shots/` (`order`, `formals`, `progress`, `model`, `export`) with tests; `/shots` (sections with up/down and run sheet linking, shots with people, reorder, details, call-back count, Suggest an order with Undo, Suggest groups, slot fit, Faces panel for relationship / vendor note / photo, reference image upload, live 15-second refresh, shared-with list), `/shots/print`, the `shots` CSV kind (also in the zip); the Shot list module on day links: registered in `src/lib/day-links/modules.ts` (on by default for photography and video vendors and for anyone whose task opens it, scoped to that section), Now / All shots / Faces tabs, offline taps through the link's queue, latest-tap-wins `setShotStatus`; a wrangler link is made automatically when a link is created for someone whose task opens a section.
+
+**Verified:** typecheck, unit tests, SQL suite, build. **Not verified:** a browser (neither `/shots` nor the module tabs rendered), a real phone, live Supabase.
+
+**Not built / different:** no mood-board image picker for a shot's reference (upload only); no sunset time on the Now tab (the app holds no venue coordinates); relationship, vendor note and photo are edited from the shot list's Faces panel, not also on the guest's own page; a guest photo gets a new path on each change (not `shots/<wedding>/<guest>.<ext>`) so a replaced photo is never served stale from the year-long cache; a link's tab bar is capped at four tabs, so the Seating module's tab (spec 53) will push one of the shot list's out when both are on.

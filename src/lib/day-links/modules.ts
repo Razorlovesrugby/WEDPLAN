@@ -31,8 +31,22 @@ export type DayModule = {
 export const MODULE_KEY = /^[a-z_]{1,40}$/;
 export const MAX_TABS = 4;
 
-/** The registry. Specs 52 and 53 add entries. */
-export const DAY_MODULES: readonly DayModule[] = [];
+/** Spec 52: the photographer's front end. On for photography and video vendors, and for anyone whose task opens it (scoped to that section). */
+const shotList: DayModule = {
+  key: "shot_list",
+  label: "Shot list",
+  offeredTo: () => true,
+  onByDefaultFor: (assignee, context) =>
+    (assignee.type === "vendor" && /photograph|video/i.test(assignee.categoryName ?? "")) || context.linkedItemOpensModule,
+  tabs: [
+    { key: "shot_now", label: "Now" },
+    { key: "shot_all", label: "All shots" },
+    { key: "shot_faces", label: "Faces" },
+  ],
+};
+
+/** The registry. Spec 53 adds the Seating module. */
+export const DAY_MODULES: readonly DayModule[] = [shotList];
 
 export function moduleByKey(key: string, registry: readonly DayModule[] = DAY_MODULES): DayModule | null {
   return registry.find((m) => m.key === key) ?? null;

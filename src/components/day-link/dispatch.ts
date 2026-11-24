@@ -11,6 +11,7 @@ import {
   setTaskState,
   tickStep,
 } from "@/server/actions/day-link-taps";
+import { setShotStatus } from "@/server/actions/shot-module";
 import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
 import type { QueuedOp, SendOutcome } from "@/lib/day-links/offline-queue";
 import { dropPhoto, takePhoto } from "./photo-store";
@@ -29,6 +30,7 @@ const ACTIONS: Record<string, (token: string, ...args: never[]) => Promise<Resul
   markArrived: markArrived as never,
   claimOpenTask: claimOpenTask as never,
   acknowledgeAnnouncement: acknowledgeAnnouncement as never,
+  setShotStatus: setShotStatus as never,
 };
 
 /** Sends a stored photo, then returns the path to put in the tap. Null when the bytes are gone. */

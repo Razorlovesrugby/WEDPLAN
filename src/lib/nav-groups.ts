@@ -51,6 +51,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     // Seating stays here, reached through each event (spec 41 Q3).
     entries: [
       { href: "/events", label: "Events & run sheet", matchPrefixes: ["/events", "/run-sheet", "/seating"] },
+      { href: "/shots", label: "Shot list", matchPrefixes: ["/shots"] },
     ],
   },
   {

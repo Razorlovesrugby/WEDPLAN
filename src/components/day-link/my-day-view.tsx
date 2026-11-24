@@ -179,6 +179,18 @@ export function MyDayView({
     }
   }, [token, queueKey, readOnly]);
 
+  useEffect(() => {
+    const reload = () => {
+      try {
+        setQueue(parseQueue(localStorage.getItem(queueKey)));
+      } catch {
+        /* nothing to reload */
+      }
+    };
+    window.addEventListener("dl-queue", reload);
+    return () => window.removeEventListener("dl-queue", reload);
+  }, [queueKey]);
+
   const saveQueue = useCallback(
     (next: QueuedOp[]) => {
       setQueue(next);

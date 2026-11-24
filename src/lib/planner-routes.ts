@@ -20,6 +20,7 @@ export const PLANNER_ROUTES = [
   "menu",
   "moodboards",
   "run-sheet",
+  "shots",
   "seating",
   "timeline",
   "vendors",

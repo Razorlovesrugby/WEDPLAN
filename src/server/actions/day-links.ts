@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/send";
 import { dayLinkEmail } from "@/lib/email/templates";
 import { decryptToken, encryptToken, generateInviteToken, hashInviteToken } from "@/lib/tokens";
 import { linkExpiry } from "@/lib/day-links/my-day";
+import { defaultModuleKeys } from "@/lib/day-links/modules";
 import { requireWedding } from "@/server/queries/wedding";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -90,10 +91,36 @@ export async function makeDayLink(input: DayLinkAssignee): Promise<ActionResult<
     .is("revoked_at", null);
   if (revokeError) return fail(revokeError.message);
 
+  // Modules a new link starts with (§7): by vendor category, and for anyone whose task opens one.
+  let categoryName: string | null = null;
+  if (parsed.data.type === "vendor") {
+    const { data: vendor } = await supabase.from("vendors").select("vendor_categories(name)").eq("id", parsed.data.id).eq("wedding_id", wedding.id).maybeSingle();
+    categoryName = (vendor as { vendor_categories?: { name?: string } | null } | null)?.vendor_categories?.name ?? null;
+  }
+  const { data: mine } = await supabase.from("run_sheet_item_assignees").select("item_id").eq("wedding_id", wedding.id).eq(column, parsed.data.id);
+  const mineIds = (mine ?? []).map((m) => m.item_id);
+  const { data: opening } = mineIds.length
+    ? await supabase.from("run_sheet_items").select("opens_module, opens_config").eq("wedding_id", wedding.id).in("id", mineIds).not("opens_module", "is", null)
+    : { data: [] };
+  const linkedKey = (opening ?? []).find((o) => o.opens_module)?.opens_module ?? null;
+  const modules = defaultModuleKeys(
+    parsed.data.type === "vendor" ? { type: "vendor", categoryName } : { type: parsed.data.type },
+    { linkedItemOpensModule: Boolean(linkedKey) },
+  );
+  const moduleConfig: Record<string, unknown> = {};
+  for (const o of opening ?? []) {
+    const section = (o.opens_config as { section_id?: string } | null)?.section_id;
+    // A wrangler (not a photography vendor) is scoped to the one section their task opens.
+    if (o.opens_module === "shot_list" && section && !/photograph|video/i.test(categoryName ?? "")) moduleConfig.shot_list = { section_id: section };
+  }
+  if (linkedKey && !modules.includes(linkedKey)) modules.push(linkedKey);
+
   const token = generateInviteToken();
   const { data, error } = await supabase
     .from("day_links")
     .insert({
+      modules,
+      module_config: moduleConfig,
       wedding_id: wedding.id,
       vendor_id: parsed.data.type === "vendor" ? parsed.data.id : null,
       guest_id: parsed.data.type === "guest" ? parsed.data.id : null,

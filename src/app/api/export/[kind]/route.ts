@@ -16,6 +16,8 @@ import { getCoachManifest } from "@/server/queries/travel";
 import { getPlannerSongs } from "@/server/queries/site-extras";
 import { getEventIdsWithSeating, getSeatingPlan } from "@/server/queries/seating";
 import { SEATING_CSV_HEADER, seatingCsvRows } from "@/lib/seating/listings";
+import { getShotList } from "@/server/queries/shots";
+import { SHOTS_CSV_HEADER, shotsCsvRows } from "@/lib/shots/export";
 import { getRegistryClaims } from "@/server/queries/registry";
 import { getAnswersOverview } from "@/server/queries/questions";
 import { answersCsv } from "@/lib/questions/export";
@@ -35,7 +37,7 @@ import type { ListItemStatus, WeddingRow } from "@/lib/types/database";
  * filter again.
  */
 
-const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating", "registry", "answers"] as const;
+const KINDS = ["guests", "catering", "households", "tasks", "coach", "songs", "seating", "registry", "answers", "shots"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -133,6 +135,11 @@ async function buildExport(kind: Kind, wedding: WeddingRow, searchParams: URLSea
       await Promise.all(chosen.map(async (e) => seatingCsvRows(e.name, await getSeatingPlan(wedding.id, e.id))))
     ).flat();
     return { filename: `seating-${stamp}.csv`, body: csvDocument([...SEATING_CSV_HEADER], rows) };
+  }
+
+  if (kind === "shots") {
+    const { sections } = await getShotList(wedding.id);
+    return { filename: `shots-${stamp}.csv`, body: csvDocument([...SHOTS_CSV_HEADER], shotsCsvRows(sections)) };
   }
 
   if (kind === "tasks") {

@@ -56,6 +56,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 49 | `0049_event_types_and_features.sql` | `event_types` (nine seeded built-ins per wedding), `events.type_id` + `asks_rsvp`/`has_seating`/`guest_facing` with backfill and checks, `seed_event_types()`, `create_wedding()` seeds them, the three RSVP views ignore events that don't ask. Spec 51. | 36, 44, 45, 48 |
 | 50 | `0050_day_links.sql` | `day_links`, `day_link_devices`, append-only `day_activity`, per-assignee task state and "Got it" columns, task content (instructions, address, critical, contact, steps/bring list, ticks), `day_contacts`, `day_info_sections`, phone and email on `people`. Spec 54, first part (see its build status). | 43, 44, 48 |
 | 51 | `0051_day_links_rest.sql` | Rest of spec 54's schema: reference photos (`run_sheet_item_files`), helper photo path, groups and members, leads and open tasks (`claim_open_task()`), announcements and their reads, push subscriptions, the reminder log, cues, module columns, `weddings.day_before_email`. Specs 52, 53, 55 move up one number. | 50 |
+| 52 | `0052_shot_list.sql` | `shot_sections`, `shots`, `shot_people`, the `shot_kind` / `shot_status` enums, and `guests.relationship` / `photo_path` / `vendor_note`. Spec 52. | 43, 44, 48, 50 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
