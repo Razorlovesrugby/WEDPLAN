@@ -22,6 +22,9 @@ export type TableListing = {
   adults: number;
   children: number;
   infants: number;
+  /** Spec 53 Part F: highchairs to bring, and wheelchair places (gaps with no chair). */
+  highchairs: number;
+  wheelchairs: number;
 };
 
 type PlanLike = {
@@ -43,6 +46,8 @@ export function tableListings(plan: PlanLike): TableListing[] {
       adults: guests.filter((s) => s.guest.ageBand === "adult").length,
       children: guests.filter((s) => s.guest.ageBand === "child").length,
       infants: guests.filter((s) => s.guest.ageBand === "infant").length,
+      highchairs: guests.filter((s) => s.guest.needsHighchair || s.guest.ageBand === "infant").length,
+      wheelchairs: guests.filter((s) => s.guest.usesWheelchair).length,
     };
   });
 }
@@ -78,6 +83,8 @@ export const SEATING_CSV_HEADER = [
   "Age band",
   "Dietary",
   "Accessibility",
+  "Highchair",
+  "Wheelchair",
 ] as const;
 
 export function seatingCsvRows(eventName: string, plan: PlanLike): (string | number)[][] {
@@ -91,6 +98,8 @@ export function seatingCsvRows(eventName: string, plan: PlanLike): (string | num
       s.guest.ageBand,
       s.guest.dietary ?? "",
       s.guest.accessibility ?? "",
+      s.guest.needsHighchair ? "yes" : "",
+      s.guest.usesWheelchair ? "yes" : "",
     ]),
   );
 }

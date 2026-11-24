@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { clearTableChairs, deleteSeatingTable, updateSeatingTable } from "@/server/actions/seating";
+import { duplicateSeatingTable, renumberSeatingTable, setChairBlocked } from "@/server/actions/seating-workspace";
+import { trayHouseholds, type TrayMode } from "@/lib/seating/tray";
 import { guestColour } from "@/lib/seating/colour";
 import { localSeatPositions, tableSize, CHAIR_OFFSET_CM } from "@/lib/seating/geometry";
 import { guestName, type SeatingTable } from "@/lib/seating/model";
@@ -39,7 +41,7 @@ export function TableDrawer() {
 }
 
 function DrawerBody({ table }: { table: SeatingTable }) {
-  const { eventId, openTable, occupancy, refresh, setError } = useSeating();
+  const { eventId, openTable, occupancy, refresh, setError, track } = useSeating();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -76,11 +78,21 @@ function DrawerBody({ table }: { table: SeatingTable }) {
           setFieldError(null);
           setMessage(null);
           startTransition(async () => {
-            const result = await updateSeatingTable(table.id, eventId, {
-              ...form,
-              length_cm: form.length_cm === "" ? null : Number(form.length_cm),
-              width_cm: form.width_cm === "" ? null : Number(form.width_cm),
-            });
+            // A new name first: a number another table has swaps the two labels (spec 53 Part B).
+            if (form.label.trim() && form.label.trim() !== table.label) {
+              const renamed = await track(`Renamed ${table.label}`, () => renumberSeatingTable(table.id, eventId, form.label));
+              if (!renamed.ok) {
+                setFieldError(renamed.error);
+                return;
+              }
+            }
+            const result = await track(`Edited ${table.label}`, () =>
+              updateSeatingTable(table.id, eventId, {
+                ...form,
+                length_cm: form.length_cm === "" ? null : Number(form.length_cm),
+                width_cm: form.width_cm === "" ? null : Number(form.width_cm),
+              }),
+            );
             if (!result.ok) {
               setFieldError(result.error);
               return;
@@ -200,13 +212,28 @@ function DrawerBody({ table }: { table: SeatingTable }) {
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                const r = await clearTableChairs(table.id, eventId);
+                const r = await track(`Cleared the chairs at ${table.label}`, () => clearTableChairs(table.id, eventId));
                 if (!r.ok) setError(r.error);
                 refresh();
               })
             }
           >
             Clear chairs
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const r = await track(`Duplicated ${table.label}`, () => duplicateSeatingTable(table.id, eventId));
+                if (!r.ok) setError(r.error);
+                else setMessage("Copied: same shape and seats, no guests.");
+                refresh();
+              })
+            }
+          >
+            Duplicate
           </button>
           <button
             type="button"
@@ -221,7 +248,7 @@ function DrawerBody({ table }: { table: SeatingTable }) {
               );
               if (!ok) return;
               startTransition(async () => {
-                const r = await deleteSeatingTable(table.id, eventId);
+                const r = await track(`Deleted ${table.label}`, () => deleteSeatingTable(table.id, eventId));
                 if (!r.ok) {
                   setFieldError(r.error);
                   return;
@@ -241,8 +268,11 @@ function DrawerBody({ table }: { table: SeatingTable }) {
 
 /** The chairs, drawn round the table, numbered clockwise from the top (Q5). */
 function Chairs({ table }: { table: SeatingTable }) {
-  const { assignments, guestById, held, hold, move, colourBy, data } = useSeating();
+  const { assignments, guestById, held, hold, move, colourBy, data, highlightGuestId, trayMode, track, eventId, refresh, setError, show } = useSeating();
+  const [pickChair, setPickChair] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
   const seats = localSeatPositions(table);
+  const blockedSet = new Set(data.blocked.filter((b) => b.tableId === table.id).map((b) => b.seatIndex));
   const { length, width } = tableSize(table);
   const pad = CHAIR_OFFSET_CM + 40;
   const w = length + pad * 2;
@@ -270,8 +300,9 @@ function Chairs({ table }: { table: SeatingTable }) {
           const guestId = byChair.get(i);
           const g = guestId ? guestById.get(guestId) : undefined;
           const reserved = i >= reservedFrom;
+          const blocked = blockedSet.has(i);
           const colour = g ? guestColour(g, colourBy, data.colour)?.colour : undefined;
-          const isHeld = guestId !== undefined && heldOne === guestId;
+          const isHeld = (guestId !== undefined && heldOne === guestId) || (guestId !== undefined && highlightGuestId === guestId);
           const name = g ? guestName(g) : reserved ? "Reserved" : `Chair ${i + 1}`;
           return (
             <g
@@ -283,11 +314,19 @@ function Chairs({ table }: { table: SeatingTable }) {
               className={reserved ? "" : "cursor-pointer"}
               onClick={() => {
                 if (reserved) return;
+                if (blocked) {
+                  setPickChair(pickChair === i ? null : i);
+                  return;
+                }
                 if (heldOne) {
                   move([heldOne], table.id, i);
                   hold(null);
                 } else if (g) {
                   hold({ guestIds: [g.id], label: guestName(g) });
+                } else {
+                  // Seat first (Part D): an empty chair opens a search of who still needs a seat.
+                  setPickChair(pickChair === i ? null : i);
+                  setSearch("");
                 }
               }}
               onKeyDown={(e) => {
@@ -297,7 +336,7 @@ function Chairs({ table }: { table: SeatingTable }) {
               <title>{name}</title>
               <circle
                 r={24}
-                fill={g ? colour ?? "#ffffff" : reserved ? "#f3efe8" : "#ffffff"}
+                fill={g ? colour ?? "#ffffff" : reserved || blocked ? "#f3efe8" : "#ffffff"}
                 stroke={isHeld ? "#1a1a1a" : "#8a8580"}
                 strokeWidth={isHeld ? 5 : 2}
                 strokeDasharray={reserved ? "6 4" : undefined}
@@ -309,12 +348,35 @@ function Chairs({ table }: { table: SeatingTable }) {
                 fill={g && colour ? "#ffffff" : "#6b6560"}
                 style={{ pointerEvents: "none" }}
               >
-                {g ? initials(guestName(g)) : reserved ? "R" : i + 1}
+                {g ? (show.names ? (g.preferredName || g.firstName).slice(0, 7) : initials(guestName(g))) : reserved ? "R" : blocked ? "✕" : i + 1}
+                {g && show.numbers ? ` ${i + 1}` : ""}
+                {g?.arrivedAt ? " ✓" : ""}
               </text>
             </g>
           );
         })}
       </svg>
+      {pickChair !== null ? (
+        <ChairPicker
+          table={table}
+          chair={pickChair}
+          blocked={blockedSet.has(pickChair)}
+          search={search}
+          setSearch={setSearch}
+          trayMode={trayMode}
+          onSeat={(ids, withChair) => {
+            move(ids, table.id, withChair ? pickChair : null);
+            setPickChair(null);
+          }}
+          onBlock={(block) =>
+            void track(block ? "Blocked a chair" : "Unblocked a chair", () => setChairBlocked(eventId, table.id, pickChair, block)).then((r) => {
+              if (!r.ok) setError(r.error);
+              setPickChair(null);
+              refresh();
+            })
+          }
+        />
+      ) : null}
       {noChair.length > 0 ? (
         <div className="mt-2">
           <p className="mb-1 text-xs text-muted">At this table, chair not chosen</p>
@@ -336,4 +398,63 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((p) => p[0]!.toUpperCase())
     .join("");
+}
+
+/** Seat first (spec 53 Part D): tap an empty chair, search for who goes there. Households show together. */
+function ChairPicker({
+  table,
+  chair,
+  blocked,
+  search,
+  setSearch,
+  trayMode,
+  onSeat,
+  onBlock,
+}: {
+  table: SeatingTable;
+  chair: number;
+  blocked: boolean;
+  search: string;
+  setSearch: (s: string) => void;
+  trayMode: TrayMode;
+  onSeat: (ids: string[], withChair: boolean) => void;
+  onBlock: (block: boolean) => void;
+}) {
+  const { data, assignments } = useSeating();
+  const households = trayHouseholds(data.guests, assignments, trayMode, { query: search }).slice(0, 6);
+  return (
+    <div className="mt-3 space-y-2 rounded border border-line p-2 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <strong>Chair {chair + 1}</strong>
+        <button type="button" className="text-xs underline" onClick={() => onBlock(!blocked)}>
+          {blocked ? "Unblock this chair" : "Block this chair"}
+        </button>
+      </div>
+      {blocked ? (
+        <p className="text-xs text-muted">This chair is out of use (a broken chair, a pillar) and is never offered as spare.</p>
+      ) : (
+        <>
+          <input className="field" autoFocus placeholder="Who sits here?" aria-label="Search unseated guests" value={search} onChange={(e) => setSearch(e.target.value)} />
+          {households.length === 0 ? <p className="text-xs text-muted">Nobody unseated matches.</p> : null}
+          {households.map((h) => (
+            <div key={h.householdId} className="space-y-1">
+              {h.guests.length > 1 ? (
+                <button type="button" className="btn py-0.5 text-xs" onClick={() => onSeat(h.guests.map((g) => g.id), false)}>
+                  Seat all {h.guests.length} · {h.householdName}
+                </button>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                {h.guests.map((g) => (
+                  <button key={g.id} type="button" className="rounded-full border border-line px-2.5 py-0.5 hover:border-muted" onClick={() => onSeat([g.id], true)}>
+                    {h.guests.length > 1 ? `Just ${g.preferredName || g.firstName}` : guestName(g)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="text-xs text-muted">Table {table.label}</p>
+        </>
+      )}
+    </div>
+  );
 }

@@ -12,6 +12,8 @@ export const SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "⌘⇧S", label: "Show or hide the sidebar" },
   { keys: "Esc", label: "Close the search, side panel or a sheet" },
   { keys: "?", label: "Show these shortcuts" },
+  { keys: "⌘Z", label: "Undo, on the seating plan" },
+  { keys: "⌘⇧Z", label: "Redo, on the seating plan" },
 ];
 
 export type KeyLike = {
@@ -38,5 +40,20 @@ export function shortcutFor(event: KeyLike, typing: boolean): ShortcutAction | n
   if (command && event.shiftKey && !event.altKey && key === "s") return "sidebar";
   // A bare "?" is text in a field; only outside one does it open the list.
   if (!typing && !command && !event.altKey && event.key === "?") return "help";
+  return null;
+}
+
+/**
+ * Undo and redo on the seating plan (spec 53 Part C). Cmd+Z / Ctrl+Z undoes,
+ * Shift+Cmd+Z / Ctrl+Shift+Z / Ctrl+Y redoes. Never while typing: in a field
+ * those keys belong to the text.
+ */
+export function undoRedoFor(event: KeyLike, typing: boolean): "undo" | "redo" | null {
+  if (typing || event.altKey) return null;
+  const command = event.metaKey || event.ctrlKey;
+  if (!command) return null;
+  const key = event.key.toLowerCase();
+  if (key === "z") return event.shiftKey ? "redo" : "undo";
+  if (key === "y" && event.ctrlKey && !event.shiftKey) return "redo";
   return null;
 }

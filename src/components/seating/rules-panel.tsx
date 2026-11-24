@@ -20,7 +20,7 @@ const KIND_LABEL: Record<SeatingRuleKind, string> = {
  * "not at this table" belongs to a table and goes with it.
  */
 export function RulesPanel() {
-  const { eventId, data, guestById, tableById, tables, refresh, setError } = useSeating();
+  const { eventId, data, guestById, tableById, tables, refresh, setError, track } = useSeating();
   const [pending, startTransition] = useTransition();
   const [kind, setKind] = useState<SeatingRuleKind>("apart");
   const [guestA, setGuestA] = useState("");
@@ -47,7 +47,7 @@ export function RulesPanel() {
 
   const add = (fields: Record<string, unknown>) =>
     startTransition(async () => {
-      const result = await addSeatingRule(eventId, fields);
+      const result = await track("Added a seating rule", () => addSeatingRule(eventId, fields));
       if (!result.ok) setError(result.error);
       else {
         setGuestA("");
@@ -75,7 +75,7 @@ export function RulesPanel() {
                 disabled={pending}
                 onClick={() =>
                   startTransition(async () => {
-                    const result = await removeSeatingRule(r.id, eventId);
+                    const result = await track("Removed a seating rule", () => removeSeatingRule(r.id, eventId));
                     if (!result.ok) setError(result.error);
                     refresh();
                   })

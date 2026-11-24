@@ -35,9 +35,9 @@ describe("modules", () => {
   it("ignores stored keys the registry doesn't know, or that aren't keys", () => {
     expect(activeModules(["shot_list", "mystery", "Bad Key!"], registry).map((m) => m.key)).toEqual(["shot_list"]);
   });
-  it("builds a tab bar with My day first, capped at four", () => {
-    const wide: DayModule = { ...shot, key: "wide", tabs: ["a", "b", "c", "d"].map((k) => ({ key: k, label: k })) };
+  it("builds a tab bar with My day first, capped at five", () => {
+    const wide: DayModule = { ...shot, key: "wide", tabs: ["a", "b", "c", "d", "e", "f"].map((k) => ({ key: k, label: k })) };
     expect(tabBar([shot]).map((t) => t.key)).toEqual(["my_day", "shots"]);
-    expect(tabBar([wide])).toHaveLength(4);
+    expect(tabBar([wide])).toHaveLength(5);
   });
 });

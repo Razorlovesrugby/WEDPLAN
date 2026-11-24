@@ -34,7 +34,15 @@ export type SeatingGuest = {
   excluded: boolean;
   /** This event's RSVP, or null when no row exists yet. */
   rsvp: RsvpStatus | null;
+  /** Spec 53 Part F: a highchair marker, and a wheelchair place (a gap with no chair). */
+  needsHighchair: boolean;
+  usesWheelchair: boolean;
+  /** Spec 53 Part I: when they were marked arrived, if they were. */
+  arrivedAt: string | null;
 };
+
+/** A chair the couple took out of use (a broken chair, a pillar), spec 53 Part I. */
+export type BlockedChair = { tableId: string; seatIndex: number };
 
 export type SeatingAssignment = {
   guestId: string;
@@ -65,9 +73,13 @@ export function compareBySurname(
   return guestNameSurnameFirst(a).localeCompare(guestNameSurnameFirst(b), "en-GB", { sensitivity: "base" });
 }
 
-/** Infants sit on a lap or in a high chair: they don't take a chair (as v_households.seat_count). */
-export function takesAChair(g: Pick<SeatingGuest, "ageBand">): boolean {
-  return g.ageBand !== "infant";
+/**
+ * Infants sit on a lap or in a high chair and a wheelchair user has a gap, not
+ * a chair: neither takes one of the table's chairs (as v_households.seat_count
+ * for infants; spec 53 Part F for wheelchairs).
+ */
+export function takesAChair(g: Pick<SeatingGuest, "ageBand"> & { usesWheelchair?: boolean }): boolean {
+  return g.ageBand !== "infant" && !g.usesWheelchair;
 }
 
 /** "Table 1", "Table 2"… — one past the highest "Table N" already used, so a deleted Table 3 isn't reissued under someone's feet. */

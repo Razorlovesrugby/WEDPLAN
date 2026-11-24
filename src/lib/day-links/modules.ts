@@ -29,7 +29,7 @@ export type DayModule = {
 };
 
 export const MODULE_KEY = /^[a-z_]{1,40}$/;
-export const MAX_TABS = 4;
+export const MAX_TABS = 5;
 
 /** Spec 52: the photographer's front end. On for photography and video vendors, and for anyone whose task opens it (scoped to that section). */
 const shotList: DayModule = {
@@ -45,8 +45,17 @@ const shotList: DayModule = {
   ],
 };
 
-/** The registry. Spec 53 adds the Seating module. */
-export const DAY_MODULES: readonly DayModule[] = [shotList];
+/** Spec 53 Part I: find a seat, mark arrivals, move a guest, seat a walk-in. On for venue and catering vendors. */
+const seating: DayModule = {
+  key: "seating",
+  label: "Seating",
+  offeredTo: () => true,
+  onByDefaultFor: (assignee) => assignee.type === "vendor" && /venue|cater/i.test(assignee.categoryName ?? ""),
+  tabs: [{ key: "seat_find", label: "Seating" }],
+};
+
+/** The registry. */
+export const DAY_MODULES: readonly DayModule[] = [shotList, seating];
 
 export function moduleByKey(key: string, registry: readonly DayModule[] = DAY_MODULES): DayModule | null {
   return registry.find((m) => m.key === key) ?? null;
@@ -74,7 +83,7 @@ export function defaultModuleKeys(
   return registry.filter((m) => m.offeredTo(assignee) && m.onByDefaultFor(assignee, context)).map((m) => m.key);
 }
 
-/** The tab bar: My day, Good to know isn't a tab here, then each module's tabs, capped at four. */
+/** The tab bar: My day first, then each module's tabs, at most five (the shot list has three, seating one). */
 export function tabBar(modules: readonly DayModule[]): { key: string; label: string }[] {
   const tabs = modules.flatMap((m) => m.tabs);
   if (tabs.length === 0) return [];

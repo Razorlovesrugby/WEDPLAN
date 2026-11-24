@@ -14,7 +14,7 @@ export type DragPayload = { guestIds: string[]; label: string };
  * high chair). Drags, and taps to pick up for tap-to-place.
  */
 export function GuestChip({ guest, compact = false }: { guest: SeatingGuest; compact?: boolean }) {
-  const { colourBy, data, held, hold } = useSeating();
+  const { colourBy, data, held, hold, selectMode, selected, toggleSelected } = useSeating();
   const name = guestName(guest);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `guest:${guest.id}`,
@@ -31,6 +31,10 @@ export function GuestChip({ guest, compact = false }: { guest: SeatingGuest; com
       {...listeners}
       onClick={(e) => {
         e.stopPropagation();
+        if (selectMode) {
+          toggleSelected(guest.id, e.shiftKey);
+          return;
+        }
         hold(isHeld ? null : { guestIds: [guest.id], label: name });
       }}
       title={[
@@ -41,13 +45,14 @@ export function GuestChip({ guest, compact = false }: { guest: SeatingGuest; com
       ]
         .filter(Boolean)
         .join("\n")}
-      aria-pressed={isHeld}
+      aria-pressed={selectMode ? selected.has(guest.id) : isHeld}
       className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 ${
         compact ? "py-0.5 text-xs" : "py-1 text-sm"
-      } ${isHeld ? "border-ink bg-ink text-white" : "border-line bg-white hover:border-muted"} ${
+      } ${isHeld || (selectMode && selected.has(guest.id)) ? "border-ink bg-ink text-white" : "border-line bg-white hover:border-muted"} ${
         isDragging ? "opacity-40" : ""
       }`}
     >
+      {selectMode ? <span aria-hidden>{selected.has(guest.id) ? "☑" : "☐"}</span> : null}
       {colour ? (
         <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colour.colour }} />
       ) : null}
@@ -62,6 +67,8 @@ export function GuestMarkers({ guest }: { guest: SeatingGuest }) {
     <>
       {guest.ageBand === "child" ? <Marker title="Child">C</Marker> : null}
       {guest.ageBand === "infant" ? <Marker title="Infant — needs a high chair, doesn't take a seat">HC</Marker> : null}
+      {guest.needsHighchair && guest.ageBand !== "infant" ? <Marker title="Needs a highchair">HC</Marker> : null}
+      {guest.usesWheelchair ? <Marker title="Uses a wheelchair — a gap at the table, not a chair">♿</Marker> : null}
       {guest.dietary ? <Marker title={`Dietary: ${guest.dietary}`}>D</Marker> : null}
       {guest.accessibility ? <Marker title={`Access: ${guest.accessibility}`}>A</Marker> : null}
     </>

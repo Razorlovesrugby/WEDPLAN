@@ -820,6 +820,9 @@ export type GuestRow = {
    */
   unable_to_attend_at: string | null;
   unable_to_attend_via: "save_the_date" | "planner" | null;
+  /** Spec 53 Part F: a highchair marker, and a wheelchair place (a gap with no chair). */
+  needs_highchair: boolean;
+  uses_wheelchair: boolean;
   /** Spec 52 §4.3: faces to know, shown only through day links. */
   relationship: string | null;
   photo_path: string | null;
@@ -1400,6 +1403,22 @@ export type ShotPersonRow = {
   person_id: string | null;
   role: string | null;
   sort_order: number;
+}
+
+export type SeatingChairBlockedRow = {
+  wedding_id: string;
+  event_id: string;
+  table_id: string;
+  seat_index: number;
+  created_at: string;
+}
+
+export type SeatingCheckinRow = {
+  wedding_id: string;
+  event_id: string;
+  guest_id: string;
+  arrived_at: string;
+  by_label: string;
 }
 
 export type TaskState = "todo" | "started" | "done" | "handed_back";
@@ -2167,6 +2186,8 @@ export type Database = {
         | "photo_path"
       >;
       day_contacts: Table<DayContactRow, "id" | "created_at" | "sort_order">;
+      seating_chairs_blocked: Table<SeatingChairBlockedRow, "created_at">;
+      seating_checkins: Table<SeatingCheckinRow, "arrived_at">;
       shot_sections: Table<ShotSectionRow, "id" | Timestamps | "run_sheet_item_id" | "location" | "sort_order">;
       shots: Table<
         ShotRow,
@@ -2264,7 +2285,9 @@ export type Database = {
         | "is_plus_one"
         | "sort_order"
         | "unable_to_attend_at"
-        | "unable_to_attend_via",
+        | "unable_to_attend_via"
+        | "needs_highchair"
+        | "uses_wheelchair",
         GuestRelationships
       >;
       tags: Table<TagRow, "id" | "created_at" | "colour">;
@@ -2532,6 +2555,14 @@ export type Database = {
           p_token_hash: string;
         };
         Returns: { outcome: "ok" | "unavailable" | "sold_out" | "busy"; claim_id: string | null; remaining: number }[];
+      };
+      /** Spec 53 Part C: the plan as one jsonb, and its hash (timestamps left out). */
+      seating_state: { Args: { p_event_id: string }; Returns: Record<string, unknown> };
+      seating_state_hash: { Args: { p_event_id: string }; Returns: string };
+      /** Puts a plan back; fails with SQLSTATE 40001 if the plan no longer hashes to `p_expected_hash`. */
+      restore_seating_state: {
+        Args: { p_event_id: string; p_payload: Record<string, unknown>; p_expected_hash?: string | null };
+        Returns: { tables: number; fixtures: number; seated: number; skipped: number; hash: string };
       };
       /** Spec 54 §10.2: a group member's claim on an open task, settled under a row lock. Service role only. */
       claim_open_task: {

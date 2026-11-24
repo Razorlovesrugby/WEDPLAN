@@ -35,6 +35,8 @@ export function GuestForm({
     const form = new FormData(event.currentTarget);
     const fields: Fields = {};
     for (const [key, value] of form.entries()) fields[key] = String(value);
+    // Unticked boxes are absent from FormData: send them explicitly so unticking saves.
+    for (const key of ["needs_highchair", "uses_wheelchair"]) fields[key] = form.get(key) === "on" ? "on" : "";
 
     startTransition(async () => {
       const result = guest
@@ -137,6 +139,17 @@ export function GuestForm({
           className="field"
         />
       </label>
+
+      <div className="space-y-1 text-sm">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="needs_highchair" defaultChecked={guest?.needs_highchair ?? false} />
+          Needs a highchair
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="uses_wheelchair" defaultChecked={guest?.uses_wheelchair ?? false} />
+          Uses a wheelchair (a gap at the table, not a chair)
+        </label>
+      </div>
 
       <label className="block">
         <span className="mb-1 block text-sm font-medium">Notes</span>

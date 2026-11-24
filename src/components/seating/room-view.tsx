@@ -44,7 +44,7 @@ type ViewBox = { x: number; y: number; w: number; h: number };
  * target too — and tap-to-place works the same as in the Tables view.
  */
 export function RoomView() {
-  const { eventId, data, tables, setTables, refresh, setError, held, hold, move } = useSeating();
+  const { eventId, data, tables, setTables, refresh, setError, held, hold, move, track } = useSeating();
   const plan = data.plan;
   const roomW = plan?.room_width_cm ?? 2000;
   const roomD = plan?.room_depth_cm ?? 1500;
@@ -121,12 +121,14 @@ export function RoomView() {
     startTransition(async () => {
       const r =
         sel.kind === "table"
-          ? await moveSeatingTable(sel.id, eventId, { x: at.x, y: at.y, rotation: at.rotation })
-          : await updateSeatingFixture(sel.id, eventId, {
-              pos_x_cm: at.x ?? 0,
-              pos_y_cm: at.y ?? 0,
-              rotation_deg: at.rotation,
-            });
+          ? await track("Moved a table", () => moveSeatingTable(sel.id, eventId, { x: at.x, y: at.y, rotation: at.rotation }))
+          : await track("Moved an item in the room", () =>
+              updateSeatingFixture(sel.id, eventId, {
+                pos_x_cm: at.x ?? 0,
+                pos_y_cm: at.y ?? 0,
+                rotation_deg: at.rotation,
+              }),
+            );
       if (!r.ok) setError(r.error);
       refresh();
     });
@@ -287,7 +289,7 @@ export function RoomView() {
     // Room centimetres → image pixels: the room box is the image.
     const toPx = (p: Point) => ({ x: (p.x / roomW) * plan.background_w_px!, y: (p.y / roomD) * plan.background_h_px! });
     startTransition(async () => {
-      const r = await calibrateSeatingRoom(eventId, toPx(points[0]!), toPx(points[1]!), real);
+      const r = await track("Calibrated the room", () => calibrateSeatingRoom(eventId, toPx(points[0]!), toPx(points[1]!), real));
       if (!r.ok) setError(r.error);
       refresh();
     });
@@ -672,7 +674,7 @@ function RoomToolbar({
 }
 
 function SelectedTablePanel({ table, onUnplace }: { table: SeatingTable; onUnplace: () => void }) {
-  const { eventId, openTable, refresh, setError, setTables } = useSeating();
+  const { eventId, openTable, refresh, setError, setTables, track } = useSeating();
   const [, startTransition] = useTransition();
   return (
     <div className="card flex flex-wrap items-center gap-2 p-2 text-sm">
@@ -688,7 +690,7 @@ function SelectedTablePanel({ table, onUnplace }: { table: SeatingTable; onUnpla
           setTables((ts) => ts.map((t) => (t.id === table.id ? { ...t, pos_x_cm: null, pos_y_cm: null } : t)));
           onUnplace();
           startTransition(async () => {
-            const r = await moveSeatingTable(table.id, eventId, { x: null, y: null });
+            const r = await track("Took a table out of the room", () => moveSeatingTable(table.id, eventId, { x: null, y: null }));
             if (!r.ok) setError(r.error);
             refresh();
           });
@@ -701,7 +703,7 @@ function SelectedTablePanel({ table, onUnplace }: { table: SeatingTable; onUnpla
 }
 
 function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; onDone: () => void }) {
-  const { eventId, refresh, setError } = useSeating();
+  const { eventId, refresh, setError, track } = useSeating();
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState(fixture.label ?? "");
   const [w, setW] = useState(fixture.width_cm);
@@ -718,7 +720,7 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {
-          const r = await updateSeatingFixture(fixture.id, eventId, { label: label || null, width_cm: w, depth_cm: d });
+          const r = await track("Edited an item in the room", () => updateSeatingFixture(fixture.id, eventId, { label: label || null, width_cm: w, depth_cm: d }));
           if (!r.ok) setError(r.error);
           refresh();
         });
@@ -751,7 +753,7 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
         onClick={() => {
           onDone();
           startTransition(async () => {
-            const r = await deleteSeatingFixture(fixture.id, eventId);
+            const r = await track("Deleted an item in the room", () => deleteSeatingFixture(fixture.id, eventId));
             if (!r.ok) setError(r.error);
             refresh();
           });
@@ -764,7 +766,7 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
 }
 
 function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; roomD: number }) {
-  const { eventId, refresh, setError } = useSeating();
+  const { eventId, refresh, setError, track } = useSeating();
   const [kind, setKind] = useState<SeatingFixtureKind>("dance_floor");
   const [pending, startTransition] = useTransition();
   return (
@@ -774,13 +776,15 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
         e.preventDefault();
         const size = FIXTURE_DEFAULTS[kind]!;
         startTransition(async () => {
-          const r = await createSeatingFixture(eventId, {
-            kind,
-            pos_x_cm: clamp(snap(view.x + view.w / 2, GRID_CM), 0, roomW),
-            pos_y_cm: clamp(snap(view.y + view.h / 2, GRID_CM), 0, roomD),
-            width_cm: size.width,
-            depth_cm: size.depth,
-          });
+          const r = await track("Added an item to the room", () =>
+            createSeatingFixture(eventId, {
+              kind,
+              pos_x_cm: clamp(snap(view.x + view.w / 2, GRID_CM), 0, roomW),
+              pos_y_cm: clamp(snap(view.y + view.h / 2, GRID_CM), 0, roomD),
+              width_cm: size.width,
+              depth_cm: size.depth,
+            }),
+          );
           if (!r.ok) setError(r.error);
           refresh();
         });
@@ -805,7 +809,7 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
 
 /** Room size, and the venue's own floor plan to draw over (§C.3). */
 function RoomSettings() {
-  const { eventId, data, refresh, setError } = useSeating();
+  const { eventId, data, refresh, setError, track } = useSeating();
   const plan = data.plan;
   const [w, setW] = useState(String((plan?.room_width_cm ?? 2000) / 100));
   const [d, setD] = useState(String((plan?.room_depth_cm ?? 1500) / 100));
@@ -854,10 +858,12 @@ function RoomSettings() {
         onSubmit={(e) => {
           e.preventDefault();
           startTransition(async () => {
-            const r = await updateSeatingRoom(eventId, {
-              room_width_cm: Math.round(Number(w) * 100),
-              room_depth_cm: Math.round(Number(d) * 100),
-            });
+            const r = await track("Changed the room size", () =>
+              updateSeatingRoom(eventId, {
+                room_width_cm: Math.round(Number(w) * 100),
+                room_depth_cm: Math.round(Number(d) * 100),
+              }),
+            );
             if (!r.ok) setError(r.error);
             refresh();
           });

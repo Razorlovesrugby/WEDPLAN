@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { pluralise } from "@/lib/format";
 import { colourLegend, parseColourBy, serialiseColourBy } from "@/lib/seating/colour";
+import { FIT_LABELS, fitCounts, type FitState } from "@/lib/seating/fit";
 import { declinedSeatedGuestIds } from "@/lib/seating/warnings";
 import { useSeating } from "./seating-state";
 
@@ -12,10 +13,20 @@ import { useSeating } from "./seating-state";
  * who has declined to the tray. Nothing here is ever removed automatically.
  */
 export function SummaryBar() {
-  const { summary, warnings, colourBy, setColourBy, data, move, openTable } = useSeating();
+  const { summary, warnings, colourBy, setColourBy, data, move, openTable, assignments } = useSeating();
   const [showWarnings, setShowWarnings] = useState(false);
   const declined = declinedSeatedGuestIds(warnings);
   const legend = colourLegend(colourBy, data.colour);
+  const seatedGuests = data.guests.filter((g) => assignments.some((a) => a.guestId === g.id));
+  const hereCount = seatedGuests.filter((g) => g.arrivedAt).length;
+  // Part G: the legend counts each fit.
+  const fitTotals: Record<string, number> = {};
+  if (colourBy.kind === "fit") {
+    const counts = fitCounts(new Map(Object.entries(data.colour.fit ?? {}) as [string, FitState][]));
+    fitTotals[FIT_LABELS.green] = counts.green;
+    fitTotals[FIT_LABELS.amber] = counts.amber;
+    fitTotals[FIT_LABELS.red] = counts.red;
+  }
   const problems = warnings.filter((w) => w.severity === "warning");
   const info = warnings.filter((w) => w.severity === "info");
 
@@ -68,6 +79,7 @@ export function SummaryBar() {
         </p>
       ) : null}
 
+      {hereCount > 0 ? <p className="text-sm text-muted" aria-live="polite">{hereCount} of {seatedGuests.length} here</p> : null}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <label className="flex items-center gap-2">
           <span className="text-xs text-muted">Colour by</span>
@@ -78,6 +90,7 @@ export function SummaryBar() {
           >
             <option value="">Nothing</option>
             <option value="side">Side</option>
+            <option value="fit">Fit: does the seat suit them</option>
             {data.colour.tags.map((t) => (
               <option key={t.id} value={`tag:${t.id}`}>
                 Tag: {t.name}
@@ -96,6 +109,7 @@ export function SummaryBar() {
               <li key={e.label} className="flex items-center gap-1">
                 <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: e.colour }} />
                 {e.label}
+                {colourBy.kind === "fit" ? ` (${fitTotals[e.label] ?? 0})` : ""}
               </li>
             ))}
           </ul>

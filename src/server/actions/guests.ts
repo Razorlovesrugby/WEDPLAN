@@ -50,6 +50,9 @@ const guestFields = z.object({
     .transform((v) => (v === undefined ? undefined : v === "" ? null : v)),
   dietary: optionalText(500),
   accessibility: optionalText(500),
+  // Spec 53 Part F. From a checkbox: "on" when ticked, absent otherwise.
+  needs_highchair: z.union([z.boolean(), z.literal("on"), z.literal("")]).optional().transform((v) => (v === undefined ? undefined : v === true || v === "on")),
+  uses_wheelchair: z.union([z.boolean(), z.literal("on"), z.literal("")]).optional().transform((v) => (v === undefined ? undefined : v === true || v === "on")),
   notes: optionalText(2000),
 });
 
