@@ -1,12 +1,13 @@
 # Feature spec: The venue designer: draw the room, style the tables, seat the guests
 
-**Status: proposed, not built.** Every question in §11 has a recommendation and
+**Status: proposed, not built.** Every question in §12 has a recommendation and
 no answer yet. Nothing is built until the planner says to build it (see
 `docs/specs/README.md`).
 
 **Mockups:** the private claude.ai design canvas "Venue designer mockups"
-(<https://claude.ai/artifact/9wUV92RjgVdvH4BHQcbpUk>), four boards: (1) the
-room designer, (2) table style, (3) drawing the venue, (4) the caterer export.
+(<https://claude.ai/artifact/9wUV92RjgVdvH4BHQcbpUk>), five boards: (1) the
+room designer, (2) table style, (3) drawing the venue, (4) the caterer export,
+(5) a family-style table.
 The boards use sample data; the numbers on them are illustrative.
 
 **Depends on:** spec 33 (the seating plan, its Room view, fixtures, venue image
@@ -23,6 +24,8 @@ versions, Show menu, Colour by), spec 51 (seating on or off per event), spec 8
 4. Manage planning and seating in one place.
 5. The look and flow of the floor-plan tool the planner shared, which puts
    the room, the furniture and the guest list on one canvas.
+6. Family-style service: shared dishes per table, not a plate or meal choice
+   per person.
 
 ## 2. Story
 
@@ -54,7 +57,10 @@ from a library, all to scale. A **table style** says what is on every place and
 in the middle of the table; tables share a style, a close-up shows it, and the
 plan adds up how many centrepieces, candles, plates and glasses it needs. A
 **caterer export** opens with the coloured floor plan. The room can be locked
-when it is final, while seating stays open.
+when it is final, while seating stays open. Each plan is **plated**, **family
+style** or **buffet**: family style holds a shared menu, puts platters down the
+middle of each table, counts them per table, and gives guests with dietary
+needs their own plate.
 
 ## 5. Part A — One visual canvas
 
@@ -87,8 +93,10 @@ panels become sheets.
 - **Chairs** are rounded tags, the size of a real chair at the room's scale,
   each with the guest's initials; at 150% zoom and above, the first name. The
   tag's colour is the answer to the **Colour chairs by** question: any RSVP
-  question spec 33 Q18 allows (main course, starter, dessert…), or Fit from spec
-  53 §G. Empty chairs are white with a dashed outline.
+  question spec 33 Q18 allows (main course, starter, dessert…), Fit from spec
+  53 §G, or **Dietary needs** (shares everything / own plate, Part F), the
+  default for family style and buffet. Empty chairs are white with a dashed
+  outline.
 - **Dietary:** a red dot on the chair when the guest's `dietary` is not empty.
 - **Declined in a seat:** a guest whose reply for this event is now No, still in
   a chair, has a dashed orange outline, and the right panel shows "*Name* can't
@@ -194,6 +202,8 @@ A named, wedding-wide description of what is on a table:
   candles (a count), tablecloth (with a note), runner (long tables), and up to
   five free items the couple names ("bud vases × 3").
 - Each item may name the **vendor** who supplies it (spec 8).
+- On a family-style plan (Part F) the style's centre sits around the shared
+  dishes, and C.3 adds two serving utensils per platter.
 
 A table has at most one style. Tables share styles, so changing the style
 changes every table using it. A table with no style has no centre glyph or place settings.
@@ -249,10 +259,84 @@ and whether to include table styles.
    then the seat list in order with answers and dietary notes.
 5. **If chosen, table styles:** each style's close-up and the C.3 totals.
 
-The existing `floor` view gains the same colouring and walls. Export → Image
+On a family-style or buffet plan the export follows Part F.5. The existing
+`floor` view gains the same colouring and walls. Export → Image
 downloads the canvas as a PNG at 1×, 2× or 4×.
 
-## 10. Data — migrations `0055` and `0056`
+## 10. Part F — How food is served
+
+Board 5. Each plan has a **service style**, set from the Venue tab or the
+close-up: **Plated**, **Family style** or **Buffet**. It changes what the plan
+colours, counts and prints.
+
+| | Plated | Family style | Buffet |
+| --- | --- | --- | --- |
+| What a guest chooses | A meal answer per course (an RSVP question) | Nothing; the table shares | Nothing |
+| Chairs coloured by, by default | The chosen meal question | Dietary needs: shares everything, or own plate | Dietary needs |
+| Middle of the table | The table style's centre | Shared dishes, with the style's centre kept low | The table style's centre |
+| Caterer export | Meals by seat | Platters per table, own plates by seat | Dietary notes by seat, head count per table |
+
+Changing the style never deletes RSVP answers or the shared menu; each is used
+again when its style is chosen again.
+
+### F.1 The shared menu
+
+A family-style plan holds a menu: courses (To start, Main, Sides, Dessert, or
+the couple's own), and in each, dishes with a name, dietary tags (vegetarian,
+vegan, gluten free, dairy free, nut free, contains fish, contains shellfish, or
+a short free tag), **serves** (how many people one platter or bowl feeds,
+default 6) and a vessel (platter, bowl or board) for the drawing. Dishes
+reorder within a course; up to 12 courses and 40 dishes.
+
+### F.2 Platters per table
+
+For each table and dish: **platters = ceiling(sharing guests ÷ serves)**, where
+sharing guests are the table's seated guests without their own plate (F.3). A
+long table of 2.4 m or more gets at least two of each dish so every end can
+reach one. Any table's count for a dish can be set by hand; a hand count stays
+until that table's guest count changes, when it is cleared and the table
+flagged "Check platters". Plan totals are per dish. Computed in
+`src/lib/seating/service.ts`, pure and tested.
+
+### F.3 Own plates
+
+A seated guest has their **own plate** when their `dietary` note is not empty,
+unless the couple turns it off on their seat (a vegetarian at a mostly
+vegetarian table may share); the couple can also turn it on for a guest with no
+note. In the close-up an own-plate place has an orange ring; in the room the
+chair is coloured; the right panel lists each own plate with seat and note.
+Own-plate guests are left out of platter counts.
+
+### F.4 Room on the table
+
+Shared dishes need the middle of the table, so on a family-style plan:
+
+- a long table narrower than 80 cm, or a round table under 150 cm across, is
+  flagged "Tight for shared dishes";
+- a style's centre arrangement taller than 30 cm (its note says tall) is drawn
+  as a low runner and flagged "Tall centrepieces get in the way of passing
+  dishes".
+
+Both are hints, never blockers.
+
+### F.5 In the room and the export
+
+In the room, a family-style table shows small dish glyphs down its middle
+instead of the centre glyph. The caterer export on a family-style plan:
+
+1. **Page 1:** the floor plan coloured by sharing / own plate; the key lists
+   the shared menu with the plan's total platters per dish, then own plates by
+   seat with their notes.
+2. **Kitchen summary:** platters per dish per table, in table order, and own
+   plates by table.
+3. **Guests A to Z**, as for plated.
+4. **One page per table:** the table drawing with the platters and own plates
+   marked, the dish list with counts, then the seat list.
+
+A buffet plan prints the floor plan coloured by dietary needs, the dietary
+notes by seat, and a head count per table.
+
+## 11. Data — migrations `0055` and `0056`
 
 Next free numbers at the time of writing; the build takes whatever is next.
 
@@ -276,17 +360,26 @@ uses them; see spec 6.1's `55P04` fix):
     (replacing spec 53's per-device choice, so exports and every
     collaborator agree).
   - `room_locked_at timestamptz`, `room_locked_by uuid` (a collaborator).
+  - `service_style text not null default 'plated' check (in ('plated',
+    'family','buffet'))`.
+  - `shared_menu jsonb not null default '[]'`: courses and dishes (F.1),
+    checked by `src/lib/seating/service.ts` before every write and by a
+    `jsonb_typeof = 'array'` check and a 64 KB size check in the database.
 - `seating_tables` gains `rows_count`, `aisle_cm` (for `rows`, both null
-  otherwise, checked), and `style_id uuid null` →
+  otherwise, checked), `platter_counts jsonb null` (hand counts by dish id,
+  F.2), and `style_id uuid null` →
   `seating_table_styles (id, wedding_id)` on delete set null.
 - **`seating_table_styles`** (new): `id`, `wedding_id`, `name` (1–60, unique per
   wedding), `place jsonb`, `centre jsonb` (shapes checked by
   `src/lib/seating/styles.ts`), `colour text`, timestamps; `unique (id,
   wedding_id)`; RLS by `is_collaborator(wedding_id)`; audit trigger.
 - `seat_assignments` gains `decline_kept_at timestamptz` (Keep for now), cleared
-  by the app when that guest's reply for the event changes.
+  by the app when that guest's reply for the event changes, and `own_plate
+  boolean null` (F.3: null follows the dietary note, true or false is the
+  couple's choice).
 - `seating_state()` returns `version: 2` and includes `drawing`, the plan's new
-  columns, `style_id`, `rows_count`, `aisle_cm` and `decline_kept_at`;
+  columns (service style and shared menu included), `style_id`, `rows_count`,
+  `aisle_cm`, `platter_counts`, `decline_kept_at` and `own_plate`;
   `restore_seating_state()` accepts versions 1 and 2, so older History entries
   still restore. Table styles are wedding-wide and are not part of a plan's
   state; undoing a style change goes through its own undo entry that restores
@@ -299,7 +392,7 @@ size check, `restore_seating_state` round-tripping a v1 and a v2 payload, the
 lock (a move refused by the action is tested in unit tests; the database does
 not enforce the lock).
 
-## 11. Open questions (each has a recommendation)
+## 12. Open questions (each has a recommendation)
 
 1. **Several layouts for one event** (try round tables against long tables, then
    pick one). **Recommendation: not now.** Plan tabs show each seating event, and
@@ -322,18 +415,28 @@ not enforce the lock).
    view the room, seat people and free seats; drawing and décor are tablet and
    desktop.
 9. **Colour chairs by: per plan or per device?** **Recommendation: per plan**
-   (§10), so the export and every collaborator see the same colours.
+   (§11), so the export and every collaborator see the same colours.
 10. **Guests see any of this?** **Recommendation: no.** Spec 33 Part F's "your
     table" on the site is unchanged; décor and walls are never shown to guests.
+
+11. **Service style per event?** **Recommendation: yes, per plan,** which is per
+    event, so a rehearsal dinner can be plated and the reception family style.
+12. **Who gets their own plate by default?** **Recommendation: anyone with a
+    dietary note,** and the couple can turn it off or on per seat.
+13. **Where the shared menu lives:** on the plan, or a wedding-wide menu
+    feature? **Recommendation: on the plan,** the smallest place that works; it
+    moves if a menu feature is ever specified.
+14. **Long tables get at least two of each dish?** **Recommendation: yes, from
+    2.4 m,** with a hand count for any table.
 
 Rejected: live co-editing with presence and watch mode (a large real-time
 build for a plan two to three people edit); floor-plan templates shared across
 weddings (WEDPLAN serves one couple's wedding at a time); 3D views; auto-seating
 (spec 53 rejected it).
 
-## 12. Build order (each step committed separately)
+## 13. Build order (each step committed separately)
 
-1. `0055`, `0056`, SQL suite additions; `drawing.ts`, `styles.ts` and the
+1. `0055`, `0056`, SQL suite additions; `drawing.ts`, `styles.ts`, `service.ts` and the
    geometry defaults, with unit tests.
 2. **Part A:** the canvas layout, chairs with names and colours, dietary and
    declined markers, Show bar, legend, plan tabs, the Library with the new
@@ -342,9 +445,12 @@ weddings (WEDPLAN serves one couple's wedding at a time); 3D views; auto-seating
    Area, Text, Measure.
 4. **Part C:** table styles, the close-up, totals and CSV.
 5. **Part D:** lock.
-6. **Part E:** the caterer view, the floor view's colours and walls, PNG export.
+6. **Part F:** service style, the shared menu, platter counts, own plates, the
+   room-on-the-table hints, and dish glyphs in the room and close-up.
+7. **Part E:** the caterer view (plated, family style and buffet), the floor
+   view's colours and walls, PNG export.
 
-## 13. Verification, honestly
+## 14. Verification, honestly
 
 What a build must say it ran: typecheck, unit tests (`drawing.ts`, `styles.ts`,
 geometry for the new shapes, the v1/v2 state shapes), the SQL suite, `npm run
@@ -352,7 +458,7 @@ build`, and the Room view, close-up and caterer print rendered in headless
 Chromium with sample data at 1440 px and 1024 px. A real iPad (pointer drawing,
 pinch) and live Supabase are separate and must be named if not done.
 
-## 14. Risks
+## 15. Risks
 
 - **Canvas performance:** 200 guests with initials, décor and walls is a few
   thousand SVG nodes. Chairs render as one `<g>` per table, and names drop to
