@@ -143,6 +143,10 @@ spec 54's. This spec adds the module.
   assigned to the run sheet item the section is linked to, which turns the
   module on for them, scoped to that section.
 
+The module follows spec 54 §5's look in full: it is the screen held to the
+highest bar of all, because the photographer uses it at speed, outdoors and
+in dim rooms.
+
 The module adds three tabs beside the link's My day (spec 54 §6), which
 already shows the photographer's run sheet items and day contacts:
 

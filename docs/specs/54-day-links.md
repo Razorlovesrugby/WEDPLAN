@@ -69,32 +69,113 @@ These hold on every screen of a day link and every module.
 7. **Works with a bad signal.** Every write queues offline and sends when the
    connection comes back (§6.8).
 
-## 5. The look
+## 5. The look: a native-feeling app
 
-The day link uses the **app's own look with the wedding's accent**: the same
-type, spacing and components on every wedding, so it is always readable, plus
-the couple's names and the accent colour from their site theme (spec 31).
+Day links and every module on them (the photographer's shot list, the
+venue's seating) are held to a higher bar than the rest of WEDPLAN. The
+planner screens and the wedding site keep their own simpler look; this
+section applies only under `/d/`. The aim is a page that feels like a
+first-class iPhone app, Apple-inspired in its conventions, not a copy of any
+Apple app.
 
-- **Type:** the system font stack. Body 17 px, task titles 22 px, the Now
-  card's title 28 px, times in tabular figures. Nothing smaller than 13 px.
-- **Colour:** paper background, ink text, one accent. The accent is used
-  only on the primary button, the progress bar and the active tab. If the
-  site's accent doesn't reach 4.5:1 contrast with white button text, the
-  app's own accent is used instead.
-- **States** each have a colour and a word, never colour alone: to do
-  (outline), on it (accent), done (green with a tick), running late (amber
-  with "+10 min"), need help (red with "Help requested"), handed back (grey,
-  struck through).
-- **Dark mode** follows the phone's setting, for dim receptions.
-- **Motion:** state changes slide or fade in under 200 ms. Nothing moves when
-  the phone asks for reduced motion.
-- **Touch:** every control is at least 44 × 44 px, with 8 px between
-  controls.
-- **Haptics:** a short vibration on Start, Done and Need help where the phone
-  supports it.
+### 5.1 Type
 
-The mockups canvas ("Shot list & seating mockups", row 1) shows the look for
-the photographer's link. The usher's link follows the same pattern.
+- The **system font**: `-apple-system, BlinkMacSystemFont, system-ui`, which
+  is SF Pro on iPhone and Mac and Roboto on Android. No web font is loaded.
+- A fixed scale, in px at the default text size:
+
+  | Style | Size / line height | Weight | Used for |
+  | --- | --- | --- | --- |
+  | Large title | 34 / 41 | bold, −0.4 tracking | the screen title ("Today") |
+  | Title 1 | 28 / 34 | bold, −0.4 | the Now card's task |
+  | Title 3 | 20 / 25 | semibold | sheet titles |
+  | Headline | 17 / 22 | semibold | row titles, buttons |
+  | Body | 17 / 22 | regular | notes |
+  | Subhead | 15 / 20 | regular | meta lines (time, place, who) |
+  | Footnote | 13 / 18 | regular | section headers, captions |
+  | Caption | 12 / 16 | medium | tab labels, status capsules |
+
+- Times and counts use tabular figures. Nothing is smaller than 12 px.
+- **Text size follows the phone.** Sizes are in `rem`, so a larger system
+  text size makes the whole page larger, and layouts wrap instead of
+  truncating.
+
+### 5.2 Colour
+
+- **Light:** grouped background `#F2F2F7`, cards `#FFFFFF`, primary text
+  `#000000`, secondary text `rgba(60,60,67,0.6)`, separators
+  `rgba(60,60,67,0.29)`, fills for grey buttons `rgba(120,120,128,0.12)`.
+- **Dark:** background `#000000`, cards `#1C1C1E`, raised cards `#2C2C2E`,
+  primary text `#FFFFFF`, secondary `rgba(235,235,245,0.6)`, separators
+  `rgba(84,84,88,0.65)`.
+- **Tint** is the wedding's accent colour (spec 31). It colours the primary
+  button, the progress ring, links and the selected tab, and nothing else. A
+  tint that can't reach 4.5:1 with white text is darkened until it does, and
+  lightened the same way in dark mode.
+- **System colours for states**, never colour alone: on it (tint), done
+  (green `#34C759` / dark `#30D158`, with a tick), running late (orange
+  `#FF9500` / `#FF9F0A`, with "+10 min"), need help (red `#FF3B30` /
+  `#FF453A`, with "Help requested"), handed back (grey, struck through).
+- **Dark mode** follows the phone. A helper can also switch it from the More
+  sheet, kept on their device.
+
+### 5.3 Shape, depth and materials
+
+- Corner radii: 22 px for the Now card, 16 px for buttons and grouped lists,
+  12 px for photos, capsules for status tags.
+- Cards sit on the grouped background with no shadow in dark mode and a very
+  soft one in light mode (`0 1px 2px rgba(0,0,0,0.04), 0 8px 24px
+  rgba(0,0,0,0.06)`).
+- Lists are **inset grouped**: rounded, with separators inset past the
+  leading icon.
+- **Bars are translucent**: the tab bar and the collapsed title bar use a
+  blurred material (`backdrop-filter: saturate(180%) blur(20px)` over a
+  70–80% background), with a hairline edge. Where blur isn't supported, they
+  are solid.
+- Sheets rise from the bottom with a grabber, a 16 px top radius and a dimmed
+  backdrop; they can be swiped down to close.
+
+### 5.4 Icons
+
+A single line-icon set drawn for WEDPLAN in the style of system symbols: a
+1.75 px stroke on a 24 px grid, rounded ends, matched to the text weight
+beside it. Every icon sits next to a word. Icons are inline SVG, not a font.
+
+### 5.5 Motion and haptics
+
+- Spring animations (about 350 ms, gently damped) for sheets, the Now card
+  changing state and rows moving to Earlier today. Fades are 150 ms.
+- The Done tick draws itself; the progress ring fills smoothly.
+- **Reduced motion** replaces every movement with a fade. **Reduced
+  transparency** makes the bars solid.
+- Haptics, where the phone allows: a light tap on Start, a success pattern on
+  Done and Taken, a firm double tap on Need help.
+
+### 5.6 Layout
+
+- Designed at 390 × 844, with safe-area insets (`env(safe-area-inset-*)`)
+  respected top and bottom, and working from 320 px wide up.
+- A **large title** ("Today") collapses into the translucent bar as the page
+  scrolls.
+- The primary button sits at the bottom of the Now card, 56 px tall, in the
+  thumb zone. Secondary actions are a row of three grey buttons with an icon
+  above a label.
+- Every control is at least 44 × 44 px.
+
+### 5.7 A home-screen app
+
+The link is an installable web app: a manifest with the wedding's initials
+on a tint-coloured icon, `display: standalone`, a matching status-bar colour,
+and a splash in the grouped background. The first-open screen (§6.1) shows
+how to add it to the home screen. Once added, it opens full screen like an
+app.
+
+### 5.8 The bar for done
+
+A day-link screen is finished only when it has been checked on a real iPhone
+and a real Android phone, in light and dark, at the default and the largest
+text size, with reduced motion on. The mockups canvas ("Shot list & seating
+mockups", the last row) shows the intended look.
 
 ## 6. Screens
 
@@ -426,8 +507,11 @@ Migration `0050_day_links.sql` (after spec 51's `0049`):
 5. **Default modules:** by vendor category, and editable per link (§7).
 6. **Buttons:** Start, Done, Running late, Need help and Can't do it
    (§6.4).
-7. **Look:** the app's look with the wedding's accent (§5). Rejected: the
-   full site theme, because readability would depend on the theme.
+7. **Look:** a native-feeling, Apple-inspired app look with the wedding's
+   accent as its tint (§5), for day links and their modules only; the
+   planner screens and the site keep their own. Rejected: the full site
+   theme (readability would depend on it), and the three earlier directions
+   (Programme, Night shift, Daylight).
 8. **Changes:** a "Changed" badge on the task (§6.2). Rejected: emailing
    helpers.
 9. **Photos:** both ways (§6.10). The couple adds reference photos and files
