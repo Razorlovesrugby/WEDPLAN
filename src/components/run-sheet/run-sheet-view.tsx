@@ -14,9 +14,11 @@ import {
   packLanes,
   type RunSheetAssignee,
   type RunSheetItem,
+  type HelperGroup,
 } from "@/lib/run-sheet";
 import { deleteRunSheetItem, duplicateRunSheetItem, moveRunSheetItem } from "@/server/actions/run-sheet";
 import { RunSheetItemEditor } from "./item-editor";
+import { PeopleView } from "./people-view";
 
 const PX_PER_MINUTE = 1.2;
 const STORAGE_KEY = "wedplan.run-sheet.view";
@@ -27,6 +29,9 @@ type EventOption = { id: string; name: string };
 export function RunSheetView({
   items,
   options,
+  contacts,
+  groups,
+  linkStates,
   events,
   timeZone,
   weddingDate,
@@ -34,6 +39,9 @@ export function RunSheetView({
 }: {
   items: RunSheetItem[];
   options: RunSheetAssignee[];
+  contacts: { id: string; label: string; phone: string }[];
+  groups: HelperGroup[];
+  linkStates: Record<string, "made" | "opened">;
   events: EventOption[];
   timeZone: string;
   weddingDate: string | null;
@@ -42,18 +50,19 @@ export function RunSheetView({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"timeline" | "list">("timeline");
+  const [view, setView] = useState<"timeline" | "list" | "people">("timeline");
   const [filter, setFilter] = useState<string>("");
   const [editor, setEditor] = useState<{ item: RunSheetItem | null; startsAt?: string } | null>(null);
 
   useEffect(() => {
     try {
-      if (window.localStorage.getItem(STORAGE_KEY) === "list") setView("list");
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved === "list" || saved === "people") setView(saved);
     } catch {
       /* storage can be unavailable; the default is fine */
     }
   }, []);
-  function chooseView(next: "timeline" | "list") {
+  function chooseView(next: "timeline" | "list" | "people") {
     setView(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
@@ -113,7 +122,7 @@ export function RunSheetView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div role="group" aria-label="View" className="inline-flex overflow-hidden rounded-md border border-line text-sm">
-          {(["timeline", "list"] as const).map((v) => (
+          {(["timeline", "list", "people"] as const).map((v) => (
             <button
               key={v}
               type="button"
@@ -121,7 +130,7 @@ export function RunSheetView({
               onClick={() => chooseView(v)}
               className={`px-3 py-1.5 ${view === v ? "bg-ink text-white" : "bg-white text-ink"}`}
             >
-              {v === "timeline" ? "Timeline" : "List"}
+              {v === "timeline" ? "Timeline" : v === "list" ? "List" : "People"}
             </button>
           ))}
         </div>
@@ -177,6 +186,8 @@ export function RunSheetView({
         <p className="card p-8 text-center text-sm text-muted">
           Nothing on the run sheet yet. Add the first item and give it a start and an end.
         </p>
+      ) : view === "people" ? (
+        <PeopleView items={items} options={options} linkStates={linkStates} timeZone={timeZone} onOpen={(item) => setEditor({ item })} />
       ) : view === "list" ? (
         <ListView items={items} timeZone={timeZone} matches={matches} menuFor={menuFor} onOpen={(item) => setEditor({ item })} />
       ) : day ? (
@@ -198,6 +209,9 @@ export function RunSheetView({
         initialStartsAt={editor?.startsAt}
         allItems={items}
         options={options}
+        contacts={contacts}
+        helperGroups={groups}
+        linkStates={linkStates}
         events={events}
         timeZone={timeZone}
         canAddPeople={canAddPeople}

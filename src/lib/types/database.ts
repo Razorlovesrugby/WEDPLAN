@@ -421,12 +421,17 @@ export type WeddingRow = {
   total_budget: number | null;
   /** ISO 4217 code, three uppercase letters (0045, spec 40). A symbol only: amounts never convert and are always hundredths. */
   currency: string;
+  /** Spec 54 §6.15: the day-before email to helpers, on by default. */
+  day_before_email: boolean;
+  /** Spec 55 §6: who answers on the day. At most one of the two is set. */
+  day_lead_person_id: string | null;
+  day_lead_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
 /** The wedding row without the money (0044) — what a planner reads instead of `weddings`. */
-export type WeddingBasicsView = Omit<WeddingRow, "total_budget">;
+export type WeddingBasicsView = Omit<WeddingRow, "total_budget" | "day_before_email">;
 
 export type TransportOptionRow = {
   id: string;
@@ -618,6 +623,8 @@ export type CollaboratorRow = {
   role: CollaboratorRole;
   /** A typed name for the assign picker and every place an assignee renders — falls back to the role label when unset (spec 15 §2). */
   display_name: string | null;
+  /** Spec 55 §6: vibrate and sound on the day. */
+  day_alerts: boolean;
   created_at: string;
 }
 
@@ -630,6 +637,11 @@ export type PersonRow = {
   sort_order: number;
   user_id: string | null;
   access: PersonAccess;
+  /** Spec 54 §10.7: so a helper can be called, texted and emailed their link. */
+  phone: string | null;
+  email: string | null;
+  /** Spec 55 §6: vibrate and sound on the day. */
+  day_alerts: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -655,6 +667,29 @@ export type EventRow = {
   guest_note: string | null;
   /** The dress code this event wears (spec 25 §4). */
   dress_code_id: string | null;
+  /** Spec 51. The type only presets the switches below at creation. */
+  type_id: string;
+  /** Guests are asked to reply. A main event must ask. */
+  asks_rsvp: boolean;
+  /** Has a seating plan. */
+  has_seating: boolean;
+  /** Offered to guests at all. Off = "just us". */
+  guest_facing: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EventTypeRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  builtin_key: string | null;
+  asks_rsvp: boolean;
+  has_seating: boolean;
+  guest_facing: boolean;
+  is_main: boolean;
+  sort_order: number;
+  hidden_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -792,6 +827,14 @@ export type GuestRow = {
    */
   unable_to_attend_at: string | null;
   unable_to_attend_via: "save_the_date" | "planner" | null;
+  /** Spec 53 Part F: a highchair marker, and a wheelchair place (a gap with no chair). */
+  needs_highchair: boolean;
+  uses_wheelchair: boolean;
+  /** Spec 52 §4.3: faces to know, shown only through day links. */
+  relationship: string | null;
+  photo_path: string | null;
+  /** The only guest note a day link ever shows. */
+  vendor_note: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -1281,6 +1324,22 @@ export type RunSheetItemRow = {
   ends_at: string;
   /** True for an item the migration had to give a time; clears when saved. */
   time_estimated: boolean;
+  /** Spec 54 §10.1: what the assignees see, separate from the couple's private `notes`. */
+  instructions: string | null;
+  address: string | null;
+  critical: boolean;
+  contact_id: string | null;
+  /** Ask for a photo when done (§6.10). */
+  photo_on_done: boolean;
+  /** The module this task opens, and with what config (§6.7). */
+  opens_module: string | null;
+  opens_config: Record<string, unknown> | null;
+  /** A cue starts on someone's word (§6.16). */
+  is_cue: boolean;
+  cue_called_at: string | null;
+  /** Open to a group, with this many places left (§10.2). */
+  open_to_group_id: string | null;
+  open_places: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -1297,6 +1356,224 @@ export type RunSheetItemAssigneeRow = {
   vendor_id: string | null;
   person_id: string | null;
   created_at: string;
+  /** Spec 54 §6.4: this assignee's own part of the task. */
+  state: TaskState;
+  state_at: string | null;
+  started_at: string | null;
+  done_at: string | null;
+  late_minutes: number | null;
+  handed_back_reason: string | null;
+  seen_at: string | null;
+  confirmed_at: string | null;
+  is_lead: boolean;
+}
+
+export type ShotKind = "group" | "moment" | "detail" | "portrait";
+export type ShotStatus = "todo" | "taken" | "skipped" | "later";
+
+export type ShotSectionRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  run_sheet_item_id: string | null;
+  location: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ShotRow = {
+  id: string;
+  wedding_id: string;
+  section_id: string;
+  title: string;
+  kind: ShotKind;
+  must_have: boolean;
+  minutes: number;
+  note: string | null;
+  shooter: "lead" | "second" | null;
+  reference_moodboard_item_id: string | null;
+  reference_path: string | null;
+  sort_order: number;
+  status: ShotStatus;
+  status_at: string | null;
+  status_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ShotPersonRow = {
+  id: string;
+  wedding_id: string;
+  shot_id: string;
+  guest_id: string | null;
+  person_id: string | null;
+  role: string | null;
+  sort_order: number;
+}
+
+export type SeatingChairBlockedRow = {
+  wedding_id: string;
+  event_id: string;
+  table_id: string;
+  seat_index: number;
+  created_at: string;
+}
+
+export type SeatingCheckinRow = {
+  wedding_id: string;
+  event_id: string;
+  guest_id: string;
+  arrived_at: string;
+  by_label: string;
+}
+
+export type TaskState = "todo" | "started" | "done" | "handed_back";
+
+export type DayLinkRow = {
+  id: string;
+  wedding_id: string;
+  vendor_id: string | null;
+  guest_id: string | null;
+  person_id: string | null;
+  label: string;
+  token_hash: string;
+  token_encrypted: string;
+  modules: string[];
+  module_config: Record<string, unknown>;
+  expires_at: string;
+  revoked_at: string | null;
+  arrived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DayLinkDeviceRow = {
+  link_id: string;
+  wedding_id: string;
+  device_id: string;
+  first_opened_at: string;
+  last_seen_at: string;
+}
+
+export type DayActivityRow = {
+  id: string;
+  wedding_id: string;
+  link_id: string | null;
+  vendor_id: string | null;
+  guest_id: string | null;
+  person_id: string | null;
+  item_id: string | null;
+  kind: string;
+  payload: Record<string, unknown>;
+  tapped_at: string;
+  received_at: string;
+  answered_at: string | null;
+  answered_by: string | null;
+  answer: string | null;
+  photo_path: string | null;
+}
+
+export type HelperGroupRow = {
+  id: string;
+  wedding_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export type HelperGroupMemberRow = {
+  id: string;
+  wedding_id: string;
+  group_id: string;
+  collaborator_user_id: string | null;
+  guest_id: string | null;
+  vendor_id: string | null;
+  person_id: string | null;
+}
+
+export type RunSheetItemFileRow = {
+  id: string;
+  wedding_id: string;
+  item_id: string;
+  path: string;
+  mime_type: string;
+  caption: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export type DayAnnouncementRow = {
+  id: string;
+  wedding_id: string;
+  audience: "everyone" | "group" | "link";
+  group_id: string | null;
+  link_id: string | null;
+  text: string;
+  important: boolean;
+  sent_by: string | null;
+  sent_at: string;
+}
+
+export type DayAnnouncementReadRow = {
+  announcement_id: string;
+  link_id: string;
+  wedding_id: string;
+  seen_at: string;
+  acknowledged_at: string | null;
+}
+
+export type DayPushSubscriptionRow = {
+  id: string;
+  wedding_id: string;
+  link_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
+}
+
+export type DayReminderLogRow = {
+  link_id: string;
+  wedding_id: string;
+  dedupe_key: string;
+  kind: "day_before_email" | "push_10_min";
+  sent_at: string;
+}
+
+export type DayContactRow = {
+  id: string;
+  wedding_id: string;
+  label: string;
+  phone: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export type RunSheetItemStepRow = {
+  id: string;
+  wedding_id: string;
+  item_id: string;
+  kind: "step" | "bring";
+  text: string;
+  sort_order: number;
+}
+
+export type RunSheetStepTickRow = {
+  wedding_id: string;
+  step_id: string;
+  assignee_id: string;
+  ticked_at: string;
+}
+
+export type DayInfoSectionRow = {
+  id: string;
+  wedding_id: string;
+  heading: string;
+  body: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1513,6 +1790,8 @@ export type GuestEventInviteView = {
    * not since answered Yes. They stay `invited`; they just aren't counted.
    */
   excluded_from_counts: boolean;
+  /** Spec 51: the event asks guests to reply. */
+  asks_rsvp: boolean;
 }
 
 export type HouseholdView = {
@@ -1888,13 +2167,93 @@ export type Database = {
         WeddingRow,
         // `slug` is optional on insert: 0015's trigger derives one from the
         // name when it is absent, so callers that do not care never set it.
-        "id" | Timestamps | "timezone" | "reminder_window_days" | "slug"
+        "id" | Timestamps | "timezone" | "reminder_window_days" | "slug" | "day_before_email" | "day_lead_person_id" | "day_lead_user_id"
       >;
-      collaborators: Table<CollaboratorRow, "id" | "created_at" | "role">;
-      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access">;
+      collaborators: Table<CollaboratorRow, "id" | "created_at" | "role" | "day_alerts">;
+      people: Table<PersonRow, "id" | Timestamps | "sort_order" | "access" | "phone" | "email" | "day_alerts">;
+      day_links: Table<
+        DayLinkRow,
+        "id" | Timestamps | "modules" | "module_config" | "revoked_at" | "arrived_at"
+      >;
+      day_link_devices: Table<DayLinkDeviceRow, "first_opened_at" | "last_seen_at">;
+      day_activity: Table<
+        DayActivityRow,
+        | "id"
+        | "link_id"
+        | "vendor_id"
+        | "guest_id"
+        | "person_id"
+        | "item_id"
+        | "payload"
+        | "tapped_at"
+        | "received_at"
+        | "answered_at"
+        | "answered_by"
+        | "answer"
+        | "photo_path"
+      >;
+      day_contacts: Table<DayContactRow, "id" | "created_at" | "sort_order">;
+      seating_chairs_blocked: Table<SeatingChairBlockedRow, "created_at">;
+      seating_checkins: Table<SeatingCheckinRow, "arrived_at">;
+      shot_sections: Table<ShotSectionRow, "id" | Timestamps | "run_sheet_item_id" | "location" | "sort_order">;
+      shots: Table<
+        ShotRow,
+        | "id"
+        | Timestamps
+        | "kind"
+        | "must_have"
+        | "minutes"
+        | "note"
+        | "shooter"
+        | "reference_moodboard_item_id"
+        | "reference_path"
+        | "sort_order"
+        | "status"
+        | "status_at"
+        | "status_by"
+      >;
+      shot_people: Table<ShotPersonRow, "id" | "guest_id" | "person_id" | "role" | "sort_order">;
+      helper_groups: Table<HelperGroupRow, "id" | "created_at" | "sort_order">;
+      helper_group_members: Table<
+        HelperGroupMemberRow,
+        "id" | "collaborator_user_id" | "guest_id" | "vendor_id" | "person_id"
+      >;
+      run_sheet_item_files: Table<RunSheetItemFileRow, "id" | "created_at" | "sort_order" | "caption">;
+      day_announcements: Table<
+        DayAnnouncementRow,
+        "id" | "sent_at" | "group_id" | "link_id" | "important" | "sent_by"
+      >;
+      day_announcement_reads: Table<DayAnnouncementReadRow, "seen_at" | "acknowledged_at">;
+      day_push_subscriptions: Table<DayPushSubscriptionRow, "id" | "created_at">;
+      day_reminder_log: Table<DayReminderLogRow, "sent_at">;
+      run_sheet_item_steps: Table<RunSheetItemStepRow, "id" | "sort_order">;
+      run_sheet_step_ticks: Table<RunSheetStepTickRow, "ticked_at">;
+      day_info_sections: Table<DayInfoSectionRow, "id" | Timestamps | "body" | "sort_order">;
       events: Table<
         EventRow,
-        "id" | Timestamps | "is_public" | "is_main" | "sort_order" | "guest_note" | "dress_code_id"
+        | "id"
+        | Timestamps
+        | "is_public"
+        | "is_main"
+        | "sort_order"
+        | "guest_note"
+        | "dress_code_id"
+        | "type_id"
+        | "asks_rsvp"
+        | "has_seating"
+        | "guest_facing"
+      >;
+      event_types: Table<
+        EventTypeRow,
+        | "id"
+        | Timestamps
+        | "builtin_key"
+        | "asks_rsvp"
+        | "has_seating"
+        | "guest_facing"
+        | "is_main"
+        | "sort_order"
+        | "hidden_at"
       >;
       households: Table<
         HouseholdRow,
@@ -1933,7 +2292,9 @@ export type Database = {
         | "is_plus_one"
         | "sort_order"
         | "unable_to_attend_at"
-        | "unable_to_attend_via",
+        | "unable_to_attend_via"
+        | "needs_highchair"
+        | "uses_wheelchair",
         GuestRelationships
       >;
       tags: Table<TagRow, "id" | "created_at" | "colour">;
@@ -2095,12 +2456,33 @@ export type Database = {
         | "offset_minutes"
         | "guest_visible"
         | "sort_order"
-        | "time_estimated",
+        | "time_estimated"
+        | "instructions"
+        | "address"
+        | "critical"
+        | "contact_id"
+        | "photo_on_done"
+        | "opens_module"
+        | "opens_config"
+        | "is_cue"
+        | "cue_called_at"
+        | "open_to_group_id"
+        | "open_places",
         RunSheetItemRelationships
       >;
       run_sheet_item_assignees: Table<
         RunSheetItemAssigneeRow,
-        "id" | "created_at",
+        | "id"
+        | "created_at"
+        | "state"
+        | "state_at"
+        | "started_at"
+        | "done_at"
+        | "late_minutes"
+        | "handed_back_reason"
+        | "seen_at"
+        | "confirmed_at"
+        | "is_lead",
         RunSheetItemAssigneeRelationships
       >;
       seating_plans: Table<
@@ -2180,6 +2562,27 @@ export type Database = {
           p_token_hash: string;
         };
         Returns: { outcome: "ok" | "unavailable" | "sold_out" | "busy"; claim_id: string | null; remaining: number }[];
+      };
+      /** Spec 55 §6: the caller's own "alerts on the day" switch (collaborator or planner). */
+      set_my_day_alerts: { Args: { p_wedding_id: string; p_on: boolean }; Returns: undefined };
+      /** Spec 53 Part C: the plan as one jsonb, and its hash (timestamps left out). */
+      seating_state: { Args: { p_event_id: string }; Returns: Record<string, unknown> };
+      seating_state_hash: { Args: { p_event_id: string }; Returns: string };
+      /** Puts a plan back; fails with SQLSTATE 40001 if the plan no longer hashes to `p_expected_hash`. */
+      restore_seating_state: {
+        Args: { p_event_id: string; p_payload: Record<string, unknown>; p_expected_hash?: string | null };
+        Returns: { tables: number; fixtures: number; seated: number; skipped: number; hash: string };
+      };
+      /** Spec 54 §10.2: a group member's claim on an open task, settled under a row lock. Service role only. */
+      claim_open_task: {
+        Args: {
+          p_wedding_id: string;
+          p_item_id: string;
+          p_vendor_id: string | null;
+          p_guest_id: string | null;
+          p_person_id: string | null;
+        };
+        Returns: "claimed" | "full" | "not_open" | "not_in_group" | "already";
       };
       /** Spec 40: makes a wedding, its collaborators and defaults in one transaction. Service role only. */
       create_wedding: {

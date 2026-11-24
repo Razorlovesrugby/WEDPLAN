@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { SeatingScreen } from "@/components/seating/seating-screen";
 import { parseColourBy } from "@/lib/seating/colour";
 import { signPath } from "@/lib/supabase/storage";
-import { getSeatingPlan, listSeatingSnapshots } from "@/server/queries/seating";
+import { getSeatingDayActivity, getSeatingPlan, listSeatingSnapshots } from "@/server/queries/seating";
 import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Seating" };
@@ -22,10 +22,31 @@ export default async function EventSeatingPage({
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
 
-  const [data, snapshots, collaborators] = await Promise.all([
+  if (!event.has_seating) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <nav className="text-sm text-muted">
+          <Link href="/events" className="hover:underline">
+            Events
+          </Link>
+        </nav>
+        <h1 className="font-serif text-2xl">{event.name} — seating</h1>
+        <p className="card p-6 text-sm">
+          Seating is off for this event.{" "}
+          <Link href="/events" className="underline">
+            Turn it on
+          </Link>{" "}
+          under Edit → What this event needs. Any plan you made before is kept.
+        </p>
+      </div>
+    );
+  }
+
+  const [data, snapshots, collaborators, dayActivity] = await Promise.all([
     getSeatingPlan(wedding.id, id),
     listSeatingSnapshots(wedding.id, id),
     getCollaborators(wedding.id),
+    getSeatingDayActivity(wedding.id),
   ]);
   // Signed here, not in the query: the print page and the CSV share the query and never draw the image.
   const backgroundUrl = data.plan?.background_path ? await signPath(data.plan.background_path) : null;
@@ -48,6 +69,7 @@ export default async function EventSeatingPage({
         timeZone={wedding.timezone}
         data={{ ...data, backgroundUrl }}
         snapshots={snapshots}
+        dayActivity={dayActivity}
         collaborators={collaborators.map((c) => ({ user_id: c.user_id, display_name: c.display_name, role: c.role }))}
         initialColourBy={parseColourBy(colour)}
       />

@@ -7,11 +7,14 @@
 
 import { sideLabel } from "@/lib/format";
 import type { GuestSide } from "@/lib/types/database";
+import { FIT_COLOURS, FIT_LABELS, type FitState } from "./fit";
 import type { SeatingGuest } from "./model";
 
 export type ColourBy =
   | { kind: "none" }
   | { kind: "side" }
+  /** Spec 53 Part G: how well each seated guest's seat suits them. */
+  | { kind: "fit" }
   | { kind: "tag"; tagId: string }
   | { kind: "question"; questionId: string };
 
@@ -32,6 +35,7 @@ export const NO_ANSWER_COLOUR = "#c9c4bb";
 /** `side`, `tag:<id>`, `q:<id>`, or anything else for none — the URL form. */
 export function parseColourBy(raw: string | null | undefined): ColourBy {
   if (raw === "side") return { kind: "side" };
+  if (raw === "fit") return { kind: "fit" };
   if (raw?.startsWith("tag:") && raw.length > 4) return { kind: "tag", tagId: raw.slice(4) };
   if (raw?.startsWith("q:") && raw.length > 2) return { kind: "question", questionId: raw.slice(2) };
   return { kind: "none" };
@@ -41,6 +45,8 @@ export function serialiseColourBy(c: ColourBy): string {
   switch (c.kind) {
     case "side":
       return "side";
+    case "fit":
+      return "fit";
     case "tag":
       return `tag:${c.tagId}`;
     case "question":
@@ -57,6 +63,8 @@ export type ColourContext = {
   questions: { id: string; label: string; options: string[] }[];
   /** questionId → guestId → the chosen option. A plain object so it crosses to the browser. */
   answers: Record<string, Record<string, string>>;
+  /** guestId → fit, computed on the client from the live plan (Part G). Absent for unseated guests. */
+  fit?: Record<string, FitState>;
 };
 
 export type ColourKeyEntry = { label: string; colour: string };
@@ -66,6 +74,8 @@ const SIDES: GuestSide[] = ["partner_a", "partner_b", "both", "other"];
 /** The key, in display order. Empty for `none`. */
 export function colourLegend(c: ColourBy, ctx: ColourContext): ColourKeyEntry[] {
   switch (c.kind) {
+    case "fit":
+      return (["green", "amber", "red"] as const).map((s) => ({ label: FIT_LABELS[s], colour: FIT_COLOURS[s] }));
     case "side":
       return [
         ...SIDES.map((s, i) => ({ label: sideLabel(s, ctx.collaborators), colour: PALETTE[i]! })),
@@ -98,6 +108,10 @@ export function guestColour(g: SeatingGuest, c: ColourBy, ctx: ColourContext): C
   if (legend.length === 0) return null;
   const fallback = legend[legend.length - 1]!;
   switch (c.kind) {
+    case "fit": {
+      const state = ctx.fit?.[g.id];
+      return state ? { label: FIT_LABELS[state], colour: FIT_COLOURS[state] } : null;
+    }
     case "side": {
       const i = g.side ? SIDES.indexOf(g.side) : -1;
       return i >= 0 ? legend[i]! : fallback;

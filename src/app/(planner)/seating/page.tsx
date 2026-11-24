@@ -11,7 +11,9 @@ export const metadata = { title: "Seating plans" };
  */
 export default async function SeatingPickerPage() {
   const wedding = await requireWedding();
-  const [events, withTables] = await Promise.all([getEvents(wedding.id), getEventIdsWithSeating(wedding.id)]);
+  const [allEvents, withTables] = await Promise.all([getEvents(wedding.id), getEventIdsWithSeating(wedding.id)]);
+  // Spec 51: only events with a seating plan switched on are offered.
+  const events = allEvents.filter((e) => e.has_seating);
 
   const planned = events.filter((e) => withTables.has(e.id));
   if (planned.length === 1) redirect(`/events/${planned[0]!.id}/seating`);
@@ -24,9 +26,9 @@ export default async function SeatingPickerPage() {
 
       {events.length === 0 ? (
         <p className="card p-8 text-center text-sm text-muted">
-          No events yet.{" "}
+          No event has a seating plan switched on.{" "}
           <Link href="/events" className="underline">
-            Add one first
+            Turn it on for an event
           </Link>
           .
         </p>

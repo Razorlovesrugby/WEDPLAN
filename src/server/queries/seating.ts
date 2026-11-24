@@ -10,6 +10,7 @@ import type {
   SeatingRule,
   SeatingTable,
 } from "@/lib/seating/model";
+import type { BlockedChair } from "@/lib/seating/model";
 import type { RsvpStatus } from "@/lib/types/database";
 
 export type SeatingPlanData = {
@@ -20,6 +21,8 @@ export type SeatingPlanData = {
   rules: SeatingRule[];
   /** Every active guest of the wedding, as seen from this event. */
   guests: SeatingGuest[];
+  /** Chairs taken out of use (spec 53 Part I). */
+  blocked: BlockedChair[];
   colour: ColourContext;
 };
 
@@ -35,8 +38,9 @@ export type SeatingPlanData = {
 export const getSeatingPlan = cache(async (weddingId: string, eventId: string): Promise<SeatingPlanData> => {
   const supabase = await createClient();
 
-  const [plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions] =
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins] =
     await Promise.all([
+      supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase
         .from("seating_tables")
@@ -56,7 +60,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
       supabase
         .from("guests")
         .select(
-          "id, household_id, first_name, last_name, preferred_name, age_band, side, dietary, accessibility, plus_one_for, households(display_name), guest_tags(tag_id), rsvps(event_id, status)",
+          "id, household_id, first_name, last_name, preferred_name, age_band, side, dietary, accessibility, plus_one_for, needs_highchair, uses_wheelchair, households(display_name), guest_tags(tag_id), rsvps(event_id, status)",
         )
         .eq("wedding_id", weddingId)
         .is("deleted_at", null),
@@ -75,9 +79,12 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
         .eq("scope", "guest")
         .eq("active", true)
         .order("sort_order"),
+      supabase.from("seating_chairs_blocked").select("table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
+      supabase.from("seating_checkins").select("guest_id, arrived_at, by_label").eq("wedding_id", weddingId).eq("event_id", eventId),
     ]);
 
   for (const [what, result] of [
+    ["the event", event],
     ["the room", plan],
     ["tables", tables],
     ["fixtures", fixtures],
@@ -88,6 +95,8 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     ["tags", tags],
     ["collaborators", collaborators],
     ["questions", questions],
+    ["blocked chairs", blocked],
+    ["arrivals", checkins],
   ] as const) {
     if (result.error) throw new Error(`Could not load ${what}: ${result.error.message}`);
   }
@@ -116,6 +125,10 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     }
   }
 
+  // Spec 51 §4.4: an event with replies off has no yeses to seat from, so
+  // everyone invited counts as coming.
+  const asksRsvp = event.data?.asks_rsvp ?? true;
+  const arrivedAt = new Map((checkins.data ?? []).map((c) => [c.guest_id, c.arrived_at]));
   const inviteByGuest = new Map((invites.data ?? []).map((i) => [i.guest_id, i]));
 
   const seatingGuests: SeatingGuest[] = (guests.data ?? []).map((g) => {
@@ -136,7 +149,10 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
       tagIds: (g.guest_tags ?? []).map((t: { tag_id: string }) => t.tag_id),
       invited: invite?.invited ?? false,
       excluded: invite?.excluded_from_counts ?? false,
-      rsvp: rsvp?.status ?? null,
+      rsvp: asksRsvp ? (rsvp?.status ?? null) : "yes",
+      needsHighchair: g.needs_highchair,
+      usesWheelchair: g.uses_wheelchair,
+      arrivedAt: arrivedAt.get(g.id) ?? null,
     };
   });
 
@@ -151,6 +167,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     })),
     rules: rules.data ?? [],
     guests: seatingGuests,
+    blocked: (blocked.data ?? []).map((b) => ({ tableId: b.table_id, seatIndex: b.seat_index })),
     colour: {
       collaborators: collaborators.data ?? [],
       tags: tags.data ?? [],
@@ -203,3 +220,44 @@ export const listSeatingSnapshots = cache(
     });
   },
 );
+
+export type SeatingDayActivity = {
+  id: string;
+  kind: string;
+  at: string;
+  by: string;
+  guestId: string | null;
+  table: string | null;
+  seat: number | null;
+  note: string | null;
+};
+
+/** Day-of arrivals, moves and walk-ins sent from day links, newest first, with the link's label (spec 53 Part I). */
+export const getSeatingDayActivity = cache(async (weddingId: string): Promise<SeatingDayActivity[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("day_activity")
+    .select("id, kind, payload, tapped_at, link_id")
+    .eq("wedding_id", weddingId)
+    .in("kind", ["seat_arrived", "seat_unarrived", "seat_moved", "seat_walk_in"])
+    .order("tapped_at", { ascending: false })
+    .limit(40);
+  if (error) throw new Error(`Could not load day-of activity: ${error.message}`);
+  const linkIds = [...new Set((data ?? []).map((a) => a.link_id).filter((x): x is string => !!x))];
+  const links = linkIds.length ? await supabase.from("day_links").select("id, label").in("id", linkIds) : { data: [], error: null };
+  if (links.error) throw new Error(`Could not load links: ${links.error.message}`);
+  const label = new Map((links.data ?? []).map((l) => [l.id, l.label]));
+  return (data ?? []).map((a) => {
+    const p = (a.payload ?? {}) as { guest_id?: string; table?: string; seat?: number | null; note?: string };
+    return {
+      id: a.id,
+      kind: a.kind,
+      at: a.tapped_at,
+      by: (a.link_id && label.get(a.link_id)) || "A day link",
+      guestId: p.guest_id ?? null,
+      table: p.table ?? null,
+      seat: p.seat ?? null,
+      note: p.note ?? null,
+    };
+  });
+});

@@ -1,6 +1,6 @@
 # Feature spec: The on-the-day master
 
-**Status: answered, not built.** Asked for as a spec (2026-11-23), as the
+**Status: built, session 61 (migration `0054`; see Build status at the end).** Asked for as a spec (2026-11-23), as the
 other half of spec 54. Every question is answered (§11); announcements, Go
 cues, escalation and the wider readiness check were added on 2026-11-24 from
 spec 54 §18's pass over the leading tools. Nothing is built until the planner
@@ -252,3 +252,17 @@ Every question took its recommendation.
 9. Typecheck, tests, SQL suite, build. On two real phones at once: a helper
    asks for help on their link, and the master vibrates, answers, and the
    helper sees the answer.
+
+## Build status (session 61)
+
+**Built:** migration `0054` (spec called it `0053`); `src/lib/day-master/` (`alerts`, `shift`, `summary`, `readiness`) with tests; `src/server/queries/day-master.ts`; `src/server/actions/day-master.ts`; `/day` in its three modes; "On the day" in the sidebar (and for planner logins); Live replacing Today on the phone tab bar on the wedding day.
+
+- **Alerts (§5.1):** Help (quick answers or text, Call, I'll take it, Dismiss), Handed back (Reassign, I'll do it), Not started (5 minutes after the start, at the start and red for a critical task; Call, Mark started, Dismiss), Running late (Shift the schedule, OK). A helper's photo shows as a thumbnail. Escalation after 3 minutes (help) or 15 minutes before the start (hand-back) moves the alert to the top, shows "Waiting N min" and sounds even with alerts off.
+- **Now / Up next / Timeline / Feed / People / Announcements:** each assignee's chip in spec 54's state words with Call and Text, step progress, the lead first, cues with Standby and a large Go, module cards (shot list and seating summaries), People with who hasn't tapped I'm here, announcements with seen and OK counts that open to names, feed filters (Problems, Notes, Progress, Photos, Shots, Seating).
+- **Shifting (§5.4):** +5 / +10 / +15 / Other, "this item and everything after it" or "just this item", a preview that lists what moves and what stays fixed, applied through spec 50's `shift_run_sheet_item`, with Undo and an offer to announce it.
+- **Readiness before the day, summary and CSV after (§7);** announce, answer questions, day lead and alerts on/off (§6).
+- **Live (§8):** refreshes every 10 seconds and on returning to the tab, "Updated N s ago", amber "Offline — showing 2:14".
+
+**Verified:** typecheck, unit tests, SQL suite, build; the Live screen rendered once in headless Chromium at desktop width with sample data. **Not verified:** the readiness and summary modes in a browser, a phone, sound and vibration, two phones at once (the spec's own acceptance check), live Supabase.
+
+**Different from the spec:** the master's own writes don't go through spec 54's offline queue (they show an error and don't queue); "Just this item" is allowed only when nothing starts after it (spec 50 moves followers with their predecessor); "Shift" doesn't yet offer a per-viewer announce to just those whose tasks moved (it pre-fills an announcement to everyone); there is no per-collaborator default-off beyond `setDayLead` turning the couple's alerts off.

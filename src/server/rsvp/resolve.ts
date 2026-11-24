@@ -48,6 +48,11 @@ export type RsvpContext = {
    * household-versus-override rule is computed.
    */
   invites: { guest_id: string; event_id: string }[];
+  /**
+   * Every invited pair, including events that don't ask for replies (spec 51).
+   * `invites` is the subset the form, the reply card and the actions work from.
+   */
+  eventInvites: { guest_id: string; event_id: string }[];
   questions: RsvpQuestionRow[];
   rsvps: RsvpRow[];
   answers: RsvpAnswerRow[];
@@ -133,14 +138,18 @@ export async function loadRsvpData(
   // exceptions on top, and it is the only thing that does.
   const { data: inviteRows } = await supabase
     .from("v_guest_event_invites")
-    .select("guest_id, event_id, invited")
+    .select("guest_id, event_id, invited, asks_rsvp")
     .eq("wedding_id", weddingId)
     .eq("household_id", householdId);
 
-  const invites = (inviteRows ?? [])
+  // `invited` already excludes events that aren't guest-facing (0049's view).
+  // An event that doesn't ask for replies stays in `events` and `eventInvites`
+  // as information, but is never offered in `invites` (spec 51 §4.4).
+  const eventInvites = (inviteRows ?? [])
     .filter((row) => row.invited)
-    .map((row) => ({ guest_id: row.guest_id, event_id: row.event_id }));
-  const invitedEventIds = [...new Set(invites.map((row) => row.event_id))];
+    .map((row) => ({ guest_id: row.guest_id, event_id: row.event_id, asks_rsvp: row.asks_rsvp }));
+  const invites = eventInvites.filter((row) => row.asks_rsvp).map(({ guest_id, event_id }) => ({ guest_id, event_id }));
+  const invitedEventIds = [...new Set(eventInvites.map((row) => row.event_id))];
 
   const [wedding, household, guests, events, questions, rsvps, answers] = await Promise.all([
     supabase
@@ -197,6 +206,9 @@ export async function loadRsvpData(
     // Narrowed to the guests still on the list: a soft-deleted guest keeps
     // their rows, and the form must not offer them.
     invites: invites.filter((row) => householdGuestIds.has(row.guest_id)),
+    eventInvites: eventInvites
+      .filter((row) => householdGuestIds.has(row.guest_id))
+      .map(({ guest_id, event_id }) => ({ guest_id, event_id })),
     questions: questions.data ?? [],
     // Narrowed to this household's own guests. The query above is scoped by
     // wedding and invited events, which is not the same thing.

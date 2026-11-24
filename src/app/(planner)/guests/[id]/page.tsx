@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GuestForm } from "@/components/guests/guest-form";
 import { HouseholdPicker } from "@/components/guests/household-picker";
+import { TasksOnTheDay } from "@/components/day-link/tasks-on-the-day";
 import { AnswerList } from "@/components/questions/answer-list";
 import { getGuest, listHouseholds } from "@/server/queries/guests";
 import { moveGuest } from "@/server/actions/guests";
@@ -114,6 +115,7 @@ export default async function GuestPage({ params }: { params: Promise<{ id: stri
             </div>
           </aside>
         </div>
+        <TasksOnTheDay weddingId={wedding.id} assignee={{ type: "guest", id }} timeZone={wedding.timezone} />
       </div>
     </div>
   );

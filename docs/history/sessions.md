@@ -4,6 +4,40 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 58 (no spec):** Supabase egress, on branch `claude/admiring-davinci-q406md`.
+The Free plan's 5 GB egress ran out (5.9 GB, almost all uncached); grace ends 13 Dec 2026.
+
+- **Cause, confirmed on live by the planner:** all 549 storage objects were `no-cache` (browser
+  PUTs to signed upload URLs sent no `cache-control`, and Storage defaults to it), and every render
+  signed a fresh URL, so no photo was served from cache. The Storage report showed one photo
+  signed twice 27s apart, both downloads cache misses.
+- **Fixed:** uploads now send `max-age=31536000` (`src/lib/storage-cache.ts`); `signPaths()`
+  reuses a batch's signed URLs for half their life via `unstable_cache`, checking the age itself
+  so a stale entry is never handed out. Token lifetimes unchanged (moodboard revocation still 1h).
+- **Existing objects:** `scripts/fix-cache-control.mjs` re-uploads them with the header (dry run
+  by default, `--apply` to write). Not run. Editing `storage.objects.metadata` in SQL is not a fix:
+  it changes the listing, not the header Storage serves.
+- **Check:** egress mid-cycle (~29 Nov); Pro is the fallback before 13 Dec.
+- **Verified:** typecheck, 1461 unit tests, build. **Not verified:** a browser, live egress, the
+  script against real storage.
+
+**Session 57 (spec 49):** RSVP answers, built on branch `claude/funny-goldberg-4u6zsj` (no PR).
+The planner found `rsvp_answers` empty although guests had answered a "do you need transport?"
+question, and asked for the fix, a way to see answers, and a check of everything else:
+
+- **Bug fixed: no RSVP question answer was ever saved.** The form's upserts named columns whose
+  only unique indexes were partial, so Postgres rejected every one (42P10) and the action ignored
+  the error. Migration **`0047` must be applied to live** before answers save; answers given
+  before then are gone and guests must answer again. **Rule: check every write's `error`.**
+- **Checked:** all 24 upserts in `src/` against the migrated schema (only these two were broken);
+  three user-facing unchecked writes fixed (coach seat cancel, guest photo removal, seat swap).
+  Spec 49 §11 lists what was left best-effort and why.
+- **Results:** a summary under each question on `/questions` (Yes 36 · No 19 · Left blank ·
+  Not replied yet), each number linking to `/questions/[id]/answers?answer=…`; an answers CSV
+  (`/api/export/answers`, also in the zip).
+- **Verified:** typecheck, 1424 unit tests, build, SQL suite (777 assertions), sample render at
+  1280px and iPhone 13. **Not verified:** live Supabase, real data, a real phone.
+
 **Session 56 (spec 48):** the phone experience, built on branch `claude/vibrant-bohr-xd2w8t`
 (no PR). The planner said the live app was poor on a phone (zooming, sideways scroll, Guests with
 no phone view, a bad bottom bar) and asked for it fixed, Apple-style. Read the spec's §2–§4:

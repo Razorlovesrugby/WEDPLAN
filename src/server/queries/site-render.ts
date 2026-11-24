@@ -247,7 +247,7 @@ export async function buildPersonalContext(
     (rsvp?.events ?? []).map((event) => [
       event.id,
       new Set(
-        (rsvp?.invites ?? [])
+        (rsvp?.eventInvites ?? [])
           .filter((row) => row.event_id === event.id)
           .map((row) => row.guest_id),
       ),

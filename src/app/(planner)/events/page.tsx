@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { EventsEditor } from "@/components/invitations/events-editor";
+import { EventTypesPanel } from "@/components/invitations/event-types-panel";
+import { getEventTypes } from "@/server/queries/event-types";
 import { listInvitations } from "@/server/queries/invitations";
 import { getEvents, getViewerKind, requireWedding } from "@/server/queries/wedding";
 import { journeyHref } from "@/lib/invitations/journey";
@@ -12,10 +14,13 @@ export default async function EventsPage() {
   // Who's invited lives under Invitations, which a planner login can't open
   // (spec 39), so only the couple gets the counts and the link (spec 42 §5.6).
   const isCouple = (await getViewerKind()) !== "planner";
-  const [events, invitations] = await Promise.all([
+  const [events, types, invitations] = await Promise.all([
     getEvents(wedding.id),
+    getEventTypes(wedding.id),
     isCouple ? listInvitations(wedding.id) : Promise.resolve([]),
   ]);
+  const usage: Record<string, number> = {};
+  for (const event of events) usage[event.type_id] = (usage[event.type_id] ?? 0) + 1;
   const invitedCount = (eventId: string) =>
     invitations.filter((row) => row.invitedEventIds.includes(eventId)).length;
 
@@ -26,13 +31,15 @@ export default async function EventsPage() {
         Times are the venue&rsquo;s local time ({wedding.timezone}), whoever is typing and wherever
         they are.
       </p>
-      {isCouple && events.length > 0 ? (
+      {isCouple && events.some((event) => event.guest_facing) ? (
         <section aria-labelledby="invited" className="card p-4 text-sm">
           <h2 id="invited" className="text-sm font-medium uppercase tracking-wide text-muted">
             Who&rsquo;s invited
           </h2>
           <ul className="mt-2 space-y-1">
-            {events.map((event) => (
+            {events
+              .filter((event) => event.guest_facing)
+              .map((event) => (
               <li key={event.id} className="flex flex-wrap items-baseline justify-between gap-2">
                 <span>{event.name}</span>
                 <Link href={journeyHref("invitation", "who")} className="underline">
@@ -43,7 +50,8 @@ export default async function EventsPage() {
           </ul>
         </section>
       ) : null}
-      <EventsEditor events={events} timeZone={wedding.timezone} />
+      <EventsEditor events={events} types={types} timeZone={wedding.timezone} />
+      <EventTypesPanel types={types} usage={usage} />
     </div>
   );
 }

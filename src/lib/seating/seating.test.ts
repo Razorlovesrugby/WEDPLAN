@@ -11,7 +11,7 @@ import {
   tableSize,
   type TableGeometryInput,
 } from "./geometry";
-import { compareBySurname, guestName, nextTableLabel, type SeatingGuest, type SeatingTable } from "./model";
+import { compareBySurname, guestName, nextTableLabel, takesAChair, type SeatingGuest, type SeatingTable } from "./model";
 import { defaultTrayMode, isAttending, trayHouseholds } from "./tray";
 import { computeWarnings, declinedSeatedGuestIds, occupancy, summarise, warningsByTable } from "./warnings";
 import { applyMove } from "./moves";
@@ -35,6 +35,9 @@ function guest(id: string, over: Partial<SeatingGuest> = {}): SeatingGuest {
     invited: true,
     excluded: false,
     rsvp: "yes",
+    needsHighchair: false,
+    usesWheelchair: false,
+    arrivedAt: null,
     ...over,
   };
 }
@@ -479,9 +482,33 @@ describe("listings", () => {
 
   it("builds CSV rows with 1-based chairs", () => {
     expect(seatingCsvRows("Reception", plan)).toEqual([
-      ["Reception", "Table 1", 2, "Ana Zed", "House ana", "adult", "", ""],
-      ["Reception", "Table 1", "", "Bo Able", "House bo", "infant", "", ""],
-      ["Reception", "Table 2", 1, "Cy Mid", "House cy", "adult", "Vegan", ""],
+      ["Reception", "Table 1", 2, "Ana Zed", "House ana", "adult", "", "", "", ""],
+      ["Reception", "Table 1", "", "Bo Able", "House bo", "infant", "", "", "", ""],
+      ["Reception", "Table 2", 1, "Cy Mid", "House cy", "adult", "Vegan", "", "", ""],
     ]);
+  });
+});
+
+describe("considerations (spec 53 Part F)", () => {
+  it("a wheelchair user takes no chair, like an infant", () => {
+    expect(takesAChair({ ageBand: "adult", usesWheelchair: true })).toBe(false);
+    expect(takesAChair({ ageBand: "adult", usesWheelchair: false })).toBe(true);
+    expect(takesAChair({ ageBand: "adult" })).toBe(true);
+  });
+  it("doesn't count a wheelchair place against the table's chairs", () => {
+    const t = table("t1", { capacity: 2 });
+    const guests = [guest("a"), guest("b", { usesWheelchair: true }), guest("c")];
+    const seats = guests.map((g) => ({ guestId: g.id, tableId: "t1", seatIndex: null }));
+    const o = occupancy([t], guests, seats).get("t1")!;
+    expect(o.chairsTaken).toBe(2);
+    expect(o.free).toBe(0);
+  });
+  it("lists highchairs and wheelchair places for the venue", () => {
+    const t = table("t1");
+    const guests = [guest("a", { needsHighchair: true }), guest("b", { usesWheelchair: true }), guest("c", { ageBand: "infant" })];
+    const seats = guests.map((g, i) => ({ guestId: g.id, tableId: "t1", seatIndex: i }));
+    const l = tableListings({ tables: [t], guests, assignments: seats })[0]!;
+    expect(l.highchairs).toBe(2);
+    expect(l.wheelchairs).toBe(1);
   });
 });

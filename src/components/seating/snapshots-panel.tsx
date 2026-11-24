@@ -24,7 +24,7 @@ export function SnapshotsPanel({
   snapshots: SeatingSnapshotSummary[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
 }) {
-  const { eventId, timeZone, refresh, setError } = useSeating();
+  const { eventId, timeZone, refresh, setError, track } = useSeating();
   const [name, setName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -34,12 +34,17 @@ export function SnapshotsPanel({
   };
   const when = (iso: string) =>
     new Intl.DateTimeFormat("en-NZ", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(iso));
+  const dayOf = (iso: string) =>
+    new Intl.DateTimeFormat("en-NZ", { weekday: "long", day: "numeric", month: "long", timeZone }).format(new Date(iso));
 
   return (
     <details className="card p-3 text-sm">
       <summary className="cursor-pointer font-medium">
-        Saved copies <span className="font-normal text-muted">({snapshots.length})</span>
+        History <span className="font-normal text-muted">({snapshots.length})</span>
       </summary>
+      <p className="mt-2 text-xs text-muted">
+        The plan keeps a version before the first change after half an hour of quiet (the newest 30 are kept). Named versions are kept until you delete them. Restoring replaces the plan for everyone, and can be undone.
+      </p>
       <form
         className="mt-3 flex flex-wrap gap-2"
         onSubmit={(e) => {
@@ -63,15 +68,18 @@ export function SnapshotsPanel({
           onChange={(e) => setName(e.target.value)}
         />
         <button type="submit" className="btn-primary" disabled={pending}>
-          Save a copy
+          Save this version…
         </button>
       </form>
       {notice ? <p className="mt-2 text-muted">{notice}</p> : null}
 
       {snapshots.length > 0 ? (
         <ul className="mt-3 divide-y divide-line">
-          {snapshots.map((s) => (
+          {snapshots.map((s, index) => (
             <li key={s.id} className="flex flex-wrap items-center gap-2 py-2">
+              {dayOf(s.createdAt) !== (index > 0 ? dayOf(snapshots[index - 1]!.createdAt) : null) ? (
+                <p className="w-full text-xs font-medium uppercase tracking-wide text-muted">{dayOf(s.createdAt)}</p>
+              ) : null}
               <div className="min-w-0 flex-1">
                 <p className="truncate">
                   {s.name}
@@ -90,7 +98,7 @@ export function SnapshotsPanel({
                 onClick={() => {
                   if (!window.confirm(`Put "${s.name}" back? The layout you have now is saved first, so you can undo this.`)) return;
                   startTransition(async () => {
-                    const r = await restoreSeatingSnapshot(s.id, eventId);
+                    const r = await track(`Restored "${s.name}"`, () => restoreSeatingSnapshot(s.id, eventId));
                     if (!r.ok) setError(r.error);
                     else
                       setNotice(

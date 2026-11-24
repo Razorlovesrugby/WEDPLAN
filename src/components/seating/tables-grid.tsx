@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useDroppable } from "@dnd-kit/core";
+import { createSeatingTables } from "@/server/actions/seating-workspace";
 import { createSeatingTable } from "@/server/actions/seating";
 import { compareBySurname, type SeatingTable } from "@/lib/seating/model";
 import type { SeatingTableShape } from "@/lib/types/database";
@@ -132,9 +133,10 @@ function TableCard({ table }: { table: SeatingTable }) {
 }
 
 function AddTable() {
-  const { eventId, refresh, setError } = useSeating();
+  const { eventId, refresh, setError, track } = useSeating();
   const [shape, setShape] = useState<SeatingTableShape>("round");
   const [capacity, setCapacity] = useState(8);
+  const [count, setCount] = useState(1);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -143,7 +145,10 @@ function AddTable() {
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {
-          const result = await createSeatingTable(eventId, { shape, capacity });
+          const result =
+            count > 1
+              ? await track(`Added ${count} tables`, () => createSeatingTables(eventId, { count, shape, capacity }))
+              : await track("Added a table", () => createSeatingTable(eventId, { shape, capacity }));
           if (!result.ok) setError(result.error);
           refresh();
         });
@@ -178,8 +183,12 @@ function AddTable() {
           className="field w-20"
         />
       </label>
+      <label className="text-sm">
+        <span className="mb-1 block text-xs text-muted">How many</span>
+        <input type="number" min={1} max={40} value={count} onChange={(e) => setCount(Math.max(1, Math.min(40, Number(e.target.value) || 1)))} className="field w-20" aria-label="How many tables" />
+      </label>
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Adding…" : "Add table"}
+        {pending ? "Adding…" : count > 1 ? `Add ${count} tables` : "Add table"}
       </button>
     </form>
   );

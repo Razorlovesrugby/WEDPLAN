@@ -52,7 +52,7 @@ const loadWedding = cache(async (): Promise<{ wedding: WeddingRow | null; kind: 
     .limit(1)
     .maybeSingle();
   if (basicsError) throw new Error(`Could not load wedding: ${basicsError.message}`);
-  if (basics) return { wedding: { ...basics, total_budget: null }, kind: "planner" };
+  if (basics) return { wedding: { ...basics, total_budget: null, day_before_email: true }, kind: "planner" };
 
   return { wedding: null, kind: null };
 });

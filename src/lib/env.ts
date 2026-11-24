@@ -63,6 +63,12 @@ const serverSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   EMAIL_REPLY_TO: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  // Web push for day links (spec 54 §6.15). All optional: without them the
+  // "Remind me" switch isn't offered and the rest works. Make a pair with
+  //   npx web-push generate-vapid-keys
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().optional(),
   // Pinterest. Both optional: the app must boot and every other feature must
   // work with them unset, the same treatment RESEND_API_KEY gets. Without
   // them, /settings shows "not configured" instead of a Connect button.

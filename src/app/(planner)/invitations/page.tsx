@@ -51,12 +51,15 @@ export default async function InvitationsPage({
 
   const wedding = await requireWedding();
   const supabase = await createClient();
-  const [allRows, events, { data: tags }, saveTheDate] = await Promise.all([
+  const [allRows, allEvents, { data: tags }, saveTheDate] = await Promise.all([
     listInvitations(wedding.id),
     getEvents(wedding.id),
     supabase.from("tags").select("id, name").eq("wedding_id", wedding.id).order("name"),
     getSaveTheDateContent(wedding.id),
   ]);
+
+  // Spec 51: "just us" events are never offered in who's invited.
+  const events = allEvents.filter((event) => event.guest_facing);
 
   const stage: Stage = isStage(params.stage) ? params.stage : status ? stageForStatus(status) : defaultStage(allRows);
   const step = isStep(params.step) ? params.step : status ? "track" : defaultStep(allRows, stage);

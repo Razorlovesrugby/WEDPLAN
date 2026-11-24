@@ -278,6 +278,16 @@ export async function assignGuests(
   if (targetError) return fail(targetError.message);
   if (!target) return fail("That table isn't part of this event");
   if (chair && chair.data >= target.capacity) return fail("That chair isn't at this table");
+  if (chair) {
+    const { data: blocked, error: blockedError } = await supabase
+      .from("seating_chairs_blocked")
+      .select("seat_index")
+      .eq("table_id", tableId)
+      .eq("seat_index", chair.data)
+      .maybeSingle();
+    if (blockedError) return fail(blockedError.message);
+    if (blocked) return fail("That chair is out of use");
+  }
 
   const { data: invited, error: inviteError } = await supabase
     .from("v_guest_event_invites")

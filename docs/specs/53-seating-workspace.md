@@ -1,6 +1,6 @@
 # Feature spec: A seating plan that's quicker to work in
 
-**Status: answered, not built.** Asked for after research into the leading
+**Status: built, session 61 (migration `0053`; see Build status at the end).** Asked for after research into the leading
 seating tools (2026-11-23). No auto-seating; undo and version history in;
 every other pattern in §3 in. Mockups: the "Shot list & seating mockups"
 canvas, rows 3 and 4 (the auto-seat board is marked "Not doing"). Every
@@ -229,3 +229,18 @@ Every question took its recommendation.
 5. Migration `0052` and Part I, the Seating module (needs spec 54).
 6. Typecheck, tests, SQL suite, build; an iPad for drag and undo; a phone for
    Part I.
+
+## Build status (session 61)
+
+**Built:** migration `0053` (spec called it `0052`); `src/lib/seating/template.ts` (Part A layout), `fit.ts` (Part G), `shortcuts.ts` undo/redo keys, with tests.
+
+- **C Undo / redo / versions:** every write on the seating screen runs through `track()`, which captures the whole plan before and after (`seating_state()`), and Undo/Redo restore it through `restore_seating_state()` with a hash guard, so an undo is refused ("Someone changed the plan since") if anything changed in between. 100 steps, cleared on reload, Cmd/Ctrl+Z and Shift+Cmd+Z / Ctrl+Y, toolbar buttons with the last action named. Automatic versions are taken before the first change after 30 quiet minutes; the newest 30 are kept; History groups by day and keeps "Save this version…".
+- **D / E:** tap an empty chair to search unseated guests (households with "Seat all N" and "Just Ana"); "Select several" with checkboxes and Shift-range, "Seat N at…" leaving whoever didn't fit selected; search finds seated guests with their table and rings their chair; "N hidden by the filter. Show all".
+- **A / B:** "Set up the room" on an empty plan with a live preview and one undoable step; "+ Tables" with a count, Duplicate, and renumbering that swaps two labels.
+- **F:** `needs_highchair` / `uses_wheelchair` on guests (a wheelchair user takes no chair), markers, listings and the CSV; a Show menu (names on chairs, seat numbers), remembered per device.
+- **G / H:** Colour by Fit with counts; "N people aren't seated yet — see who" above Print & share.
+- **I:** the Seating module on day links (find a seat, Arrived, move to a spare chair, walk-in as a reserved seat with a note), blocked chairs (set from the chair picker), arrival ticks and "86 of 112 here" on the couple's plan, 15-second refresh, and an On the day list with the link's label.
+
+**Verified:** typecheck, unit tests, SQL suite (910 assertions incl. the undo guard), build. **Not verified:** a browser (none of the seating changes has been rendered), an iPad for drag and undo, a phone for the module, live Supabase.
+
+**Different from the spec:** undo is whole-plan, so it is refused if anything changed (not just the same guest or table); "Show" and meal colours apply to the table drawer's chairs, not yet the Room view or the floor-plan print; blocked chairs aren't drawn on the Room view; a link's tab bar cap rose from four to five so the shot list's three tabs and seating's one both fit.

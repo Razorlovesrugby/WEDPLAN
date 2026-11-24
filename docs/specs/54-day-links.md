@@ -1,6 +1,6 @@
 # Feature spec: Day links — a live page for everyone with a job on the day
 
-**Status: answered, not built.** Asked for as a
+**Status: first part built (session 60, migration 0050); the rest is not built.** See "Build status" below. Asked for as a
 spec (2026-11-23). The first two rounds are answered (§15, §17). A pass
 against the leading event-staffing and day-of tools (§18) added
 confirmations, check-in, announcements, open tasks, good-to-know, reminders
@@ -843,3 +843,21 @@ Every question took its recommendation.
 9. **The day-before email:** on by default for helpers with an email, sent at
    6 pm in the wedding's timezone by the same `pg_cron` job (§6.15). The
    couple can turn it off.
+
+## Build status (session 60)
+
+**Built** (typechecked, unit-tested, SQL-suite tested, `npm run build`; the helper page was rendered once in headless Chromium at 390 px in light and dark with sample data; never run on live, on a real phone, or with real email/push):
+
+- Migrations `0050` and `0051` (0051 holds the rest of §11; specs 52, 53 and 55 move up one migration number).
+- `src/lib/day-links/`: `state`, `my-day` (incl. cues), `tint`, `offline-queue`, `photo`, `reminders`, `modules`, `initials`, with tests; `src/lib/run-sheet/suggested-tasks.ts`.
+- Helper page `/d/[token]`: first open, My day, Now/Next up/Earlier today, task screen, Start/Done/Undo, Running late, Need help, Can't do it (with a suggested replacement from their group), Add a note (a question before the day), steps, bring list, Got it, I'm here, contacts, Good to know, announcements (important ones stay pinned until OK), Can you help? (open tasks), lead text, cues (Standby countdown, Go now, 3-second refresh, vibration), photos both ways (couple's reference photos with a full-screen viewer; helper photos on Done, Need help and notes, shrunk to 1600 px JPEG on the phone, "Done — add a photo" when asked), the offline queue with its strip (taps and photos kept on the device and sent in order), a service worker that keeps the last page and shows push reminders, the installable manifest and initials icon, opt-in "Remind me 10 minutes before", the tab bar and module slot.
+- Couple's side: `/run-sheet/links` (links, email, phone/email in place, extend, See what they see, day contacts, Good to know with reordering, groups, announcements with who has seen/OK'd, cue Go/Reset, needs-someone list, help requests and questions, the day-before email switch, module switches), the print sheet, the People view on `/run-sheet`, "Assign someone to several tasks", the item editor's helper section (instructions, steps, bring list, address, contact, must-not-slip, photo on done, cue, lead, open to a group, reference photos, suggested tasks, groups, link state and Make their link), "Tasks on the day" on guest and vendor pages, phone/email when adding a helper.
+- `/api/cron/day-links` (day-before email at 6 pm wedding time, 10-minute push, idempotent through `day_reminder_log`) and `scripts/ensure-day-cron.mjs`.
+
+**You need to do:** apply `0050`/`0051`; generate VAPID keys (`npx web-push generate-vapid-keys`) and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (without them the Remind-me switch isn't shown); run `node scripts/ensure-day-cron.mjs` with `SUPABASE_DB_URL`, `SITE_URL`, `CRON_SECRET` (needs `pg_cron` and `pg_net`; the secret is stored in the job's SQL); run `scripts/ensure-bucket.mjs` if photos' bucket doesn't exist.
+
+**Still not done:** the module registry is empty until specs 52 and 53 add their modules (the shell, tab bar, per-link switches and `opens_module` are ready); "Tasks on the day" isn't on a page for helpers added as people (the People view and Day links screen cover them); a task's contact can only be a day contact, not another assignee on the task; the email chip menu is a "Make their link" line in the editor, not a full menu.
+
+**Deviations:** saving a task's helper content is a second call after the item's own save, not one transaction. Audit rows for a helper's taps show `actor_kind = 'public'` but not the link's label. "Changed" shows the badge without "was 1:45, now 2:00". A task opened to a group closes to claims when its places are used up; deleting the group leaves the places count but no group. Offline, a tap is shown at once and sent later; claiming an open task is not queued, because two phones could race for it.
+
+**Email removed (session 61):** the planner doesn't use email, so the "Send by email" button, the link email, the day-before email and its on/off switch were taken out. Reminders are the opt-in 10-minute push only. `weddings.day_before_email` (migration `0051`) stays in the schema, unused. Phone and email on `people` (§10.7) are unchanged, as plain contact details.

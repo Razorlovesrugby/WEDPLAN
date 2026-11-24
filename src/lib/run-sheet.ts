@@ -33,9 +33,40 @@ export type RunSheetAssignee = {
   type: RunSheetAssigneeType;
   id: string;
   label: string;
+  /** Marked the lead of the task they're on (spec 54 §10.2). Only set on an item's own assignees. */
+  isLead?: boolean;
 };
 
-export type RunSheetItem = RunSheetItemView & { assignees: RunSheetAssignee[] };
+/** What a task holds for the people helping (spec 54 §10.1). Separate from the couple's private notes. */
+export type HelperContent = {
+  instructions: string | null;
+  address: string | null;
+  critical: boolean;
+  contactId: string | null;
+  steps: string[];
+  bring: string[];
+  photoOnDone: boolean;
+  isCue: boolean;
+  cueCalledAt: string | null;
+  opensModule: string | null;
+  openGroupId: string | null;
+  openPlaces: number | null;
+  files: { id: string; url: string | null; mime: string; caption: string | null }[];
+};
+
+/** A saved group of helpers (spec 54 §10.2): `memberKeys` are `type:id` assignee keys. */
+export type HelperGroup = { id: string; name: string; memberKeys: string[] };
+
+export type RunSheetItem = RunSheetItemView & { assignees: RunSheetAssignee[]; helper: HelperContent };
+
+/** Up to 12 steps and 12 bring items per task (§11). One per line, blanks dropped. */
+export const MAX_STEPS = 12;
+export function linesOf(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 // ---------------------------------------------------------------------------
 // Overlap

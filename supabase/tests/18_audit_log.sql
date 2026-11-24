@@ -295,7 +295,14 @@ declare
     'list_templates',        -- shared across weddings, no wedding_id
     'household_slug_aliases', -- derived from a household's name
     'seating_snapshots',     -- itself a saved copy; auditing it would duplicate the payload
-    'planner_table_access'   -- static registry written only by migration; closed to every session
+    'planner_table_access',  -- static registry written only by migration; closed to every session
+    'day_activity',          -- its own append-only record (spec 54 §11)
+    'day_link_devices',      -- which phones opened a link; bookkeeping
+    'run_sheet_step_ticks',  -- a helper's own tick, already an activity row
+    'helper_group_members',  -- membership of a group; the group itself is audited
+    'day_announcement_reads', -- a helper's own "seen"/"OK", bookkeeping
+    'day_push_subscriptions', -- a credential
+    'day_reminder_log'       -- send bookkeeping
   ];
 begin
   select string_agg(c.relname, ', ' order by c.relname) into v_missing
