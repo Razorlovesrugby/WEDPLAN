@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildTemplate, planRenumber, type TemplateInput } from "@/lib/seating/template";
 import { nextTableLabel } from "@/lib/seating/model";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
-import { firstSpaceOf, resolveLayout } from "@/server/seating-layout";
+import { resolveLayout, resolveSpace } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -135,6 +135,7 @@ export async function applySeatingTemplate(
   eventId: string,
   input: Omit<TemplateInput, "room">,
   layoutId?: string,
+  spaceId?: string,
 ): Promise<ActionResult<{ tables: number; fixtures: number }>> {
   const wedding = await requireWedding();
   const parsed = templateSchema.safeParse(input);
@@ -148,19 +149,22 @@ export async function applySeatingTemplate(
   const supabase = await createClient();
   const [existing, space] = await Promise.all([
     supabase.from("seating_tables").select("id", { count: "exact", head: true }).eq("layout_id", shown.layout.id).eq("wedding_id", wedding.id),
-    firstSpaceOf(wedding.id, shown.layout.id),
+    resolveSpace(wedding.id, shown.layout.id, spaceId),
   ]);
   if (existing.error) return fail(existing.error.message);
   if (space.error) return fail(space.error.message);
   if ((existing.count ?? 0) > 0) return fail("This plan already has tables. Use + Tables to add more.");
 
-  const layout = buildTemplate({ ...parsed.data, room: { widthCm: space.data?.room_width_cm ?? 2000, depthCm: space.data?.room_depth_cm ?? 1500 } });
+  if (!space.data) return fail("That room isn't part of this layout");
+  const spaceKey = space.data.id;
+  const layout = buildTemplate({ ...parsed.data, room: { widthCm: space.data.room_width_cm ?? 2000, depthCm: space.data.room_depth_cm ?? 1500 } });
   if (layout.tables.length > 0) {
     const { error } = await supabase.from("seating_tables").insert(
       layout.tables.map((t, i) => ({
         wedding_id: wedding.id,
         event_id: eventId,
         layout_id: shown.layout.id,
+        space_id: spaceKey,
         label: t.label,
         shape: t.shape,
         capacity: t.capacity,
@@ -178,6 +182,7 @@ export async function applySeatingTemplate(
         wedding_id: wedding.id,
         event_id: eventId,
         layout_id: shown.layout.id,
+        space_id: spaceKey,
         kind: f.kind,
         label: f.label,
         pos_x_cm: f.pos_x_cm,
@@ -202,7 +207,7 @@ const bulkSchema = z.object({
 });
 
 /** "6 rounds of 10": added in free space near the centre of the room. */
-export async function createSeatingTables(eventId: string, input: z.input<typeof bulkSchema>, layoutId?: string): Promise<ActionResult<{ added: number }>> {
+export async function createSeatingTables(eventId: string, input: z.input<typeof bulkSchema>, layoutId?: string, spaceId?: string): Promise<ActionResult<{ added: number }>> {
   const wedding = await requireWedding();
   const parsed = bulkSchema.safeParse(input);
   if (!parsed.success) return fail("Pick 1 to 40 tables, with 1 to 60 seats each");
@@ -211,17 +216,19 @@ export async function createSeatingTables(eventId: string, input: z.input<typeof
   if (!shown.ok) return fail(shown.error);
   const supabase = await createClient();
   const [tables, space] = await Promise.all([
-    supabase.from("seating_tables").select("label, sort_order, pos_x_cm, pos_y_cm").eq("layout_id", shown.layout.id).eq("wedding_id", wedding.id),
-    firstSpaceOf(wedding.id, shown.layout.id),
+    supabase.from("seating_tables").select("label, sort_order, pos_x_cm, pos_y_cm, space_id").eq("layout_id", shown.layout.id).eq("wedding_id", wedding.id),
+    resolveSpace(wedding.id, shown.layout.id, spaceId),
   ]);
   if (tables.error) return fail(tables.error.message);
   if (space.error) return fail(space.error.message);
+  if (!space.data) return fail("That room isn't part of this layout");
 
   const labels = (tables.data ?? []).map((t) => t.label);
   let sort = Math.max(0, ...(tables.data ?? []).map((t) => t.sort_order));
   const w = space.data?.room_width_cm ?? 2000;
   const d = space.data?.room_depth_cm ?? 1500;
-  const placed = (tables.data ?? []).filter((t) => t.pos_x_cm !== null && t.pos_y_cm !== null);
+  // Where the next row starts depends only on this room's tables.
+  const placed = (tables.data ?? []).filter((t) => t.space_id === space.data!.id && t.pos_x_cm !== null && t.pos_y_cm !== null);
   const step = 320;
   const perRow = Math.max(1, Math.floor((w - 300) / step));
   const originY = placed.length ? Math.max(...placed.map((t) => t.pos_y_cm!)) + step : d / 2 - step;
@@ -236,6 +243,7 @@ export async function createSeatingTables(eventId: string, input: z.input<typeof
       wedding_id: wedding.id,
       event_id: eventId,
       layout_id: shown.layout.id,
+      space_id: space.data!.id,
       label,
       shape: parsed.data.shape,
       capacity: parsed.data.capacity,
@@ -332,7 +340,7 @@ export async function setGuestConsiderations(guestId: string, fields: { needsHig
 export async function setChairBlocked(eventId: string, tableId: string, seatIndex: number, blocked: boolean): Promise<ActionResult> {
   const wedding = await requireWedding();
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
-  const chair = z.number().int().min(0).max(59).safeParse(seatIndex);
+  const chair = z.number().int().min(0).max(399).safeParse(seatIndex);
   if (!chair.success || !uuid.safeParse(tableId).success) return fail("That chair doesn't exist");
   const supabase = await createClient();
   if (blocked) {
@@ -365,6 +373,44 @@ export async function setSeatingColourBy(eventId: string, raw: string): Promise<
     .from("seating_plans")
     .upsert({ wedding_id: wedding.id, event_id: eventId, colour_by: colour === "" ? null : colour }, { onConflict: "event_id" });
   if (error) return fail(error.message);
+  revalidate(eventId);
+  return ok(undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Declined guests who still have a seat (spec 57 A.2)
+// ---------------------------------------------------------------------------
+
+/** "Free the seat": the guest goes back to nobody's table. Only ever on a click. */
+export async function freeDeclinedSeat(eventId: string, guestId: string, layoutId?: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!uuid.safeParse(guestId).success || !(await eventBelongs(wedding.id, eventId))) return fail("That guest isn't on the plan");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const supabase = await createClient();
+  const { error } = await supabase.from("seat_assignments").delete().eq("wedding_id", wedding.id).eq("layout_id", layout.layout.id).eq("guest_id", guestId);
+  if (error) return fail(error.message);
+  revalidate(eventId);
+  await revalidateGuestPagesIfRevealed(eventId);
+  return ok(undefined);
+}
+
+/** "Keep for now": the card stays hidden until this guest's reply changes again. */
+export async function keepDeclinedSeat(eventId: string, guestId: string, layoutId?: string): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!uuid.safeParse(guestId).success || !(await eventBelongs(wedding.id, eventId))) return fail("That guest isn't on the plan");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("seat_assignments")
+    .update({ decline_kept_at: new Date().toISOString() })
+    .eq("wedding_id", wedding.id)
+    .eq("layout_id", layout.layout.id)
+    .eq("guest_id", guestId)
+    .select("guest_id");
+  if (error) return fail(error.message);
+  if (!data || data.length === 0) return fail("That guest isn't on the plan any more");
   revalidate(eventId);
   return ok(undefined);
 }

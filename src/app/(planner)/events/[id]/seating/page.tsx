@@ -13,10 +13,10 @@ export default async function EventSeatingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ colour?: string; layout?: string }>;
+  searchParams: Promise<{ colour?: string; layout?: string; space?: string }>;
 }) {
   const { id } = await params;
-  const { colour, layout } = await searchParams;
+  const { colour, layout, space } = await searchParams;
   const wedding = await requireWedding();
   const events = await getEvents(wedding.id);
   const event = events.find((e) => e.id === id);
@@ -42,7 +42,7 @@ export default async function EventSeatingPage({
     );
   }
 
-  const data = await getSeatingPlan(wedding.id, id, layout);
+  const data = await getSeatingPlan(wedding.id, id, layout, space);
   const [snapshots, collaborators, dayActivity] = await Promise.all([
     listSeatingSnapshots(wedding.id, id, data.layoutId),
     getCollaborators(wedding.id),

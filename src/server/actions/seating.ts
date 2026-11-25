@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createUploadUrl, removePaths } from "@/lib/supabase/storage";
-import { calibrateRoom, normaliseDegrees } from "@/lib/seating/geometry";
+import { calibrateRoom, normaliseDegrees, readSegments } from "@/lib/seating/geometry";
 import { nextTableLabel } from "@/lib/seating/model";
 import { zonedInputToUtc } from "@/lib/timezone";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
-import { firstSpaceOf, resolveLayout } from "@/server/seating-layout";
+import { resolveLayout, resolveSpace } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -18,7 +18,7 @@ import { fail, ok, type ActionResult } from "./result";
  */
 
 const uuid = z.string().uuid();
-const shapeSchema = z.enum(["round", "long", "square", "head", "sweetheart", "oval", "half_moon", "serpentine"]);
+const shapeSchema = z.enum(["round", "long", "square", "head", "sweetheart", "oval", "half_moon", "serpentine", "rows", "banquet"]);
 const fixtureKindSchema = z.enum([
   "dance_floor",
   "bar",
@@ -31,6 +31,23 @@ const fixtureKindSchema = z.enum([
   "photo_booth",
   "buffet",
   "other",
+  "lounge",
+  "kids_area",
+  "floral_arch",
+  "garland",
+  "aisle_flowers",
+  "candles",
+  "plant",
+  "sign",
+  "lantern",
+  "drape",
+  "marquee",
+  "tree",
+  "path",
+  "pool",
+  "garden_bed",
+  "slope",
+  "custom",
 ]);
 
 function revalidate(eventId: string) {
@@ -68,25 +85,44 @@ async function ensurePlan(weddingId: string, eventId: string): Promise<string | 
 const tableFieldsSchema = z.object({
   label: z.string().trim().min(1, "Give the table a name").max(60),
   shape: shapeSchema,
-  capacity: z.coerce.number().int().min(1, "At least one seat").max(60, "Sixty seats at most"),
-  reserved_seats: z.coerce.number().int().min(0).max(60).default(0),
+  capacity: z.coerce.number().int().min(1, "At least one seat").max(400, "Too many seats for one table"),
+  reserved_seats: z.coerce.number().int().min(0).max(400).default(0),
   reserved_note: z.string().trim().max(200).optional(),
   ends_seated: z.boolean().default(false),
   accessible: z.boolean().default(false),
   notes: z.string().trim().max(1000).optional(),
   width_cm: z.coerce.number().int().min(40).max(2000).nullable().optional(),
   length_cm: z.coerce.number().int().min(40).max(2000).nullable().optional(),
+  // Ceremony rows and banquet runs (spec 57 A.3); left out, they stay as they are.
+  rows_count: z.coerce.number().int().min(1).max(100).optional(),
+  aisle_cm: z.coerce.number().int().min(0).max(1000).optional(),
+  segments: z.unknown().optional(),
 });
 
 export async function createSeatingTable(
   eventId: string,
-  fields: { shape?: string; capacity?: number; label?: string; pos_x_cm?: number; pos_y_cm?: number },
+  fields: {
+    shape?: string;
+    capacity?: number;
+    label?: string;
+    pos_x_cm?: number;
+    pos_y_cm?: number;
+    /** A cocktail table is one place, marked reserved, so it has no seats to fill. */
+    reserved_seats?: number;
+    rows_count?: number;
+    aisle_cm?: number;
+    segments?: unknown;
+  },
   layoutId?: string,
+  spaceId?: string,
 ): Promise<ActionResult<{ id: string; label: string }>> {
   const wedding = await requireWedding();
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
+  if (space.error) return fail(space.error.message);
+  if (!space.data) return fail("That room isn't part of this layout");
 
   const supabase = await createClient();
   const { data: existing, error: readError } = await supabase
@@ -97,7 +133,8 @@ export async function createSeatingTable(
   if (readError) return fail(readError.message);
 
   const shape = shapeSchema.catch("round").parse(fields.shape);
-  const capacity = z.coerce.number().int().min(1).max(60).catch(shape === "head" ? 6 : shape === "sweetheart" ? 2 : 8).parse(fields.capacity ?? undefined);
+  const capacity = z.coerce.number().int().min(1).max(shape === "rows" || shape === "banquet" ? 400 : 60).catch(shape === "head" ? 6 : shape === "sweetheart" ? 2 : shape === "rows" ? 40 : shape === "banquet" ? 20 : 8).parse(fields.capacity ?? undefined);
+  const segments = shape === "banquet" ? readSegments(fields.segments) : [];
   const label = fields.label?.trim() || nextTableLabel((existing ?? []).map((t) => t.label));
   const sortOrder = Math.max(0, ...(existing ?? []).map((t) => t.sort_order)) + 1;
   const placed = Number.isFinite(fields.pos_x_cm) && Number.isFinite(fields.pos_y_cm);
@@ -108,12 +145,18 @@ export async function createSeatingTable(
       wedding_id: wedding.id,
       event_id: eventId,
       layout_id: layout.layout.id,
+      space_id: space.data.id,
       label: label.slice(0, 60),
       shape,
       capacity,
       sort_order: sortOrder,
       pos_x_cm: placed ? Math.round(fields.pos_x_cm!) : null,
       pos_y_cm: placed ? Math.round(fields.pos_y_cm!) : null,
+      reserved_seats: Math.max(0, Math.min(capacity, Math.round(fields.reserved_seats ?? 0))),
+      // The database insists rows have a row count and nothing else does.
+      rows_count: shape === "rows" ? z.coerce.number().int().min(1).max(100).catch(4).parse(fields.rows_count ?? undefined) : null,
+      aisle_cm: shape === "rows" ? z.coerce.number().int().min(0).max(1000).catch(120).parse(fields.aisle_cm ?? undefined) : null,
+      segments: shape === "banquet" && segments.length > 0 ? segments : null,
     })
     .select("id, label")
     .single();
@@ -136,6 +179,9 @@ export async function updateSeatingTable(
   const wedding = await requireWedding();
   const parsed = tableFieldsSchema.safeParse(fields);
   if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
+  if (parsed.data.capacity > 60 && parsed.data.shape !== "rows" && parsed.data.shape !== "banquet") {
+    return fail("Sixty seats at most, except for ceremony rows and banquet runs", { capacity: ["Sixty seats at most"] });
+  }
   if (parsed.data.reserved_seats > parsed.data.capacity) {
     return fail("Reserved seats can't be more than the table's seats", {
       reserved_seats: ["More than the table seats"],
@@ -143,9 +189,24 @@ export async function updateSeatingTable(
   }
 
   const supabase = await createClient();
+  // Rows need a row count and banquet runs their pieces; every other shape has neither.
+  const { data: current, error: currentError } = await supabase
+    .from("seating_tables")
+    .select("rows_count, aisle_cm, segments")
+    .eq("id", tableId)
+    .eq("wedding_id", wedding.id)
+    .maybeSingle();
+  if (currentError) return fail(currentError.message);
+  if (!current) return fail("That table doesn't exist");
+  const isRows = parsed.data.shape === "rows";
+  const isBanquet = parsed.data.shape === "banquet";
+  const segments = isBanquet ? (parsed.data.segments !== undefined ? readSegments(parsed.data.segments) : readSegments(current.segments)) : [];
   const { error } = await supabase
     .from("seating_tables")
     .update({
+      rows_count: isRows ? (parsed.data.rows_count ?? current.rows_count ?? 4) : null,
+      aisle_cm: isRows ? (parsed.data.aisle_cm ?? current.aisle_cm ?? 120) : null,
+      segments: isBanquet && segments.length > 0 ? segments : null,
       label: parsed.data.label,
       shape: parsed.data.shape,
       capacity: parsed.data.capacity,
@@ -209,16 +270,19 @@ export async function deleteSeatingTable(tableId: string, eventId: string): Prom
 export async function moveSeatingTable(
   tableId: string,
   eventId: string,
-  position: { x: number | null; y: number | null; rotation?: number },
+  position: { x: number | null; y: number | null; rotation?: number; spaceId?: string },
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const placed = position.x !== null && position.y !== null;
   if (placed && (!Number.isFinite(position.x) || !Number.isFinite(position.y))) return fail("That's not a position");
 
   const supabase = await createClient();
+  // Placing a table in a room puts it in THAT room: the same layout's other space (the composite key refuses a space of another layout).
+  const moveSpace = placed && position.spaceId && uuid.safeParse(position.spaceId).success ? { space_id: position.spaceId } : {};
   const { error } = await supabase
     .from("seating_tables")
     .update({
+      ...moveSpace,
       pos_x_cm: placed ? Math.round(position.x!) : null,
       pos_y_cm: placed ? Math.round(position.y!) : null,
       ...(position.rotation === undefined ? {} : { rotation_deg: normaliseDegrees(position.rotation) }),
@@ -255,7 +319,7 @@ export async function assignGuests(
   const ids = z.array(uuid).min(1).max(300).safeParse(guestIds);
   if (!ids.success) return fail("Nobody to move");
   if (tableId !== null && !uuid.safeParse(tableId).success) return fail("That table doesn't exist");
-  const chair = seatIndex === undefined || seatIndex === null ? null : z.number().int().min(0).max(59).safeParse(seatIndex);
+  const chair = seatIndex === undefined || seatIndex === null ? null : z.number().int().min(0).max(399).safeParse(seatIndex);
   if (chair && !chair.success) return fail("That chair doesn't exist");
   if (chair && ids.data.length !== 1) return fail("One person per chair");
 
@@ -472,6 +536,7 @@ export async function updateSeatingRoom(
   eventId: string,
   fields: { room_width_cm: number; room_depth_cm: number },
   layoutId?: string,
+  spaceId?: string,
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const dims = z
@@ -485,7 +550,7 @@ export async function updateSeatingRoom(
 
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
-  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data) return fail("This layout has no room yet");
   const supabase = await createClient();
@@ -506,11 +571,12 @@ export async function calibrateSeatingRoom(
   b: { x: number; y: number },
   realCm: number,
   layoutId?: string,
+  spaceId?: string,
 ): Promise<ActionResult<{ room_width_cm: number; room_depth_cm: number }>> {
   const wedding = await requireWedding();
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
-  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data?.background_w_px || !space.data.background_h_px) return fail("Upload the venue's floor plan first");
 
@@ -571,6 +637,7 @@ export async function confirmSeatingBackground(
   eventId: string,
   fields: { path: string; width: number; height: number },
   layoutId?: string,
+  spaceId?: string,
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const prefix = `seating/${wedding.id}/${eventId}/`;
@@ -582,7 +649,7 @@ export async function confirmSeatingBackground(
 
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
-  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data) return fail("This layout has no room yet");
   const supabase = await createClient();
@@ -611,11 +678,11 @@ export async function confirmSeatingBackground(
   return ok(undefined);
 }
 
-export async function removeSeatingBackground(eventId: string, layoutId?: string): Promise<ActionResult> {
+export async function removeSeatingBackground(eventId: string, layoutId?: string, spaceId?: string): Promise<ActionResult> {
   const wedding = await requireWedding();
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
-  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data?.background_path) return ok(undefined);
 
@@ -638,8 +705,22 @@ export async function removeSeatingBackground(eventId: string, layoutId?: string
 
 export async function createSeatingFixture(
   eventId: string,
-  fields: { kind: string; pos_x_cm: number; pos_y_cm: number; width_cm: number; depth_cm: number },
+  fields: {
+    kind: string;
+    pos_x_cm: number;
+    pos_y_cm: number;
+    width_cm: number;
+    depth_cm: number;
+    label?: string | null;
+    /** Décor: how many this one placed item stands for. */
+    quantity?: number;
+    vendor_id?: string | null;
+    /** A kind `custom` item is one of the couple's own; a kind `marquee` can name a marquee template. */
+    custom_item_id?: string | null;
+    marquee_id?: string | null;
+  },
   layoutId?: string,
+  spaceId?: string,
 ): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   const parsed = z
@@ -649,12 +730,23 @@ export async function createSeatingFixture(
       pos_y_cm: z.number().finite(),
       width_cm: z.number().int().min(20).max(5000),
       depth_cm: z.number().int().min(20).max(5000),
+      label: z.string().trim().max(60).nullable().optional(),
+      quantity: z.number().int().min(1).max(9999).optional(),
+      vendor_id: uuid.nullable().optional(),
+      custom_item_id: uuid.nullable().optional(),
+      marquee_id: uuid.nullable().optional(),
     })
     .safeParse(fields);
   if (!parsed.success) return fail("That doesn't fit in the room");
+  // The database insists a custom item is named and nothing else names one.
+  if ((parsed.data.kind === "custom") !== Boolean(parsed.data.custom_item_id)) return fail("Pick which of your own items that is");
+  if (parsed.data.marquee_id && parsed.data.kind !== "marquee") return fail("Only a marquee can name a marquee template");
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
+  if (space.error) return fail(space.error.message);
+  if (!space.data) return fail("That room isn't part of this layout");
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -663,11 +755,17 @@ export async function createSeatingFixture(
       wedding_id: wedding.id,
       event_id: eventId,
       layout_id: layout.layout.id,
+      space_id: space.data.id,
       kind: parsed.data.kind,
       pos_x_cm: Math.round(parsed.data.pos_x_cm),
       pos_y_cm: Math.round(parsed.data.pos_y_cm),
       width_cm: parsed.data.width_cm,
       depth_cm: parsed.data.depth_cm,
+      label: parsed.data.label || null,
+      quantity: parsed.data.quantity ?? 1,
+      vendor_id: parsed.data.vendor_id ?? null,
+      custom_item_id: parsed.data.custom_item_id ?? null,
+      marquee_id: parsed.data.marquee_id ?? null,
     })
     .select("id")
     .single();
@@ -679,7 +777,16 @@ export async function createSeatingFixture(
 export async function updateSeatingFixture(
   fixtureId: string,
   eventId: string,
-  fields: { label?: string | null; pos_x_cm?: number; pos_y_cm?: number; width_cm?: number; depth_cm?: number; rotation_deg?: number },
+  fields: {
+    label?: string | null;
+    pos_x_cm?: number;
+    pos_y_cm?: number;
+    width_cm?: number;
+    depth_cm?: number;
+    rotation_deg?: number;
+    quantity?: number;
+    vendor_id?: string | null;
+  },
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const parsed = z
@@ -690,6 +797,8 @@ export async function updateSeatingFixture(
       width_cm: z.number().int().min(20).max(5000).optional(),
       depth_cm: z.number().int().min(20).max(5000).optional(),
       rotation_deg: z.number().finite().optional(),
+      quantity: z.number().int().min(1).max(9999).optional(),
+      vendor_id: uuid.nullable().optional(),
     })
     .safeParse(fields);
   if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
@@ -705,6 +814,8 @@ export async function updateSeatingFixture(
       ...(f.width_cm === undefined ? {} : { width_cm: f.width_cm }),
       ...(f.depth_cm === undefined ? {} : { depth_cm: f.depth_cm }),
       ...(f.rotation_deg === undefined ? {} : { rotation_deg: normaliseDegrees(f.rotation_deg) }),
+      ...(f.quantity === undefined ? {} : { quantity: f.quantity }),
+      ...(f.vendor_id === undefined ? {} : { vendor_id: f.vendor_id }),
     })
     .eq("id", fixtureId)
     .eq("wedding_id", wedding.id);

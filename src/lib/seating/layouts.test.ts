@@ -33,6 +33,7 @@ const guest = (id: string, over: Partial<SeatingGuest> = {}): SeatingGuest => ({
   needsHighchair: false,
   usesWheelchair: false,
   dietaryNeeds: [],
+  replyChangedAt: null,
   arrivedAt: null,
   ...over,
 });

@@ -21,7 +21,7 @@ const ELEMENTS: { key: RoomElement; label: string }[] = [
  * every table and fixture.
  */
 export function RoomSetup({ onSkip }: { onSkip: () => void }) {
-  const { eventId, layoutId, data, track, refresh, setError } = useSeating();
+  const { eventId, layoutId, spaceId, data, track, refresh, setError } = useSeating();
   const [pending, startTransition] = useTransition();
   const counts = useMemo(() => {
     const coming = data.guests.filter((g) => g.invited && !g.excluded && g.rsvp !== "no");
@@ -107,7 +107,7 @@ export function RoomSetup({ onSkip }: { onSkip: () => void }) {
         disabled={pending || layout.tables.length === 0}
         onClick={() =>
           startTransition(async () => {
-            const r = await track("Set up the room", () => applySeatingTemplate(eventId, { people, tables, couple, elements: [...elements] }, layoutId));
+            const r = await track("Set up the room", () => applySeatingTemplate(eventId, { people, tables, couple, elements: [...elements] }, layoutId, spaceId));
             if (!r.ok) setError(r.error);
             refresh();
           })

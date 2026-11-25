@@ -10,7 +10,8 @@ import { undoRedoFor, isTypingTarget } from "@/lib/shortcuts";
 import type { ColourBy, ColourContext } from "@/lib/seating/colour";
 import type { StoredCount, TableStyle } from "@/lib/seating/items";
 import type { LayoutSummary } from "@/lib/seating/layouts";
-import type { SeatingSpaceRow } from "@/lib/types/database";
+import { SELECT, type Tool } from "@/lib/seating/tools";
+import type { SeatingCustomItemRow, SeatingMarqueeRow, SeatingSpaceRow } from "@/lib/types/database";
 import type {
   SeatingAssignment,
   SeatingFixture,
@@ -31,6 +32,10 @@ import {
   type TableOccupancy,
 } from "@/lib/seating/warnings";
 
+/** The Show menu: chair names and numbers, and the layers of the room (Venue, Furniture, Flowers & décor). */
+export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; furniture: boolean; decor: boolean };
+const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, furniture: true, decor: true };
+
 export type SeatingData = {
   plan: SeatingPlan | null;
   backgroundUrl: string | null;
@@ -46,6 +51,11 @@ export type SeatingData = {
   /** Every layout of the event (the tabs), and the shown layout's spaces. */
   layouts: LayoutSummary[];
   spaces: SeatingSpaceRow[];
+  /** The room on screen: the one asked for in the address, else the first. */
+  spaceId: string | null;
+  customItems: SeatingCustomItemRow[];
+  marquees: SeatingMarqueeRow[];
+  vendors: { id: string; name: string }[];
   counts: StoredCount[];
 };
 
@@ -57,6 +67,8 @@ type SeatingState = {
   timeZone: string;
   /** The layout on screen: the live one, or a draft (spec 57 Part G). Every write names it. */
   layoutId: string | undefined;
+  /** The room (space) on screen; room and drawing writes name it. */
+  spaceId: string | undefined;
   /** True when the screen shows a draft: nothing a guest or a day link reads changes until it is made live. */
   isDraft: boolean;
   data: SeatingData;
@@ -85,9 +97,12 @@ type SeatingState = {
   setSelected: (ids: Set<string>) => void;
   /** Spec 53 Part E: the guest a search just found, ringed on their chair. */
   highlightGuestId: string | null;
-  /** Spec 53 Part F: what the chairs show. Remembered per device. */
-  show: { names: boolean; numbers: boolean };
-  setShow: (s: { names: boolean; numbers: boolean }) => void;
+  /** What the next click on the canvas does (spec 57 A.1). */
+  tool: Tool;
+  setTool: (t: Tool) => void;
+  /** Spec 53 Part F and spec 57 A.2: what the canvas shows. Remembered per device. */
+  show: ShowSettings;
+  setShow: (s: ShowSettings) => void;
   /** Opens a seated guest's table and rings their chair. */
   focusGuest: (guestId: string) => void;
   /** Seat guests at a table, in a chair, or back in the tray (null). Optimistic. */
@@ -157,16 +172,26 @@ export function SeatingProvider({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastToggled = useRef<string | null>(null);
   const [highlightGuestId, setHighlightGuestId] = useState<string | null>(null);
-  const [show, setShowState] = useState({ names: false, numbers: false });
+  const [tool, setTool] = useState<Tool>(SELECT);
+  const [show, setShowState] = useState<ShowSettings>(DEFAULT_SHOW);
   useEffect(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem("wedplan.seating.show") ?? "null");
-      if (saved && typeof saved === "object") setShowState({ names: Boolean(saved.names), numbers: Boolean(saved.numbers) });
+      if (saved && typeof saved === "object") {
+        const on = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+        setShowState({
+          names: Boolean(saved.names),
+          numbers: Boolean(saved.numbers),
+          venue: on(saved.venue, true),
+          furniture: on(saved.furniture, true),
+          decor: on(saved.decor, true),
+        });
+      }
     } catch {
       /* storage blocked: the default is fine */
     }
   }, []);
-  const setShow = useCallback((next: { names: boolean; numbers: boolean }) => {
+  const setShow = useCallback((next: ShowSettings) => {
     setShowState(next);
     try {
       window.localStorage.setItem("wedplan.seating.show", JSON.stringify(next));
@@ -346,6 +371,7 @@ export function SeatingProvider({
       eventId,
       timeZone,
       layoutId,
+      spaceId: data.spaceId ?? undefined,
       isDraft: data.layouts.find((l) => l.id === data.layoutId)?.isLive === false,
       data: dataWithFit,
       assignments,
@@ -370,6 +396,8 @@ export function SeatingProvider({
       setSelected,
       highlightGuestId,
       focusGuest,
+      tool,
+      setTool,
       show,
       setShow,
       move,
@@ -387,7 +415,7 @@ export function SeatingProvider({
       undoLabel: undoStack.current.at(-1)?.label ?? null,
       redoLabel: redoStack.current.at(-1)?.label ?? null,
     };
-  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, show, setShow]);
+  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, tool, show, setShow]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

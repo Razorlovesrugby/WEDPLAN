@@ -211,7 +211,7 @@ export async function moveGuestOnTheDay(token: string, guestId: string, tableId:
   const auth = await authorise(token);
   if (!("ctx" in auth)) return auth;
   if (!idSchema.safeParse(guestId).success || !idSchema.safeParse(tableId).success) return fail("Unknown guest or table");
-  const chair = seatIndex === null ? null : z.number().int().min(0).max(59).safeParse(seatIndex);
+  const chair = seatIndex === null ? null : z.number().int().min(0).max(399).safeParse(seatIndex);
   if (chair && !chair.success) return fail("That chair doesn't exist");
   const { ctx, eventId } = auth;
   const supabase = createAdminClient();

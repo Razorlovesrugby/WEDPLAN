@@ -152,7 +152,7 @@ export function readSegments(raw: unknown): BanquetSegment[] {
  * in order along one side and back along the other. An empty or unreadable
  * run is one straight piece sized for the capacity.
  */
-function banquetRun(raw: unknown, capacity: number): { length: number; width: number; seats: Point[] } {
+function banquetRun(raw: unknown, capacity: number): { length: number; width: number; seats: Point[]; pieces: Point[][] } {
   let segs = readSegments(raw);
   if (segs.length === 0) segs = [{ len: Math.max(120, Math.ceil(capacity / 2) * CM_PER_CHAIR), turn: 0 }];
   const depth = LONG_TABLE_DEPTH_CM;
@@ -218,7 +218,57 @@ function banquetRun(raw: unknown, capacity: number): { length: number; width: nu
   const seats: Point[] = [];
   for (let i = 0; i < pieces.length; i++) seats.push(...side(i, -1));
   for (let i = pieces.length - 1; i >= 0; i--) seats.push(...side(i, 1).reverse());
-  return { length: maxX - minX, width: maxY - minY, seats: seats.slice(0, capacity) };
+  // Each piece's own rectangle, in the same centred frame, for drawing the run as the joined pieces it is.
+  const polys = pieces.map((p) => {
+    const nx = -Math.sin(p.h) * (depth / 2);
+    const ny = Math.cos(p.h) * (depth / 2);
+    const b = { x: p.a.x + p.len * Math.cos(p.h), y: p.a.y + p.len * Math.sin(p.h) };
+    return [
+      { x: p.a.x + nx - cx, y: p.a.y + ny - cy },
+      { x: b.x + nx - cx, y: b.y + ny - cy },
+      { x: b.x - nx - cx, y: b.y - ny - cy },
+      { x: p.a.x - nx - cx, y: p.a.y - ny - cy },
+    ];
+  });
+  return { length: maxX - minX, width: maxY - minY, seats: seats.slice(0, capacity), pieces: polys };
+}
+
+/** A banquet run's pieces as rectangles in the table's own frame (centred, not turned), for drawing. */
+export function banquetPieces(raw: unknown, capacity: number): Point[][] {
+  return banquetRun(raw, capacity).pieces;
+}
+
+/**
+ * Ready-made runs for the banquet setup: a straight run, an L and a U. Pieces
+ * are `{len, turn}`; see `BanquetSegment`. A run is one chain of pieces, so a
+ * T is two runs: a straight one with another set across its middle.
+ */
+export function banquetPreset(kind: "straight" | "l" | "u", pieceCm = 300, pieces = 2): BanquetSegment[] {
+  const len = Math.max(120, pieceCm);
+  const straight = (n: number): BanquetSegment[] => Array.from({ length: Math.max(1, n) }, (_, i) => ({ len, turn: 0 }));
+  if (kind === "straight") return straight(pieces);
+  // A U: along, turn a right angle, across, turn again, back.
+  if (kind === "u") return [{ len, turn: 0 }, { len: len * 0.6, turn: 90 }, { len, turn: 90 }];
+  // An L: along, then a right angle and across.
+  return [{ len, turn: 0 }, { len: len * 0.6, turn: 90 }];
+}
+
+/** A ceremony block's rows as rectangles in the table's frame: each row's left and right half either side of the aisle. */
+export function rowBlocks(t: Pick<SizeInput, "capacity" | "rows_count" | "aisle_cm">): { x: number; y: number; w: number; h: number }[] {
+  const rows = Math.max(1, t.rows_count ?? 1);
+  const perRow = Math.ceil(t.capacity / rows);
+  const aisle = t.aisle_cm ?? DEFAULT_AISLE_CM;
+  const left = Math.ceil(perRow / 2);
+  const right = perRow - left;
+  const hl = (perRow * ROW_CHAIR_PITCH_CM + aisle) / 2;
+  const hw = (rows * ROW_PITCH_CM) / 2;
+  const out: { x: number; y: number; w: number; h: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    const y = -hw + r * ROW_PITCH_CM + 5;
+    out.push({ x: -hl, y, w: left * ROW_CHAIR_PITCH_CM, h: ROW_PITCH_CM - 10 });
+    if (right > 0) out.push({ x: -hl + left * ROW_CHAIR_PITCH_CM + aisle, y, w: right * ROW_CHAIR_PITCH_CM, h: ROW_PITCH_CM - 10 });
+  }
+  return out;
 }
 
 /** A serpentine table's wave: how far its centre line sits from straight at `x` (the table's own frame). */
@@ -458,7 +508,7 @@ export function normaliseDegrees(deg: number): number {
   return ((Math.round(deg) % 360) + 360) % 360;
 }
 
-/** A sensible default footprint for a new fixture (§C.1). */
+/** A sensible default footprint for a new fixture (§C.1). The database keeps every side between 20 and 5000 cm. */
 export const FIXTURE_DEFAULTS: Record<string, { width: number; depth: number; label: string }> = {
   dance_floor: { width: 500, depth: 500, label: "Dance floor" },
   bar: { width: 300, depth: 80, label: "Bar" },
@@ -478,9 +528,9 @@ export const FIXTURE_DEFAULTS: Record<string, { width: number; depth: number; la
   aisle_flowers: { width: 40, depth: 40, label: "Aisle flowers" },
   candles: { width: 60, depth: 20, label: "Candles" },
   plant: { width: 60, depth: 60, label: "Plant" },
-  sign: { width: 60, depth: 10, label: "Sign" },
+  sign: { width: 60, depth: 20, label: "Sign" },
   lantern: { width: 30, depth: 30, label: "Lantern" },
-  drape: { width: 300, depth: 15, label: "Drape" },
+  drape: { width: 300, depth: 20, label: "Drape" },
   marquee: { width: 900, depth: 1500, label: "Marquee" },
   tree: { width: 300, depth: 300, label: "Tree" },
   path: { width: 150, depth: 800, label: "Path" },

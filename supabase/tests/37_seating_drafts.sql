@@ -254,3 +254,22 @@ begin;
 set local role anon;
 select pg_temp.expect_error('select 1 from public.v_live_seat_assignments', '42501', 'anon cannot read the live seat view');
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- 5. Big blocks (migration 0060)
+-- ---------------------------------------------------------------------------
+begin;
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+select pg_temp.expect_error(format(
+  'insert into public.seating_tables (wedding_id, event_id, label, shape, capacity) values (%L, %L, ''Big'', ''round'', 61)', :w1, :reception),
+  '23514', 'a dinner table still holds sixty at most');
+insert into public.seating_tables (wedding_id, event_id, label, shape, capacity, rows_count)
+values (:w1, :reception, 'Ceremony', 'rows', 240, 12);
+insert into public.seating_tables (wedding_id, event_id, label, shape, capacity)
+values (:w1, :reception, 'Long run', 'banquet', 120);
+select pg_temp.expect((select count(*) from public.seating_tables where capacity > 60), 2, 'ceremony rows and a banquet run can be bigger');
+select pg_temp.expect_error(format(
+  'insert into public.seating_tables (wedding_id, event_id, label, shape, capacity, rows_count) values (%L, %L, ''Too big'', ''rows'', 401, 10)', :w1, :reception),
+  '23514', 'but not past four hundred');
+rollback;

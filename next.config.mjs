@@ -25,6 +25,14 @@ const nextConfig = {
     // board and ranking screens have to parse before they become interactive.
     optimizePackageImports: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/modifiers", "@dnd-kit/utilities"],
   },
+
+  // pdf.js (the venue plan's PDF page picker, spec 57 B.2) names an optional
+  // Node-only `canvas` package that a browser bundle never reaches. Without
+  // this, webpack stops on the unresolved import.
+  webpack: (config) => {
+    config.resolve.alias = { ...config.resolve.alias, canvas: false };
+    return config;
+  },
 };
 
 export default nextConfig;

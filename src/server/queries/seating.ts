@@ -15,7 +15,7 @@ import type { RsvpStatus } from "@/lib/types/database";
 import { parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
 import { chooseLayout, type LayoutSummary } from "@/lib/seating/layouts";
 import { parseDietaryNeeds, type DietaryNeed } from "@/lib/dietary";
-import type { SeatingSpaceRow } from "@/lib/types/database";
+import type { SeatingCustomItemRow, SeatingMarqueeRow, SeatingSpaceRow } from "@/lib/types/database";
 
 export type SeatingPlanData = {
   plan: SeatingPlan | null;
@@ -34,8 +34,13 @@ export type SeatingPlanData = {
   layoutId: string | null;
   /** Every layout of the event, deleted drafts included (the tabs and "Recently deleted" filter them). */
   layouts: LayoutSummary[];
-  /** The shown layout's spaces, in order. */
+  /** The shown layout's spaces, in order, and which one the screen is on (the one asked for, else the first). */
   spaces: SeatingSpaceRow[];
+  spaceId: string | null;
+  /** The couple's own décor items and marquee templates (wedding-wide), and their suppliers to pick from. */
+  customItems: SeatingCustomItemRow[];
+  marquees: SeatingMarqueeRow[];
+  vendors: { id: string; name: string }[];
   /** The couple's final item counts for that layout. */
   counts: StoredCount[];
 };
@@ -49,7 +54,7 @@ export type SeatingPlanData = {
  * who is coming. Invited-ness comes from `v_guest_event_invites` and nowhere
  * else (spec 22).
  */
-export const getSeatingPlan = cache(async (weddingId: string, eventId: string, requestedLayoutId?: string): Promise<SeatingPlanData> => {
+export const getSeatingPlan = cache(async (weddingId: string, eventId: string, requestedLayoutId?: string, requestedSpaceId?: string): Promise<SeatingPlanData> => {
   const supabase = await createClient();
 
   // Which layout to show comes first: every table, fixture and seat read below is filtered to it.
@@ -75,7 +80,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
   // A layout nobody has placed anything in yet has no id to filter on: the all-zero uuid matches nothing.
   const scope = layoutId ?? "00000000-0000-0000-0000-000000000000";
 
-  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted, needs] =
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted, needs, customItems, marquees, vendors] =
     await Promise.all([
       supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
@@ -94,12 +99,12 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
         .eq("event_id", eventId)
         .eq("layout_id", scope)
         .order("created_at", { ascending: true }),
-      supabase.from("seat_assignments").select("guest_id, table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId).eq("layout_id", scope),
+      supabase.from("seat_assignments").select("guest_id, table_id, seat_index, decline_kept_at").eq("wedding_id", weddingId).eq("event_id", eventId).eq("layout_id", scope),
       supabase.from("seating_rules").select("*").eq("wedding_id", weddingId).order("created_at", { ascending: true }),
       supabase
         .from("guests")
         .select(
-          "id, household_id, first_name, last_name, preferred_name, age_band, side, dietary, accessibility, plus_one_for, needs_highchair, uses_wheelchair, households(display_name), guest_tags(tag_id), rsvps(event_id, status)",
+          "id, household_id, first_name, last_name, preferred_name, age_band, side, dietary, accessibility, plus_one_for, needs_highchair, uses_wheelchair, unable_to_attend_at, households(display_name), guest_tags(tag_id), rsvps(event_id, status, updated_at)",
         )
         .eq("wedding_id", weddingId)
         .is("deleted_at", null),
@@ -128,6 +133,9 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
         supabase.from("seat_assignments").select("layout_id").eq("wedding_id", weddingId).eq("event_id", eventId),
       ]),
       supabase.from("guest_dietary_needs").select("guest_id, tag, is_allergy, other_text").eq("wedding_id", weddingId),
+      supabase.from("seating_custom_items").select("*").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
+      supabase.from("seating_marquees").select("*").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
+      supabase.from("vendors").select("id, name").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
     ]);
 
   for (const [what, result] of [
@@ -149,6 +157,9 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
     ["table counts", counted[0]],
     ["seat counts", counted[1]],
     ["dietary needs", needs],
+    ["your own items", customItems],
+    ["marquees", marquees],
+    ["suppliers", vendors],
   ] as const) {
     if (result.error) throw new Error(`Could not load ${what}: ${result.error.message}`);
   }
@@ -209,7 +220,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
 
   const seatingGuests: SeatingGuest[] = (guests.data ?? []).map((g) => {
     const invite = inviteByGuest.get(g.id);
-    const rsvp = (g.rsvps ?? []).find((r: { event_id: string; status: RsvpStatus }) => r.event_id === eventId);
+    const rsvp = (g.rsvps ?? []).find((r: { event_id: string; status: RsvpStatus; updated_at: string }) => r.event_id === eventId);
     return {
       id: g.id,
       householdId: g.household_id,
@@ -230,14 +241,16 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
       needsHighchair: g.needs_highchair,
       usesWheelchair: g.uses_wheelchair,
       arrivedAt: arrivedAt.get(g.id) ?? null,
+      // The later of their reply and "unable to attend": the moment a kept seat stops being kept.
+      replyChangedAt: [rsvp?.updated_at, g.unable_to_attend_at].filter((x): x is string => Boolean(x)).sort().at(-1) ?? null,
     };
   });
 
   const tableIdsHere = new Set((tables.data ?? []).map((t) => t.id));
 
   // The room lives on the space now (migration 0059): the plan the screen sees
-  // carries the shown layout's first space's room, whatever the plan row says.
-  const firstSpace = (spaces.data ?? [])[0];
+  // carries the shown space's room, whatever the plan row says.
+  const firstSpace = (spaces.data ?? []).find((s) => s.id === requestedSpaceId) ?? (spaces.data ?? [])[0];
   const shownPlan = plan.data
     ? firstSpace
       ? {
@@ -260,6 +273,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
       guestId: a.guest_id,
       tableId: a.table_id,
       seatIndex: a.seat_index,
+      declineKeptAt: a.decline_kept_at,
     })),
     rules: rules.data ?? [],
     guests: seatingGuests,
@@ -277,6 +291,10 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
     layoutId,
     layouts,
     spaces: spaces.data ?? [],
+    spaceId: firstSpace?.id ?? null,
+    customItems: customItems.data ?? [],
+    marquees: marquees.data ?? [],
+    vendors: vendors.data ?? [],
     counts,
   };
 });

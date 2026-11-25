@@ -42,6 +42,8 @@ export type SeatingGuest = {
   usesWheelchair: boolean;
   /** Spec 53 Part I: when they were marked arrived, if they were. */
   arrivedAt: string | null;
+  /** When this event's reply, or "unable to attend", last changed: what "Keep for now" is measured against (spec 57 A.2). */
+  replyChangedAt: string | null;
 };
 
 /** A chair the couple took out of use (a broken chair, a pillar), spec 53 Part I. */
@@ -51,6 +53,8 @@ export type SeatingAssignment = {
   guestId: string;
   tableId: string;
   seatIndex: number | null;
+  /** "Keep for now" on a declined guest's seat (spec 57 A.2). Null or absent: not kept. */
+  declineKeptAt?: string | null;
 };
 
 export type SeatingTable = SeatingTableRow;

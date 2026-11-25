@@ -45,17 +45,27 @@ export async function resolveLayout(
   return { ok: true, layout: { id: data.id, isLive: data.is_live, lockedAt: data.locked_at } };
 }
 
-/** A layout's first space: where the room settings and new things go until spaces have tabs. */
-export async function firstSpaceOf(weddingId: string, layoutId: string) {
+/**
+ * The space an action works on: the one named if it lies in this layout,
+ * otherwise the layout's first. `data` is null when the layout has no space
+ * (or the one named isn't in it).
+ */
+export async function resolveSpace(weddingId: string, layoutId: string, spaceId?: string | null) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("seating_spaces")
-    .select("id, room_width_cm, room_depth_cm, background_path, background_w_px, background_h_px, calibrated")
+    .select("id, name, room_width_cm, room_depth_cm, background_path, background_w_px, background_h_px, calibrated, drawing")
     .eq("wedding_id", weddingId)
-    .eq("layout_id", layoutId)
-    .order("sort_order")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
+    .eq("layout_id", layoutId);
+  if (spaceId) {
+    if (!UUID.test(spaceId)) return { data: null, error: null };
+    query = query.eq("id", spaceId);
+  }
+  const { data, error } = await query.order("sort_order").order("created_at").limit(1).maybeSingle();
   return { data, error };
+}
+
+/** A layout's first space. */
+export function firstSpaceOf(weddingId: string, layoutId: string) {
+  return resolveSpace(weddingId, layoutId, null);
 }

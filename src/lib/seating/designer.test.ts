@@ -1,17 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
+  bulgeFromPoint,
   constrainAngle,
+  drawingIds,
   emptyDrawing,
   formatLength,
+  newDrawingId,
+  nearestOnWall,
+  openingEnds,
   parseDrawing,
   polygonArea,
+  removeWall,
   snapCorner,
+  splitWall,
   wallBounds,
   wallLength,
+  wallPath,
+  wallPoint,
   wallRadius,
+  type Drawing,
   type Wall,
 } from "./drawing";
-import { localSeatPositions, readSegments, tableSize, tablePolygon, seatPositions, FIXTURE_DEFAULTS, polygonsOverlap } from "./geometry";
+import { declinedSeats, isKept } from "./declined";
+import { isPdf, pdfScale } from "./pdf-plan";
+import { LIBRARY, carriesQuantity, fixtureGroup, searchLibrary, tileDrawSize } from "./library";
+import { banquetPieces, banquetPreset, rowBlocks, localSeatPositions, readSegments, tableSize, tablePolygon, seatPositions, FIXTURE_DEFAULTS, polygonsOverlap } from "./geometry";
 import { classifyWalkway, DEFAULT_SETTINGS, parseSettings } from "./plan-settings";
 import { computeService, parseMenu, typedPlatters, type ServiceSeat, type ServiceTable } from "./service";
 import { chairDetail, chairMarks, initials, readableText } from "./chairs";
@@ -443,7 +456,7 @@ describe("what a chair shows", () => {
   const g = (over: Partial<SeatingGuest> = {}): SeatingGuest => ({
     id: "g", householdId: "h", householdName: "H", firstName: "Aroha", lastName: "Ngata", preferredName: null, ageBand: "adult", side: null,
     dietary: null, accessibility: null, plusOneFor: null, tagIds: [], invited: true, excluded: false, rsvp: "yes",
-    needsHighchair: false, usesWheelchair: false, arrivedAt: null, dietaryNeeds: [], ...over,
+    needsHighchair: false, usesWheelchair: false, arrivedAt: null, dietaryNeeds: [], replyChangedAt: null, ...over,
   });
 
   it("steps from dots to initials to names as you zoom in", () => {
@@ -490,5 +503,222 @@ describe("what a chair shows", () => {
     expect(colourLegend({ kind: "dietary" }, ctx).map((e) => e.label)).toEqual(["Dietary need", "None"]);
     expect(guestColour(g({ dietary: "Nuts" }), { kind: "dietary" }, ctx)!.label).toBe("Dietary need");
     expect(guestColour(g(), { kind: "dietary" }, ctx)!.label).toBe("None");
+  });
+});
+
+describe("FIXTURE_DEFAULTS", () => {
+  it("every default fits what the database accepts (20 to 5000 cm a side)", () => {
+    for (const [kind, size] of Object.entries(FIXTURE_DEFAULTS)) {
+      expect(size.width, `${kind} width`).toBeGreaterThanOrEqual(20);
+      expect(size.width, `${kind} width`).toBeLessThanOrEqual(5000);
+      expect(size.depth, `${kind} depth`).toBeGreaterThanOrEqual(20);
+      expect(size.depth, `${kind} depth`).toBeLessThanOrEqual(5000);
+    }
+  });
+});
+
+describe("wall geometry (spec 57 Part B)", () => {
+  const straight: Wall = { id: "w1", a: [0, 0], b: [400, 0], thick: 20, bulge: 0 };
+  // A half circle of radius 200 through (0,0) and (400,0): bulge 200 off the chord.
+  const half: Wall = { id: "w2", a: [0, 0], b: [400, 0], thick: 20, bulge: 200 };
+
+  it("walks along a straight wall", () => {
+    expect(wallPoint(straight, 0.25)).toMatchObject({ x: 100, y: 0, angle: 0 });
+    expect(wallPoint(straight, 2)).toMatchObject({ x: 400, y: 0 });
+  });
+  it("walks along an arc: the middle is the bulge, the ends are the ends", () => {
+    const mid = wallPoint(half, 0.5);
+    expect(mid.x).toBeCloseTo(200, 3);
+    expect(mid.y).toBeCloseTo(200, 3);
+    const end = wallPoint(half, 1);
+    expect(end.x).toBeCloseTo(400, 3);
+    expect(end.y).toBeCloseTo(0, 3);
+    // Bulging the other way puts the middle on the other side.
+    expect(wallPoint({ ...half, bulge: -200 }, 0.5).y).toBeCloseTo(-200, 3);
+  });
+  it("draws a straight wall as a line and an arc as an arc", () => {
+    expect(wallPath(straight)).toBe("M 0 0 L 400 0");
+    expect(wallPath(half)).toMatch(/^M 0 0 A 200\.0 200\.0 0 0 0 400 0$/);
+    // Past a half circle the large-arc flag is set.
+    expect(wallPath({ ...half, bulge: 300 })).toMatch(/ 0 1 0 400 0$/);
+    expect(wallPath({ ...half, bulge: -200 })).toMatch(/ 0 0 1 400 0$/);
+  });
+  it("sets a bulge from where the pointer is", () => {
+    expect(bulgeFromPoint([0, 0], [400, 0], [200, 120])).toBe(120);
+    expect(bulgeFromPoint([0, 0], [400, 0], [200, -80])).toBe(-80);
+    expect(bulgeFromPoint([0, 0], [400, 0], [200, 0.3])).toBe(0);
+    expect(bulgeFromPoint([0, 0], [0, 0], [5, 5])).toBe(0);
+  });
+  it("finds the nearest wall and how far along it", () => {
+    const hit = nearestOnWall([straight, { id: "far", a: [0, 500], b: [400, 500], thick: 20, bulge: 0 }], [100, 30], 50)!;
+    expect(hit.wall.id).toBe("w1");
+    expect(hit.t).toBeCloseTo(0.25, 5);
+    expect(hit.dist).toBeCloseTo(30, 5);
+    expect(nearestOnWall([straight], [100, 80], 50)).toBeNull();
+    const onArc = nearestOnWall([half], [200, 230], 50)!;
+    expect(onArc.t).toBeCloseTo(0.5, 3);
+    expect(onArc.dist).toBeCloseTo(30, 3);
+  });
+  it("splits a straight wall in two and shares out its doors", () => {
+    const d: Drawing = {
+      ...emptyDrawing(),
+      walls: [straight],
+      openings: [
+        { id: "d1", kind: "door", wall: "w1", at: 0.25, width: 90, swing: "in", hinge: "a" },
+        { id: "d2", kind: "window", wall: "w1", at: 0.75, width: 120, swing: "in", hinge: "a" },
+      ],
+    };
+    const out = splitWall(d, "w1", "w1b");
+    expect(out.walls.map((w) => [w.id, w.a, w.b])).toEqual([
+      ["w1", [0, 0], [200, 0]],
+      ["w1b", [200, 0], [400, 0]],
+    ]);
+    expect(out.openings.find((o) => o.id === "d1")).toMatchObject({ wall: "w1", at: 0.5 });
+    expect(out.openings.find((o) => o.id === "d2")).toMatchObject({ wall: "w1b", at: 0.5 });
+    expect(parseDrawing(out).ok).toBe(true);
+    expect(splitWall(d, "nope", "x")).toBe(d);
+    expect(splitWall(d, "w1", "w1")).toBe(d);
+  });
+  it("splits an arc into two arcs of the same circle", () => {
+    const out = splitWall({ ...emptyDrawing(), walls: [half] }, "w2", "w2b");
+    const [first, second] = out.walls;
+    // A quarter circle of radius 200 has its middle 200·(1−cos 45°) ≈ 59 cm off its chord.
+    expect(first!.bulge).toBe(59);
+    expect(second!.bulge).toBe(59);
+    // Whole centimetres: the radius is the same circle to within the rounding.
+    expect(Math.abs(wallRadius(first!)! - 200)).toBeLessThan(2);
+    expect(first!.b).toEqual([200, 200]);
+  });
+  it("removes a wall with its openings", () => {
+    const d: Drawing = { ...emptyDrawing(), walls: [straight, half], openings: [{ id: "d1", kind: "door", wall: "w1", at: 0.5, width: 90, swing: "in", hinge: "a" }] };
+    const out = removeWall(d, "w1");
+    expect(out.walls.map((w) => w.id)).toEqual(["w2"]);
+    expect(out.openings).toEqual([]);
+  });
+  it("gives a door's gap its ends", () => {
+    const e = openingEnds(straight, { at: 0.5, width: 100 });
+    expect(e.from).toEqual([150, 0]);
+    expect(e.to).toEqual([250, 0]);
+    expect(e.centre).toEqual([200, 0]);
+  });
+  it("makes ids that are free and valid", () => {
+    const taken = new Set(["w000000"]);
+    const id = newDrawingId("w", taken, () => 0);
+    expect(id).toMatch(/^[A-Za-z0-9_-]{1,40}$/);
+    expect(taken.has(id)).toBe(false);
+  });
+  it("lists the ids in use", () => {
+    expect(drawingIds({ ...emptyDrawing(), walls: [straight], labels: [{ id: "l1", text: "x", x: 0, y: 0, size: 16 }] })).toEqual(new Set(["w1", "l1"]));
+  });
+});
+
+describe("library (spec 57 A.3)", () => {
+  it("has the tables the spec lists and every fixture kind has a default size", () => {
+    const tables = LIBRARY.filter((t) => t.group === "tables").map((t) => t.label);
+    expect(tables).toEqual(["Round", "Long", "Square", "Oval", "Half-moon", "Serpentine", "Banquet run", "Sweetheart", "Ceremony rows", "Cocktail"]);
+    for (const t of LIBRARY.filter((x) => x.item.type === "fixture")) {
+      expect(FIXTURE_DEFAULTS[(t.item as { kind: string }).kind], t.label).toBeTruthy();
+    }
+  });
+  it("tile ids are unique, and rows and banquet runs ask for setup", () => {
+    expect(new Set(LIBRARY.map((t) => t.id)).size).toBe(LIBRARY.length);
+    expect(LIBRARY.filter((t) => t.needsSetup).map((t) => t.id)).toEqual(["banquet", "rows"]);
+  });
+  it("groups fixtures for the Show layers", () => {
+    expect(fixtureGroup("dance_floor")).toBe("room");
+    expect(fixtureGroup("floral_arch")).toBe("decor");
+    expect(fixtureGroup("custom")).toBe("decor");
+    expect(fixtureGroup("marquee")).toBe("outdoors");
+  });
+  it("searches every group by name or group", () => {
+    expect(searchLibrary(LIBRARY, "arch").map((t) => t.id)).toEqual(["floral_arch"]);
+    expect(searchLibrary(LIBRARY, "outdoor").length).toBe(6);
+    expect(searchLibrary(LIBRARY, "  ").length).toBe(LIBRARY.length);
+    expect(searchLibrary(LIBRARY, "zzz")).toEqual([]);
+  });
+  it("lets décor carry a quantity but not a dance floor", () => {
+    expect(carriesQuantity("aisle_flowers")).toBe(true);
+    expect(carriesQuantity("dance_floor")).toBe(false);
+  });
+  it("draws tiles to scale", () => {
+    expect(tileDrawSize({ w: 300, d: 75 }, 60)).toEqual({ w: 60, h: 15 });
+    expect(tileDrawSize({ w: 100, d: 100 }, 60)).toEqual({ w: 60, h: 60 });
+  });
+});
+
+describe("banquet pieces and ceremony blocks", () => {
+  it("draws a straight banquet run as its joined pieces, centred", () => {
+    const pieces = banquetPieces([{ len: 300, turn: 0 }, { len: 300, turn: 0 }], 20);
+    expect(pieces).toHaveLength(2);
+    const xs = pieces.flat().map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(-300, 3);
+    expect(Math.max(...xs)).toBeCloseTo(300, 3);
+    const ys = pieces.flat().map((p) => p.y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(75, 3);
+  });
+  it("an unreadable run is one straight piece", () => {
+    expect(banquetPieces(null, 10)).toHaveLength(1);
+  });
+  it("offers a straight run, an L and a U that read back as valid runs", () => {
+    expect(banquetPreset("straight", 300, 3)).toHaveLength(3);
+    expect(readSegments(banquetPreset("u"))).toHaveLength(3);
+    expect(readSegments(banquetPreset("l"))).toHaveLength(2);
+    // A U turns twice, a right angle each time.
+    expect(banquetPreset("u").map((s) => s.turn)).toEqual([0, 90, 90]);
+  });
+  it("lays rows out either side of the aisle", () => {
+    const blocks = rowBlocks({ capacity: 40, rows_count: 4, aisle_cm: 120 });
+    expect(blocks).toHaveLength(8);
+    const row0 = blocks.filter((b) => b.y === blocks[0]!.y);
+    expect(row0).toHaveLength(2);
+    // The gap between the two halves is the aisle.
+    expect(row0[1]!.x - (row0[0]!.x + row0[0]!.w)).toBe(120);
+    expect(rowBlocks({ capacity: 9, rows_count: 1, aisle_cm: 100 })).toHaveLength(2);
+    expect(rowBlocks({ capacity: 1, rows_count: 1, aisle_cm: 100 })).toHaveLength(1);
+  });
+});
+
+describe("declined, still in a seat (spec 57 A.2)", () => {
+  const g = (over: Partial<SeatingGuest> = {}): SeatingGuest => ({
+    id: "g", householdId: "h", householdName: "H", firstName: "G", lastName: null, preferredName: null, ageBand: "adult", side: null,
+    dietary: null, dietaryNeeds: [], accessibility: null, plusOneFor: null, tagIds: [], invited: true, excluded: false, rsvp: "yes",
+    needsHighchair: false, usesWheelchair: false, arrivedAt: null, replyChangedAt: null, ...over,
+  });
+  const seat = (guestId: string, declineKeptAt: string | null = null) => ({ guestId, tableId: "t1", seatIndex: 2, declineKeptAt });
+  it("lists a seated guest who is no longer coming, and nobody who is", () => {
+    const out = declinedSeats([g({ id: "a", rsvp: "no" }), g({ id: "b", rsvp: "yes" }), g({ id: "c", excluded: true }), g({ id: "d", rsvp: null })], [seat("a"), seat("b"), seat("c"), seat("d")]);
+    expect(out.map((x) => x.guest.id)).toEqual(["a", "c"]);
+  });
+  it("never lists an unseated guest", () => {
+    expect(declinedSeats([g({ id: "a", rsvp: "no" })], [])).toEqual([]);
+  });
+  it("Keep for now hides the card until the reply changes again", () => {
+    const guest = (changed: string | null) => g({ id: "a", rsvp: "no", replyChangedAt: changed });
+    expect(declinedSeats([guest("2026-11-01T00:00:00Z")], [seat("a", "2026-11-02T00:00:00Z")])).toEqual([]);
+    // They answered again after it was kept: the card is back.
+    expect(declinedSeats([guest("2026-11-03T00:00:00Z")], [seat("a", "2026-11-02T00:00:00Z")])).toHaveLength(1);
+    expect(declinedSeats([guest(null)], [seat("a", "2026-11-02T00:00:00Z")])).toEqual([]);
+    expect(isKept(null, "2026-11-01T00:00:00Z")).toBe(false);
+  });
+});
+
+describe("PDF plans (spec 57 B.2)", () => {
+  it("draws a page at 150 dpi", () => {
+    // A4 portrait is 595 × 842 pt: 150 dpi is 2.083…× scale, 1754 px on the long side.
+    expect(pdfScale(595, 842)).toBeCloseTo(150 / 72, 6);
+  });
+  it("never lets the longest side pass 6000 px", () => {
+    // An A0 sheet is 2384 × 3370 pt: 150 dpi would be 7021 px.
+    const s = pdfScale(2384, 3370);
+    expect(3370 * s).toBeCloseTo(6000, 3);
+    expect(2384 * s).toBeLessThan(6000);
+  });
+  it("copes with a degenerate page", () => {
+    expect(pdfScale(0, 0)).toBeGreaterThan(0);
+  });
+  it("tells a PDF by type or by name", () => {
+    expect(isPdf({ type: "application/pdf", name: "x" })).toBe(true);
+    expect(isPdf({ type: "", name: "Plan.PDF" })).toBe(true);
+    expect(isPdf({ type: "image/png", name: "plan.png" })).toBe(false);
   });
 });
