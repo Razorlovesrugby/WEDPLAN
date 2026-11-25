@@ -1,6 +1,6 @@
 # Feature spec: The venue designer: draw the room, style the tables, seat the guests
 
-**Status: answered, partly built** (see **Build status** at the end). Every
+**Status: answered, built in two sessions; see Build status** for what is missing and what was and was not verified. Every
 question answered 2026-11-24 (40, 8 follow-ups and 3 last ones; see
 **Answered**).
 
@@ -616,59 +616,68 @@ and must be named if not done.
 
 ## Build status
 
-Built on branch `claude/visual-seating-plan-gkbppo`, migrations `0055` to
-`0058`. Typechecked, unit-tested (1696), SQL-suite tested (990 assertions, 68
-of them new), single-transaction migration check passed, and `npm run build`
-passes. **Never opened in a browser or run on live; nothing is applied to
-live.** The table close-up was rendered for six shapes in headless Chromium;
-no other screen was.
+Built across two sessions on branches `claude/visual-seating-plan-gkbppo` (63) and
+`claude/nifty-fermi-rel802` (64), migrations `0055` to `0061`. **Every part of
+the spec has something built; the lists below say what is missing.**
+Typechecked, unit-tested (1828), SQL-suite tested (1067 assertions), the
+single-transaction migration check passes, and `npm run build` passes.
+**Never run against live Supabase, a real iPad or a printer; nothing is applied
+to live.** What was seen in a real browser (headless Chromium, 1440 and 390 px,
+the real components with the server actions stubbed and sample data): the Room
+view with the venue drawing, the library, the drawing tools (walls, curved
+walls, doors, areas, text, measure, select, drag a corner, split, delete), the
+start choices on an empty space, the Food service panel, the table close-up for
+six shapes, the phone view (no tools, no library, no horizontal scroll), a PDF
+turned into a plan page (a two-page test PDF; the A0 page held to 6000 px), and
+the caterer, florist and shared pages rendered to HTML and screenshotted. The
+print views have not been through a browser's print dialog, and `/p/<token>` has
+not run under Next with a database.
+
+### Migrations (the spec named `0055` to `0058`; the build added three)
+
+| # | What |
+| --- | --- |
+| `0055`–`0058` | As §15 (session 63). |
+| `0059` | Draft layouts: one seat per guest per **layout** (primary key `(guest_id, layout_id)`), the plan-to-space room trigger dropped (the room lives on the space; `seating_plans`' room columns stay, unused), `v_live_seat_assignments` and `v_live_seating_tables` (what guests, day links and the master read), `seating_state` / `_hash` / `restore_seating_state` / snapshots per layout (History is per layout), `seating_try_layout()` and `seating_make_live()`. |
+| `0060` | Ceremony rows and banquet runs may seat up to 400 (every other shape still 60). |
+| `0061` | `seating_share_check()` (security definer, service role only) and a lockout (five wrong passcodes, fifteen minutes). |
 
 ### Built
 
-- **Data (§15):** all four migrations, with the backfill tested on legacy
-  data (nothing lost, no audit rows, no `updated_at` changes), state version 2
-  with version 1 still restoring, and tests for tenancy, the shape rules, the
-  restore round trip and the dietary rules.
-- **A:** chairs show initials (first names from 150% zoom, bare dots below
-  60%), a red dot for a dietary note and a dashed orange outline for a guest
-  who can't come; Colour by gains Dietary needs and is the plan's, saved
-  through an undoable step; sweetheart, oval, half-moon and serpentine tables
-  can be added and drawn as themselves in the room and the table drawer.
-- **C:** styles (create, edit, delete, per table or for all), the close-up in
-  the table drawer for every shape but ceremony rows, totals by chairs and by
-  guests, typed final numbers with the "Seating changed since you set this"
-  flag, CSV.
-- **Libraries, tested, no screen yet:** `drawing.ts` (B), `service.ts` (F),
-  `plan-settings.ts` (I), and geometry for ceremony rows and banquet runs.
+- **G (layouts):** try a layout (a copy with fresh ids, seating included, 20 drafts at most), switch, rename, delete a draft (kept in "Recently deleted" for 30 days and restorable), make live, which turns the old live layout into "*name* (before *date*)" and lists anyone coming with no seat or seated and no longer coming before it confirms. Undo, History and print work per layout. Every read outside the designer goes through the live views.
+- **H (dietary):** tags with allergy or preference and a short Other, on the guest page, in the guest table's Dietary cell, in the table drawer and on the RSVP form (a checked upsert, its `onConflict` pinned in `38_dietary_needs.sql`). Chair dots (red allergy, amber preference, grey note only), Colour by, chips, print, the CSV and the day-link seating module (tags only, never the free text) read them. Old free-text notes are untouched.
+- **A (canvas):** space tabs (add, rename, delete without unseating anyone), per-space room, plan and drawing; Guests / Library / Venue panels; the library (tables, room, décor, outdoors tiles, click then click or drag; ceremony rows and banquet runs with their own setup; the couple's own décor with a supplier; marquee templates with poles and rounded ends; décor quantity and supplier); Show layers (Venue, Furniture, Flowers & décor, Names, Seat numbers); an in-canvas legend with counts; "*Name* can't come any more. Free seat *N*?" with Free the seat and Keep for now (kept until their reply changes); below tablet width the room is for looking and seating only.
+- **B (drawing):** walls and curved walls (shift keeps 0/45/90°, snaps to the grid and to corners, closes on the first corner), doors, double doors, windows and openings that snap to a wall and slide along it, columns, stairs, power points, fire exits and toilets, areas (outdoor ones hatched), text, measure (kept as a dimension, coloured by the plan's walkway thresholds between two tables), select, drag a corner (the walls that meet it follow), bend, straighten, split, thickness, delete; three equal starting choices on an empty space; a fade; a PDF plan (page picker, drawn in the browser by pdf.js at 150 dpi, 6000 px at most, never uploaded). Every finished edit is one undoable write, validated by `drawing.ts`.
+- **C:** table styles (session 63), per-table changes over a style with "Changed from *style*" and Reset to style, the Kids starter style (offered when the first child is seated), an item's supplier and a budget line that follows its final number (manual-quantity lines only; clearing the number leaves the quantity), a supplier's page lists what the plan says they bring, serving utensils (two per platter) in the totals.
+- **D (lock):** Lock room per layout, by any collaborator, with who and when; every action that would move, resize, add or delete a wall, drawing, area, table, fixture or space refuses with "The room is locked. Unlock it to move things."; an undo under a lock may put seats back but never the room.
+- **E (exports):** caterer (a plan per space with chairs numbered and allergy chairs ringed, the key with counts, dietary needs by seat, kitchen summary, guests A to Z, a page per table), venue (no names), florist (décor numbered, centres, the list), hire (furniture marked, counts by type and size, tableware), A4 or A3, portrait or landscape, chosen spaces; PNG of the shown space at 1×, 2× or 4×; Share with an optional passcode and expiry, a public noindex page and the same exports behind it, Turn off, a line in `/privacy`; the entrance board in A4, A3, A2, A1 or A0, portrait or landscape, grouped by space.
+- **F (food):** the event's default style and a menu of courses each taking it or their own; platters per dish and table (typed counts that flag "Check platters" when who shares changes, a long-table minimum from the settings), own plates and kids' meals per seat and course, the "Tight for shared dishes" and tall-centre flags, the kitchen summary, shared dishes down the middle and plate rings and name tags in the close-up.
+- **I (settings):** walkway thresholds, shared-dish thresholds, the long-table length and default sizes of library items; the Measure tool, the clearance rings and the library use them.
 
 ### Differences from the spec
 
-- Item totals are by item type across all styles (`place:charger`), with the
-  styles' notes listed under each, not one row per style.
-- The CSV is built in the browser, not a `seating-items` kind on
-  `/api/export/[kind]`; no supplier or budget line is shown yet.
-- The shape picker offers eight shapes; ceremony rows and banquet runs need
-  their own creation screens.
-- Every seat still has its `(guest, event)` key and no read filters by layout,
-  because no draft can exist yet.
-- Dietary dots use the free-text note; no screen edits the structured tags.
+- Item totals are by item type across all styles (`place:charger`), not one row per style; the CSV is built in the browser, not a `seating-items` kind on `/api/export/[kind]`.
+- A **T banquet run is two runs**: a run is one chain of pieces, so the presets are straight, L and U.
+- A **cocktail table** is a round table of one place marked reserved (a table needs at least one seat).
+- **Tall centrepieces** are the couple's tick on the item; there is no height, so the plan's "tall over 30 cm" setting is kept but not used.
+- **Share links** show their address once, when made (only its hash is stored, as migration `0057` decided), so a link can be listed and turned off but not copied again; a lost one is replaced.
+- The **PNG** leaves out the venue's plan image (a picture from another address would stop the browser saving it); the **fade** is stored per space and applied on the screen, in prints and in shares.
+- **Deleted drafts** are hidden and restorable for 30 days, but nothing purges them afterwards.
+- A banquet run's or rows block's chairs are numbered continuously (no "Row 2, seat 3").
+- Every export is the browser's print view (save as PDF); there is no server-made PDF.
 
 ### Not built
 
 | Part | What is missing |
 | --- | --- |
-| A | Event, layout and space tabs; the Library, Venue and Guests panels and the new right panel; the Show layers; the in-canvas legend; the "Free the seat?" card; unnamed plus-ones' label; ceremony rows, banquet runs, décor and marquee placement, the couple's own décor |
-| B | Every drawing tool and screen: the starting choices, PDF upload, fade, walls and curves, doors and windows, marquees, areas, text, measure, kept dimensions |
-| C | The per-table changes editor; suppliers and budget-line following; vendor pages; the kids' starter style |
-| D | The lock: no action, server check or button (the columns exist) |
-| E | The caterer, venue, florist and hire exports; PNG; the share link and its page and `/privacy` line; the entrance board sizes |
-| F | The menu editor, service-style switch, platter screen, own-plate and kids' meal controls, room-on-the-table hints, the kitchen summary |
-| G | Draft layouts: making, switching, swapping, deleting; the seat key change and layout filtering on every read |
-| H | The dietary editor (guest, guest table, seating panel); the RSVP change; dots from tags |
-| I | The settings sheet; walkway colours from the thresholds |
+| A | Event tabs on the screen (events are still reached from the seating picker); the top bar's saved state; a right panel (the selection's controls sit under the canvas and in the table drawer, not in a panel with Seats / Style / Notes tabs); the unnamed plus-one's "*Host*'s +1" label; Walkway guides as a Show layer (the "Space around tables" toggle is where it was); a table's floating bar (name, style, Rotate, Duplicate) |
+| B | Moving a whole wall by dragging it (corners, split and delete are there); a marquee used as the space's walls; "Use the venue's plan as it is" has no scale-setting step of its own beyond the existing "Set the scale" over the plan |
+| E | A "Copy" of the item list; the florist and hire lists as their own CSV |
+| G | A purge of deleted drafts after 30 days; History does not show a deleted draft's versions |
+| Checks | A real iPad, a printer, a browser print dialog, a phone on the live site, `/p/<token>` under Next with a database, the budget line following a final number against live data, the backfill on a copy of live data |
 
-### Order for the rest
+### Order for whoever continues
 
-The drafts migration first (drop the `(guest, event)` seat key, filter every
-read to the live layout, drop the room trigger once the room lives on spaces),
-then A and B (one canvas, then drawing), F and H, then E and D.
+Apply `0055`–`0061` to live in order (`0055` alone first), then open a real event
+with seating: check the Room view, make a draft and swap it live and back, share a
+link with a passcode, and print each export once.
