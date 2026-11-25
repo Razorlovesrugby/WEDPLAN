@@ -1811,6 +1811,9 @@ export type SeatingShareLinkRow = {
   revoked_at: string | null;
   created_by: string | null;
   created_at: string;
+  /** Five wrong passcodes lock the link for fifteen minutes (migration 0061). */
+  failed_attempts: number;
+  locked_until: string | null;
 };
 
 export type DietaryTag =
@@ -2733,7 +2736,7 @@ export type Database = {
       >;
       seating_share_links: Table<
         SeatingShareLinkRow,
-        "id" | "created_at" | "passcode_hash" | "label" | "expires_at" | "revoked_at" | "created_by"
+        "id" | "created_at" | "passcode_hash" | "label" | "expires_at" | "revoked_at" | "created_by" | "failed_attempts" | "locked_until"
       >;
       guest_dietary_needs: Table<GuestDietaryNeedRow, Timestamps | "other_text" | "is_allergy">;
       seating_layouts: Table<
@@ -2826,6 +2829,11 @@ export type Database = {
       seating_make_live: {
         Args: { p_event_id: string; p_layout_id: string };
         Returns: { live: string; previous: string | null; previous_name: string | null };
+      };
+      /** Spec 57 E.3: whether a share link opens (token hash and the passcode hash given), and for which event. Service role only. */
+      seating_share_check: {
+        Args: { p_token_hash: string; p_passcode_hash?: string | null };
+        Returns: { status: string; event_id: string | null; wedding_id: string | null }[];
       };
       /** Spec 57: the event's live layout, made (with its space) if it has none. */
       seating_live_layout: { Args: { p_event_id: string }; Returns: string };

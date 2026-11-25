@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { SeatingScreen } from "@/components/seating/seating-screen";
 import { parseColourBy } from "@/lib/seating/colour";
 import { signPath } from "@/lib/supabase/storage";
-import { getSeatingDayActivity, getSeatingPlan, listSeatingSnapshots } from "@/server/queries/seating";
+import { getSeatingDayActivity, getSeatingPlan, listSeatingSnapshots, listShareLinks } from "@/server/queries/seating";
 import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Seating" };
@@ -43,10 +43,11 @@ export default async function EventSeatingPage({
   }
 
   const data = await getSeatingPlan(wedding.id, id, layout, space);
-  const [snapshots, collaborators, dayActivity] = await Promise.all([
+  const [snapshots, collaborators, dayActivity, shareLinks] = await Promise.all([
     listSeatingSnapshots(wedding.id, id, data.layoutId),
     getCollaborators(wedding.id),
     getSeatingDayActivity(wedding.id),
+    listShareLinks(wedding.id, id),
   ]);
   // Signed here, not in the query: the print page and the CSV share the query and never draw the image.
   const backgroundUrl = data.plan?.background_path ? await signPath(data.plan.background_path) : null;
@@ -66,6 +67,8 @@ export default async function EventSeatingPage({
 
       <SeatingScreen
         eventId={id}
+        eventName={event.name}
+        shareLinks={shareLinks}
         timeZone={wedding.timezone}
         data={{ ...data, backgroundUrl }}
         snapshots={snapshots}

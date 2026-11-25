@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/types/database";
 import type { ColourContext } from "@/lib/seating/colour";
 import type {
   SeatingAssignment,
@@ -66,8 +68,23 @@ export type SeatingPlanData = {
  * who is coming. Invited-ness comes from `v_guest_event_invites` and nowhere
  * else (spec 22).
  */
-export const getSeatingPlan = cache(async (weddingId: string, eventId: string, requestedLayoutId?: string, requestedSpaceId?: string): Promise<SeatingPlanData> => {
-  const supabase = await createClient();
+export const getSeatingPlan = cache(async (weddingId: string, eventId: string, requestedLayoutId?: string, requestedSpaceId?: string): Promise<SeatingPlanData> =>
+  loadSeatingPlan(await createClient(), weddingId, eventId, requestedLayoutId, requestedSpaceId),
+);
+
+/**
+ * `getSeatingPlan` with the client named. A shared plan (spec 57 E.3) is read
+ * by someone with no account, through the service role, after the database has
+ * said which event the link is for: the caller scopes it to that wedding and
+ * event, as every public loader here does.
+ */
+export async function loadSeatingPlan(
+  supabase: SupabaseClient<Database>,
+  weddingId: string,
+  eventId: string,
+  requestedLayoutId?: string,
+  requestedSpaceId?: string,
+): Promise<SeatingPlanData> {
 
   // Which layout to show comes first: every table, fixture and seat read below is filtered to it.
   const layoutRows = await supabase
@@ -314,7 +331,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
     budgetLines: budgetLines.data ?? [],
     counts,
   };
-});
+}
 
 /** Which events have at least one table — for the /seating picker. */
 export const getEventIdsWithSeating = cache(async (weddingId: string): Promise<Set<string>> => {
@@ -436,3 +453,17 @@ export const getVendorSeatingItems = cache(async (weddingId: string, vendorId: s
     })),
   ];
 });
+
+/** An event's share links, newest first. The address itself is never stored, so it can't be listed. */
+export const listShareLinks = cache(async (weddingId: string, eventId: string) => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("seating_share_links")
+    .select("id, label, expires_at, revoked_at, created_at, passcode_hash")
+    .eq("wedding_id", weddingId)
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Could not load share links: ${error.message}`);
+  return (data ?? []).map((l) => ({ id: l.id, label: l.label, expires_at: l.expires_at, revoked_at: l.revoked_at, created_at: l.created_at, hasPasscode: l.passcode_hash !== null }));
+});
+export type ShareLinkSummary = Awaited<ReturnType<typeof listShareLinks>>[number];

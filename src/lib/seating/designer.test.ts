@@ -23,6 +23,8 @@ import {
 } from "./drawing";
 import { declinedSeats, isKept } from "./declined";
 import { roomChanged } from "./lock";
+import { pngFileName, pngSize } from "./png-export";
+import { parseShareInput, shareLinkState, shareRefusal } from "./share";
 import { buildKitchen, mealQuestion, sharedFlags } from "./kitchen";
 import { isPdf, pdfScale } from "./pdf-plan";
 import { LIBRARY, carriesQuantity, fixtureGroup, searchLibrary, tileDrawSize } from "./library";
@@ -890,5 +892,59 @@ describe("the Kids starter style (spec 57 C.1)", () => {
     expect(shouldOfferKidsStyle(2, [])).toBe(true);
     expect(shouldOfferKidsStyle(2, [{ name: "Garden round" }])).toBe(true);
     expect(shouldOfferKidsStyle(2, [{ name: " kids " }])).toBe(false);
+  });
+});
+
+describe("share links (spec 57 E.3)", () => {
+  const now = new Date("2026-12-01T10:00:00Z");
+  it("takes no passcode and no expiry as none", () => {
+    expect(parseShareInput({}, now)).toEqual({ ok: true, value: { passcode: null, expiresAt: null, label: null } });
+    expect(parseShareInput({ passcode: "  ", expires: "" }, now)).toEqual({ ok: true, value: { passcode: null, expiresAt: null, label: null } });
+  });
+  it("keeps a passcode of four to twelve characters and refuses the rest", () => {
+    expect(parseShareInput({ passcode: "abcd" }, now)).toMatchObject({ ok: true, value: { passcode: "abcd" } });
+    expect(parseShareInput({ passcode: "a".repeat(12) }, now).ok).toBe(true);
+    expect(parseShareInput({ passcode: "abc" }, now).ok).toBe(false);
+    expect(parseShareInput({ passcode: "a".repeat(13) }, now).ok).toBe(false);
+  });
+  it("sets the expiry to the end of the day, and refuses one that has passed", () => {
+    expect(parseShareInput({ expires: "2026-12-25" }, now)).toMatchObject({ ok: true, value: { expiresAt: "2026-12-25T23:59:59.000Z" } });
+    expect(parseShareInput({ expires: "2026-11-30" }, now).ok).toBe(false);
+    expect(parseShareInput({ expires: "soon" }, now).ok).toBe(false);
+  });
+  it("trims and shortens the label", () => {
+    expect(parseShareInput({ label: "  Caterer  " }, now)).toMatchObject({ value: { label: "Caterer" } });
+    expect((parseShareInput({ label: "x".repeat(200) }, now) as { value: { label: string } }).value.label).toHaveLength(80);
+  });
+  it("says nothing about whether a gone link ever existed", () => {
+    expect(shareRefusal("gone")).toBe(shareRefusal("ok" as never));
+    expect(shareRefusal("passcode_required")).toMatch(/passcode/);
+    expect(shareRefusal("locked")).toMatch(/wait/i);
+  });
+  it("tells a link's state", () => {
+    expect(shareLinkState({ revoked_at: null, expires_at: null }, now)).toBe("live");
+    expect(shareLinkState({ revoked_at: "2026-11-01T00:00:00Z", expires_at: null }, now)).toBe("revoked");
+    expect(shareLinkState({ revoked_at: null, expires_at: "2026-11-30T00:00:00Z" }, now)).toBe("expired");
+    expect(shareLinkState({ revoked_at: "2026-11-01T00:00:00Z", expires_at: "2026-11-30T00:00:00Z" }, now)).toBe("revoked");
+  });
+});
+
+describe("PNG export (spec 57 Part E)", () => {
+  it("sizes the picture from the plan's own box at 1×, 2× and 4×", () => {
+    // A 20 × 15 m room plus its margin is a 2160 × 1740 cm box: one pixel per 2 cm at 1×.
+    expect(pngSize({ w: 2160, h: 1740 }, 1)).toEqual({ width: 1080, height: 870, capped: false });
+    expect(pngSize({ w: 2160, h: 1740 }, 4)).toEqual({ width: 4320, height: 3480, capped: false });
+  });
+  it("holds a huge room under what a browser can draw, keeping its shape", () => {
+    // A 200 m room at 4× would be 40 000 px wide.
+    const big = pngSize({ w: 20_000, h: 10_000 }, 4);
+    expect(big.capped).toBe(true);
+    expect(Math.max(big.width, big.height)).toBe(8192);
+    expect(big.width / big.height).toBeCloseTo(2, 1);
+  });
+  it("names the file for the event and space without odd characters", () => {
+    expect(pngFileName("Reception", "Hall")).toBe("Reception - Hall.png");
+    expect(pngFileName("A/B: C*", "Hall?")).toBe("AB C - Hall.png");
+    expect(pngFileName("", "")).toBe("Seating plan.png");
   });
 });

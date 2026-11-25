@@ -13,6 +13,9 @@ import type { SeatingDayActivity, SeatingSnapshotSummary } from "@/server/querie
 import { DragPreview, type DragPayload } from "./guest-chip";
 import { trayHouseholds } from "@/lib/seating/tray";
 import { DeclinedSeats } from "./declined-seats";
+import { ExportDialog } from "./export-dialog";
+import { ShareDialog } from "./share-dialog";
+import type { ShareLinkSummary } from "@/server/queries/seating";
 import { LayoutTabs } from "./layout-tabs";
 import { LibraryPanel } from "./library-panel";
 import { VenuePanel } from "./venue-panel";
@@ -38,15 +41,19 @@ const VIEW_KEY = "wedplan.seating.view";
 
 export function SeatingScreen({
   eventId,
+  eventName,
   timeZone,
   data,
   snapshots,
   dayActivity,
   collaborators,
+  shareLinks = [],
   initialColourBy,
 }: {
   eventId: string;
+  eventName: string;
   timeZone: string;
+  shareLinks?: ShareLinkSummary[];
   data: SeatingData;
   snapshots: SeatingSnapshotSummary[];
   dayActivity: SeatingDayActivity[];
@@ -55,18 +62,22 @@ export function SeatingScreen({
 }) {
   return (
     <SeatingProvider eventId={eventId} timeZone={timeZone} data={data} initialColourBy={initialColourBy}>
-      <Screen timeZone={timeZone} snapshots={snapshots} dayActivity={dayActivity} collaborators={collaborators} />
+      <Screen timeZone={timeZone} eventName={eventName} shareLinks={shareLinks} snapshots={snapshots} dayActivity={dayActivity} collaborators={collaborators} />
     </SeatingProvider>
   );
 }
 
 function Screen({
   timeZone,
+  eventName,
+  shareLinks,
   snapshots,
   dayActivity,
   collaborators,
 }: {
   timeZone: string;
+  eventName: string;
+  shareLinks: ShareLinkSummary[];
   snapshots: SeatingSnapshotSummary[];
   dayActivity: SeatingDayActivity[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
@@ -219,8 +230,12 @@ function Screen({
                   <p className="text-xs text-muted">Meal colours: pick an answer under Colour by.</p>
                 </div>
               </details>
-              <details className="relative ml-auto">
-                <summary className="btn cursor-pointer list-none py-1">Print &amp; share</summary>
+              <div className="ml-auto flex items-center gap-1">
+                <ShareDialog links={shareLinks} timeZone={timeZone} />
+                <ExportDialog eventName={eventName} />
+              </div>
+              <details className="relative">
+                <summary className="btn cursor-pointer list-none py-1">Print</summary>
                 <ul className="absolute right-0 z-30 mt-1 w-64 rounded border border-line bg-white py-1 text-sm shadow-lg">
                   {unseated > 0 ? (
                     <li className="border-b border-line px-3 py-1.5 text-amber-800">

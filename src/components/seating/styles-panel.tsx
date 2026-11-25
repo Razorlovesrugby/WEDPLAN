@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { applyTableStyle, deleteTableStyle, saveTableStyle, setItemFinalCount, setItemLinks, setTableStyleChanges } from "@/server/actions/seating-styles";
 import { closeupFood } from "@/lib/seating/kitchen";
+import { itemLines, tableCounts } from "@/lib/seating/item-lines";
 import { useKitchen } from "./use-kitchen";
 import { changesFrom, effectiveStyle as effectiveStyleOf, parseStyleChanges as parseChanges } from "@/lib/seating/items";
 import {
@@ -56,28 +57,18 @@ export function StylesPanel() {
   const usedBy = (styleId: string) => tables.filter((t) => t.style_id === styleId).length;
 
   const lines = useMemo(() => {
-    const seatedAt = new Map<string, number>();
-    for (const a of assignments) seatedAt.set(a.tableId, (seatedAt.get(a.tableId) ?? 0) + 1);
-    const blockedAt = new Map<string, number>();
-    for (const b of data.blocked) blockedAt.set(b.tableId, (blockedAt.get(b.tableId) ?? 0) + 1);
-    const rows = computeItems({
-      tables: tables.map((t) => ({
-        id: t.id,
-        shape: t.shape,
-        capacity: t.capacity,
-        reserved_seats: t.reserved_seats,
-        style_id: t.style_id,
-        style_changes: t.style_changes,
-        seated: seatedAt.get(t.id) ?? 0,
-        blocked: blockedAt.get(t.id) ?? 0,
-      })),
+    const { seatedAt, blockedAt } = tableCounts(assignments, data.blocked);
+    return itemLines({
+      tables,
+      seatedAt,
+      blockedAt,
       styles: data.styles,
       fixtures: data.fixtures,
       customNames: Object.fromEntries(data.customItems.map((c) => [c.id, c.name])),
       // Two per platter (spec 57 F.3): serving utensils for the shared courses.
       utensils: kitchen.utensils,
+      counts: data.counts,
     });
-    return mergeFinal(rows, data.counts);
   }, [tables, assignments, data.blocked, data.styles, data.fixtures, data.counts, data.customItems, kitchen.utensils]);
 
   const run = (label: string | null, write: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) =>
