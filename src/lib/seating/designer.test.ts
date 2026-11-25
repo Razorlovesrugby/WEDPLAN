@@ -23,6 +23,7 @@ import {
 } from "./drawing";
 import { declinedSeats, isKept } from "./declined";
 import { roomChanged } from "./lock";
+import { buildKitchen, mealQuestion, sharedFlags } from "./kitchen";
 import { isPdf, pdfScale } from "./pdf-plan";
 import { LIBRARY, carriesQuantity, fixtureGroup, searchLibrary, tileDrawSize } from "./library";
 import { banquetPieces, banquetPreset, rowBlocks, localSeatPositions, readSegments, tableSize, tablePolygon, seatPositions, FIXTURE_DEFAULTS, polygonsOverlap } from "./geometry";
@@ -31,7 +32,7 @@ import { computeService, parseMenu, typedPlatters, type ServiceSeat, type Servic
 import { chairDetail, chairMarks, initials, readableText } from "./chairs";
 import { colourLegend, guestColour, parseColourBy, serialiseColourBy } from "./colour";
 import type { SeatingGuest } from "./model";
-import { computeItems, effectiveStyle, itemsCsv, mergeFinal, parseStyleChanges, parseStyleCentre, parseStylePlace, type ItemTable, type TableStyle } from "./items";
+import { changesFrom, computeItems, effectiveStyle, itemsCsv, kidsStarterStyle, shouldOfferKidsStyle, mergeFinal, parseStyleChanges, parseStyleCentre, parseStylePlace, type ItemTable, type TableStyle } from "./items";
 
 const wall = (id: string, a: [number, number], b: [number, number], over: Partial<Wall> = {}): Wall => ({ id, a, b, thick: 20, bulge: 0, ...over });
 
@@ -757,5 +758,137 @@ describe("locking the room (spec 57 Part D)", () => {
   });
   it("copes with nothing", () => {
     expect(roomChanged(null, undefined)).toBe(false);
+  });
+});
+
+describe("kitchen summary (spec 57 E.1.2)", () => {
+  const guest = (id: string, over: Partial<SeatingGuest> = {}): SeatingGuest => ({
+    id, householdId: "h", householdName: "H", firstName: id, lastName: "Ngata", preferredName: null, ageBand: "adult", side: null,
+    dietary: null, dietaryNeeds: [], accessibility: null, plusOneFor: null, tagIds: [], invited: true, excluded: false, rsvp: "yes",
+    needsHighchair: false, usesWheelchair: false, arrivedAt: null, replyChangedAt: null, ...over,
+  });
+  const tables = [
+    { id: "t1", label: "Table 1", shape: "round" as const, capacity: 8, ends_seated: false, width_cm: null, length_cm: null, rows_count: null, aisle_cm: null, segments: null },
+    { id: "t2", label: "Table 2", shape: "round" as const, capacity: 8, ends_seated: false, width_cm: null, length_cm: null, rows_count: null, aisle_cm: null, segments: null },
+  ];
+  const guests = [
+    guest("a", { dietaryNeeds: [{ tag: "peanut", isAllergy: true, otherText: null }] }),
+    guest("b", { dietary: "no onions" }),
+    guest("c"),
+    guest("kid", { ageBand: "child" }),
+  ];
+  const seats = [
+    { guestId: "a", tableId: "t1", seatIndex: 0 },
+    { guestId: "b", tableId: "t1", seatIndex: 1, ownPlate: { main: true } },
+    { guestId: "c", tableId: "t1", seatIndex: null },
+    { guestId: "kid", tableId: "t2", seatIndex: 3 },
+  ];
+  const menu = [
+    { id: "main", name: "Mains", style: "shared" as const, dishes: [{ id: "lamb", name: "Lamb", tags: [], vessel: "platter" as const, serves: 4 }] },
+    { id: "starter", name: "Starters", style: "plated" as const, dishes: [] },
+    { id: "canapes", name: "Canapés", style: "roaming" as const, dishes: [] },
+  ];
+  const meal = { id: "q", label: "Meal", options: ["Beef", "Fish"], answers: { a: "Beef", b: "Fish", c: "Beef" } };
+  const out = buildKitchen({ menu, defaultStyle: "plated", tables, seats, guests, settings: { longTableCm: null }, meal });
+
+  it("counts plated courses per answer, with a line for nobody's answer", () => {
+    expect(out.courses.find((c) => c.courseId === "starter")!.plated).toEqual([
+      { answer: "Beef", count: 2 },
+      { answer: "Fish", count: 1 },
+      { answer: "No answer", count: 1 },
+    ]);
+  });
+  it("works out platters per table for a shared course, leaving out own plates and kids' meals", () => {
+    const main = out.courses.find((c) => c.courseId === "main")!;
+    // Table 1: three seated, one on their own plate → two sharing; 2 ÷ 4 serves = 1 platter. Table 2: the child has a kids' meal → nobody shares.
+    expect(main.heads.map((h) => h.sharing)).toEqual([2, 0]);
+    expect(main.shared[0]!.tables.map((t) => t.platters)).toEqual([1, null]);
+    expect(main.shared[0]!.total).toBe(1);
+    expect(out.utensils).toBe(2);
+  });
+  it("lists own plates and kids' meals with their table and seat", () => {
+    const main = out.courses.find((c) => c.courseId === "main")!;
+    expect(main.ownPlates).toEqual([{ table: "Table 1", seat: 2, name: "b Ngata", dietary: "no onions" }]);
+    expect(main.kidsMeals.map((k) => k.name)).toEqual(["kid Ngata"]);
+  });
+  it("counts a roaming course by head", () => {
+    expect(out.courses.find((c) => c.courseId === "canapes")!.totalGuests).toBe(4);
+  });
+  it("lists every dietary need with where they sit, allergies marked", () => {
+    expect(out.dietary).toEqual([
+      { table: "Table 1", seat: 1, name: "a Ngata", dietary: "Allergy: Peanuts", allergy: true },
+      { table: "Table 1", seat: 2, name: "b Ngata", dietary: "no onions", allergy: false },
+    ]);
+  });
+  it("finds the meal question by the plan's choice, else by name, else none", () => {
+    const qs = [{ id: "q1", label: "Song request", options: [] }, { id: "q2", label: "Dinner choice", options: ["Beef"] }];
+    expect(mealQuestion(qs, { q2: { a: "Beef" } }, null)?.id).toBe("q2");
+    expect(mealQuestion(qs, {}, "q1")?.id).toBe("q1");
+    expect(mealQuestion([qs[0]!], {}, null)).toBeNull();
+  });
+});
+
+describe("shared-dish flags (spec 57 F.4)", () => {
+  const settings = { tightForShared: { longWidthCm: 80, roundCm: 150 } };
+  const base = { capacity: 8, ends_seated: false, width_cm: null, length_cm: null, rows_count: null, aisle_cm: null, segments: null };
+  it("flags a long table narrower than the limit and a small round one", () => {
+    // A long table is 75 cm deep: under the 80 cm limit.
+    expect(sharedFlags({ ...base, shape: "long" }, {}, settings)).toEqual(["Tight for shared dishes"]);
+    expect(sharedFlags({ ...base, shape: "round", capacity: 6 }, {}, settings)).toEqual(["Tight for shared dishes"]);
+    expect(sharedFlags({ ...base, shape: "round", capacity: 10 }, {}, settings)).toEqual([]);
+  });
+  it("follows the plan's own limits", () => {
+    expect(sharedFlags({ ...base, shape: "long" }, {}, { tightForShared: { longWidthCm: 70, roundCm: 150 } })).toEqual([]);
+  });
+  it("flags a ticked tall centre, only while it is on", () => {
+    expect(sharedFlags({ ...base, shape: "round", capacity: 12 }, { candles: { on: true, tall: true } }, settings)).toEqual(["Tall centrepieces get in the way of passing dishes"]);
+    expect(sharedFlags({ ...base, shape: "round", capacity: 12 }, { candles: { on: false, tall: true } }, settings)).toEqual([]);
+  });
+});
+
+describe("per-table changes (spec 57 C.1)", () => {
+  const style = { place: { charger: { on: true }, glasses: { on: true, count: 2 } }, centre: { candles: { on: true, count: 4 }, extras: [{ name: "Bud vases", count: 3 }] } };
+  it("is nothing when the table is just its style", () => {
+    expect(changesFrom(style, effectiveStyle(style, null))).toBeNull();
+  });
+  it("keeps only what differs", () => {
+    const wanted = effectiveStyle(style, null);
+    wanted.place = { ...wanted.place, glasses: { on: true, count: 3 }, napkin: { on: true } };
+    wanted.centre = { ...wanted.centre, candles: { on: false } };
+    expect(changesFrom(style, wanted)).toEqual({ place: { glasses: { on: true, count: 3 }, napkin: { on: true } }, centre: { candles: { on: false } } });
+  });
+  it("turns an item the style has off, and replaces the extras whole", () => {
+    const wanted = { place: { glasses: style.place.glasses }, centre: { candles: style.centre.candles, extras: [{ name: "Bud vases", count: 5 }] } };
+    expect(changesFrom(style, wanted)).toEqual({ place: { charger: { on: false } }, centre: { extras: [{ name: "Bud vases", count: 5 }] } });
+  });
+  it("round trips through effectiveStyle", () => {
+    const wanted = { place: { charger: { on: true }, napkin: { on: true, note: "linen" } }, centre: { runner: { on: true } } };
+    const changes = changesFrom(style, wanted);
+    const back = effectiveStyle(style, changes);
+    expect(back.place.napkin).toEqual({ on: true, note: "linen" });
+    expect(back.place.glasses?.on).toBe(false);
+    expect(back.centre.runner?.on).toBe(true);
+    expect(back.centre.candles?.on).toBe(false);
+  });
+  it("with no style, everything wanted is a change", () => {
+    expect(changesFrom(null, { place: { charger: { on: true } }, centre: {} })).toEqual({ place: { charger: { on: true } } });
+  });
+});
+
+describe("the Kids starter style (spec 57 C.1)", () => {
+  it("is plastic cups, no charger and an activity pack, and parses as a style", () => {
+    const k = kidsStarterStyle();
+    expect(k.name).toBe("Kids");
+    expect(k.place.charger?.on).toBe(false);
+    expect(k.place.glasses?.note).toBe("plastic cups");
+    expect(k.centre.extras).toEqual([{ name: "Activity pack", count: 1 }]);
+    expect(parseStylePlace(k.place)).toEqual(k.place);
+    expect(parseStyleCentre(k.centre)).toEqual(k.centre);
+  });
+  it("is offered once a child is seated and not before, and not if the couple already has one", () => {
+    expect(shouldOfferKidsStyle(0, [])).toBe(false);
+    expect(shouldOfferKidsStyle(2, [])).toBe(true);
+    expect(shouldOfferKidsStyle(2, [{ name: "Garden round" }])).toBe(true);
+    expect(shouldOfferKidsStyle(2, [{ name: " kids " }])).toBe(false);
   });
 });

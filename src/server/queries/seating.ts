@@ -12,10 +12,20 @@ import type {
 } from "@/lib/seating/model";
 import type { BlockedChair } from "@/lib/seating/model";
 import type { RsvpStatus } from "@/lib/types/database";
-import { parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
+import { describeItemKey, parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
+import { FIXTURE_DEFAULTS } from "@/lib/seating/geometry";
 import { chooseLayout, type LayoutSummary } from "@/lib/seating/layouts";
 import { parseDietaryNeeds, type DietaryNeed } from "@/lib/dietary";
 import type { SeatingCustomItemRow, SeatingMarqueeRow, SeatingSpaceRow } from "@/lib/types/database";
+
+/** A jsonb of true/false flags per course id, read defensively. */
+function boolMap(raw: unknown): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw)) if (typeof v === "boolean") out[k] = v;
+  }
+  return out;
+}
 
 export type SeatingPlanData = {
   plan: SeatingPlan | null;
@@ -41,6 +51,8 @@ export type SeatingPlanData = {
   customItems: SeatingCustomItemRow[];
   marquees: SeatingMarqueeRow[];
   vendors: { id: string; name: string }[];
+  /** Budget lines costed by a manual quantity: the ones an item's final number can drive (spec 57 C.4). */
+  budgetLines: { id: string; label: string }[];
   /** The couple's final item counts for that layout. */
   counts: StoredCount[];
 };
@@ -80,7 +92,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
   // A layout nobody has placed anything in yet has no id to filter on: the all-zero uuid matches nothing.
   const scope = layoutId ?? "00000000-0000-0000-0000-000000000000";
 
-  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted, needs, customItems, marquees, vendors] =
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted, needs, customItems, marquees, vendors, budgetLines] =
     await Promise.all([
       supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
@@ -99,7 +111,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
         .eq("event_id", eventId)
         .eq("layout_id", scope)
         .order("created_at", { ascending: true }),
-      supabase.from("seat_assignments").select("guest_id, table_id, seat_index, decline_kept_at").eq("wedding_id", weddingId).eq("event_id", eventId).eq("layout_id", scope),
+      supabase.from("seat_assignments").select("guest_id, table_id, seat_index, decline_kept_at, own_plate, kids_meal").eq("wedding_id", weddingId).eq("event_id", eventId).eq("layout_id", scope),
       supabase.from("seating_rules").select("*").eq("wedding_id", weddingId).order("created_at", { ascending: true }),
       supabase
         .from("guests")
@@ -136,6 +148,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
       supabase.from("seating_custom_items").select("*").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
       supabase.from("seating_marquees").select("*").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
       supabase.from("vendors").select("id, name").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
+      supabase.from("budget_items").select("id, label").eq("wedding_id", weddingId).eq("quantity_basis", "manual").order("label"),
     ]);
 
   for (const [what, result] of [
@@ -160,6 +173,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
     ["your own items", customItems],
     ["marquees", marquees],
     ["suppliers", vendors],
+    ["budget lines", budgetLines],
   ] as const) {
     if (result.error) throw new Error(`Could not load ${what}: ${result.error.message}`);
   }
@@ -274,6 +288,8 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
       tableId: a.table_id,
       seatIndex: a.seat_index,
       declineKeptAt: a.decline_kept_at,
+      ownPlate: boolMap(a.own_plate),
+      kidsMeal: boolMap(a.kids_meal),
     })),
     rules: rules.data ?? [],
     guests: seatingGuests,
@@ -295,6 +311,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
     customItems: customItems.data ?? [],
     marquees: marquees.data ?? [],
     vendors: vendors.data ?? [],
+    budgetLines: budgetLines.data ?? [],
     counts,
   };
 });
@@ -384,4 +401,38 @@ export const getSeatingDayActivity = cache(async (weddingId: string): Promise<Se
       note: p.note ?? null,
     };
   });
+});
+
+export type VendorSeatingItem = { text: string; final: number | null; note: string | null };
+
+/**
+ * What the seating plan says this supplier is bringing (spec 57 C.4): the live
+ * layout's items that name them, with the couple's final number or "Not set",
+ * and the décor placed with them as its supplier. Shown on the vendor's page.
+ */
+export const getVendorSeatingItems = cache(async (weddingId: string, vendorId: string): Promise<VendorSeatingItem[]> => {
+  const supabase = await createClient();
+  const live = await supabase.from("seating_layouts").select("id, event_id").eq("wedding_id", weddingId).eq("is_live", true).is("deleted_at", null);
+  if (live.error) throw new Error(`Could not load layouts: ${live.error.message}`);
+  const layoutIds = (live.data ?? []).map((l) => l.id);
+  if (layoutIds.length === 0) return [];
+  const [counts, fixtures, customs, spaces] = await Promise.all([
+    supabase.from("seating_item_counts").select("item_key, final_count").eq("wedding_id", weddingId).eq("vendor_id", vendorId).in("layout_id", layoutIds),
+    supabase.from("seating_fixtures").select("kind, label, quantity, space_id, custom_item_id").eq("wedding_id", weddingId).eq("vendor_id", vendorId).in("layout_id", layoutIds),
+    supabase.from("seating_custom_items").select("id, name").eq("wedding_id", weddingId),
+    supabase.from("seating_spaces").select("id, name").eq("wedding_id", weddingId).in("layout_id", layoutIds),
+  ]);
+  for (const [what, r] of [["items", counts], ["décor", fixtures], ["your own items", customs], ["spaces", spaces]] as const) {
+    if (r.error) throw new Error(`Could not load ${what}: ${r.error.message}`);
+  }
+  const customNames = Object.fromEntries((customs.data ?? []).map((c) => [c.id, c.name]));
+  const spaceName = new Map((spaces.data ?? []).map((s) => [s.id, s.name]));
+  return [
+    ...(counts.data ?? []).map((c) => ({ text: describeItemKey(c.item_key, customNames), final: c.final_count, note: null })),
+    ...(fixtures.data ?? []).map((f) => ({
+      text: f.label ?? (f.custom_item_id ? customNames[f.custom_item_id] : null) ?? FIXTURE_DEFAULTS[f.kind]?.label ?? f.kind,
+      final: f.quantity,
+      note: `placed in ${spaceName.get(f.space_id) ?? "the room"}`,
+    })),
+  ];
 });

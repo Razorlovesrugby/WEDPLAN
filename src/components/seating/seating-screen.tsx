@@ -24,6 +24,7 @@ import { RulesPanel } from "./rules-panel";
 import { SeatingProvider, useSeating, type SeatingData } from "./seating-state";
 import { RevealPanel, SnapshotsPanel } from "./snapshots-panel";
 import { DayActivityPanel } from "./day-activity-panel";
+import { FoodPanel } from "./food-panel";
 import { SettingsPanel } from "./settings-panel";
 import { StylesPanel } from "./styles-panel";
 import { SummaryBar } from "./summary-bar";
@@ -265,6 +266,7 @@ function Screen({
 
         <RulesPanel />
         <StylesPanel />
+        <FoodPanel />
         <SettingsPanel />
         <SnapshotsPanel snapshots={snapshots} collaborators={collaborators} />
         <DayActivityPanel activity={dayActivity} />

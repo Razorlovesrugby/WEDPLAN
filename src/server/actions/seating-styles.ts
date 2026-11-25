@@ -83,6 +83,7 @@ export async function deleteTableStyle(eventId: string, styleId: string): Promis
     .eq("id", styleId)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
+
   revalidate(eventId);
   return ok(undefined);
 }
@@ -169,6 +170,84 @@ export async function setItemFinalCount(
     { onConflict: "layout_id,item_key" },
   );
   if (error) return fail(error.message);
+
+  // A linked budget line follows the final number (spec 57 C.4). Clearing the number leaves the line's quantity as it was.
+  if (parsed.data.final !== null) {
+    const link = await supabase.from("seating_item_counts").select("budget_item_id").eq("layout_id", layout.layout.id).eq("item_key", parsed.data.key).maybeSingle();
+    if (link.error) return fail(link.error.message);
+    if (link.data?.budget_item_id) {
+      const followed = await supabase
+        .from("budget_items")
+        .update({ quantity: parsed.data.final })
+        .eq("id", link.data.budget_item_id)
+        .eq("wedding_id", wedding.id)
+        .eq("quantity_basis", "manual");
+      if (followed.error) return fail(followed.error.message);
+    }
+  }
   revalidate(eventId);
+  revalidatePath("/budget");
+  return ok(undefined);
+}
+
+
+/**
+ * Names an item's supplier and the budget line that follows its final number
+ * (spec 57 C.4). The line must be costed by a manual quantity (spec 6.1); the
+ * line's quantity is set to the final number at once if there is one, and from
+ * then on whenever it changes. Either link can be cleared with null; unlinking
+ * stops the line following and leaves its quantity.
+ */
+export async function setItemLinks(
+  eventId: string,
+  itemKey: string,
+  links: { vendorId?: string | null; budgetItemId?: string | null },
+  layoutId?: string,
+): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
+  const parsed = z
+    .object({ key: z.string().min(1).max(160), vendorId: uuid.nullable().optional(), budgetItemId: uuid.nullable().optional() })
+    .safeParse({ key: itemKey, ...links });
+  if (!parsed.success) return fail("That link isn't right");
+  const supabase = await createClient();
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+
+  if (parsed.data.vendorId) {
+    const v = await supabase.from("vendors").select("id").eq("id", parsed.data.vendorId).eq("wedding_id", wedding.id).maybeSingle();
+    if (v.error) return fail(v.error.message);
+    if (!v.data) return fail("That supplier doesn't exist");
+  }
+  let followed: { id: string } | null = null;
+  if (parsed.data.budgetItemId) {
+    const line = await supabase.from("budget_items").select("id, quantity_basis").eq("id", parsed.data.budgetItemId).eq("wedding_id", wedding.id).maybeSingle();
+    if (line.error) return fail(line.error.message);
+    if (!line.data) return fail("That budget line doesn't exist");
+    if (line.data.quantity_basis !== "manual") return fail("That line isn't costed by a quantity. Set it to “manual quantity × unit price” in the budget first.");
+    followed = line.data;
+  }
+
+  const patch: { wedding_id: string; layout_id: string; item_key: string; vendor_id?: string | null; budget_item_id?: string | null } = {
+    wedding_id: wedding.id,
+    layout_id: layout.layout.id,
+    item_key: parsed.data.key,
+  };
+  if (links.vendorId !== undefined) patch.vendor_id = parsed.data.vendorId ?? null;
+  if (links.budgetItemId !== undefined) patch.budget_item_id = parsed.data.budgetItemId ?? null;
+  const { error } = await supabase.from("seating_item_counts").upsert(patch, { onConflict: "layout_id,item_key" });
+  if (error) return fail(error.message);
+
+  if (followed) {
+    const row = await supabase.from("seating_item_counts").select("final_count").eq("layout_id", layout.layout.id).eq("item_key", parsed.data.key).maybeSingle();
+    if (row.error) return fail(row.error.message);
+    if (row.data?.final_count !== null && row.data?.final_count !== undefined) {
+      const set = await supabase.from("budget_items").update({ quantity: row.data.final_count }).eq("id", followed.id).eq("wedding_id", wedding.id);
+      if (set.error) return fail(set.error.message);
+    }
+  }
+  revalidate(eventId);
+  revalidatePath("/budget");
+  revalidatePath("/vendors", "layout");
   return ok(undefined);
 }

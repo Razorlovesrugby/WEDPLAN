@@ -1,11 +1,16 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { applyTableStyle, deleteTableStyle, saveTableStyle, setItemFinalCount } from "@/server/actions/seating-styles";
+import { applyTableStyle, deleteTableStyle, saveTableStyle, setItemFinalCount, setItemLinks, setTableStyleChanges } from "@/server/actions/seating-styles";
+import { closeupFood } from "@/lib/seating/kitchen";
+import { useKitchen } from "./use-kitchen";
+import { changesFrom, effectiveStyle as effectiveStyleOf, parseStyleChanges as parseChanges } from "@/lib/seating/items";
 import {
   CENTRE_ITEMS,
   CENTRE_LABEL,
   computeItems,
+  kidsStarterStyle,
+  shouldOfferKidsStyle,
   itemsCsv,
   mergeFinal,
   PLACE_ITEMS,
@@ -42,8 +47,10 @@ const PER_PLACE_COUNT: Partial<Record<PlaceKey, string>> = { cutlery: "pieces", 
  */
 export function StylesPanel() {
   const { eventId, layoutId, data, tables, assignments, track, setError, refresh } = useSeating();
+  const { kitchen } = useKitchen();
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const seatedChildren = assignments.filter((a) => data.guests.find((g) => g.id === a.guestId)?.ageBand !== "adult" && data.guests.some((g) => g.id === a.guestId)).length;
 
   const styleById = useMemo(() => new Map(data.styles.map((s) => [s.id, s])), [data.styles]);
   const usedBy = (styleId: string) => tables.filter((t) => t.style_id === styleId).length;
@@ -66,11 +73,12 @@ export function StylesPanel() {
       })),
       styles: data.styles,
       fixtures: data.fixtures,
-      customNames: {},
-      utensils: 0,
+      customNames: Object.fromEntries(data.customItems.map((c) => [c.id, c.name])),
+      // Two per platter (spec 57 F.3): serving utensils for the shared courses.
+      utensils: kitchen.utensils,
     });
     return mergeFinal(rows, data.counts);
-  }, [tables, assignments, data.blocked, data.styles, data.fixtures, data.counts]);
+  }, [tables, assignments, data.blocked, data.styles, data.fixtures, data.counts, data.customItems, kitchen.utensils]);
 
   const run = (label: string | null, write: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) =>
     startTransition(async () => {
@@ -108,6 +116,15 @@ export function StylesPanel() {
       <p className="text-sm text-muted">
         What is on each place and in the middle of a table. Tables share a style; change it once and every table using it follows. Open a table to see it drawn.
       </p>
+
+      {shouldOfferKidsStyle(seatedChildren, data.styles) ? (
+        <div className="flex flex-wrap items-center gap-2 rounded border border-line bg-paper/60 px-3 py-2 text-sm" role="status">
+          <span className="flex-1">A child is seated. Add a Kids style (plastic cups, no charger, an activity pack)? You can change or delete it like any other.</span>
+          <button type="button" className="btn py-1" disabled={pending} onClick={() => run("Added the Kids style", () => saveTableStyle(eventId, kidsStarterStyle()))}>
+            Add the Kids style
+          </button>
+        </div>
+      ) : null}
 
       {data.styles.length === 0 && !draft ? <p className="text-sm text-muted">No styles yet.</p> : null}
       <ul className="space-y-1.5">
@@ -222,6 +239,38 @@ export function StylesPanel() {
                       {l.label}
                       {l.notes.length > 0 ? <span className="block text-xs text-muted">{l.notes.join(" · ")}</span> : null}
                       {l.status === "changed" ? <span className="block text-xs text-amber-800">Seating changed since you set this</span> : null}
+                      <details className="mt-0.5 text-xs">
+                        <summary className="cursor-pointer text-muted">
+                          {l.vendorId || l.budgetItemId
+                            ? `${l.vendorId ? (data.vendors.find((v) => v.id === l.vendorId)?.name ?? "A supplier") : ""}${l.vendorId && l.budgetItemId ? " · " : ""}${l.budgetItemId ? `follows “${data.budgetLines.find((b) => b.id === l.budgetItemId)?.label ?? "a budget line"}”` : ""}`
+                            : "Supplier and budget line"}
+                        </summary>
+                        <div className="mt-1 grid gap-1.5">
+                          <label className="flex items-center gap-1.5">
+                            <span className="w-16 text-muted">Supplier</span>
+                            <select className="field py-0.5" value={l.vendorId ?? ""} disabled={pending} onChange={(e) => run(null, () => setItemLinks(eventId, l.key, { vendorId: e.target.value || null }, layoutId))}>
+                              <option value="">None</option>
+                              {data.vendors.map((v) => (
+                                <option key={v.id} value={v.id}>
+                                  {v.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="flex items-center gap-1.5">
+                            <span className="w-16 text-muted">Budget line</span>
+                            <select className="field py-0.5" value={l.budgetItemId ?? ""} disabled={pending} onChange={(e) => run(null, () => setItemLinks(eventId, l.key, { budgetItemId: e.target.value || null }, layoutId))}>
+                              <option value="">Not linked</option>
+                              {data.budgetLines.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <p className="text-muted">The line&rsquo;s quantity follows the final number. Only lines costed by a manual quantity are listed.</p>
+                        </div>
+                      </details>
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{l.suggestedChairs}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{l.suggestedGuests}</td>
@@ -266,6 +315,7 @@ function StyleEditor({
   onSave,
   onCancel,
   onDelete,
+  forTable = false,
 }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
@@ -273,6 +323,8 @@ function StyleEditor({
   onSave: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  /** Editing one table's changes on top of its style: no name, and the button says so. */
+  forTable?: boolean;
 }) {
   const setPlace = (k: PlaceKey, v: PlaceSetting | null) => {
     const place = { ...draft.place };
@@ -297,10 +349,12 @@ function StyleEditor({
         onSave();
       }}
     >
-      <label className="block text-sm">
-        <span className="mb-1 block text-xs text-muted">Name</span>
-        <input className="field" required maxLength={STYLE_LIMITS.name} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Garden round" autoFocus />
-      </label>
+      {forTable ? null : (
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs text-muted">Name</span>
+          <input className="field" required maxLength={STYLE_LIMITS.name} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Garden round" autoFocus />
+        </label>
+      )}
 
       <fieldset className="space-y-1.5">
         <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Each place</legend>
@@ -373,8 +427,8 @@ function StyleEditor({
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" className="btn btn-primary" disabled={pending || draft.name.trim() === ""}>
-          {draft.id ? "Save style" : "Add style"}
+        <button type="submit" className="btn btn-primary" disabled={pending || (!forTable && draft.name.trim() === "")}>
+          {forTable ? "Save this table's changes" : draft.id ? "Save style" : "Add style"}
         </button>
         <button type="button" className="btn" onClick={onCancel}>
           Cancel
@@ -391,9 +445,17 @@ function StyleEditor({
 
 /** In a table's drawer: pick its style and see it set, top down. */
 export function TableStyleSection({ table }: { table: SeatingTable }) {
-  const { eventId, layoutId, data, track, setError, refresh } = useSeating();
+  const { eventId, data, assignments, track, setError, refresh } = useSeating();
+  const { kitchen, menu, defaultStyle } = useKitchen();
   const [pending, startTransition] = useTransition();
+  const [changing, setChanging] = useState<Draft | null>(null);
   const style = table.style_id ? data.styles.find((s) => s.id === table.style_id) ?? null : null;
+  const changed = parseChanges(table.style_changes);
+  // Dishes down the middle, plate rings and name tags come from the menu and who is seated (spec 57 C.2, F).
+  const food = useMemo(
+    () => closeupFood({ kitchen, menu, defaultStyle, tableId: table.id, seats: assignments, guests: data.guests }),
+    [kitchen, menu, defaultStyle, table.id, assignments, data.guests],
+  );
   if (table.shape === "rows") return null;
   return (
     <details className="mt-4 rounded border border-line p-3" open={style !== null}>
@@ -425,7 +487,56 @@ export function TableStyleSection({ table }: { table: SeatingTable }) {
             </select>
           </label>
         )}
-        <TableCloseup table={table} style={style} />
+        <TableCloseup table={table} style={style} food={food} />
+        {changed ? (
+          <p className="flex flex-wrap items-center gap-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
+            Changed from {style ? `“${style.name}”` : "having no style"}.
+            <button
+              type="button"
+              className="underline"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const r = await track(`Reset ${table.label} to its style`, () => setTableStyleChanges(eventId, table.id, null));
+                  if (!r.ok) setError(r.error);
+                  setChanging(null);
+                  refresh();
+                })
+              }
+            >
+              Reset to style
+            </button>
+          </p>
+        ) : null}
+        {changing ? (
+          <StyleEditor
+            forTable
+            draft={changing}
+            setDraft={setChanging}
+            pending={pending}
+            onCancel={() => setChanging(null)}
+            onSave={() =>
+              startTransition(async () => {
+                const next = changesFrom(style, { place: changing.place, centre: changing.centre });
+                const r = await track(`Changed ${table.label}'s settings`, () => setTableStyleChanges(eventId, table.id, next));
+                if (!r.ok) setError(r.error);
+                else setChanging(null);
+                refresh();
+              })
+            }
+          />
+        ) : (
+          <button
+            type="button"
+            className="btn py-1"
+            onClick={() => {
+              const eff = effectiveStyleOf(style, changed);
+              setChanging({ name: table.label, place: eff.place, centre: eff.centre });
+            }}
+          >
+            Change this table
+          </button>
+        )}
       </div>
     </details>
   );

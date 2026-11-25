@@ -55,6 +55,10 @@ export type SeatingAssignment = {
   seatIndex: number | null;
   /** "Keep for now" on a declined guest's seat (spec 57 A.2). Null or absent: not kept. */
   declineKeptAt?: string | null;
+  /** Spec 57 F.5, per course id: true = this guest has their own plate (left out of the platters). */
+  ownPlate?: Record<string, boolean>;
+  /** Per course id: false = this child shares, true or absent = the default plated kids' meal. */
+  kidsMeal?: Record<string, boolean>;
 };
 
 export type SeatingTable = SeatingTableRow;

@@ -76,3 +76,25 @@ select pg_temp.expect_text(
   (select (count(*) > 0)::text from public.audit_log where wedding_id = :w1 and table_name = 'guest_dietary_needs'),
   'true', 'dietary changes are audited');
 rollback;
+
+-- ===========================================================================
+-- Item counts: the supplier and budget line upsert (spec 57 C.4)
+-- ===========================================================================
+-- src/server/actions/seating-styles.ts upserts `onConflict: "layout_id,item_key"`
+-- with only the link columns: it must keep a final number already typed.
+begin;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', true);
+set local role authenticated;
+insert into public.seating_tables (wedding_id, event_id, label, capacity)
+values ('11111111-1111-4111-8111-111111111111', 'e2222222-2222-4222-8222-222222222222', 'T', 8);
+create temp table lay as select id from public.seating_layouts where event_id = 'e2222222-2222-4222-8222-222222222222' and is_live;
+insert into public.seating_item_counts (wedding_id, layout_id, item_key, final_count)
+select '11111111-1111-4111-8111-111111111111', id, 'place:charger', 40 from lay
+on conflict (layout_id, item_key) do update set final_count = excluded.final_count;
+insert into public.seating_item_counts (wedding_id, layout_id, item_key, vendor_id)
+select '11111111-1111-4111-8111-111111111111', id, 'place:charger', 'e0000000-0000-4000-8000-000000000002' from lay
+on conflict (layout_id, item_key) do update set vendor_id = excluded.vendor_id;
+select pg_temp.expect_text(
+  (select final_count::text || ' ' || (vendor_id is not null)::text from public.seating_item_counts where item_key = 'place:charger'),
+  '40 true', 'naming a supplier keeps the final number typed before it');
+rollback;

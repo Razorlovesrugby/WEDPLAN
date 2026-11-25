@@ -57,6 +57,7 @@ export type SeatingData = {
   customItems: SeatingCustomItemRow[];
   marquees: SeatingMarqueeRow[];
   vendors: { id: string; name: string }[];
+  budgetLines: { id: string; label: string }[];
   counts: StoredCount[];
 };
 

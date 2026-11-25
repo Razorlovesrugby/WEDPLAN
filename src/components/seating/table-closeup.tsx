@@ -1,5 +1,6 @@
 import { CHAIR_OFFSET_CM, localSeatPositions, serpentinePath, tableSize } from "@/lib/seating/geometry";
 import { CENTRE_LABEL, effectiveStyle, parseStyleChanges, type TableStyle } from "@/lib/seating/items";
+import type { CloseupFood } from "@/lib/seating/kitchen";
 import type { SeatingTable } from "@/lib/seating/model";
 
 /**
@@ -71,9 +72,12 @@ function PlaceSetting({
 export function TableCloseup({
   table,
   style,
+  food,
 }: {
   table: SeatingTable;
   style: TableStyle | null;
+  /** Shared dishes down the middle, plate rings and name tags (spec 57 C.2, F.4, F.5). */
+  food?: CloseupFood;
 }) {
   if (table.shape === "rows") {
     return <p className="text-sm text-muted">Ceremony rows are chairs only: there is no tabletop to set.</p>;
@@ -109,6 +113,12 @@ export function TableCloseup({
           return (
             <g key={i}>
               <circle cx={p.x} cy={p.y} r={17} fill="#f4f1ec" stroke="#c9c4bb" />
+              {food?.rings[i] ? <circle cx={p.x} cy={p.y} r={21} fill="none" stroke={food.rings[i] === "kids" ? "#7e3fb8" : "#d97706"} strokeWidth={3.5} /> : null}
+              {food?.names[i] ? (
+                <text x={p.x + out.x * 34} y={p.y + out.y * 34} textAnchor="middle" dominantBaseline="central" fontSize={11} fill="#3a3632" stroke="#ffffff" strokeWidth={3} paintOrder="stroke">
+                  {food.names[i]}
+                </text>
+              ) : null}
               <g transform={`translate(${at.x} ${at.y}) rotate(${rot})`}>
                 <PlaceSetting place={eff.place} />
               </g>
@@ -128,6 +138,22 @@ export function TableCloseup({
               />
             ))}
             <circle r={arrangementSize * 0.22} fill="#ffffff" />
+          </g>
+        ) : null}
+        {food && food.dishes.length > 0 ? (
+          <g aria-label="Shared dishes">
+            {food.dishes.map((d, i) => {
+              const along = longish ? -hl * 0.7 + ((i + 0.5) * (hl * 1.4)) / food.dishes.length : Math.cos((i * 2 * Math.PI) / food.dishes.length) * Math.min(hl, hw) * 0.45;
+              const across = longish ? 0 : Math.sin((i * 2 * Math.PI) / food.dishes.length) * Math.min(hl, hw) * 0.45;
+              return (
+                <g key={d.name + i} transform={`translate(${along} ${across})`}>
+                  {d.vessel === "board" ? <rect x={-14} y={-6} width={28} height={12} rx={2} fill="#d9b98a" stroke="#a98a5c" /> : d.vessel === "bowl" ? <circle r={9} fill="#e8eef2" stroke="#8aa0b0" /> : <ellipse rx={15} ry={9} fill="#f3f3f3" stroke="#9a9a9a" />}
+                  <text y={20} textAnchor="middle" fontSize={9} fill="#3a3632">
+                    {d.name} ×{d.count}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         ) : null}
         {Array.from({ length: candles }, (_, i) => {

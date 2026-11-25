@@ -227,3 +227,70 @@ export function itemsCsv(lines: readonly ItemLine[]): string {
   const body = lines.map((l) => [l.label, l.suggestedChairs, l.suggestedGuests, l.final, l.notes.join("; ")].map(esc).join(","));
   return [header.join(","), ...body].join("\n");
 }
+
+/**
+ * The changes that turn a style into what a table should have: each place and
+ * centre key that differs, and the whole `extras` list when it differs. Null
+ * when the table is just its style. The inverse of `effectiveStyle`.
+ */
+export function changesFrom(
+  style: Pick<TableStyle, "place" | "centre"> | null,
+  wanted: { place: StylePlace; centre: StyleCentre },
+): StyleChanges | null {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const base = { place: style?.place ?? {}, centre: style?.centre ?? {} };
+  const place: StylePlace = {};
+  for (const k of PLACE_ITEMS) {
+    if (!same(wanted.place[k], base.place[k])) place[k] = wanted.place[k] ?? { on: false };
+  }
+  const centre: StyleCentre = {};
+  for (const k of CENTRE_ITEMS) {
+    if (!same(wanted.centre[k], base.centre[k])) centre[k] = wanted.centre[k] ?? { on: false };
+  }
+  if (!same(wanted.centre.extras ?? [], base.centre.extras ?? [])) centre.extras = wanted.centre.extras ?? [];
+  const out: StyleChanges = {};
+  if (Object.keys(place).length > 0) out.place = place;
+  if (Object.keys(centre).length > 0) out.centre = centre;
+  return out.place || out.centre ? out : null;
+}
+
+/**
+ * A readable name for an item key (`place:charger`, `centre:candles`,
+ * `extra:bud-vases`, `room:aisle_flowers`, `room:custom:<id>`, `utensil`), for
+ * a vendor's page where the item sits outside the totals list.
+ */
+export function describeItemKey(key: string, customNames: Readonly<Record<string, string>> = {}): string {
+  const [group, ...rest] = key.split(":");
+  const tail = rest.join(":");
+  if (group === "place") return PLACE_LABEL[tail as PlaceKey] ?? tail;
+  if (group === "centre") return CENTRE_LABEL[tail as CentreKey] ?? tail;
+  if (group === "room") {
+    if (tail.startsWith("custom:")) return customNames[tail.slice("custom:".length)] ?? "Your own item";
+    return DECOR_ROOM_KINDS.get(tail as SeatingFixtureKind) ?? tail.replace(/_/g, " ");
+  }
+  if (group === "extra") return tail.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+  if (key === "utensil") return "Serving utensils";
+  return key;
+}
+
+/** The Kids starter style (spec 57 C.1): plastic cups, no charger, an activity pack. An ordinary style once made. */
+export const KIDS_STYLE_NAME = "Kids";
+export function kidsStarterStyle(): { name: string; place: StylePlace; centre: StyleCentre } {
+  return {
+    name: KIDS_STYLE_NAME,
+    place: {
+      charger: { on: false },
+      dinner_plate: { on: true },
+      napkin: { on: true },
+      cutlery: { on: true, count: 2 },
+      glasses: { on: true, count: 1, note: "plastic cups" },
+      name_card: { on: true },
+    },
+    centre: { extras: [{ name: "Activity pack", count: 1 }] },
+  };
+}
+
+/** Offered once a child is seated and there is no style called Kids yet (any case). */
+export function shouldOfferKidsStyle(seatedChildren: number, styles: readonly Pick<TableStyle, "name">[]): boolean {
+  return seatedChildren > 0 && !styles.some((s) => s.name.trim().toLowerCase() === KIDS_STYLE_NAME.toLowerCase());
+}
