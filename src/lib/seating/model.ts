@@ -4,6 +4,7 @@
  * reads it. Nothing here touches the database.
  */
 
+import type { DietaryNeed } from "@/lib/dietary";
 import type {
   AgeBand,
   GuestSide,
@@ -25,6 +26,8 @@ export type SeatingGuest = {
   ageBand: AgeBand;
   side: GuestSide | null;
   dietary: string | null;
+  /** Structured needs (spec 57 Part H); `dietary` stays as the free-text detail beside them. */
+  dietaryNeeds: DietaryNeed[];
   accessibility: string | null;
   plusOneFor: string | null;
   tagIds: string[];

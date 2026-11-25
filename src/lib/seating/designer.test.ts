@@ -443,7 +443,7 @@ describe("what a chair shows", () => {
   const g = (over: Partial<SeatingGuest> = {}): SeatingGuest => ({
     id: "g", householdId: "h", householdName: "H", firstName: "Aroha", lastName: "Ngata", preferredName: null, ageBand: "adult", side: null,
     dietary: null, accessibility: null, plusOneFor: null, tagIds: [], invited: true, excluded: false, rsvp: "yes",
-    needsHighchair: false, usesWheelchair: false, arrivedAt: null, ...over,
+    needsHighchair: false, usesWheelchair: false, arrivedAt: null, dietaryNeeds: [], ...over,
   });
 
   it("steps from dots to initials to names as you zoom in", () => {
@@ -464,9 +464,12 @@ describe("what a chair shows", () => {
   });
 
   it("marks a dietary note and a guest who can't come", () => {
-    expect(chairMarks(g())).toEqual({ dietary: false, declined: false });
+    expect(chairMarks(g())).toEqual({ dietary: false, dietaryDot: null, declined: false });
     expect(chairMarks(g({ dietary: "  " })).dietary).toBe(false);
     expect(chairMarks(g({ dietary: "Shellfish" })).dietary).toBe(true);
+    expect(chairMarks(g({ dietary: "Shellfish" })).dietaryDot).toBe("note");
+    expect(chairMarks(g({ dietaryNeeds: [{ tag: "vegan", isAllergy: false, otherText: null }] })).dietaryDot).toBe("preference");
+    expect(chairMarks(g({ dietaryNeeds: [{ tag: "nut", isAllergy: true, otherText: null }], dietary: "x" })).dietaryDot).toBe("allergy");
     expect(chairMarks(g({ rsvp: "no" })).declined).toBe(true);
     expect(chairMarks(g({ excluded: true })).declined).toBe(true);
     expect(chairMarks(g({ rsvp: null })).declined).toBe(false);

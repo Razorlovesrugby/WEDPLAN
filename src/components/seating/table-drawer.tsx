@@ -8,6 +8,8 @@ import { guestColour } from "@/lib/seating/colour";
 import { localSeatPositions, serpentinePath, tableSize, CHAIR_OFFSET_CM } from "@/lib/seating/geometry";
 import { guestName, type SeatingTable } from "@/lib/seating/model";
 import type { SeatingTableShape } from "@/lib/types/database";
+import { GuestDietaryNeeds } from "@/components/guest-dietary-needs";
+import { dietaryText, hasAllergy, hasAnyDietary } from "@/lib/dietary";
 import { GuestChip } from "./guest-chip";
 import { useSeating } from "./seating-state";
 import { PICKABLE_SHAPES, SHAPE_LABEL } from "./tables-grid";
@@ -71,6 +73,7 @@ function DrawerBody({ table }: { table: SeatingTable }) {
       </div>
 
       <Chairs table={table} />
+      <DietaryAtTable table={table} />
       <TableStyleSection table={table} />
 
       <form
@@ -265,6 +268,50 @@ function DrawerBody({ table }: { table: SeatingTable }) {
         </div>
       </form>
     </div>
+  );
+}
+
+/** Who at this table has a dietary need, and a way to change it (spec 57 Part H). */
+function DietaryAtTable({ table }: { table: SeatingTable }) {
+  const { assignments, guestById, refresh } = useSeating();
+  const [editing, setEditing] = useState<string | null>(null);
+  const guests = assignments
+    .filter((a) => a.tableId === table.id && guestById.has(a.guestId))
+    .map((a) => guestById.get(a.guestId)!)
+    .sort((a, b) => guestName(a).localeCompare(guestName(b), "en-GB"));
+  if (guests.length === 0) return null;
+  return (
+    <section className="mt-3 border-t border-line pt-2" aria-label="Dietary needs at this table">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Dietary needs</h3>
+      <ul className="space-y-1 text-sm">
+        {guests.map((g) => (
+          <li key={g.id}>
+            <div className="flex items-start gap-2">
+              <span className="w-32 shrink-0 truncate font-medium">{guestName(g)}</span>
+              <span className={`flex-1 ${hasAllergy(g.dietaryNeeds) ? "text-red-800" : "text-muted"}`}>
+                {hasAnyDietary(g.dietaryNeeds, g.dietary) ? dietaryText(g.dietaryNeeds, g.dietary) : "None given"}
+              </span>
+              <button type="button" className="text-xs underline" onClick={() => setEditing(editing === g.id ? null : g.id)}>
+                {editing === g.id ? "Close" : "Edit"}
+              </button>
+            </div>
+            {editing === g.id ? (
+              <div className="mt-1 rounded border border-line p-2">
+                <GuestDietaryNeeds
+                  guestId={g.id}
+                  initial={g.dietaryNeeds}
+                  label={`${guestName(g)}'s dietary needs`}
+                  onSaved={() => {
+                    setEditing(null);
+                    refresh();
+                  }}
+                />
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

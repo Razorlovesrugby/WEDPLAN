@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { guestName } from "@/lib/format";
+import { dietarySummary, type DietaryNeed } from "@/lib/dietary";
 import { clampTapTime } from "@/lib/day-links/state";
 import { resolveDayLink, type ResolvedDayLink } from "@/server/day-links/resolve";
 import { fail, ok, type ActionResult } from "./result";
@@ -59,6 +60,8 @@ export type SeatingModuleGuest = {
   seat: number | null;
   mates: string[];
   vendorNote: string | null;
+  /** The structured dietary tags only ("Allergy: Peanuts. Vegetarian"), never the free-text note (spec 52 §4.3, spec 57 Part H). */
+  dietary: string | null;
   arrived: boolean;
 };
 
@@ -90,6 +93,12 @@ export async function loadSeatingModule(token: string): Promise<ActionResult<Sea
   for (const r of [tables, assignments, blocked, checkins]) if (r.error) return fail(r.error.message);
 
   const guestIds = (assignments.data ?? []).map((a) => a.guest_id);
+  const needs = guestIds.length
+    ? await supabase.from("guest_dietary_needs").select("guest_id, tag, is_allergy, other_text").eq("wedding_id", weddingId).in("guest_id", guestIds)
+    : { data: [], error: null };
+  if (needs.error) return fail(needs.error.message);
+  const needsBy = new Map<string, DietaryNeed[]>();
+  for (const n of needs.data ?? []) needsBy.set(n.guest_id, [...(needsBy.get(n.guest_id) ?? []), { tag: n.tag, isAllergy: n.is_allergy, otherText: n.other_text }]);
   const guests = guestIds.length
     ? await supabase.from("guests").select("id, first_name, last_name, preferred_name, vendor_note, age_band, uses_wheelchair").eq("wedding_id", weddingId).is("deleted_at", null).in("id", guestIds)
     : { data: [], error: null };
@@ -113,6 +122,7 @@ export async function loadSeatingModule(token: string): Promise<ActionResult<Sea
       seat: a.seat_index,
       mates: (byTable.get(t.id) ?? []).filter((x) => x.guest_id !== g.id).map((x) => guestName(guestById.get(x.guest_id)!)).sort((x, y) => x.localeCompare(y, "en-GB")),
       vendorNote: g.vendor_note,
+      dietary: dietarySummary(needsBy.get(g.id) ?? []) || null,
       arrived: arrived.has(g.id),
     };
   });

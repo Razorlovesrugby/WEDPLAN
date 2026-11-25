@@ -298,7 +298,7 @@ export async function buildPreviewPersonal(
   options: { blank?: boolean } = {},
 ): Promise<PersonalContext> {
   const loaded = await loadRsvpData(weddingId, household.id);
-  const rsvp = loaded && options.blank ? { ...loaded, rsvps: [], answers: [] } : loaded;
+  const rsvp = loaded && options.blank ? { ...loaded, rsvps: [], answers: [], dietaryNeeds: {} } : loaded;
 
   return buildPersonalContext(
     weddingId,

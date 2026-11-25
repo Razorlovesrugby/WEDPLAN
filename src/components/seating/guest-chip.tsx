@@ -1,5 +1,6 @@
 "use client";
 
+import { dietaryText, hasAllergy, hasAnyDietary } from "@/lib/dietary";
 import { useDraggable } from "@dnd-kit/core";
 import { guestColour } from "@/lib/seating/colour";
 import { guestName, type SeatingGuest } from "@/lib/seating/model";
@@ -39,7 +40,7 @@ export function GuestChip({ guest, compact = false }: { guest: SeatingGuest; com
       }}
       title={[
         name,
-        guest.dietary ? `Dietary: ${guest.dietary}` : null,
+        hasAnyDietary(guest.dietaryNeeds, guest.dietary) ? `Dietary: ${dietaryText(guest.dietaryNeeds, guest.dietary)}` : null,
         guest.accessibility ? `Access: ${guest.accessibility}` : null,
         colour ? colour.label : null,
       ]
@@ -69,18 +70,22 @@ export function GuestMarkers({ guest }: { guest: SeatingGuest }) {
       {guest.ageBand === "infant" ? <Marker title="Infant — needs a high chair, doesn't take a seat">HC</Marker> : null}
       {guest.needsHighchair && guest.ageBand !== "infant" ? <Marker title="Needs a highchair">HC</Marker> : null}
       {guest.usesWheelchair ? <Marker title="Uses a wheelchair — a gap at the table, not a chair">♿</Marker> : null}
-      {guest.dietary ? <Marker title={`Dietary: ${guest.dietary}`}>D</Marker> : null}
+      {hasAnyDietary(guest.dietaryNeeds, guest.dietary) ? (
+        <Marker title={`Dietary: ${dietaryText(guest.dietaryNeeds, guest.dietary)}`} tone={hasAllergy(guest.dietaryNeeds) ? "allergy" : "plain"}>
+          D
+        </Marker>
+      ) : null}
       {guest.accessibility ? <Marker title={`Access: ${guest.accessibility}`}>A</Marker> : null}
     </>
   );
 }
 
-function Marker({ title, children }: { title: string; children: string }) {
+function Marker({ title, children, tone = "plain" }: { title: string; children: string; tone?: "plain" | "allergy" }) {
   return (
     <span
       title={title}
       aria-label={title}
-      className="shrink-0 rounded bg-line/70 px-1 text-[0.65rem] font-semibold leading-4 text-muted"
+      className={`shrink-0 rounded px-1 text-[0.65rem] font-semibold leading-4 ${tone === "allergy" ? "bg-red-100 text-red-800" : "bg-line/70 text-muted"}`}
     >
       {children}
     </span>

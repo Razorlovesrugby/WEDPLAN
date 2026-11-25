@@ -1,3 +1,4 @@
+import { dietaryText, hasAnyDietary } from "@/lib/dietary";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -111,7 +112,9 @@ export default async function SeatingPrintPage({
                         <span className="flex-1">
                           {guestName(s.guest)}
                           {s.guest.ageBand !== "adult" ? <span className="text-muted"> ({s.guest.ageBand})</span> : null}
-                          {s.guest.dietary ? <span className="block text-xs text-muted">Dietary: {s.guest.dietary}</span> : null}
+                          {hasAnyDietary(s.guest.dietaryNeeds, s.guest.dietary) ? (
+                            <span className="block text-xs text-muted">Dietary: {dietaryText(s.guest.dietaryNeeds, s.guest.dietary)}</span>
+                          ) : null}
                           {s.guest.accessibility ? (
                             <span className="block text-xs text-muted">Access: {s.guest.accessibility}</span>
                           ) : null}
@@ -168,8 +171,8 @@ export default async function SeatingPrintPage({
                   ) : null}
                   <td className="py-2">
                     {l.guests
-                      .filter((s) => s.guest.dietary)
-                      .map((s) => `${guestName(s.guest)}: ${s.guest.dietary}`)
+                      .filter((s) => hasAnyDietary(s.guest.dietaryNeeds, s.guest.dietary))
+                      .map((s) => `${guestName(s.guest)}: ${dietaryText(s.guest.dietaryNeeds, s.guest.dietary)}`)
                       .join("; ") || "—"}
                   </td>
                 </tr>

@@ -5,6 +5,7 @@
  * RSVP already asks: there is no meal schema.
  */
 
+import { hasAnyDietary } from "@/lib/dietary";
 import { sideLabel } from "@/lib/format";
 import type { GuestSide } from "@/lib/types/database";
 import { FIT_COLOURS, FIT_LABELS, type FitState } from "./fit";
@@ -124,7 +125,7 @@ export function guestColour(g: SeatingGuest, c: ColourBy, ctx: ColourContext): C
       return state ? { label: FIT_LABELS[state], colour: FIT_COLOURS[state] } : null;
     }
     case "dietary":
-      return (g.dietary ?? "").trim() !== "" ? legend[0]! : legend[1]!;
+      return hasAnyDietary(g.dietaryNeeds, g.dietary) ? legend[0]! : legend[1]!;
     case "side": {
       const i = g.side ? SIDES.indexOf(g.side) : -1;
       return i >= 0 ? legend[i]! : fallback;

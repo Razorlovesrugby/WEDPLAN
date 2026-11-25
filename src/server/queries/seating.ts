@@ -14,6 +14,7 @@ import type { BlockedChair } from "@/lib/seating/model";
 import type { RsvpStatus } from "@/lib/types/database";
 import { parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
 import { chooseLayout, type LayoutSummary } from "@/lib/seating/layouts";
+import { parseDietaryNeeds, type DietaryNeed } from "@/lib/dietary";
 import type { SeatingSpaceRow } from "@/lib/types/database";
 
 export type SeatingPlanData = {
@@ -74,7 +75,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
   // A layout nobody has placed anything in yet has no id to filter on: the all-zero uuid matches nothing.
   const scope = layoutId ?? "00000000-0000-0000-0000-000000000000";
 
-  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted] =
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted, needs] =
     await Promise.all([
       supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
@@ -126,6 +127,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
         supabase.from("seating_tables").select("layout_id").eq("wedding_id", weddingId).eq("event_id", eventId),
         supabase.from("seat_assignments").select("layout_id").eq("wedding_id", weddingId).eq("event_id", eventId),
       ]),
+      supabase.from("guest_dietary_needs").select("guest_id, tag, is_allergy, other_text").eq("wedding_id", weddingId),
     ]);
 
   for (const [what, result] of [
@@ -146,6 +148,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
     ["spaces", spaces],
     ["table counts", counted[0]],
     ["seat counts", counted[1]],
+    ["dietary needs", needs],
   ] as const) {
     if (result.error) throw new Error(`Could not load ${what}: ${result.error.message}`);
   }
@@ -197,6 +200,13 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
   const arrivedAt = new Map((checkins.data ?? []).map((c) => [c.guest_id, c.arrived_at]));
   const inviteByGuest = new Map((invites.data ?? []).map((i) => [i.guest_id, i]));
 
+  const needsByGuest = new Map<string, DietaryNeed[]>();
+  for (const n of needs.data ?? []) {
+    const list = needsByGuest.get(n.guest_id) ?? [];
+    list.push({ tag: n.tag, isAllergy: n.is_allergy, otherText: n.other_text });
+    needsByGuest.set(n.guest_id, list);
+  }
+
   const seatingGuests: SeatingGuest[] = (guests.data ?? []).map((g) => {
     const invite = inviteByGuest.get(g.id);
     const rsvp = (g.rsvps ?? []).find((r: { event_id: string; status: RsvpStatus }) => r.event_id === eventId);
@@ -210,6 +220,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string, r
       ageBand: g.age_band,
       side: g.side,
       dietary: g.dietary,
+      dietaryNeeds: parseDietaryNeeds(needsByGuest.get(g.id) ?? []),
       accessibility: g.accessibility,
       plusOneFor: g.plus_one_for,
       tagIds: (g.guest_tags ?? []).map((t: { tag_id: string }) => t.tag_id),

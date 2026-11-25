@@ -551,7 +551,7 @@ function TableShape({
                 ) : null}
               </g>
             ) : null}
-            {marks?.dietary ? <circle cx={p.x + 14} cy={p.y - 14} r={6} fill="#c81e1e" stroke="#ffffff" strokeWidth={1.5} style={{ pointerEvents: "none" }} /> : null}
+            {marks?.dietaryDot ? <circle cx={p.x + 14} cy={p.y - 14} r={6} fill={marks.dietaryDot === "allergy" ? "#c81e1e" : marks.dietaryDot === "preference" ? "#d97706" : "#8a8580"} stroke="#ffffff" strokeWidth={1.5} style={{ pointerEvents: "none" }} /> : null}
           </g>
         );
       })}

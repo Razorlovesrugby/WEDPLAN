@@ -520,6 +520,7 @@ export function SiteBlockView({
               }}
               look={resolveLook("rsvp", block.style?.variant)}
               off={resolveRsvpOff(block.style?.rsvpOff)}
+              dietaryNeeds={personal.rsvp.dietaryNeeds}
               eventWhen={Object.fromEntries(
                 personal.rsvp.events
                   .filter((event) => event.starts_at)
