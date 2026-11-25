@@ -8,7 +8,8 @@ import { calibrateRoom, normaliseDegrees, readSegments } from "@/lib/seating/geo
 import { nextTableLabel } from "@/lib/seating/model";
 import { zonedInputToUtc } from "@/lib/timezone";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
-import { resolveLayout, resolveSpace } from "@/server/seating-layout";
+import { resolveLayout, resolveSpace, roomIsLocked } from "@/server/seating-layout";
+import { LOCKED_MESSAGE } from "@/lib/seating/lock";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -120,6 +121,7 @@ export async function createSeatingTable(
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data) return fail("That room isn't part of this layout");
@@ -192,12 +194,28 @@ export async function updateSeatingTable(
   // Rows need a row count and banquet runs their pieces; every other shape has neither.
   const { data: current, error: currentError } = await supabase
     .from("seating_tables")
-    .select("rows_count, aisle_cm, segments")
+    .select("rows_count, aisle_cm, segments, shape, capacity, width_cm, length_cm, ends_seated")
     .eq("id", tableId)
     .eq("wedding_id", wedding.id)
     .maybeSingle();
   if (currentError) return fail(currentError.message);
   if (!current) return fail("That table doesn't exist");
+  // A lock holds the room's furniture still: a name, notes and reserved seats may change, its shape and size may not.
+  const lock = await roomIsLocked(wedding.id, { tableId });
+  if (lock.error) return fail(lock.error);
+  if (
+    lock.locked &&
+    (current.shape !== parsed.data.shape ||
+      current.capacity !== parsed.data.capacity ||
+      (current.width_cm ?? null) !== (parsed.data.width_cm ?? null) ||
+      (current.length_cm ?? null) !== (parsed.data.length_cm ?? null) ||
+      current.ends_seated !== (parsed.data.shape === "long" && parsed.data.ends_seated) ||
+      (parsed.data.rows_count !== undefined && parsed.data.rows_count !== current.rows_count) ||
+      (parsed.data.aisle_cm !== undefined && parsed.data.aisle_cm !== current.aisle_cm) ||
+      (parsed.data.segments !== undefined && JSON.stringify(readSegments(parsed.data.segments)) !== JSON.stringify(readSegments(current.segments))))
+  ) {
+    return fail(LOCKED_MESSAGE);
+  }
   const isRows = parsed.data.shape === "rows";
   const isBanquet = parsed.data.shape === "banquet";
   const segments = isBanquet ? (parsed.data.segments !== undefined ? readSegments(parsed.data.segments) : readSegments(current.segments)) : [];
@@ -257,6 +275,9 @@ export async function reorderSeatingTables(eventId: string, orderedIds: string[]
 /** Deletes a table; its guests go back to the tray (the FK cascades their assignments). */
 export async function deleteSeatingTable(tableId: string, eventId: string): Promise<ActionResult> {
   const wedding = await requireWedding();
+  const lock = await roomIsLocked(wedding.id, { tableId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
   const { error } = await supabase.from("seating_tables").delete().eq("id", tableId).eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
@@ -275,6 +296,9 @@ export async function moveSeatingTable(
   const wedding = await requireWedding();
   const placed = position.x !== null && position.y !== null;
   if (placed && (!Number.isFinite(position.x) || !Number.isFinite(position.y))) return fail("That's not a position");
+  const lock = await roomIsLocked(wedding.id, { tableId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
 
   const supabase = await createClient();
   // Placing a table in a room puts it in THAT room: the same layout's other space (the composite key refuses a space of another layout).
@@ -550,6 +574,7 @@ export async function updateSeatingRoom(
 
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data) return fail("This layout has no room yet");
@@ -576,6 +601,7 @@ export async function calibrateSeatingRoom(
   const wedding = await requireWedding();
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data?.background_w_px || !space.data.background_h_px) return fail("Upload the venue's floor plan first");
@@ -649,6 +675,7 @@ export async function confirmSeatingBackground(
 
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data) return fail("This layout has no room yet");
@@ -682,6 +709,7 @@ export async function removeSeatingBackground(eventId: string, layoutId?: string
   const wedding = await requireWedding();
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data?.background_path) return ok(undefined);
@@ -744,6 +772,7 @@ export async function createSeatingFixture(
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data) return fail("That room isn't part of this layout");
@@ -803,6 +832,9 @@ export async function updateSeatingFixture(
     .safeParse(fields);
   if (!parsed.success) return fail("Some fields need fixing", parsed.error.flatten().fieldErrors);
   const f = parsed.data;
+  const lock = await roomIsLocked(wedding.id, { fixtureId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -826,6 +858,9 @@ export async function updateSeatingFixture(
 
 export async function deleteSeatingFixture(fixtureId: string, eventId: string): Promise<ActionResult> {
   const wedding = await requireWedding();
+  const lock = await roomIsLocked(wedding.id, { fixtureId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
   const { error } = await supabase.from("seating_fixtures").delete().eq("id", fixtureId).eq("wedding_id", wedding.id);
   if (error) return fail(error.message);

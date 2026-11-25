@@ -5,7 +5,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { parseDrawing, wallBounds } from "@/lib/seating/drawing";
 import { requireWedding } from "@/server/queries/wedding";
-import { resolveLayout, resolveSpace } from "@/server/seating-layout";
+import { resolveLayout, resolveSpace, roomIsLocked } from "@/server/seating-layout";
+import { LOCKED_MESSAGE } from "@/lib/seating/lock";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -33,6 +34,7 @@ export async function addSeatingSpace(eventId: string, name: string, layoutId?: 
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Give the room a name");
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
 
   const supabase = await createClient();
   const { data: existing, error: readError } = await supabase
@@ -63,6 +65,9 @@ export async function renameSeatingSpace(eventId: string, spaceId: string, name:
   const parsed = nameSchema.safeParse(name);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Give the room a name");
   if (!uuid.safeParse(spaceId).success) return fail("That room doesn't exist");
+  const lock = await roomIsLocked(wedding.id, { spaceId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("seating_spaces")
@@ -86,6 +91,7 @@ export async function deleteSeatingSpace(eventId: string, spaceId: string, layou
   if (!uuid.safeParse(spaceId).success) return fail("That room doesn't exist");
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
 
   const { data: spaces, error } = await supabase
@@ -124,6 +130,9 @@ export async function setSeatingSpaceOpacity(eventId: string, spaceId: string, o
   const wedding = await requireWedding();
   const parsed = drawingFieldsSchema.safeParse({ opacity });
   if (!parsed.success || !uuid.safeParse(spaceId).success) return fail("That isn't a fade from 10 to 100");
+  const lock = await roomIsLocked(wedding.id, { spaceId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("seating_spaces")
@@ -154,6 +163,7 @@ export async function saveSeatingDrawing(eventId: string, spaceId: string, drawi
   }
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
+  if (layout.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const space = await resolveSpace(wedding.id, layout.layout.id, spaceId);
   if (space.error) return fail(space.error.message);
   if (!space.data || space.data.id !== spaceId) return fail("That room isn't part of this layout");

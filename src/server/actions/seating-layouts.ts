@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { DELETED_DRAFT_DAYS } from "@/lib/seating/layouts";
-import { requireWedding } from "@/server/queries/wedding";
+import { getSessionUser, requireWedding } from "@/server/queries/wedding";
 import { resolveLayout } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
 
@@ -121,4 +121,27 @@ export async function makeLayoutLive(eventId: string, layoutId: string): Promise
   revalidatePath("/w", "layout");
   revalidatePath("/day", "layout");
   return ok({ previousId: data.previous });
+}
+
+/**
+ * Lock room (spec 57 Part D): freezes the shown layout's walls, drawing,
+ * areas, furniture and décor. Any collaborator can lock or unlock; the plan
+ * shows who and when. Seating, freeing seats, table styles and counts still
+ * work. Every write that would change the room enforces it.
+ */
+export async function setRoomLock(eventId: string, layoutId: string | undefined, locked: boolean): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  const user = await getSessionUser();
+  if (!user) return fail("Sign in again to lock the room");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("seating_layouts")
+    .update(locked ? { locked_at: new Date().toISOString(), locked_by: user.id } : { locked_at: null, locked_by: null })
+    .eq("id", layout.layout.id)
+    .eq("wedding_id", wedding.id);
+  if (error) return fail(error.message);
+  revalidate(eventId);
+  return ok(undefined);
 }

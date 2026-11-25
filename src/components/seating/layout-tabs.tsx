@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { deleteLayoutDraft, makeLayoutLive, renameLayout, restoreLayoutDraft, tryLayout } from "@/server/actions/seating-layouts";
+import { deleteLayoutDraft, makeLayoutLive, renameLayout, restoreLayoutDraft, setRoomLock, tryLayout } from "@/server/actions/seating-layouts";
 import { guestName } from "@/lib/seating/model";
 import { orderLayouts, recentlyDeleted, suggestDraftName, swapReport } from "@/lib/seating/layouts";
 import { pluralise } from "@/lib/format";
@@ -15,7 +15,13 @@ import { useSeating } from "./seating-state";
  * and has its own seating; nothing a guest or a day link reads changes until
  * a draft is made live.
  */
-export function LayoutTabs() {
+export function LayoutTabs({
+  collaborators = [],
+  timeZone,
+}: {
+  collaborators?: { user_id: string; display_name: string | null; role: string }[];
+  timeZone?: string;
+}) {
   const { eventId, data, assignments, setError } = useSeating();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -74,6 +80,30 @@ export function LayoutTabs() {
         >
           + Try a layout
         </button>
+        {current ? (
+          <button
+            type="button"
+            className="btn py-1"
+            disabled={pending}
+            aria-pressed={Boolean(current.lockedAt)}
+            title={current.lockedAt ? "Unlock the room so walls, furniture and décor can move again" : "Hold the walls, furniture and décor still. Seating carries on."}
+            onClick={() => run(() => setRoomLock(eventId, current.id, !current.lockedAt))}
+          >
+            {current.lockedAt ? "🔒 Unlock room" : "Lock room"}
+          </button>
+        ) : null}
+        {current?.lockedAt ? (
+          <span className="text-xs text-muted">
+            Locked
+            {(() => {
+              const c = collaborators.find((x) => x.user_id === current.lockedBy);
+              const who = c ? c.display_name || (c.role === "owner" ? "Partner A" : "Partner B") : null;
+              const when = new Intl.DateTimeFormat("en-NZ", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(current.lockedAt));
+              return `${who ? ` by ${who}` : ""} on ${when}`;
+            })()}
+            . Seating still works.
+          </span>
+        ) : null}
         {current && !current.isLive ? (
           <details className="relative">
             <summary className="btn cursor-pointer list-none py-1" aria-label="This draft">

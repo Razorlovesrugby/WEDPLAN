@@ -22,6 +22,7 @@ import {
   type Wall,
 } from "./drawing";
 import { declinedSeats, isKept } from "./declined";
+import { roomChanged } from "./lock";
 import { isPdf, pdfScale } from "./pdf-plan";
 import { LIBRARY, carriesQuantity, fixtureGroup, searchLibrary, tileDrawSize } from "./library";
 import { banquetPieces, banquetPreset, rowBlocks, localSeatPositions, readSegments, tableSize, tablePolygon, seatPositions, FIXTURE_DEFAULTS, polygonsOverlap } from "./geometry";
@@ -720,5 +721,41 @@ describe("PDF plans (spec 57 B.2)", () => {
     expect(isPdf({ type: "application/pdf", name: "x" })).toBe(true);
     expect(isPdf({ type: "", name: "Plan.PDF" })).toBe(true);
     expect(isPdf({ type: "image/png", name: "plan.png" })).toBe(false);
+  });
+});
+
+describe("locking the room (spec 57 Part D)", () => {
+  const state = (over: Record<string, unknown> = {}) => ({
+    spaces: [{ id: "s", name: "Hall", room_width_cm: 2000, drawing: { walls: [] } }],
+    tables: [{ id: "t1", space_id: "s", shape: "round", capacity: 8, pos_x_cm: 100, pos_y_cm: 100, label: "Table 1", style_id: null, reserved_seats: 0 }],
+    fixtures: [{ id: "f1", space_id: "s", kind: "bar", pos_x_cm: 5, pos_y_cm: 5, width_cm: 300, depth_cm: 80 }],
+    assignments: [],
+    ...over,
+  });
+  it("sees no change when only the seating moved", () => {
+    expect(roomChanged(state(), state({ assignments: [{ guest_id: "g", table_id: "t1", seat_index: 1 }] }))).toBe(false);
+  });
+  it("lets a table's label, style and reserved seats change under a lock", () => {
+    const t = state().tables[0]!;
+    expect(roomChanged(state(), state({ tables: [{ ...t, label: "Head table", style_id: "x", reserved_seats: 2 }] }))).toBe(false);
+  });
+  it("sees a table moved or resized, added or deleted", () => {
+    const t = state().tables[0]!;
+    expect(roomChanged(state(), state({ tables: [{ ...t, pos_x_cm: 300 }] }))).toBe(true);
+    expect(roomChanged(state(), state({ tables: [{ ...t, capacity: 10 }] }))).toBe(true);
+    expect(roomChanged(state(), state({ tables: [] }))).toBe(true);
+    expect(roomChanged(state(), state({ tables: [t, { ...t, id: "t2" }] }))).toBe(true);
+  });
+  it("sees a fixture or the drawing change", () => {
+    expect(roomChanged(state(), state({ fixtures: [] }))).toBe(true);
+    expect(roomChanged(state(), state({ spaces: [{ id: "s", name: "Hall", room_width_cm: 2000, drawing: { walls: [{ id: "w" }] } }] }))).toBe(true);
+  });
+  it("doesn't care about list order", () => {
+    const a = { id: "a", space_id: "s", shape: "round", capacity: 4 };
+    const b = { id: "b", space_id: "s", shape: "round", capacity: 4 };
+    expect(roomChanged({ tables: [a, b] }, { tables: [b, a] })).toBe(false);
+  });
+  it("copes with nothing", () => {
+    expect(roomChanged(null, undefined)).toBe(false);
   });
 });

@@ -24,6 +24,7 @@ import { RulesPanel } from "./rules-panel";
 import { SeatingProvider, useSeating, type SeatingData } from "./seating-state";
 import { RevealPanel, SnapshotsPanel } from "./snapshots-panel";
 import { DayActivityPanel } from "./day-activity-panel";
+import { SettingsPanel } from "./settings-panel";
 import { StylesPanel } from "./styles-panel";
 import { SummaryBar } from "./summary-bar";
 import { TableDrawer } from "./table-drawer";
@@ -53,28 +54,30 @@ export function SeatingScreen({
 }) {
   return (
     <SeatingProvider eventId={eventId} timeZone={timeZone} data={data} initialColourBy={initialColourBy}>
-      <Screen snapshots={snapshots} dayActivity={dayActivity} collaborators={collaborators} />
+      <Screen timeZone={timeZone} snapshots={snapshots} dayActivity={dayActivity} collaborators={collaborators} />
     </SeatingProvider>
   );
 }
 
 function Screen({
+  timeZone,
   snapshots,
   dayActivity,
   collaborators,
 }: {
+  timeZone: string;
   snapshots: SeatingSnapshotSummary[];
   dayActivity: SeatingDayActivity[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
 }) {
-  const { eventId, layoutId, isDraft, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
+  const { eventId, layoutId, isDraft, locked, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
   const unseated = trayHouseholds(data.guests, assignments, trayMode).reduce((n, h) => n + h.guests.length, 0);
   const [skippedSetup, setSkippedSetup] = useState(false);
   const [view, setView] = useState<View>("tables");
   const [leftTab, setLeftTab] = useState<"guests" | "library" | "venue">("guests");
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   // Below tablet width the designer views the room and seats people only (spec 57 Part A).
-  const canEdit = useMediaQuery(TABLET_UP);
+  const canEdit = useMediaQuery(TABLET_UP) && !locked;
 
   // The Room view needs room to work in (§C.4): phones open on Tables, and a
   // planner's last choice is remembered on this device only.
@@ -119,7 +122,7 @@ function Screen({
     <DndContext id="seating" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <div className="space-y-4">
         <SummaryBar />
-        <LayoutTabs />
+        <LayoutTabs collaborators={collaborators} timeZone={timeZone} />
         <DeclinedSeats />
 
         {tables.length === 0 && data.fixtures.length === 0 && !skippedSetup ? <RoomSetup onSkip={() => setSkippedSetup(true)} /> : null}
@@ -262,6 +265,7 @@ function Screen({
 
         <RulesPanel />
         <StylesPanel />
+        <SettingsPanel />
         <SnapshotsPanel snapshots={snapshots} collaborators={collaborators} />
         <DayActivityPanel activity={dayActivity} />
         <RevealPanel />

@@ -11,6 +11,7 @@ import type { ColourBy, ColourContext } from "@/lib/seating/colour";
 import type { StoredCount, TableStyle } from "@/lib/seating/items";
 import type { LayoutSummary } from "@/lib/seating/layouts";
 import { SELECT, type Tool } from "@/lib/seating/tools";
+import { parseSettings, type PlanSettings } from "@/lib/seating/plan-settings";
 import type { SeatingCustomItemRow, SeatingMarqueeRow, SeatingSpaceRow } from "@/lib/types/database";
 import type {
   SeatingAssignment,
@@ -69,8 +70,12 @@ type SeatingState = {
   layoutId: string | undefined;
   /** The room (space) on screen; room and drawing writes name it. */
   spaceId: string | undefined;
+  /** This plan's thresholds and default sizes (spec 57 Part I), always complete. */
+  settings: PlanSettings;
   /** True when the screen shows a draft: nothing a guest or a day link reads changes until it is made live. */
   isDraft: boolean;
+  /** Part D: the shown layout's room is locked (walls, drawing, furniture and décor are held still). */
+  locked: boolean;
   data: SeatingData;
   /** The optimistic copies: what the screen shows while an action is in flight. */
   assignments: SeatingAssignment[];
@@ -372,7 +377,9 @@ export function SeatingProvider({
       timeZone,
       layoutId,
       spaceId: data.spaceId ?? undefined,
+      settings: parseSettings(data.plan?.settings),
       isDraft: data.layouts.find((l) => l.id === data.layoutId)?.isLive === false,
+      locked: Boolean(data.layouts.find((l) => l.id === data.layoutId)?.lockedAt),
       data: dataWithFit,
       assignments,
       tables,

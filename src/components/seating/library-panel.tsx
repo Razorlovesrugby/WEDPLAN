@@ -18,7 +18,7 @@ const GROUPS: LibraryGroup[] = ["tables", "room", "decor", "outdoors"];
  * décor and marquee templates sit with the built-in items.
  */
 export function LibraryPanel() {
-  const { eventId, data, tool, setTool, setError, refresh } = useSeating();
+  const { eventId, data, tool, setTool, setError, refresh, settings } = useSeating();
   const [query, setQuery] = useState("");
   const [setup, setSetup] = useState<LibraryTile | null>(null);
   const [adding, setAdding] = useState<"item" | "marquee" | null>(null);
@@ -40,7 +40,12 @@ export function LibraryPanel() {
     w: m.width_cm,
     d: m.length_cm,
   }));
-  const tiles = searchLibrary([...LIBRARY, ...mine, ...marquees], query);
+  // The plan's own default sizes (Part I) replace the built-in footprint of a built-in fixture.
+  const sized = LIBRARY.map((t) => {
+    const own = t.item.type === "fixture" ? settings.defaultSizes[t.item.kind] : undefined;
+    return own && t.item.type === "fixture" ? { ...t, w: own.width, d: own.depth, item: { ...t.item, width: own.width, depth: own.depth } } : t;
+  });
+  const tiles = searchLibrary([...sized, ...mine, ...marquees], query);
   const placing = tool.kind === "place" ? tool.item : null;
 
   const choose = (tile: LibraryTile) => {

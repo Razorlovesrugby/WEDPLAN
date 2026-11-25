@@ -16,7 +16,6 @@ import { chairDetail, chairFirstName, chairMarks, initials, readableText, type C
 import { colourCounts, guestColour } from "@/lib/seating/colour";
 import { declinedSeats } from "@/lib/seating/declined";
 import {
-  CLEARANCE_CM,
   FIXTURE_DEFAULTS,
   banquetPieces,
   rowBlocks,
@@ -53,9 +52,9 @@ type ViewBox = { x: number; y: number; w: number; h: number };
  * target too — and tap-to-place works the same as in the Tables view.
  */
 export function RoomView() {
-  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show } = useSeating();
-  // Below tablet width the room is for looking at and seating people: no moving furniture, no drawing (spec 57 Part A).
-  const editable = useMediaQuery(TABLET_UP);
+  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show, locked } = useSeating();
+  // Below tablet width the room is for looking at and seating people: no moving furniture, no drawing (spec 57 Part A). A locked room is the same (Part D).
+  const editable = useMediaQuery(TABLET_UP) && !locked;
   const plan = data.plan;
   const roomW = plan?.room_width_cm ?? 2000;
   const roomD = plan?.room_depth_cm ?? 1500;
@@ -615,7 +614,8 @@ function TableShape({
   detail: ChairDetail;
   onPointerDown: (e: RPointerEvent) => void;
 }) {
-  const { occupancy, warningsByTable, assignments, guestById, colourBy, data, held } = useSeating();
+  const { occupancy, warningsByTable, assignments, guestById, colourBy, data, held, settings } = useSeating();
+  const clearance = settings.walkway.comfortable;
   const { setNodeRef, isOver } = useDroppable({ id: `table:${table.id}` });
   const { length, width } = tableSize(table);
   const occ = occupancy.get(table.id)!;
@@ -639,13 +639,13 @@ function TableShape({
     >
       {rings ? (
         table.shape === "round" ? (
-          <circle r={length / 2 + CLEARANCE_CM} fill="none" stroke="#c9c4bb" strokeDasharray="12 10" strokeWidth={3} />
+          <circle r={length / 2 + clearance} fill="none" stroke="#c9c4bb" strokeDasharray="12 10" strokeWidth={3} />
         ) : (
           <rect
-            x={-length / 2 - CLEARANCE_CM}
-            y={-width / 2 - CLEARANCE_CM}
-            width={length + 2 * CLEARANCE_CM}
-            height={width + 2 * CLEARANCE_CM}
+            x={-length / 2 - clearance}
+            y={-width / 2 - clearance}
+            width={length + 2 * clearance}
+            height={width + 2 * clearance}
             fill="none"
             stroke="#c9c4bb"
             strokeDasharray="12 10"

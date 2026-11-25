@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { buildTemplate, planRenumber, type TemplateInput } from "@/lib/seating/template";
+import { parseSettings } from "@/lib/seating/plan-settings";
 import { nextTableLabel } from "@/lib/seating/model";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
-import { resolveLayout, resolveSpace } from "@/server/seating-layout";
+import { resolveLayout, resolveSpace, roomIsLocked } from "@/server/seating-layout";
+import { LOCKED_MESSAGE, roomChanged } from "@/lib/seating/lock";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -97,6 +99,12 @@ export async function restoreSeatingState(
   const layout = await resolveLayout(wedding.id, eventId, layoutId);
   if (!layout.ok) return fail(layout.error);
   const supabase = await createClient();
+  // Undo under a lock may put seats back but never the room: a step from before the lock would move furniture.
+  if (layout.layout.lockedAt) {
+    const now = await supabase.rpc("seating_state", { p_event_id: eventId, p_layout_id: layout.layout.id });
+    if (now.error) return fail(now.error.message);
+    if (roomChanged(now.data, payload)) return fail("The room is locked, so that step can't be undone. Unlock it first.");
+  }
   const { data, error } = await supabase.rpc("restore_seating_state", {
     p_event_id: eventId,
     p_payload: payload,
@@ -145,6 +153,7 @@ export async function applySeatingTemplate(
   if (planError) return fail(planError);
   const shown = await resolveLayout(wedding.id, eventId, layoutId);
   if (!shown.ok) return fail(shown.error);
+  if (shown.layout.lockedAt) return fail(LOCKED_MESSAGE);
 
   const supabase = await createClient();
   const [existing, space] = await Promise.all([
@@ -214,6 +223,7 @@ export async function createSeatingTables(eventId: string, input: z.input<typeof
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
   const shown = await resolveLayout(wedding.id, eventId, layoutId);
   if (!shown.ok) return fail(shown.error);
+  if (shown.layout.lockedAt) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
   const [tables, space] = await Promise.all([
     supabase.from("seating_tables").select("label, sort_order, pos_x_cm, pos_y_cm, space_id").eq("layout_id", shown.layout.id).eq("wedding_id", wedding.id),
@@ -264,6 +274,9 @@ export async function createSeatingTables(eventId: string, input: z.input<typeof
 export async function duplicateSeatingTable(tableId: string, eventId: string): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   if (!uuid.safeParse(tableId).success) return fail("That table doesn't exist");
+  const lock = await roomIsLocked(wedding.id, { tableId });
+  if (lock.error) return fail(lock.error);
+  if (lock.locked) return fail(LOCKED_MESSAGE);
   const supabase = await createClient();
   const { data: t, error } = await supabase.from("seating_tables").select("*").eq("id", tableId).eq("event_id", eventId).eq("wedding_id", wedding.id).maybeSingle();
   if (error) return fail(error.message);
@@ -411,6 +424,28 @@ export async function keepDeclinedSeat(eventId: string, guestId: string, layoutI
     .select("guest_id");
   if (error) return fail(error.message);
   if (!data || data.length === 0) return fail("That guest isn't on the plan any more");
+  revalidate(eventId);
+  return ok(undefined);
+}
+
+// ---------------------------------------------------------------------------
+// Plan settings (spec 57 Part I)
+// ---------------------------------------------------------------------------
+
+/**
+ * The plan's thresholds and default sizes. Whatever arrives is cleaned by
+ * `parseSettings` (out-of-range numbers are clamped, junk takes its default),
+ * so the stored value is always one the screens can read.
+ */
+export async function saveSeatingSettings(eventId: string, input: unknown): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
+  const settings = parseSettings(input);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("seating_plans")
+    .upsert({ wedding_id: wedding.id, event_id: eventId, settings }, { onConflict: "event_id" });
+  if (error) return fail(error.message);
   revalidate(eventId);
   return ok(undefined);
 }

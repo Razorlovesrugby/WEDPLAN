@@ -69,3 +69,27 @@ export async function resolveSpace(weddingId: string, layoutId: string, spaceId?
 export function firstSpaceOf(weddingId: string, layoutId: string) {
   return resolveSpace(weddingId, layoutId, null);
 }
+
+/**
+ * Whether the room of the layout this row belongs to is locked (spec 57 Part
+ * D). Name one thing it holds: a table, a fixture or a space; or the layout
+ * itself. A row that isn't there is not locked (the write will say so).
+ */
+export async function roomIsLocked(
+  weddingId: string,
+  ref: { layoutId?: string; tableId?: string; fixtureId?: string; spaceId?: string },
+): Promise<{ locked: boolean; error: string | null }> {
+  const supabase = await createClient();
+  let layoutId = ref.layoutId ?? null;
+  if (!layoutId) {
+    const [table, id] = ref.tableId ? ["seating_tables", ref.tableId] : ref.fixtureId ? ["seating_fixtures", ref.fixtureId] : ref.spaceId ? ["seating_spaces", ref.spaceId] : [null, null];
+    if (!table || !id || !UUID.test(id)) return { locked: false, error: null };
+    const { data, error } = await supabase.from(table as "seating_tables").select("layout_id").eq("id", id).eq("wedding_id", weddingId).maybeSingle();
+    if (error) return { locked: false, error: error.message };
+    layoutId = data?.layout_id ?? null;
+  }
+  if (!layoutId) return { locked: false, error: null };
+  const { data, error } = await supabase.from("seating_layouts").select("locked_at").eq("id", layoutId).eq("wedding_id", weddingId).maybeSingle();
+  if (error) return { locked: false, error: error.message };
+  return { locked: Boolean(data?.locked_at), error: null };
+}
