@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { parseStyleChanges, parseStyleCentre, parseStylePlace, STYLE_LIMITS } from "@/lib/seating/items";
 import { requireWedding } from "@/server/queries/wedding";
+import { resolveLayout } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -140,6 +141,7 @@ export async function setItemFinalCount(
   itemKey: string,
   final: number | null,
   suggested: { chairs: number; guests: number },
+  layoutId?: string,
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
@@ -153,13 +155,12 @@ export async function setItemFinalCount(
     .safeParse({ key: itemKey, final, chairs: suggested.chairs, guests: suggested.guests });
   if (!parsed.success) return fail("That number isn't right");
   const supabase = await createClient();
-  const layout = await supabase.from("seating_layouts").select("id").eq("wedding_id", wedding.id).eq("event_id", eventId).eq("is_live", true).is("deleted_at", null).maybeSingle();
-  if (layout.error) return fail(layout.error.message);
-  if (!layout.data) return fail("Place a table first");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
   const { error } = await supabase.from("seating_item_counts").upsert(
     {
       wedding_id: wedding.id,
-      layout_id: layout.data.id,
+      layout_id: layout.layout.id,
       item_key: parsed.data.key,
       final_count: parsed.data.final,
       suggested_chairs: parsed.data.final === null ? null : parsed.data.chairs,

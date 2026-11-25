@@ -12,6 +12,7 @@ import { serialiseColourBy, type ColourBy } from "@/lib/seating/colour";
 import type { SeatingDayActivity, SeatingSnapshotSummary } from "@/server/queries/seating";
 import { DragPreview, type DragPayload } from "./guest-chip";
 import { trayHouseholds } from "@/lib/seating/tray";
+import { LayoutTabs } from "./layout-tabs";
 import { RoomSetup } from "./room-setup";
 import { RoomView } from "./room-view";
 import { RulesPanel } from "./rules-panel";
@@ -61,7 +62,7 @@ function Screen({
   dayActivity: SeatingDayActivity[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
 }) {
-  const { eventId, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
+  const { eventId, layoutId, isDraft, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
   const unseated = trayHouseholds(data.guests, assignments, trayMode).reduce((n, h) => n + h.guests.length, 0);
   const [skippedSetup, setSkippedSetup] = useState(false);
   const [view, setView] = useState<View>("tables");
@@ -104,12 +105,13 @@ function Screen({
 
   const colourParam = serialiseColourBy(colourBy);
   const printHref = (v: string) =>
-    `/events/${eventId}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}`;
+    `/events/${eventId}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}${isDraft && layoutId ? `&layout=${layoutId}` : ""}`;
 
   return (
     <DndContext id="seating" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <div className="space-y-4">
         <SummaryBar />
+        <LayoutTabs />
 
         {tables.length === 0 && data.fixtures.length === 0 && !skippedSetup ? <RoomSetup onSkip={() => setSkippedSetup(true)} /> : null}
 

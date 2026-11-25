@@ -41,7 +41,7 @@ const PER_PLACE_COUNT: Partial<Record<PlaceKey, string>> = { cutlery: "pieces", 
  * are suggestions; the couple types the final one.
  */
 export function StylesPanel() {
-  const { eventId, data, tables, assignments, track, setError, refresh } = useSeating();
+  const { eventId, layoutId, data, tables, assignments, track, setError, refresh } = useSeating();
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState<Draft | null>(null);
 
@@ -244,7 +244,7 @@ export function StylesPanel() {
                             return;
                           }
                           if (next === l.final) return;
-                          run(null, () => setItemFinalCount(eventId, l.key, next, { chairs: l.suggestedChairs, guests: l.suggestedGuests }));
+                          run(null, () => setItemFinalCount(eventId, l.key, next, { chairs: l.suggestedChairs, guests: l.suggestedGuests }, layoutId));
                         }}
                       />
                     </td>
@@ -391,7 +391,7 @@ function StyleEditor({
 
 /** In a table's drawer: pick its style and see it set, top down. */
 export function TableStyleSection({ table }: { table: SeatingTable }) {
-  const { eventId, data, track, setError, refresh } = useSeating();
+  const { eventId, layoutId, data, track, setError, refresh } = useSeating();
   const [pending, startTransition] = useTransition();
   const style = table.style_id ? data.styles.find((s) => s.id === table.style_id) ?? null : null;
   if (table.shape === "rows") return null;

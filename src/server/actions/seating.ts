@@ -8,6 +8,7 @@ import { calibrateRoom, normaliseDegrees } from "@/lib/seating/geometry";
 import { nextTableLabel } from "@/lib/seating/model";
 import { zonedInputToUtc } from "@/lib/timezone";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
+import { firstSpaceOf, resolveLayout } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -80,16 +81,19 @@ const tableFieldsSchema = z.object({
 export async function createSeatingTable(
   eventId: string,
   fields: { shape?: string; capacity?: number; label?: string; pos_x_cm?: number; pos_y_cm?: number },
+  layoutId?: string,
 ): Promise<ActionResult<{ id: string; label: string }>> {
   const wedding = await requireWedding();
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
 
   const supabase = await createClient();
   const { data: existing, error: readError } = await supabase
     .from("seating_tables")
     .select("label, sort_order")
     .eq("wedding_id", wedding.id)
-    .eq("event_id", eventId);
+    .eq("layout_id", layout.layout.id);
   if (readError) return fail(readError.message);
 
   const shape = shapeSchema.catch("round").parse(fields.shape);
@@ -103,6 +107,7 @@ export async function createSeatingTable(
     .insert({
       wedding_id: wedding.id,
       event_id: eventId,
+      layout_id: layout.layout.id,
       label: label.slice(0, 60),
       shape,
       capacity,
@@ -244,6 +249,7 @@ export async function assignGuests(
   tableId: string | null,
   guestIds: string[],
   seatIndex?: number | null,
+  layoutId?: string,
 ): Promise<ActionResult<{ swappedWith: string | null }>> {
   const wedding = await requireWedding();
   const ids = z.array(uuid).min(1).max(300).safeParse(guestIds);
@@ -254,13 +260,17 @@ export async function assignGuests(
   if (chair && ids.data.length !== 1) return fail("One person per chair");
 
   const supabase = await createClient();
+  // The layout is the target table's; only putting someone back in the tray needs it named (or the live one).
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const layoutKey = layout.layout.id;
 
   if (tableId === null) {
     const { error } = await supabase
       .from("seat_assignments")
       .delete()
       .eq("wedding_id", wedding.id)
-      .eq("event_id", eventId)
+      .eq("layout_id", layoutKey)
       .in("guest_id", ids.data);
     if (error) return fail(error.message);
     revalidate(eventId);
@@ -274,9 +284,10 @@ export async function assignGuests(
     .eq("id", tableId)
     .eq("wedding_id", wedding.id)
     .eq("event_id", eventId)
+    .eq("layout_id", layoutKey)
     .maybeSingle();
   if (targetError) return fail(targetError.message);
-  if (!target) return fail("That table isn't part of this event");
+  if (!target) return fail("That table isn't part of this layout");
   if (chair && chair.data >= target.capacity) return fail("That chair isn't at this table");
   if (chair) {
     const { data: blocked, error: blockedError } = await supabase
@@ -305,7 +316,7 @@ export async function assignGuests(
     .from("seat_assignments")
     .select("guest_id, table_id, seat_index")
     .eq("wedding_id", wedding.id)
-    .eq("event_id", eventId)
+    .eq("layout_id", layoutKey)
     .in("guest_id", ids.data);
   if (currentError) return fail(currentError.message);
   const currentBy = new Map((current ?? []).map((r) => [r.guest_id, r]));
@@ -338,21 +349,21 @@ export async function assignGuests(
           .from("seat_assignments")
           .update({ table_id: from.table_id, seat_index: null })
           .eq("guest_id", occupant.guest_id)
-          .eq("event_id", eventId);
+          .eq("layout_id", layoutKey);
         if (error) return fail(error.message);
       } else {
         const { error } = await supabase
           .from("seat_assignments")
           .delete()
           .eq("guest_id", occupant.guest_id)
-          .eq("event_id", eventId);
+          .eq("layout_id", layoutKey);
         if (error) return fail(error.message);
       }
     }
 
     const { error } = await supabase.from("seat_assignments").upsert(
-      { wedding_id: wedding.id, event_id: eventId, guest_id: mover, table_id: tableId, seat_index: chair.data },
-      { onConflict: "guest_id,event_id" },
+      { wedding_id: wedding.id, event_id: eventId, layout_id: layoutKey, guest_id: mover, table_id: tableId, seat_index: chair.data },
+      { onConflict: "guest_id,layout_id" },
     );
     if (error) return fail(error.message);
 
@@ -363,7 +374,7 @@ export async function assignGuests(
         .from("seat_assignments")
         .update({ seat_index: from.seat_index })
         .eq("guest_id", swappedWith)
-        .eq("event_id", eventId);
+        .eq("layout_id", layoutKey);
       if (swapError) return fail(swapError.message);
     }
   } else {
@@ -374,12 +385,13 @@ export async function assignGuests(
       return {
         wedding_id: wedding.id,
         event_id: eventId,
+        layout_id: layoutKey,
         guest_id: guestId,
         table_id: tableId,
         seat_index: prev && prev.table_id === tableId ? prev.seat_index : null,
       };
     });
-    const { error } = await supabase.from("seat_assignments").upsert(rows, { onConflict: "guest_id,event_id" });
+    const { error } = await supabase.from("seat_assignments").upsert(rows, { onConflict: "guest_id,layout_id" });
     if (error) return fail(error.message);
   }
 
@@ -459,6 +471,7 @@ export async function removeSeatingRule(ruleId: string, eventId: string): Promis
 export async function updateSeatingRoom(
   eventId: string,
   fields: { room_width_cm: number; room_depth_cm: number },
+  layoutId?: string,
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const dims = z
@@ -470,13 +483,16 @@ export async function updateSeatingRoom(
   if (!dims.success) return fail("Those room sizes don't work", dims.error.flatten().fieldErrors);
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
 
-  const planError = await ensurePlan(wedding.id, eventId);
-  if (planError) return fail(planError);
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  if (space.error) return fail(space.error.message);
+  if (!space.data) return fail("This layout has no room yet");
   const supabase = await createClient();
   const { error } = await supabase
-    .from("seating_plans")
+    .from("seating_spaces")
     .update({ ...dims.data, calibrated: false })
-    .eq("event_id", eventId)
+    .eq("id", space.data.id)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
   revalidate(eventId);
@@ -489,25 +505,23 @@ export async function calibrateSeatingRoom(
   a: { x: number; y: number },
   b: { x: number; y: number },
   realCm: number,
+  layoutId?: string,
 ): Promise<ActionResult<{ room_width_cm: number; room_depth_cm: number }>> {
   const wedding = await requireWedding();
-  const supabase = await createClient();
-  const { data: plan, error: readError } = await supabase
-    .from("seating_plans")
-    .select("background_w_px, background_h_px")
-    .eq("event_id", eventId)
-    .eq("wedding_id", wedding.id)
-    .maybeSingle();
-  if (readError) return fail(readError.message);
-  if (!plan?.background_w_px || !plan.background_h_px) return fail("Upload the venue's floor plan first");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  if (space.error) return fail(space.error.message);
+  if (!space.data?.background_w_px || !space.data.background_h_px) return fail("Upload the venue's floor plan first");
 
-  const dims = calibrateRoom({ width: plan.background_w_px, height: plan.background_h_px }, a, b, realCm);
+  const dims = calibrateRoom({ width: space.data.background_w_px, height: space.data.background_h_px }, a, b, realCm);
   if (!dims) return fail("Pick two points further apart, and a distance above zero");
 
+  const supabase = await createClient();
   const { error } = await supabase
-    .from("seating_plans")
+    .from("seating_spaces")
     .update({ ...dims, calibrated: true })
-    .eq("event_id", eventId)
+    .eq("id", space.data.id)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
   revalidate(eventId);
@@ -538,10 +552,25 @@ export async function requestSeatingBackgroundUpload(
   return ok({ path, uploadUrl: upload.signedUrl });
 }
 
-/** Records the uploaded image on the plan and removes the one it replaces. */
+/**
+ * Records the uploaded image on the layout's room. A draft copy shares its
+ * source's image file until it is replaced, so a file is only removed once no
+ * space still points at it.
+ */
+async function removeBackgroundFileIfUnused(weddingId: string, path: string): Promise<void> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("seating_spaces")
+    .select("id", { count: "exact", head: true })
+    .eq("wedding_id", weddingId)
+    .eq("background_path", path);
+  if ((count ?? 0) === 0) await removePaths([path]);
+}
+
 export async function confirmSeatingBackground(
   eventId: string,
   fields: { path: string; width: number; height: number },
+  layoutId?: string,
 ): Promise<ActionResult> {
   const wedding = await requireWedding();
   const prefix = `seating/${wedding.id}/${eventId}/`;
@@ -551,18 +580,19 @@ export async function confirmSeatingBackground(
   const size = z.object({ width: z.number().int().min(1).max(20000), height: z.number().int().min(1).max(20000) }).safeParse(fields);
   if (!size.success) return fail("Couldn't read the image's size");
 
-  const planError = await ensurePlan(wedding.id, eventId);
-  if (planError) return fail(planError);
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  if (space.error) return fail(space.error.message);
+  if (!space.data) return fail("This layout has no room yet");
   const supabase = await createClient();
-  const { data: before } = await supabase.from("seating_plans").select("background_path").eq("event_id", eventId).maybeSingle();
 
   // Fit the room box to the image's shape, keeping the width the planner had.
-  const { data: plan } = await supabase.from("seating_plans").select("room_width_cm").eq("event_id", eventId).maybeSingle();
-  const width = plan?.room_width_cm ?? 2000;
+  const width = space.data.room_width_cm ?? 2000;
   const depth = Math.min(20000, Math.max(300, Math.round((width * size.data.height) / size.data.width)));
 
   const { error } = await supabase
-    .from("seating_plans")
+    .from("seating_spaces")
     .update({
       background_path: fields.path,
       background_w_px: size.data.width,
@@ -570,35 +600,34 @@ export async function confirmSeatingBackground(
       room_depth_cm: depth,
       calibrated: false,
     })
-    .eq("event_id", eventId)
+    .eq("id", space.data.id)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
 
-  if (before?.background_path && before.background_path !== fields.path) await removePaths([before.background_path]);
+  if (space.data.background_path && space.data.background_path !== fields.path) {
+    await removeBackgroundFileIfUnused(wedding.id, space.data.background_path);
+  }
   revalidate(eventId);
   return ok(undefined);
 }
 
-export async function removeSeatingBackground(eventId: string): Promise<ActionResult> {
+export async function removeSeatingBackground(eventId: string, layoutId?: string): Promise<ActionResult> {
   const wedding = await requireWedding();
-  const supabase = await createClient();
-  const { data: before } = await supabase
-    .from("seating_plans")
-    .select("background_path")
-    .eq("event_id", eventId)
-    .eq("wedding_id", wedding.id)
-    .maybeSingle();
-  if (!before?.background_path) return ok(undefined);
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
+  const space = await firstSpaceOf(wedding.id, layout.layout.id);
+  if (space.error) return fail(space.error.message);
+  if (!space.data?.background_path) return ok(undefined);
 
-  // Bytes first, then the row (storage.ts: the other order strands objects).
-  const removed = await removePaths([before.background_path]);
-  if (!removed.ok) return fail(removed.error ?? "Couldn't remove the image");
+  // The row first, then the bytes if nothing else uses them (a draft may share the file).
+  const supabase = await createClient();
   const { error } = await supabase
-    .from("seating_plans")
+    .from("seating_spaces")
     .update({ background_path: null, background_w_px: null, background_h_px: null, calibrated: false })
-    .eq("event_id", eventId)
+    .eq("id", space.data.id)
     .eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
+  await removeBackgroundFileIfUnused(wedding.id, space.data.background_path);
   revalidate(eventId);
   return ok(undefined);
 }
@@ -610,6 +639,7 @@ export async function removeSeatingBackground(eventId: string): Promise<ActionRe
 export async function createSeatingFixture(
   eventId: string,
   fields: { kind: string; pos_x_cm: number; pos_y_cm: number; width_cm: number; depth_cm: number },
+  layoutId?: string,
 ): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   const parsed = z
@@ -623,6 +653,8 @@ export async function createSeatingFixture(
     .safeParse(fields);
   if (!parsed.success) return fail("That doesn't fit in the room");
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
+  const layout = await resolveLayout(wedding.id, eventId, layoutId);
+  if (!layout.ok) return fail(layout.error);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -630,6 +662,7 @@ export async function createSeatingFixture(
     .insert({
       wedding_id: wedding.id,
       event_id: eventId,
+      layout_id: layout.layout.id,
       kind: parsed.data.kind,
       pos_x_cm: Math.round(parsed.data.pos_x_cm),
       pos_y_cm: Math.round(parsed.data.pos_y_cm),
@@ -693,7 +726,7 @@ export async function deleteSeatingFixture(fixtureId: string, eventId: string): 
 // Snapshots (Part E)
 // ---------------------------------------------------------------------------
 
-export async function saveSeatingSnapshot(eventId: string, name: string): Promise<ActionResult<{ id: string }>> {
+export async function saveSeatingSnapshot(eventId: string, name: string, layoutId?: string): Promise<ActionResult<{ id: string }>> {
   const wedding = await requireWedding();
   const parsedName = z.string().trim().min(1, "Give the copy a name").max(120).safeParse(name);
   if (!parsedName.success) return fail(parsedName.error.issues[0]?.message ?? "Give the copy a name");
@@ -705,6 +738,7 @@ export async function saveSeatingSnapshot(eventId: string, name: string): Promis
     p_event_id: eventId,
     p_name: parsedName.data,
     p_created_by: user?.id ?? null,
+    p_layout_id: layoutId ?? null,
   });
   if (error) return fail(error.message);
   revalidate(eventId);

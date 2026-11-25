@@ -34,7 +34,7 @@ export default async function SeatingPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: string; colour?: string }>;
+  searchParams: Promise<{ view?: string; colour?: string; layout?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -43,17 +43,21 @@ export default async function SeatingPrintPage({
   const event = (await getEvents(wedding.id)).find((e) => e.id === id);
   if (!event) notFound();
 
-  const data = await getSeatingPlan(wedding.id, id);
+  // A draft can be printed to compare (?layout=), and says so on the page; with no layout it is the live one.
+  const data = await getSeatingPlan(wedding.id, id, sp.layout);
+  const shownLayout = data.layouts.find((l) => l.id === data.layoutId);
+  const draftName = shownLayout && !shownLayout.isLive ? shownLayout.name : null;
   const colourBy = parseColourBy(sp.colour);
   const legend = colourLegend(colourBy, data.colour);
   const listings = tableListings(data);
   const colourParam = serialiseColourBy(colourBy);
-  const href = (v: string) => `/events/${id}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}`;
+  const layoutParam = draftName && data.layoutId ? `&layout=${data.layoutId}` : "";
+  const href = (v: string) => `/events/${id}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}${layoutParam}`;
 
   return (
     <div className="space-y-5">
       <div className="no-print flex flex-wrap items-center gap-2">
-        <Link href={`/events/${id}/seating${colourParam ? `?colour=${encodeURIComponent(colourParam)}` : ""}`} className="btn">
+        <Link href={`/events/${id}/seating${draftName && data.layoutId ? `?layout=${data.layoutId}` : ""}${colourParam ? `${draftName ? "&" : "?"}colour=${encodeURIComponent(colourParam)}` : ""}`} className="btn">
           ← Back to seating
         </Link>
         <nav aria-label="Print views" className="flex flex-wrap gap-1">
@@ -72,6 +76,12 @@ export default async function SeatingPrintPage({
           <PrintButton />
         </span>
       </div>
+
+      {draftName ? (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          This is the draft “{draftName}”, not the live layout. Guests and day links don&rsquo;t see it.
+        </p>
+      ) : null}
 
       {data.tables.length === 0 ? (
         <p className="card p-8 text-center text-sm text-muted">No tables yet, so there&rsquo;s nothing to print.</p>

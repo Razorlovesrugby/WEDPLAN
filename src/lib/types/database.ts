@@ -1858,6 +1858,8 @@ export type SeatingSnapshotRow = {
   id: string;
   wedding_id: string;
   event_id: string;
+  /** The layout it was taken from (and restores into). */
+  layout_id: string;
   name: string;
   automatic: boolean;
   created_by: string | null;
@@ -2796,6 +2798,9 @@ export type Database = {
       v_moodboards: View<MoodboardView>;
       v_coach_runs: View<CoachRunView>;
       v_registry_items: View<RegistryItemView>;
+      /** Spec 57 Part G: seats and tables of each event's LIVE layout; what guests, day links and the master read. */
+      v_live_seat_assignments: View<SeatAssignmentRow>;
+      v_live_seating_tables: View<SeatingTableRow>;
     };
     Functions: {
       /** Spec 36: a visitor's claim, settled under a row lock. Service role only. */
@@ -2813,11 +2818,20 @@ export type Database = {
       /** Spec 55 §6: the caller's own "alerts on the day" switch (collaborator or planner). */
       set_my_day_alerts: { Args: { p_wedding_id: string; p_on: boolean }; Returns: undefined };
       /** Spec 53 Part C: the plan as one jsonb, and its hash (timestamps left out). */
-      seating_state: { Args: { p_event_id: string }; Returns: Record<string, unknown> };
-      seating_state_hash: { Args: { p_event_id: string }; Returns: string };
+      seating_state: { Args: { p_event_id: string; p_layout_id?: string | null }; Returns: Record<string, unknown> };
+      seating_state_hash: { Args: { p_event_id: string; p_layout_id?: string | null }; Returns: string };
+      /** Spec 57 Part G: copies a layout into a new draft, with fresh ids; returns the draft's id. */
+      seating_try_layout: { Args: { p_event_id: string; p_source_layout_id: string; p_name: string }; Returns: string };
+      /** Spec 57 Part G: swaps a draft in; the live layout becomes a draft. */
+      seating_make_live: {
+        Args: { p_event_id: string; p_layout_id: string };
+        Returns: { live: string; previous: string | null; previous_name: string | null };
+      };
+      /** Spec 57: the event's live layout, made (with its space) if it has none. */
+      seating_live_layout: { Args: { p_event_id: string }; Returns: string };
       /** Puts a plan back; fails with SQLSTATE 40001 if the plan no longer hashes to `p_expected_hash`. */
       restore_seating_state: {
-        Args: { p_event_id: string; p_payload: Record<string, unknown>; p_expected_hash?: string | null };
+        Args: { p_event_id: string; p_payload: Record<string, unknown>; p_expected_hash?: string | null; p_layout_id?: string | null };
         Returns: { tables: number; fixtures: number; seated: number; skipped: number; hash: string };
       };
       /** Spec 54 §10.2: a group member's claim on an open task, settled under a row lock. Service role only. */
@@ -2890,7 +2904,7 @@ export type Database = {
       };
       /** Spec 33: saves the event's layout under a name; returns the snapshot id. */
       take_seating_snapshot: {
-        Args: { p_event_id: string; p_name: string; p_automatic?: boolean; p_created_by?: string | null };
+        Args: { p_event_id: string; p_name: string; p_automatic?: boolean; p_created_by?: string | null; p_layout_id?: string | null };
         Returns: string;
       };
       /** Spec 33: puts a snapshot back, saving the layout it replaces first. */

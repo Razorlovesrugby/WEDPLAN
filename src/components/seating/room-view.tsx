@@ -46,7 +46,7 @@ type ViewBox = { x: number; y: number; w: number; h: number };
  * target too — and tap-to-place works the same as in the Tables view.
  */
 export function RoomView() {
-  const { eventId, data, tables, setTables, refresh, setError, held, hold, move, track } = useSeating();
+  const { eventId, layoutId, data, tables, setTables, refresh, setError, held, hold, move, track } = useSeating();
   const plan = data.plan;
   const roomW = plan?.room_width_cm ?? 2000;
   const roomD = plan?.room_depth_cm ?? 1500;
@@ -293,7 +293,7 @@ export function RoomView() {
     // Room centimetres → image pixels: the room box is the image.
     const toPx = (p: Point) => ({ x: (p.x / roomW) * plan.background_w_px!, y: (p.y / roomD) * plan.background_h_px! });
     startTransition(async () => {
-      const r = await track("Calibrated the room", () => calibrateSeatingRoom(eventId, toPx(points[0]!), toPx(points[1]!), real));
+      const r = await track("Calibrated the room", () => calibrateSeatingRoom(eventId, toPx(points[0]!), toPx(points[1]!), real, layoutId));
       if (!r.ok) setError(r.error);
       refresh();
     });
@@ -758,7 +758,7 @@ function SelectedTablePanel({ table, onUnplace }: { table: SeatingTable; onUnpla
 }
 
 function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; onDone: () => void }) {
-  const { eventId, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, refresh, setError, track } = useSeating();
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState(fixture.label ?? "");
   const [w, setW] = useState(fixture.width_cm);
@@ -821,7 +821,7 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
 }
 
 function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; roomD: number }) {
-  const { eventId, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, refresh, setError, track } = useSeating();
   const [kind, setKind] = useState<SeatingFixtureKind>("dance_floor");
   const [pending, startTransition] = useTransition();
   return (
@@ -838,7 +838,7 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
               pos_y_cm: clamp(snap(view.y + view.h / 2, GRID_CM), 0, roomD),
               width_cm: size.width,
               depth_cm: size.depth,
-            }),
+            }, layoutId),
           );
           if (!r.ok) setError(r.error);
           refresh();
@@ -864,7 +864,7 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
 
 /** Room size, and the venue's own floor plan to draw over (§C.3). */
 function RoomSettings() {
-  const { eventId, data, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, data, refresh, setError, track } = useSeating();
   const plan = data.plan;
   const [w, setW] = useState(String((plan?.room_width_cm ?? 2000) / 100));
   const [d, setD] = useState(String((plan?.room_depth_cm ?? 1500) / 100));
@@ -899,7 +899,7 @@ function RoomSettings() {
       setError("That upload didn't finish. Try again?");
       return;
     }
-    const done = await confirmSeatingBackground(eventId, { path: slot.data.path, width: encoded.width, height: encoded.height });
+    const done = await confirmSeatingBackground(eventId, { path: slot.data.path, width: encoded.width, height: encoded.height }, layoutId);
     setBusy(null);
     if (!done.ok) setError(done.error);
     refresh();
@@ -917,7 +917,7 @@ function RoomSettings() {
               updateSeatingRoom(eventId, {
                 room_width_cm: Math.round(Number(w) * 100),
                 room_depth_cm: Math.round(Number(d) * 100),
-              }),
+              }, layoutId),
             );
             if (!r.ok) setError(r.error);
             refresh();
@@ -957,7 +957,7 @@ function RoomSettings() {
             className="btn text-red-700"
             onClick={() =>
               startTransition(async () => {
-                const r = await removeSeatingBackground(eventId);
+                const r = await removeSeatingBackground(eventId, layoutId);
                 if (!r.ok) setError(r.error);
                 refresh();
               })

@@ -9,6 +9,8 @@ import { computeFit } from "@/lib/seating/fit";
 import { undoRedoFor, isTypingTarget } from "@/lib/shortcuts";
 import type { ColourBy, ColourContext } from "@/lib/seating/colour";
 import type { StoredCount, TableStyle } from "@/lib/seating/items";
+import type { LayoutSummary } from "@/lib/seating/layouts";
+import type { SeatingSpaceRow } from "@/lib/types/database";
 import type {
   SeatingAssignment,
   SeatingFixture,
@@ -41,6 +43,9 @@ export type SeatingData = {
   colour: ColourContext;
   styles: TableStyle[];
   layoutId: string | null;
+  /** Every layout of the event (the tabs), and the shown layout's spaces. */
+  layouts: LayoutSummary[];
+  spaces: SeatingSpaceRow[];
   counts: StoredCount[];
 };
 
@@ -50,6 +55,10 @@ export type Held = { guestIds: string[]; label: string } | null;
 type SeatingState = {
   eventId: string;
   timeZone: string;
+  /** The layout on screen: the live one, or a draft (spec 57 Part G). Every write names it. */
+  layoutId: string | undefined;
+  /** True when the screen shows a draft: nothing a guest or a day link reads changes until it is made live. */
+  isDraft: boolean;
   data: SeatingData;
   /** The optimistic copies: what the screen shows while an action is in flight. */
   assignments: SeatingAssignment[];
@@ -135,6 +144,7 @@ export function SeatingProvider({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const layoutId = data.layoutId ?? undefined;
   const [pending, startTransition] = useTransition();
   const [assignments, setAssignments] = useState(data.assignments);
   const [tables, setTablesState] = useState(data.tables);
@@ -189,10 +199,10 @@ export function SeatingProvider({
   const track = useCallback(
     <T extends { ok: boolean }>(label: string, write: () => Promise<T>): Promise<T> => {
       const job = queue.current.then(async () => {
-        const before = await captureSeatingState(eventId, true).catch(() => null);
+        const before = await captureSeatingState(eventId, true, layoutId).catch(() => null);
         const result = await write();
         if (result.ok && before?.ok) {
-          const after = await captureSeatingState(eventId, false).catch(() => null);
+          const after = await captureSeatingState(eventId, false, layoutId).catch(() => null);
           if (after?.ok && after.data.hash !== before.data.hash) {
             undoStack.current = [
               ...undoStack.current,
@@ -207,7 +217,7 @@ export function SeatingProvider({
       queue.current = job.catch(() => undefined);
       return job;
     },
-    [eventId],
+    [eventId, layoutId],
   );
 
   const step = useCallback(
@@ -219,7 +229,7 @@ export function SeatingProvider({
         if (!entry) return;
         const payload = direction === "undo" ? entry.before : entry.after;
         const expected = direction === "undo" ? entry.afterHash : entry.beforeHash;
-        const result = await restoreSeatingState(eventId, payload, expected).catch(() => null);
+        const result = await restoreSeatingState(eventId, payload, expected, layoutId).catch(() => null);
         from.current = from.current.slice(0, -1);
         if (result?.ok) {
           const next: UndoEntry =
@@ -235,7 +245,7 @@ export function SeatingProvider({
         router.refresh();
       });
     },
-    [eventId, router],
+    [eventId, layoutId, router],
   );
   const undo = useCallback(() => step("undo"), [step]);
   const redo = useCallback(() => step("redo"), [step]);
@@ -270,7 +280,7 @@ export function SeatingProvider({
       const where = tableId ? tables.find((t) => t.id === tableId)?.label : null;
       const label = where ? `Seated ${who} at ${where}` : `Unseated ${who}`;
       startTransition(async () => {
-        const result = await track(label, () => assignGuests(eventId, tableId, guestIds, seatIndex ?? null));
+        const result = await track(label, () => assignGuests(eventId, tableId, guestIds, seatIndex ?? null, layoutId));
         if (!result.ok) {
           setAssignments(before);
           setError(result.error);
@@ -278,7 +288,7 @@ export function SeatingProvider({
         router.refresh();
       });
     },
-    [eventId, router, data.guests, tables, track],
+    [eventId, layoutId, router, data.guests, tables, track],
   );
 
   const toggleSelected = useCallback(
@@ -335,6 +345,8 @@ export function SeatingProvider({
     return {
       eventId,
       timeZone,
+      layoutId,
+      isDraft: data.layouts.find((l) => l.id === data.layoutId)?.isLive === false,
       data: dataWithFit,
       assignments,
       tables,
@@ -375,7 +387,7 @@ export function SeatingProvider({
       undoLabel: undoStack.current.at(-1)?.label ?? null,
       redoLabel: redoStack.current.at(-1)?.label ?? null,
     };
-  }, [eventId, timeZone, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, show, setShow]);
+  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, show, setShow]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

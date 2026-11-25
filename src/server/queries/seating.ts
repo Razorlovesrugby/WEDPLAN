@@ -13,6 +13,8 @@ import type {
 import type { BlockedChair } from "@/lib/seating/model";
 import type { RsvpStatus } from "@/lib/types/database";
 import { parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
+import { chooseLayout, type LayoutSummary } from "@/lib/seating/layouts";
+import type { SeatingSpaceRow } from "@/lib/types/database";
 
 export type SeatingPlanData = {
   plan: SeatingPlan | null;
@@ -27,8 +29,12 @@ export type SeatingPlanData = {
   colour: ColourContext;
   /** The wedding's table styles (spec 57 Part C), by name. */
   styles: TableStyle[];
-  /** The event's live layout, null until anything is placed. */
+  /** The layout shown (the one asked for, else the live one); null until anything is placed. */
   layoutId: string | null;
+  /** Every layout of the event, deleted drafts included (the tabs and "Recently deleted" filter them). */
+  layouts: LayoutSummary[];
+  /** The shown layout's spaces, in order. */
+  spaces: SeatingSpaceRow[];
   /** The couple's final item counts for that layout. */
   counts: StoredCount[];
 };
@@ -42,10 +48,33 @@ export type SeatingPlanData = {
  * who is coming. Invited-ness comes from `v_guest_event_invites` and nowhere
  * else (spec 22).
  */
-export const getSeatingPlan = cache(async (weddingId: string, eventId: string): Promise<SeatingPlanData> => {
+export const getSeatingPlan = cache(async (weddingId: string, eventId: string, requestedLayoutId?: string): Promise<SeatingPlanData> => {
   const supabase = await createClient();
 
-  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, layout] =
+  // Which layout to show comes first: every table, fixture and seat read below is filtered to it.
+  const layoutRows = await supabase
+    .from("seating_layouts")
+    .select("id, name, is_live, locked_at, locked_by, deleted_at")
+    .eq("wedding_id", weddingId)
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: true });
+  if (layoutRows.error) throw new Error(`Could not load the layouts: ${layoutRows.error.message}`);
+  const summaries: LayoutSummary[] = (layoutRows.data ?? []).map((l) => ({
+    id: l.id,
+    name: l.name,
+    isLive: l.is_live,
+    lockedAt: l.locked_at,
+    lockedBy: l.locked_by,
+    deletedAt: l.deleted_at,
+    tables: 0,
+    seated: 0,
+  }));
+  const shown = chooseLayout(summaries, requestedLayoutId);
+  const layoutId = shown?.id ?? null;
+  // A layout nobody has placed anything in yet has no id to filter on: the all-zero uuid matches nothing.
+  const scope = layoutId ?? "00000000-0000-0000-0000-000000000000";
+
+  const [event, plan, tables, fixtures, assignments, rules, guests, invites, tags, collaborators, questions, blocked, checkins, styles, spaces, counted] =
     await Promise.all([
       supabase.from("events").select("asks_rsvp").eq("id", eventId).eq("wedding_id", weddingId).maybeSingle(),
       supabase.from("seating_plans").select("*").eq("event_id", eventId).eq("wedding_id", weddingId).maybeSingle(),
@@ -54,6 +83,7 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
         .select("*")
         .eq("wedding_id", weddingId)
         .eq("event_id", eventId)
+        .eq("layout_id", scope)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true }),
       supabase
@@ -61,8 +91,9 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
         .select("*")
         .eq("wedding_id", weddingId)
         .eq("event_id", eventId)
+        .eq("layout_id", scope)
         .order("created_at", { ascending: true }),
-      supabase.from("seat_assignments").select("guest_id, table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
+      supabase.from("seat_assignments").select("guest_id, table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId).eq("layout_id", scope),
       supabase.from("seating_rules").select("*").eq("wedding_id", weddingId).order("created_at", { ascending: true }),
       supabase
         .from("guests")
@@ -89,7 +120,12 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
       supabase.from("seating_chairs_blocked").select("table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
       supabase.from("seating_checkins").select("guest_id, arrived_at, by_label").eq("wedding_id", weddingId).eq("event_id", eventId),
       supabase.from("seating_table_styles").select("id, name, place, centre").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
-      supabase.from("seating_layouts").select("id").eq("wedding_id", weddingId).eq("event_id", eventId).eq("is_live", true).is("deleted_at", null).maybeSingle(),
+      supabase.from("seating_spaces").select("*").eq("wedding_id", weddingId).eq("layout_id", scope).order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
+      // Counts for the tabs: how much each layout holds.
+      Promise.all([
+        supabase.from("seating_tables").select("layout_id").eq("wedding_id", weddingId).eq("event_id", eventId),
+        supabase.from("seat_assignments").select("layout_id").eq("wedding_id", weddingId).eq("event_id", eventId),
+      ]),
     ]);
 
   for (const [what, result] of [
@@ -107,12 +143,19 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     ["blocked chairs", blocked],
     ["arrivals", checkins],
     ["table styles", styles],
-    ["the layout", layout],
+    ["spaces", spaces],
+    ["table counts", counted[0]],
+    ["seat counts", counted[1]],
   ] as const) {
     if (result.error) throw new Error(`Could not load ${what}: ${result.error.message}`);
   }
 
-  const layoutId = layout.data?.id ?? null;
+  const tablesIn = new Map<string, number>();
+  for (const t of counted[0].data ?? []) tablesIn.set(t.layout_id, (tablesIn.get(t.layout_id) ?? 0) + 1);
+  const seatsIn = new Map<string, number>();
+  for (const a of counted[1].data ?? []) seatsIn.set(a.layout_id, (seatsIn.get(a.layout_id) ?? 0) + 1);
+  const layouts = summaries.map((l) => ({ ...l, tables: tablesIn.get(l.id) ?? 0, seated: seatsIn.get(l.id) ?? 0 }));
+
   let counts: StoredCount[] = [];
   if (layoutId) {
     const stored = await supabase
@@ -179,8 +222,27 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     };
   });
 
+  const tableIdsHere = new Set((tables.data ?? []).map((t) => t.id));
+
+  // The room lives on the space now (migration 0059): the plan the screen sees
+  // carries the shown layout's first space's room, whatever the plan row says.
+  const firstSpace = (spaces.data ?? [])[0];
+  const shownPlan = plan.data
+    ? firstSpace
+      ? {
+          ...plan.data,
+          room_width_cm: firstSpace.room_width_cm,
+          room_depth_cm: firstSpace.room_depth_cm,
+          background_path: firstSpace.background_path,
+          background_w_px: firstSpace.background_w_px,
+          background_h_px: firstSpace.background_h_px,
+          calibrated: firstSpace.calibrated,
+        }
+      : plan.data
+    : null;
+
   return {
-    plan: plan.data ?? null,
+    plan: shownPlan,
     tables: tables.data ?? [],
     fixtures: fixtures.data ?? [],
     assignments: (assignments.data ?? []).map((a) => ({
@@ -190,7 +252,10 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     })),
     rules: rules.data ?? [],
     guests: seatingGuests,
-    blocked: (blocked.data ?? []).map((b) => ({ tableId: b.table_id, seatIndex: b.seat_index })),
+    // A blocked chair belongs to a table, so it is in this layout when its table is.
+    blocked: (blocked.data ?? [])
+      .filter((b) => tableIdsHere.has(b.table_id))
+      .map((b) => ({ tableId: b.table_id, seatIndex: b.seat_index })),
     colour: {
       collaborators: collaborators.data ?? [],
       tags: tags.data ?? [],
@@ -199,6 +264,8 @@ export const getSeatingPlan = cache(async (weddingId: string, eventId: string): 
     },
     styles: (styles.data ?? []).map((st) => ({ id: st.id, name: st.name, place: parseStylePlace(st.place), centre: parseStyleCentre(st.centre) })),
     layoutId,
+    layouts,
+    spaces: spaces.data ?? [],
     counts,
   };
 });
@@ -223,14 +290,16 @@ export type SeatingSnapshotSummary = {
 
 /** An event's saved copies, newest first, with enough to tell them apart. */
 export const listSeatingSnapshots = cache(
-  async (weddingId: string, eventId: string): Promise<SeatingSnapshotSummary[]> => {
+  async (weddingId: string, eventId: string, layoutId?: string | null): Promise<SeatingSnapshotSummary[]> => {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("seating_snapshots")
       .select("id, name, automatic, created_at, created_by, payload")
       .eq("wedding_id", weddingId)
-      .eq("event_id", eventId)
-      .order("created_at", { ascending: false });
+      .eq("event_id", eventId);
+    // History is per layout (Part G); a screen with no layout yet has none.
+    if (layoutId) query = query.eq("layout_id", layoutId);
+    const { data, error } = await query.order("created_at", { ascending: false });
     if (error) throw new Error(`Could not load saved copies: ${error.message}`);
     return (data ?? []).map((s) => {
       const payload = (s.payload ?? {}) as { tables?: unknown[]; assignments?: unknown[] };
