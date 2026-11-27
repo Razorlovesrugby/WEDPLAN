@@ -1,6 +1,6 @@
 # Feature spec: The RSVP form asks for dietary needs in one free-text box; tags are the couple's to set
 
-**Status: answered 2026-11-27, not built. The build waits for "build it".**
+**Status: answered 2026-11-27 except Q2 (§9), not built. The build waits for Q2's answer and for "build it".**
 
 **Depends on:** spec 57 (Part H: the dietary tags, and the guest page, guest table, table drawer and seating screens that
 read them), spec 35 (the RSVP form in the site theme: a guest who is not coming is not asked about food). **No migration.**
@@ -8,9 +8,11 @@ read them), spec 35 (the RSVP form in the site theme: a guest who is not coming 
 ## 1. What was asked
 
 The RSVP form is live: guests reply, and come back to change their answers. Spec 57 Part H put a tag picker on it. Take the
-picker off the guest-facing form so the form is exactly what it was before, and keep every guest's free-text dietary note,
-whoever wrote it, exactly as saved. Leave every other place tags are used as it is. The couple sets tags on a guest
-themselves, from the guest page, the guest table or the seating screens, working from the free-text note the guest wrote.
+picker off the guest-facing form so the form is exactly what it was before, with nothing of the picker left behind: the
+code, what it added to shared code, the tags guests saved, and their record in the audit log. Keep every guest's free-text
+dietary note, whoever wrote it, exactly as saved. Leave every other place tags are used as it is (§9). The couple sets tags
+on a guest themselves, from the guest page, the guest table or the seating screens, working from the free-text note the guest
+wrote.
 
 What the form does today, checked against the code:
 
@@ -58,17 +60,17 @@ What the form does today, checked against the code:
 - The seating table drawer's dietary editing.
 - Everything that reads tags: chair dots, Colour by, chips, the summary bar, the print sheets, the caterer, venue and kitchen
   exports, the shared plan page, the day-link Seating module and the guest CSV.
-- `guest_dietary_needs`, its migration and policies, `saveGuestDietaryNeeds`, `replaceGuestNeeds`, `src/lib/dietary.ts`, and
-  `DietaryNeedsEditor` (the guest page and the guest table use it).
+- `guest_dietary_needs`, its migration and policies (the table stays, empty), `saveGuestDietaryNeeds`, `replaceGuestNeeds`,
+  `src/lib/dietary.ts`, and `DietaryNeedsEditor` as the guest page and the guest table draw it.
 
 A guest who wrote a note and has no tags shows a grey chair dot and is listed with their note. The couple adds tags from
 that guest's "Add tags". Nothing new is built for this.
 
 ## 5. Data
 
-No migration and no schema change; `0062` stays with spec 59. The only rows deleted are the rows of `guest_dietary_needs`,
-by a one-off script the planner runs by hand (§7). No statement in this feature touches the `guests` table, where the
-free-text note lives.
+No migration and no schema change; `0062` stays with spec 59. The only rows deleted are the rows of `guest_dietary_needs`
+and the audit-log rows for that table, by a one-off script the planner runs by hand (§7). No statement in this feature
+touches the `guests` table, where the free-text note lives.
 
 ## 6. What the build touches
 
@@ -82,27 +84,33 @@ them since), so the RSVP form's dietary fields are the form as it was.
 | `src/server/actions/rsvp.ts` | The `dietaryNeeds` schema field, the write block, the two imports. |
 | `src/server/rsvp/resolve.ts` | The `dietaryNeeds` field of `RsvpContext`, `needsByGuest`, the `guest_dietary_needs` query. |
 | `src/server/queries/site-render.ts` | `dietaryNeeds: {}` in the blank preview. |
+| `src/components/dietary-needs-editor.tsx` | The `legendClass`, `inputClass` and `help` props, which only the RSVP form passes; their defaults become the fixed classes, so the guest page and the guest table draw the editor exactly as they do. |
+| `src/components/dietary-needs-editor.test.ts` | The test "takes the site's own classes on the RSVP form". The other three tests stay and pass unchanged. |
 | `supabase/tests/38_dietary_needs.sql` | One comment that says the RSVP form uses the upsert; the assertions stay (the guest page still uses it). |
 | `supabase/one-off/clear_dietary_tags.sql` | New. The two steps in §7, run by hand in the Supabase SQL editor. The app never runs it. |
-| `supabase/tests/40_clear_dietary_tags.sql` | New. Runs the script against seeded rows (§9). |
+| `supabase/tests/40_clear_dietary_tags.sql` | New. Runs the script against seeded rows (§10). |
 
-At build, the change also updates spec 57's Part H (§12, its build order and its Build status line, which name the RSVP
-form), this spec's status, and the spec index.
+At build, the change also removes the RSVP form from spec 57's Part H (§12, its build order and its Build status line) and
+from the structured-dietary-needs bullet in HANDOFF, and updates this spec's status and the spec index.
 
 ## 7. The one-off clear
 
-Empties `guest_dietary_needs`, every wedding and every guest. The tags are expected to be few or none; step 1 shows how many
-there are before anything is deleted. The clear never reads or writes `guests`.
+Empties `guest_dietary_needs` for every wedding and guest, and removes that table's trail from the audit log. The tags are
+expected to be few or none; step 1 shows how many there are before anything is deleted. The script never reads or writes
+`guests`, and it never touches the audit-log rows of any other table, so the history of every free-text note stays.
 
-**Step 1, read-only.** Returns the number of tag rows, the number of guests who have a tag, and the number of guests with a
-non-empty free-text note.
+**Step 1, read-only.** Returns the number of tag rows, the number of guests who have a tag, the number of guests with a
+non-empty free-text note, and the number of audit-log rows for `guest_dietary_needs`.
 
-**Step 2, one transaction.** Deletes every row of `guest_dietary_needs` and returns the count. Then the same three numbers as
-step 1: the tag counts are zero, and the count of guests with a note is the number step 1 gave, unchanged. If it is not, the
-planner rolls back.
+**Step 2, one transaction.** Deletes every row of `guest_dietary_needs`. Then, in the same transaction, sets the audit log's
+own prune switch (`set_config('app.audit_prune', 'on', true)`, the one deletion the append-only log allows) and deletes every
+audit-log row for `guest_dietary_needs`, including the entries step 2's own delete just wrote. It then compares the count of
+guests with a note to the count it read at the start, and raises, which aborts the whole transaction, if they differ. It
+returns tag rows, guests with a tag and audit rows left for the table (all zero) and the unchanged note count.
 
-**What remains.** The app shows no tags. The audit log keeps a record of the saves and the deletes for its 12 months
-(Settings, Activity), and the nightly backups hold the rows for 30 days. The script does not touch the audit log.
+**What remains.** Nothing in the app: no tag on any screen and no entry in Settings, Activity. Outside the app, the nightly
+backups still hold the rows and their audit entries for 30 days and are not edited, and the code's history stays in git
+(history on `main` is not rewritten).
 
 **Order.** Release the code change first, then run the script. Run first, a guest on a form that still shows the picker
 could tick a tag again.
@@ -112,23 +120,36 @@ could tick a tag again.
 **Q1. Tags guests already saved from the RSVP form:** clear them all, as if the picker had never existed. Nobody is
 expected to have used them. Folded into §5 and §7.
 
-## 9. Verification
+## 9. Open question
+
+**Q2. What "wipe" covers.** This spec wipes everything the RSVP picker added. It leaves tag editing on the guest page, in the
+guest table's Dietary cell and in the seating table drawer, and the chair dots, Colour by, chips, exports and day-link module
+that read tags (§4). Removing the tags feature from those places too is a larger change: a migration that drops
+`guest_dietary_needs`, and edits across the seating screens, the exports, the day-link module and the guest table.
+*Recommendation: the RSVP picker only (this spec).* You asked for the other pages to be left alone, and the empty tag table
+stays because the guest page still saves to it. If you want the whole tag feature gone, say so and it becomes a second,
+larger spec.
+
+## 10. Verification
 
 At build, typecheck, unit tests and `npm run build`; `./scripts/verify-migrations.sh` as a non-root user, because one SQL
 test file is edited (a comment) and one is added.
 
-- **The form is as it was:** each of the five files in §6 is identical to its content before spec 57 Part H, so a diff of
-  them against that point is empty.
+- **The form is as it was:** each of the five files at the top of §6 is identical to its content before spec 57 Part H, so a
+  diff of them against that point is empty.
+- **The editor is as it was for everyone else:** the three editor tests that remain pass unchanged.
 - **The note is untouched:** the new SQL test seeds guests with free-text notes and tag rows, runs the script, and asserts
-  every note is identical afterwards and every tag row is gone.
+  every note is identical afterwards, every tag row is gone, no audit-log row for `guest_dietary_needs` is left, and the
+  audit-log rows for `guests` (the seeded note edits) are all still there. It also asserts the transaction aborts when a note
+  count would change.
 - **The form's markup:** a static-markup test that it renders one "Dietary requirements" input and no "Dietary needs" group,
   and that the submit payload has `dietary` and no `dietaryNeeds`, if the form renders without a browser; if not, headless
   Chromium against the real form with the server action stubbed.
 
 **Cannot be checked from a session:** a real submit against live Supabase, a real phone, a form that was open in a guest's
-browser when the change went out, and the script against live data. The planner checks live: the three numbers in §7 before
-and after, and, after release, their own invitation link (change a dietary answer, save, reopen: the box shows what they
-saved and no tag picker appears).
+browser when the change went out, and the script against live data. The planner checks live: the numbers in §7 before and
+after, and, after release, their own invitation link (change a dietary answer, save, reopen: the box shows what they saved
+and no tag picker appears).
 
 **Release:** the code change is a guest-facing page on a live app. It ships as one change that only removes code, with no
 database step, and goes live when it reaches `main`. The script is a separate step the planner runs after it (§7).
