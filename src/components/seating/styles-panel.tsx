@@ -29,6 +29,7 @@ import {
 import type { SeatingTable } from "@/lib/seating/model";
 import { useSeating } from "./seating-state";
 import { TableCloseup } from "./table-closeup";
+import { ZoomPlan } from "./zoom-plan";
 
 type Draft = { id?: string; name: string; place: StylePlace; centre: StyleCentre };
 
@@ -478,7 +479,9 @@ export function TableStyleSection({ table }: { table: SeatingTable }) {
             </select>
           </label>
         )}
-        <TableCloseup table={table} style={style} food={food} />
+        <ZoomPlan label={`${table.label} close-up`}>
+          <TableCloseup table={table} style={style} food={food} />
+        </ZoomPlan>
         {changed ? (
           <p className="flex flex-wrap items-center gap-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
             Changed from {style ? `“${style.name}”` : "having no style"}.

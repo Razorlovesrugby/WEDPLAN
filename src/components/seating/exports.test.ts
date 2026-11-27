@@ -139,7 +139,10 @@ describe("the shared page", () => {
   });
   it("writes nothing: no form, no button that saves", () => {
     expect(out).not.toContain("<form");
-    expect(out).not.toContain("<button");
+    // The only buttons are each plan's zoom controls (spec 60 D.1), which move the picture and nothing else.
+    const zoom = /<div data-zoom-control[\s\S]*?<\/button><\/div>/g;
+    expect(out.match(zoom)?.length).toBe(2);
+    expect(out.replace(zoom, "")).not.toContain("<button");
   });
   it("doesn't carry what a supplier shouldn't have", () => {
     expect(out).not.toContain("Needs a ramp");

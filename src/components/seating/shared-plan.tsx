@@ -10,6 +10,7 @@ import { pluralise } from "@/lib/format";
 import type { SeatingPlanData } from "@/server/queries/seating";
 import { KitchenSummaryView } from "./exports";
 import { PlanDrawing, type PlanSeat } from "./plan-drawing";
+import { ZoomPlan } from "./zoom-plan";
 
 /**
  * A shared plan, as the person with the link sees it (spec 57 E.3): the event's
@@ -73,7 +74,10 @@ export function SharedPlan({
       {data.spaces.map((space) => (
         <section key={space.id} className="space-y-2">
           <h2 className="font-serif text-xl">{space.name}</h2>
-          <PlanDrawing space={space} tables={data.tables} fixtures={data.fixtures} customItems={data.customItems} marquees={data.marquees} backgroundUrl={backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: true, chairs: "numbered", seats, tableText: "label_count", seatedAt }} />
+          {/* Pinch or Ctrl/⌘ + scroll to zoom, drag to pan when zoomed; a plain scroll still scrolls this page (spec 60 D.1). */}
+          <ZoomPlan label={`${space.name} plan`}>
+            <PlanDrawing space={space} tables={data.tables} fixtures={data.fixtures} customItems={data.customItems} marquees={data.marquees} backgroundUrl={backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: true, chairs: "numbered", seats, tableText: "label_count", seatedAt }} />
+          </ZoomPlan>
         </section>
       ))}
 
