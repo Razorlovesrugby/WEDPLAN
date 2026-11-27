@@ -58,6 +58,7 @@ import {
   type View,
 } from "@/lib/seating/canvas";
 import { classifyWalkway } from "@/lib/seating/plan-settings";
+import { LONG_PRESS_MS, describeChange, describeFixture, describePosition, describeTable, focusOrder, movedTooFar, nextFocus, type Change } from "@/lib/seating/keyboard";
 import { isTypingTarget } from "@/lib/shortcuts";
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
 import type { SeatingFixtureKind } from "@/lib/types/database";
@@ -184,6 +185,16 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const [guides, setGuides] = useState<Guide[]>([]);
   const [box, setBox] = useState<Box | null>(null);
   const [, startTransition] = useTransition();
+  // Keyboard and touch (spec 60 B): the item Tab has reached (the plan keeps real focus; the item is its active descendant),
+  // what the live region says, and the touch-only switches.
+  const [kbFocus, setKbFocus] = useState<string | null>(null);
+  const [live, setLive] = useState("");
+  const [multi, setMulti] = useState(false);
+  const [lineSwitch, setLineSwitch] = useState(false);
+  const touchy = useMediaQuery("(pointer: coarse)", false);
+  const spaceUsed = useRef(false);
+  const longPress = useRef<{ from: Point; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const pressFired = useRef(false);
 
   useEffect(() => setSelection(new Set()), [spaceId, layoutId]);
 
@@ -223,6 +234,31 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const selBodies = useMemo(() => [...sel].map((k) => bodyByKey.get(k)!).filter(pickable), [sel, bodyByKey, pickable]);
   const selRef = useRef(sel);
   selRef.current = sel;
+
+  // Tab's order (locked layers are skipped), and what the keys act on: the selection, or else the item Tab has reached.
+  const order = useMemo(() => focusOrder(bodies.filter((b) => !locks[b.layer])), [bodies, locks]);
+  const focusBody = kbFocus ? bodyByKey.get(kbFocus) : undefined;
+  const actBodies = selBodies.length > 0 ? selBodies : focusBody && pickable(focusBody) ? [focusBody] : [];
+  useEffect(() => {
+    if (kbFocus && !bodyByKey.has(kbFocus)) setKbFocus(null);
+  }, [kbFocus, bodyByKey]);
+  /** What each thing is called, for the live region. */
+  const nameOf = useCallback(
+    (b: Body | undefined): string | undefined => {
+      if (!b) return undefined;
+      if (b.kind === "table") return tables.find((t) => t.id === b.id)?.label;
+      const f = fixtures.find((x) => x.id === b.id);
+      if (!f) return undefined;
+      const custom = f.custom_item_id ? data.customItems.find((c) => c.id === f.custom_item_id) : undefined;
+      return f.label ?? custom?.name ?? FIXTURE_DEFAULTS[f.kind]?.label ?? f.kind;
+    },
+    [tables, fixtures, data.customItems],
+  );
+  /** Says it in the polite live region; the same words twice in a row still get read. */
+  const say = useCallback((c: Change) => {
+    const text = describeChange(c);
+    setLive((prev) => (prev === text ? `${text}\u200b` : text));
+  }, []);
 
   /** Screen point → room centimetres. */
   const toRoom = useCallback((clientX: number, clientY: number): Point => {
@@ -319,8 +355,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
 
   const inRoom = (p: Point): Point => ({ x: Math.round(clamp(p.x, 0, roomW)), y: Math.round(clamp(p.y, 0, roomD)) });
 
-  const duplicateSelection = (list: Body[] = selBodies) => {
-    if (!editable) return;
+  const duplicateSelection = (list: Body[] = actBodies) => {
+    if (!editable || list.length === 0) return;
+    say({ kind: "duplicate", count: list.length });
     copyItems(
       list.map((b) => {
         const at = inRoom({ x: b.x + 50, y: b.y + 50 });
@@ -330,8 +367,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     );
   };
 
-  const copySelection = (list: Body[] = selBodies) => {
+  const copySelection = (list: Body[] = actBodies) => {
     if (list.length === 0) return;
+    say({ kind: "copy", count: list.length });
     const box = unionBox(list.map((b) => boundsOf(b.poly)))!;
     clipboard = {
       layoutId,
@@ -344,6 +382,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const pasteAt = (at: Point | null) => {
     if (!editable || !clipboard) return;
     if (clipboard.layoutId !== layoutId) return setError("That was copied from another layout. Copy and paste work within one layout.");
+    say({ kind: "paste", count: clipboard.items.length });
     const v = viewRef.current;
     const target = at ?? { x: v.x + v.w / 2, y: v.y + v.h / 2 };
     const dx = target.x - clipboard.centre.x;
@@ -357,12 +396,13 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     );
   };
 
-  const deleteSelection = (list: Body[] = selBodies) => {
+  const deleteSelection = (list: Body[] = actBodies) => {
     if (!editable || list.length === 0) return;
     const tableIds = new Set(list.filter((b) => b.kind === "table").map((b) => b.id));
     const seated = assignments.filter((a) => tableIds.has(a.tableId)).length;
     if (seated > 0 && !window.confirm(`Delete ${list.length === 1 ? "this table" : `these ${tableIds.size} tables`}? ${seated} ${seated === 1 ? "guest goes" : "guests go"} back to the tray. You can undo it.`)) return;
     const gone = new Set(list.map((b) => b.key));
+    say({ kind: "delete", count: list.length });
     setSelection(new Set());
     setTables((ts) => ts.filter((t) => !gone.has(`t:${t.id}`)));
     setFixtures((fs) => fs.filter((f) => !gone.has(`f:${f.id}`)));
@@ -402,20 +442,22 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   };
 
   const nudge = (dx: number, dy: number) => {
-    if (!editable || selBodies.length === 0) return;
-    const d = clampDelta(selBodies, { dx, dy }, roomW, roomD);
-    applyMoves(selBodies.map((b) => ({ key: b.key, x: b.x + d.dx, y: b.y + d.dy, rotation: b.rotation })));
-    later(selBodies.map((b) => b.key), moveLabel(selBodies.map((b) => b.key)));
+    if (!editable || actBodies.length === 0) return;
+    const d = clampDelta(actBodies, { dx, dy }, roomW, roomD);
+    applyMoves(actBodies.map((b) => ({ key: b.key, x: b.x + d.dx, y: b.y + d.dy, rotation: b.rotation })));
+    say({ kind: "move", count: actBodies.length, name: nameOf(actBodies[0]), dx: d.dx, dy: d.dy });
+    later(actBodies.map((b) => b.key), moveLabel(actBodies.map((b) => b.key)));
   };
 
   /** Each item turns about its own centre. */
   const turn = (deg: number, now = false) => {
-    if (!editable || selBodies.length === 0) return;
-    const moves = selBodies.map((b) => ({ key: b.key, x: b.x, y: b.y, rotation: normaliseDegrees(b.rotation + deg) }));
+    if (!editable || actBodies.length === 0) return;
+    const moves = actBodies.map((b) => ({ key: b.key, x: b.x, y: b.y, rotation: normaliseDegrees(b.rotation + deg) }));
     applyMoves(moves);
-    const label = selBodies.length === 1 ? "Turned an item" : `Turned ${selBodies.length} things`;
+    say({ kind: "turn", count: actBodies.length, name: nameOf(actBodies[0]), deg });
+    const label = actBodies.length === 1 ? "Turned an item" : `Turned ${actBodies.length} things`;
     if (now) commitMoves(moves, label);
-    else later(selBodies.map((b) => b.key), label);
+    else later(actBodies.map((b) => b.key), label);
   };
 
   const arrange = (deltas: Map<string, Delta>, label: string) => {
@@ -433,7 +475,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const grid = (gap: number) => arrange(gridBodies(selBodies, gap), `Arranged ${selBodies.length} things in a grid`);
 
   const selectAll = () => setSelection(new Set(bodies.filter(pickable).map((b) => b.key)));
-  const selectLike = () => setSelection(new Set(selectSimilar(bodies.filter(pickable), sel)));
+  const selectLike = () => setSelection(new Set(selectSimilar(bodies.filter(pickable), actBodies.map((b) => b.key))));
 
   // ---- the view --------------------------------------------------------------
   /** Keyboard shortcuts live on the plan: after a toolbar button, put focus back there. */
@@ -605,6 +647,31 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const pinch = useRef<{ dist: number; view: View; mid: Point } | null>(null);
   const panBy = tool.kind === "hand" || spaceHeld;
 
+  // Long-press (touch): a finger resting on an item or the floor opens the right-click menu there (spec 60 B.2).
+  const cancelLongPress = () => {
+    if (longPress.current) clearTimeout(longPress.current.timer);
+    longPress.current = null;
+  };
+  const startLongPress = (e: RPointerEvent, key: string | null) => {
+    if (e.pointerType !== "touch" || e.button !== 0) return;
+    cancelLongPress();
+    pressFired.current = false;
+    const from = { x: e.clientX, y: e.clientY };
+    longPress.current = {
+      from,
+      timer: setTimeout(() => {
+        longPress.current = null;
+        pressFired.current = true;
+        // The press is not also a drag or a tap.
+        setDrag(null);
+        setDragView(null);
+        setBox(null);
+        setGuides([]);
+        openMenu(from.x, from.y, key);
+      }, LONG_PRESS_MS),
+    };
+  };
+
   const startPan = (e: RPointerEvent) => {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     setDrag({ mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false });
@@ -618,13 +685,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     const body = bodyByKey.get(key);
     if (!body) return;
     e.stopPropagation();
+    if (spaceHeld) spaceUsed.current = true;
     svgRef.current?.focus({ preventScroll: true });
+    setKbFocus(null);
     tools.setSelected(null);
+    startLongPress(e, key);
+    // Select several (touch): a tap adds or removes, as Shift does with a mouse.
+    const toggle = e.shiftKey || multi;
     // A guest in hand seats at the table tapped; picking and moving are for when nobody is held.
     let keys = [...sel];
     const wasSelected = sel.has(key);
     if (!held) {
-      if (e.shiftKey) {
+      if (toggle) {
         const next = new Set(sel);
         if (!next.delete(key)) next.add(key);
         setSelection(next);
@@ -652,7 +724,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       // Alt before the drag copies; Alt during one turns snapping off.
       copy: e.altKey && editable && !held,
       wasSelected,
-      shift: e.shiftKey,
+      shift: toggle,
       delta: { dx: 0, dy: 0 },
     });
   };
@@ -668,17 +740,23 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
 
   const onBackgroundPointerDown = (e: RPointerEvent) => {
     svgRef.current?.focus({ preventScroll: true });
+    setKbFocus(null);
+    if (spaceHeld) spaceUsed.current = true;
     if (e.button === 2) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
+      cancelLongPress();
       setDrag(null);
       setPanning(false);
       pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y), view: viewRef.current, mid: toRoom((a!.x + b!.x) / 2, (a!.y + b!.y) / 2) };
       return;
     }
-    if (tool.kind === "place" && editable && e.shiftKey && e.button === 0 && e.pointerType !== "touch" && !panBy) {
+    // A finger holds the menu open after a long press, unless it is stamping or drawing.
+    if (!calibrating && !isDrawing(tool) && tool.kind !== "place") startLongPress(e, null);
+    // Stamp along a line: Shift+drag with a mouse, or the Line switch with a finger.
+    if (tool.kind === "place" && editable && (e.shiftKey || lineSwitch) && e.button === 0 && (e.pointerType !== "touch" || lineSwitch) && !panBy) {
       const raw = toRoom(e.clientX, e.clientY);
       const start = { x: snap(raw.x, snapOn ? GRID_CM : 0), y: snap(raw.y, snapOn ? GRID_CM : 0) };
       setDrag({ mode: "line", start, item: tool.item });
@@ -687,16 +765,17 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     }
     // Pan: the middle button, Space, the Hand tool, a finger, and any tool that draws (a click is its click, a drag moves the view).
     // Otherwise the Select tool draws a selection box.
-    if (e.button === 1 || panBy || e.pointerType === "touch" || tool.kind !== "select") {
+    if (e.button === 1 || panBy || (e.pointerType === "touch" && !multi) || tool.kind !== "select") {
       setDrag({ mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false });
       if (e.button === 1 || panBy) setPanning(true);
     } else {
-      setDrag({ mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey ? new Set(sel) : new Set(), moved: false });
+      setDrag({ mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey || multi ? new Set(sel) : new Set(), moved: false });
     }
   };
 
   const onPointerMove = (e: RPointerEvent) => {
     lastPointer.current = toRoom(e.clientX, e.clientY);
+    if (longPress.current && movedTooFar(longPress.current.from, { x: e.clientX, y: e.clientY })) cancelLongPress();
     if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2 && pinch.current) {
       const [a, b] = [...pointers.current.values()];
@@ -764,12 +843,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     else if (editable && tools.onCanvasClick(p, e)) {
       // The tool took the click.
     } else {
-      if (!e.shiftKey) setSelection(new Set());
+      // With Select several on, a tap on empty floor leaves the selection alone.
+      if (!e.shiftKey && !multi) setSelection(new Set());
       tools.setSelected(null);
     }
   };
 
   const onPointerUp = (e: RPointerEvent) => {
+    cancelLongPress();
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
     const d = drag.current;
@@ -812,11 +893,55 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   };
 
   // ---- the keyboard ----------------------------------------------------------
+  /** Esc: out of the plan to the next control on the page. */
+  const leavePlan = () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const tabbable = [...document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    tabbable.slice(tabbable.indexOf(svg as unknown as HTMLElement) + 1).find((el) => !svg.contains(el) && el.getClientRects().length > 0)?.focus();
+  };
+  /** Brings a thing into view when Tab reaches it off screen, so the ring is never somewhere you can't see. */
+  const reveal = (b: Body) => {
+    const box = boundsOf(b.hit);
+    const v = viewRef.current;
+    if (box.x0 >= v.x && box.x1 <= v.x + v.w && box.y0 >= v.y && box.y1 <= v.y + v.h) return;
+    setView((cur) => ({ ...cur, x: (box.x0 + box.x1) / 2 - cur.w / 2, y: (box.y0 + box.y1) / 2 - cur.h / 2 }));
+  };
+  const focusItem = (key: string | null) => {
+    setKbFocus(key);
+    if (!key) return;
+    const b = bodyByKey.get(key);
+    if (b) reveal(b);
+    say({ kind: "focus", name: nameOf(b) ?? "Item", index: order.indexOf(key) + 1, total: order.length, selected: sel.has(key) });
+  };
+  const sayPicked = (picked: Set<string>) => say({ kind: "select", count: picked.size, name: picked.size === 1 ? nameOf(bodyByKey.get([...picked][0]!)) : undefined });
+  /** Shift+Enter, and Space on its own: add the item Tab has reached to the selection, or take it out. */
+  const toggleFocused = () => {
+    const b = kbFocus ? bodyByKey.get(kbFocus) : undefined;
+    if (!kbFocus || !b || !pickable(b)) return;
+    const next = new Set(sel);
+    if (!next.delete(kbFocus)) next.add(kbFocus);
+    setSelection(next);
+    sayPicked(next);
+  };
+  /** Enter: pick the item and open it: a table's close-up, or a piece of furniture's inspector. */
+  const openFocused = () => {
+    const b = kbFocus ? bodyByKey.get(kbFocus) : undefined;
+    if (!kbFocus || !b || !pickable(b)) return;
+    tools.setSelected(null);
+    setSelection(new Set([kbFocus]));
+    if (b.kind === "table") openTable(b.id);
+    sayPicked(new Set([kbFocus]));
+  };
+
   const onKeyDown = (e: RKeyboardEvent) => {
     if (isTypingTarget(e.target as HTMLElement)) return;
     if (e.key === " ") {
       e.preventDefault();
-      if (!e.repeat) setSpaceHeld(true);
+      if (!e.repeat) {
+        setSpaceHeld(true);
+        spaceUsed.current = false;
+      }
       return;
     }
     if (e.key === "?") {
@@ -827,6 +952,17 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       return;
     }
     if (editable && tools.onKey(e)) return;
+    // Tab walks the plan's tables and furniture in reading order; past either end it leaves the plan, as Tab does anywhere.
+    if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const to = nextFocus(order, kbFocus, e.shiftKey ? -1 : 1);
+      if (to === "leave") return setKbFocus(null);
+      e.preventDefault();
+      return focusItem(to);
+    }
+    if (e.key === "Enter" && kbFocus) {
+      e.preventDefault();
+      return e.shiftKey ? toggleFocused() : openFocused();
+    }
     const command = e.metaKey || e.ctrlKey;
     if (command) {
       const k = e.key.toLowerCase();
@@ -837,7 +973,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       } else if (k === "d" && editable) {
         e.preventDefault();
         duplicateSelection();
-      } else if (k === "c" && selBodies.length > 0) {
+      } else if (k === "c" && actBodies.length > 0) {
         e.preventDefault();
         copySelection();
       } else if (k === "v" && editable) {
@@ -862,23 +998,33 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     else if (e.shiftKey && e.code === "Digit1") showFit();
     else if (e.shiftKey && e.code === "Digit2") showSelection();
     else if (e.key === "Escape") {
-      if (sel.size) setSelection(new Set());
+      if (multi) setMulti(false);
+      else if (sel.size) setSelection(new Set());
+      // Something Tab has reached: Esc steps out of the plan to the next control.
+      else if (kbFocus) {
+        setKbFocus(null);
+        leavePlan();
+      }
       // Nothing picked and no tool in hand: Esc leaves focus mode.
       else if (focus && tool.kind === "select" && !tools.hasSelection) onLeaveFocus?.();
     }
-    else if (e.key === "ArrowLeft" && sel.size) (e.preventDefault(), nudge(-step, 0));
-    else if (e.key === "ArrowRight" && sel.size) (e.preventDefault(), nudge(step, 0));
-    else if (e.key === "ArrowUp" && sel.size) (e.preventDefault(), nudge(0, -step));
-    else if (e.key === "ArrowDown" && sel.size) (e.preventDefault(), nudge(0, step));
-    else if ((e.key === "r" || e.key === "R") && sel.size) turn(e.shiftKey ? -15 : 15);
-    else if ((e.key === "Delete" || e.key === "Backspace") && sel.size) (e.preventDefault(), deleteSelection());
+    else if (e.key === "ArrowLeft" && actBodies.length) (e.preventDefault(), nudge(-step, 0));
+    else if (e.key === "ArrowRight" && actBodies.length) (e.preventDefault(), nudge(step, 0));
+    else if (e.key === "ArrowUp" && actBodies.length) (e.preventDefault(), nudge(0, -step));
+    else if (e.key === "ArrowDown" && actBodies.length) (e.preventDefault(), nudge(0, step));
+    else if ((e.key === "r" || e.key === "R") && actBodies.length) turn(e.shiftKey ? -15 : 15);
+    else if ((e.key === "Delete" || e.key === "Backspace") && actBodies.length) (e.preventDefault(), deleteSelection());
     else {
       const next = toolForKey(e.key);
       if (next && !e.shiftKey && (editable || next.kind === "select" || next.kind === "hand")) setTool(tool.kind === next.kind && next.kind !== "select" ? SELECT : next);
     }
   };
   const onKeyUp = (e: RKeyboardEvent) => {
-    if (e.key === " ") setSpaceHeld(false);
+    if (e.key !== " ") return;
+    setSpaceHeld(false);
+    // A short press with no drag picks the item Tab has reached; held with a drag it was a pan.
+    if (!spaceUsed.current) toggleFocused();
+    spaceUsed.current = false;
   };
 
   const finishCalibration = (points: Point[]) => {
@@ -899,11 +1045,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   // ---- right-click -----------------------------------------------------------
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (calibrating || isDrawing(tool)) return;
     const el = (e.target as Element).closest("[data-key]");
-    const key = el?.getAttribute("data-key") ?? null;
-    const at = { x: e.clientX, y: e.clientY };
-    const here = toRoom(e.clientX, e.clientY);
+    openMenu(e.clientX, e.clientY, el?.getAttribute("data-key") ?? null);
+  };
+  /** The menu at a screen point, for the thing there (`key`) or the empty floor. A right-click and a long-press both come here. */
+  const openMenu = (clientX: number, clientY: number, key: string | null) => {
+    if (calibrating || isDrawing(tool)) return;
+    const at = { x: clientX, y: clientY };
+    const here = toRoom(clientX, clientY);
     const navigation: MenuItem = {
       label: "Navigation",
       children: [
@@ -1057,14 +1206,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           ? "Trackpad mode: two-finger scroll pans, pinch or ⌘/Ctrl+scroll zooms. On a mouse, switch to Mouse mode in the zoom box or by right-clicking the plan."
           : "Mouse mode: the wheel zooms, Shift+wheel pans sideways. On a trackpad, switch to Trackpad mode in the zoom box or by right-clicking the plan."
         : tool.kind === "place"
-          ? `Stamp: ${tool.item.label} · click to place · Shift+drag a line · 1–9 switch · Esc to stop`
+          ? `Stamp: ${tool.item.label} · click to place · ${lineSwitch ? "drag stamps a line" : "Shift+drag a line"} · 1–9 switch · Esc to stop`
           : tools.status
             ? tools.status
             : tool.kind === "hand" || spaceHeld
               ? "Hand: drag to pan · V for Select"
-              : sel.size > 0
-                ? `${sel.size} selected · drag to move · arrows nudge · R turns · Alt before dragging copies · Delete removes`
-                : "Select: click, or drag a box · Shift adds · Space+drag pans · ? for shortcuts";
+              : multi
+                ? "Select several: tap to add or remove · drag on the floor for a box · Esc or the button turns it off"
+                : kbFocus && sel.size === 0
+                  ? `${nameOf(focusBody) ?? "Item"} · Enter opens · Shift+Enter or Space picks · arrows nudge · Tab next · Esc leaves the plan`
+                  : sel.size > 0
+                    ? `${sel.size} selected · drag to move · arrows nudge · R turns · Alt before dragging copies · Delete removes`
+                    : "Select: click, or drag a box · Shift adds · Space+drag pans · ? for shortcuts";
 
   const strip = (
     <RoomStrip
@@ -1160,7 +1313,10 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         tabIndex={0}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
-        onBlur={() => setSpaceHeld(false)}
+        onBlur={() => {
+          setSpaceHeld(false);
+          setKbFocus(null);
+        }}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -1182,7 +1338,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             /* not one of ours */
           }
         }}
-        aria-label="Floor plan"
+        aria-label="Floor plan. Tab moves through the tables and furniture, Enter opens one, Shift+Enter or Space picks it."
+        aria-activedescendant={kbFocus ? `plan-${kbFocus}` : undefined}
         role="application"
       >
           <rect x={view.x - view.w} y={view.y - view.h} width={view.w * 3} height={view.h * 3} fill="transparent" onPointerDown={onBackgroundPointerDown} />
@@ -1217,6 +1374,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
                     hovered={hoverKey === key}
                     cursor={itemCursor}
                     fontSize={fontSize}
+                    where={describePosition({ x: f.pos_x_cm, y: f.pos_y_cm }, roomW, roomD)}
                     onPointerDown={stableDown}
                     onHover={setHoverKey}
                   />
@@ -1237,6 +1395,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
                     rings={rings}
                     fontSize={fontSize}
                     detail={detail}
+                    where={describePosition({ x: t.pos_x_cm ?? 0, y: t.pos_y_cm ?? 0 }, roomW, roomD)}
                     onPointerDown={stableDown}
                     onHover={setHoverKey}
                   />
@@ -1246,6 +1405,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           </g>
 
           {tools.overlay}
+
+          {/* The item Tab has reached: a ring outside its outline (and its chairs), in its own colour, never the hover colour. */}
+          {focusBody ? (
+            <g transform={shift(focusBody.key)} style={{ pointerEvents: "none" }} aria-hidden>
+              <polygon points={focusBody.hit.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#ffffff" strokeWidth={unit * 7} strokeLinejoin="round" />
+              <polygon points={focusBody.hit.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#2563eb" strokeWidth={unit * 3.5} strokeLinejoin="round" />
+            </g>
+          ) : null}
 
           {calibrating?.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={view.w / 150} fill="#b0532b" style={{ pointerEvents: "none" }} />
@@ -1302,6 +1469,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           ) : null}
           {editable && selectedFixture && !dragView ? <RotateHandle item={selectedFixture} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `f:${selectedFixture.id}`)} /> : null}
       </svg>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {live}
+      </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-1.5 px-3">
         <FloatingToolbar
@@ -1319,6 +1489,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           setNavMode={setNavMode}
           onDone={focusPlan}
           onStamp={startStamp}
+          onMulti={touchy && editable ? () => setMulti((on) => !on) : undefined}
+          multi={multi}
         />
         {panelsHidden ? null : (
           <p className="max-w-full rounded bg-white/90 px-2 py-0.5 text-center text-xs text-muted shadow-sm" role="status" aria-live="polite">
@@ -1343,6 +1515,12 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             />
             cm
           </label>
+        ) : null}
+        {tool.kind === "place" && !panelsHidden && touchy && editable ? (
+          // A finger has no Shift: with Line on, a drag stamps along it (spec 60 B.2).
+          <button type="button" aria-pressed={lineSwitch} className={`pointer-events-auto rounded border px-2.5 py-1 text-xs shadow-sm ${lineSwitch ? "border-ink bg-ink text-white" : "border-line bg-white/90"}`} onClick={() => setLineSwitch((on) => !on)}>
+            Line: {lineSwitch ? "on, drag to stamp along it" : "off"}
+          </button>
         ) : null}
       </div>
     </>
@@ -1510,6 +1688,7 @@ function TableShapeBase({
   rings,
   fontSize,
   detail,
+  where,
   onPointerDown,
   onHover,
 }: {
@@ -1521,6 +1700,7 @@ function TableShapeBase({
   rings: boolean;
   fontSize: number;
   detail: ChairDetail;
+  where: string;
   onPointerDown: (e: RPointerEvent, key: string) => void;
   onHover: (key: string | null) => void;
 }) {
@@ -1542,13 +1722,14 @@ function TableShapeBase({
     <g
       ref={setNodeRef as unknown as React.Ref<SVGGElement>}
       transform={`translate(${table.pos_x_cm} ${table.pos_y_cm}) rotate(${table.rotation_deg})`}
+      id={`plan-${itemKey}`}
       data-key={itemKey}
       onPointerDown={(e) => onPointerDown(e, itemKey)}
       onPointerEnter={() => onHover(itemKey)}
       onPointerLeave={() => onHover(null)}
       style={{ cursor }}
       role="button"
-      aria-label={`${table.label}, ${occ.chairsTaken} of ${table.capacity}`}
+      aria-label={describeTable({ label: table.label, shape: table.shape, capacity: table.capacity, taken: occ.chairsTaken, where })}
     >
       {rings ? (
         table.shape === "round" ? (
@@ -1692,6 +1873,7 @@ function FixtureShapeBase({
   hovered,
   cursor,
   fontSize,
+  where,
   onPointerDown,
   onHover,
 }: {
@@ -1701,6 +1883,7 @@ function FixtureShapeBase({
   hovered: boolean;
   cursor: string;
   fontSize: number;
+  where: string;
   onPointerDown: (e: RPointerEvent, key: string) => void;
   onHover: (key: string | null) => void;
 }) {
@@ -1717,13 +1900,14 @@ function FixtureShapeBase({
   return (
     <g
       transform={`translate(${fixture.pos_x_cm} ${fixture.pos_y_cm}) rotate(${fixture.rotation_deg})`}
+      id={`plan-${itemKey}`}
       data-key={itemKey}
       onPointerDown={(e) => onPointerDown(e, itemKey)}
       onPointerEnter={() => onHover(itemKey)}
       onPointerLeave={() => onHover(null)}
       style={{ cursor }}
       role="button"
-      aria-label={fixture.quantity > 1 ? `${label}, ${fixture.quantity}` : label}
+      aria-label={describeFixture({ label, quantity: fixture.quantity, where })}
     >
       {marquee ? (
         <MarqueeBody width={w} length={d} template={marquee} fill={fill} stroke={stroke} strokeWidth={selected ? 6 : 3} />

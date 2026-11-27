@@ -28,6 +28,8 @@ export function FloatingToolbar({
   navMode,
   setNavMode,
   onDone,
+  onMulti,
+  multi = false,
 }: {
   tool: Tool;
   setTool: (t: Tool) => void;
@@ -38,6 +40,9 @@ export function FloatingToolbar({
   toolsHidden?: boolean;
   /** Starts Stamp with the last item stamped (or opens the Library to choose one). */
   onStamp?: () => void;
+  /** Select several (spec 60 B.2): given on a touch screen, where a tap and a drag have no Shift. */
+  onMulti?: () => void;
+  multi?: boolean;
   zoomPct: number;
   zoomBy: (factor: number) => void;
   onFit: () => void;
@@ -79,6 +84,20 @@ export function FloatingToolbar({
         >
           Stamp
           <kbd className={`ml-1.5 hidden font-sans text-[10px] sm:inline ${tool.kind === "place" ? "text-white/70" : "text-muted"}`}>S</kbd>
+        </button>
+      ) : null}
+      {!toolsHidden && canDraw && onMulti ? (
+        <button
+          type="button"
+          aria-pressed={multi}
+          title="Select several: tap to add or remove, drag on the floor for a box (Esc turns it off)"
+          className={`rounded px-2.5 py-1 ${multi ? "bg-ink text-white" : "hover:bg-line/50"}`}
+          onClick={() => {
+            onMulti();
+            onDone();
+          }}
+        >
+          Select several
         </button>
       ) : null}
       {toolsHidden ? null : <span aria-hidden className="mx-1 h-5 w-px bg-line" />}

@@ -36,6 +36,25 @@ const SECTIONS: { title: string; rows: Row[] }[] = [
     ],
   },
   {
+    title: "Without a mouse",
+    rows: [
+      ["Tab · ⇧Tab", "Into the plan, then through its tables and furniture, top to bottom and left to right"],
+      ["Enter", "Open a table's close-up, or a piece of furniture's inspector"],
+      ["⇧Enter, or Space on its own", "Add it to the selection, or take it out"],
+      ["Arrows, R, Delete, ⌘/Ctrl + D, C", "Act on the item Tab has reached when nothing else is picked"],
+      ["Esc", "Clear the selection, then step out of the plan to the next control"],
+    ],
+  },
+  {
+    title: "On a tablet",
+    rows: [
+      ["Select several", "On the toolbar: tap to add or remove, drag on the floor for a box"],
+      ["Press and hold", "The right-click menu, on an item or on the floor"],
+      ["Line, while stamping", "Drag to stamp along a line"],
+      ["Two fingers", "Pinch to zoom, as before"],
+    ],
+  },
+  {
     title: "Changing",
     rows: [
       ["Drag", "Move the whole selection (snaps to neighbours; hold Alt during the drag to turn snapping off)"],
