@@ -92,7 +92,9 @@ export function ZoomPlan({ children, label, roomNav = false }: { children: React
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pan = useRef<{ x: number; y: number } | null>(null);
   const pinch = useRef<{ dist: number; z: ZoomState; mid: { x: number; y: number } } | null>(null);
-  const canPan = isZoomedIn(z) || (roomNav && (hand || spaceHeld));
+  // View only: a zoomed plan pans when dragged. The planner's close-up places and drags items on the plan, so a drag there is the
+  // item's; panning is the Hand, Space or the middle button, as in the Room view.
+  const canPan = roomNav ? hand || spaceHeld : isZoomedIn(z);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest("[data-zoom-control]")) return;

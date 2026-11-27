@@ -270,6 +270,44 @@ select pg_temp.expect((select count(*) from public.seating_fixtures where id = :
 rollback;
 
 -- ---------------------------------------------------------------------------
+-- 4b. What is placed on a table's top (spec 59 D)
+-- ---------------------------------------------------------------------------
+begin;
+select set_config('request.jwt.claim.sub', :alex, true);
+set local role authenticated;
+insert into public.seating_tables (id, wedding_id, event_id, label, shape, capacity, sort_order, pos_x_cm, pos_y_cm, locked)
+values (:t1, :w1, :reception, 'Table 1', 'round', 8, 1, 500, 500, true), (:t2, :w1, :reception, 'Table 2', 'long', 10, 2, 900, 500, false);
+insert into public.seating_fixtures (id, wedding_id, event_id, kind, pos_x_cm, pos_y_cm, width_cm, depth_cm)
+values (:f1, :w1, :reception, 'dance_floor', 1000, 700, 500, 500);
+create temp table ids as select (select id from public.seating_layouts where event_id = :reception and is_live) as live;
+
+select public.seating_apply_items(:reception, (select live from ids), 'items',
+  jsonb_build_array(
+    jsonb_build_object('kind', 'table', 'id', :t1, 'table_items', jsonb_build_array(jsonb_build_object('id', 'a', 'kind', 'candles', 'along', 0, 'across', 0))),
+    jsonb_build_object('kind', 'table', 'id', :t2, 'table_items', '[]'::jsonb, 'style_changes', jsonb_build_object('item_rules', jsonb_build_array(jsonb_build_object('id', 'r1', 'kind', 'candles', 'rule', 'centre'))))));
+select pg_temp.expect_true((select jsonb_array_length(table_items) = 1 from public.seating_tables where id = :t1), 'items are set on a table, even a held one');
+select pg_temp.expect_true((select style_changes->'item_rules'->0->>'id' = 'r1' from public.seating_tables where id = :t2), '… and a table''s own rules with them');
+select public.seating_apply_items(:reception, (select live from ids), 'items',
+  jsonb_build_array(jsonb_build_object('kind', 'table', 'id', :t2, 'table_items', '[]'::jsonb, 'style_changes', 'null'::jsonb)));
+select pg_temp.expect_true((select style_changes is null from public.seating_tables where id = :t2), 'a null clears the table''s own changes');
+select public.seating_apply_items(:reception, (select live from ids), 'items',
+  jsonb_build_array(jsonb_build_object('kind', 'table', 'id', :t2, 'table_items', jsonb_build_array(jsonb_build_object('id', 'z', 'kind', 'sign', 'along', 0.1, 'across', 0)))));
+select pg_temp.expect_true((select jsonb_array_length(table_items) = 1 from public.seating_tables where id = :t2), 'leaving style_changes out leaves them alone');
+
+-- All or nothing across tables.
+select pg_temp.expect_error(format('select public.seating_apply_items(%L, %L, ''items'', %L)', :reception, (select live from ids),
+  jsonb_build_array(jsonb_build_object('kind', 'table', 'id', :t1, 'table_items', '[]'::jsonb), jsonb_build_object('kind', 'table', 'id', :gone, 'table_items', '[]'::jsonb))::text),
+  'P0002', 'an items call naming a table that is not there is refused whole', 'seating_item_missing');
+select pg_temp.expect((select jsonb_array_length(table_items) from public.seating_tables where id = :t1), 1, '… and the other table kept its items');
+select pg_temp.expect_error(format('select public.seating_apply_items(%L, %L, ''items'', %L)', :reception, (select live from ids),
+  jsonb_build_array(jsonb_build_object('kind', 'fixture', 'id', :f1, 'table_items', '[]'::jsonb))::text),
+  '22023', 'only a table carries items');
+select pg_temp.expect_error(format('select public.seating_apply_items(%L, %L, ''items'', %L)', :reception, (select live from ids),
+  jsonb_build_array(jsonb_build_object('kind', 'table', 'id', :t1, 'table_items', '{}'::jsonb))::text),
+  '23514', 'items that are not a list are refused by the table''s own check');
+rollback;
+
+-- ---------------------------------------------------------------------------
 -- 5. Refusals: a locked room, the wrong layout, an empty call, a stranger
 -- ---------------------------------------------------------------------------
 begin;

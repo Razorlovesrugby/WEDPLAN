@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { FIXTURE_DEFAULTS } from "@/lib/seating/geometry";
 import { HELD_MESSAGE, LOCKED_MESSAGE } from "@/lib/seating/lock";
 import { FIXTURE_LIMITS, TABLE_LIMITS } from "@/lib/seating/resize";
+import { parseStyleChanges } from "@/lib/seating/items";
+import { parseItemRules, parseTableItems } from "@/lib/seating/table-items";
 import { requireWedding } from "@/server/queries/wedding";
 import { resolveLayout } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
@@ -239,4 +241,40 @@ export async function createSeatingTables(
   if (parsed.data.items.some((i) => (i.reserved_seats ?? 0) > i.capacity)) return fail("Reserved seats can't be more than the table's seats");
   const r = await apply(eventId, layoutId, "stamp", parsed.data.items.map((i) => ({ kind: "table", ...i })), parsed.data.spaceId);
   return r.ok ? ok({ ids: r.data.tables }) : r;
+}
+
+/**
+ * Sets what is placed on tables' tops (spec 59 D.1), and, when `rules` is given, each table's own rules over its style's
+ * (D.2; `null` takes the table back to its style's). Many tables at once (Paste table décor, Make it by hand) are one
+ * transaction. A held table can still be dressed: Lock item holds where it is, not what is on it.
+ */
+export async function setTableItems(
+  eventId: string,
+  layoutId: string | undefined,
+  updates: { tableId: string; items: unknown; rules?: unknown }[],
+): Promise<ActionResult> {
+  const parsed = z.array(z.object({ tableId: uuid, items: z.unknown(), rules: z.unknown().optional() })).min(1).max(MAX_ITEMS).safeParse(updates);
+  if (!parsed.success || new Set(parsed.data.map((u) => u.tableId)).size !== parsed.data.length) return fail("That's not something to place");
+  const wedding = await requireWedding();
+  const supabase = await createClient();
+  // A table's own rules live inside its style changes, beside its place settings and centre: change only the rules.
+  const needsRules = parsed.data.filter((u) => u.rules !== undefined);
+  const current = new Map<string, unknown>();
+  if (needsRules.length > 0) {
+    const { data, error } = await supabase.from("seating_tables").select("id, style_changes").in("id", needsRules.map((u) => u.tableId)).eq("wedding_id", wedding.id);
+    if (error) return fail(error.message);
+    for (const row of data ?? []) current.set(row.id, row.style_changes);
+  }
+  const rows = parsed.data.map((u) => {
+    const row: Record<string, unknown> = { kind: "table", id: u.tableId, table_items: parseTableItems(u.items) };
+    if (u.rules !== undefined) {
+      const { item_rules: _drop, ...rest } = parseStyleChanges(current.get(u.tableId)) ?? {};
+      void _drop;
+      const next = u.rules === null ? rest : { ...rest, item_rules: parseItemRules(u.rules) };
+      row.style_changes = Object.keys(next).length > 0 ? next : null;
+    }
+    return row;
+  });
+  const r = await apply(eventId, layoutId, "items", rows);
+  return r.ok ? ok(undefined) : r;
 }

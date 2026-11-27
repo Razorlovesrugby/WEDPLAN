@@ -30,8 +30,11 @@ import type { SeatingTable } from "@/lib/seating/model";
 import { useSeating } from "./seating-state";
 import { TableCloseup } from "./table-closeup";
 import { ZoomPlan } from "./zoom-plan";
+import { ItemRulesEditor, type RuleChoices } from "./item-rules-editor";
+import { parseMenu } from "@/lib/seating/service";
+import type { ItemRule } from "@/lib/seating/table-items";
 
-type Draft = { id?: string; name: string; place: StylePlace; centre: StyleCentre };
+type Draft = { id?: string; name: string; place: StylePlace; centre: StyleCentre; /** Items placed by rule (spec 59 D.2), on the style and not on a one-table change. */ item_rules?: ItemRule[] };
 
 const NEW_STYLE: Draft = {
   name: "",
@@ -124,7 +127,7 @@ export function StylesPanel() {
           <li key={s.id} className="flex flex-wrap items-center gap-2 rounded border border-line px-3 py-1.5 text-sm">
             <strong>{s.name}</strong>
             <span className="text-xs text-muted">{usedBy(s.id) === 0 ? "not used" : `${usedBy(s.id)} ${usedBy(s.id) === 1 ? "table" : "tables"}`}</span>
-            <button type="button" className="ml-auto text-xs underline" onClick={() => setDraft({ id: s.id, name: s.name, place: s.place, centre: s.centre })}>
+            <button type="button" className="ml-auto text-xs underline" onClick={() => setDraft({ id: s.id, name: s.name, place: s.place, centre: s.centre, item_rules: s.item_rules ?? [] })}>
               Edit
             </button>
           </li>
@@ -332,6 +335,11 @@ function StyleEditor({
   };
   const extras = draft.centre.extras ?? [];
   const setExtras = (next: CentreExtra[]) => setDraft({ ...draft, centre: { ...draft.centre, extras: next } });
+  const { data: seatingData } = useSeating();
+  const choices: RuleChoices = useMemo(() => {
+    const m = parseMenu(seatingData.plan?.menu);
+    return { dishes: (m.ok ? m.menu : []).flatMap((c) => c.dishes.map((d) => ({ id: d.id, name: d.name }))), customItems: seatingData.customItems.map((c) => ({ id: c.id, name: c.name })) };
+  }, [seatingData.plan?.menu, seatingData.customItems]);
 
   return (
     <form
@@ -417,6 +425,16 @@ function StyleEditor({
           ) : null}
         </div>
       </fieldset>
+
+      {forTable ? null : (
+        <fieldset className="space-y-2 rounded border border-line p-2">
+          <legend className="px-1 text-sm font-medium">Items placed by rule</legend>
+          <p className="text-xs text-muted">
+            For example “a platter every 3 seats” or “flowers at each end”. They follow each table&apos;s size and chair count; a table can have its own rules instead (its Décor tab).
+          </p>
+          <ItemRulesEditor rules={draft.item_rules ?? []} onChange={(item_rules) => setDraft({ ...draft, item_rules })} choices={choices} />
+        </fieldset>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="submit" className="btn btn-primary" disabled={pending || (!forTable && draft.name.trim() === "")}>

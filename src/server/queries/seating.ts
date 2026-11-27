@@ -15,6 +15,7 @@ import type {
 import type { BlockedChair } from "@/lib/seating/model";
 import type { RsvpStatus } from "@/lib/types/database";
 import { describeItemKey, parseStyleCentre, parseStylePlace, type StoredCount, type TableStyle } from "@/lib/seating/items";
+import { parseItemRules } from "@/lib/seating/table-items";
 import { FIXTURE_DEFAULTS } from "@/lib/seating/geometry";
 import { chooseLayout, type LayoutSummary } from "@/lib/seating/layouts";
 import { parseDietaryNeeds, type DietaryNeed } from "@/lib/dietary";
@@ -154,7 +155,7 @@ export async function loadSeatingPlan(
         .order("sort_order"),
       supabase.from("seating_chairs_blocked").select("table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
       supabase.from("seating_checkins").select("guest_id, arrived_at, by_label").eq("wedding_id", weddingId).eq("event_id", eventId),
-      supabase.from("seating_table_styles").select("id, name, place, centre").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
+      supabase.from("seating_table_styles").select("id, name, place, centre, item_rules").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
       supabase.from("seating_spaces").select("*").eq("wedding_id", weddingId).eq("layout_id", scope).order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
       // Counts for the tabs: how much each layout holds.
       Promise.all([
@@ -321,7 +322,7 @@ export async function loadSeatingPlan(
       questions: questionRows,
       answers,
     },
-    styles: (styles.data ?? []).map((st) => ({ id: st.id, name: st.name, place: parseStylePlace(st.place), centre: parseStyleCentre(st.centre) })),
+    styles: (styles.data ?? []).map((st) => ({ id: st.id, name: st.name, place: parseStylePlace(st.place), centre: parseStyleCentre(st.centre), item_rules: parseItemRules(st.item_rules) })),
     layoutId,
     layouts,
     spaces: spaces.data ?? [],

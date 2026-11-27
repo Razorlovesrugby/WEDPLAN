@@ -2,6 +2,9 @@ import { CHAIR_OFFSET_CM, localSeatPositions, serpentinePath, tableSize } from "
 import { CENTRE_LABEL, effectiveStyle, parseStyleChanges, type TableStyle } from "@/lib/seating/items";
 import type { CloseupFood } from "@/lib/seating/kitchen";
 import type { SeatingTable } from "@/lib/seating/model";
+import type { TableItem } from "@/lib/seating/table-items";
+import type { Ref, ReactNode } from "react";
+import { TableItemGlyph } from "./table-item-glyph";
 
 /**
  * One table, top down and to scale, with what the style puts on it (spec 57
@@ -73,11 +76,25 @@ export function TableCloseup({
   table,
   style,
   food,
+  items,
+  dishNames,
+  overlay,
+  svgRef,
+  svgProps,
 }: {
   table: SeatingTable;
   style: TableStyle | null;
   /** Shared dishes down the middle, plate rings and name tags (spec 57 C.2, F.4, F.5). */
   food?: CloseupFood;
+  /** What is placed on the top (spec 59 D.1), and what rules place: ghosts have `fromRule`. Drawn to scale, so exports show them. */
+  items?: (TableItem & { fromRule?: string })[];
+  /** Names for `dish` and `custom` items, by their `ref`. */
+  dishNames?: Readonly<Record<string, string>>;
+  /** More SVG drawn on top, in the table's own frame: the editor's selection and guides. */
+  overlay?: ReactNode;
+  /** The close-up editor reads pointer positions off this. */
+  svgRef?: Ref<SVGSVGElement>;
+  svgProps?: React.SVGAttributes<SVGSVGElement>;
 }) {
   if (table.shape === "rows") {
     return <p className="text-sm text-muted">Ceremony rows are chairs only: there is no tabletop to set.</p>;
@@ -97,10 +114,12 @@ export function TableCloseup({
   return (
     <figure className="space-y-2">
       <svg
+        ref={svgRef}
         viewBox={`${-hl - pad} ${-hw - pad} ${length + pad * 2} ${width + pad * 2}`}
         className="mx-auto block max-h-96 w-full"
         role="img"
         aria-label={`${table.label} set with ${style?.name ?? "nothing"}`}
+        {...svgProps}
       >
         {centre.tablecloth?.on ? <Outline shape={table.shape} hl={hl} hw={hw} grow={12} fill="#f7f3ed" stroke="#e2dbd0" /> : null}
         <Outline shape={table.shape} hl={hl} hw={hw} grow={0} fill="#ffffff" stroke="#b8b0a4" />
@@ -156,6 +175,9 @@ export function TableCloseup({
             })}
           </g>
         ) : null}
+        {(items ?? []).map((it) => (
+          <TableItemGlyph key={it.id} item={it} length={length} width={width} ghost={Boolean(it.fromRule)} name={it.ref ? dishNames?.[it.ref] : undefined} />
+        ))}
         {Array.from({ length: candles }, (_, i) => {
           const a = (i * 2 * Math.PI) / Math.max(candles, 1) + Math.PI / 6;
           const r = arrangementSize + 14;
@@ -163,6 +185,7 @@ export function TableCloseup({
           const y = longish ? (i % 2 ? 18 : -18) : Math.sin(a) * r;
           return <circle key={i} cx={x} cy={y} r={4.5} fill="#fff8e6" stroke="#e7d7b0" style={{ filter: "drop-shadow(0 0 4px rgba(242,193,78,0.6))" }} />;
         })}
+        {overlay}
       </svg>
       <figcaption className="text-xs text-muted">
         {style ? <>Style: <strong className="text-ink">{style.name}</strong></> : "No style yet."}

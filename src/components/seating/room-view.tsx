@@ -80,7 +80,13 @@ import { FloatingToolbar } from "./canvas-toolbar";
 import { CanvasMenu, type MenuItem } from "./canvas-menu";
 import { FirstVisitTips, ShortcutSheet } from "./canvas-help";
 import { MultiSelectionPanel } from "./selection-inspector";
-import { TableInspector } from "./table-inspector";
+import { TableInspector, type InspectorTab } from "./table-inspector";
+import { TableItemsEditor, getHeldDecor, hasHeldDecor, holdDecor } from "./table-items-editor";
+import { TableItemGlyph } from "./table-item-glyph";
+import { effectiveRules, parseTableItems, pasteItems, ruleItems } from "@/lib/seating/table-items";
+import { parseStyleChanges } from "@/lib/seating/items";
+import { parseMenu } from "@/lib/seating/service";
+import { setTableItems } from "@/server/actions/seating-items";
 import { setDesignerHandler } from "./designer-bridge";
 
 const GRID_CM = 25;
@@ -202,6 +208,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const [live, setLive] = useState("");
   const [multi, setMulti] = useState(false);
   const [lineSwitch, setLineSwitch] = useState(false);
+  /** Add table décor (right-click) asks the inspector for its Décor tab. */
+  const [inspectorTab, setInspectorTab] = useState<{ tab: InspectorTab; at: number } | null>(null);
   const touchy = useMediaQuery("(pointer: coarse)", false);
   const spaceUsed = useRef(false);
   const longPress = useRef<{ from: Point; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -549,6 +557,46 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     say({ kind: "order", count: sorted.length, where });
     startTransition(async () => {
       const r = await track(where === "front" ? "Brought to the front" : "Sent to the back", () => orderSeatingItems(eventId, layoutId, sorted.map((f) => f.id), where));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+  };
+
+  // ---- décor on tables (spec 59 Part D) ---------------------------------------------
+  /** Names for the dishes and the couple's own items, for what is drawn on a table. */
+  const itemNames = useMemo(() => {
+    const m = parseMenu(data.plan?.menu);
+    const dishes = (m.ok ? m.menu : []).flatMap((c) => c.dishes.map((d) => [d.id, d.name] as const));
+    return Object.fromEntries([...dishes, ...data.customItems.map((c) => [c.id, c.name] as const)]) as Record<string, string>;
+  }, [data.plan?.menu, data.customItems]);
+
+  const openDecor = (tableId: string) => {
+    tools.setSelected(null);
+    setSelection(new Set([`t:${tableId}`]));
+    setInspectorTab({ tab: "items", at: Date.now() });
+  };
+  const copyDecorOf = (tableId: string) => {
+    const t = tables.find((x) => x.id === tableId);
+    if (!t) return;
+    const items = parseTableItems(t.table_items);
+    holdDecor({ items, rules: parseStyleChanges(t.style_changes)?.item_rules ?? null });
+    say({ kind: "copy", count: items.length });
+  };
+  /** Paste table décor onto each table picked: items keep their place relative to the table's length, so they land where they were whatever its size (D.3). */
+  const pasteDecorOn = (tableIds: string[]) => {
+    const held = getHeldDecor();
+    if (!editable || !held || tableIds.length === 0) return;
+    const updates = tableIds.flatMap((id) => {
+      const t = tables.find((x) => x.id === id);
+      if (!t) return [];
+      const current = parseTableItems(t.table_items);
+      return [{ tableId: id, items: [...current, ...pasteItems(held.items, new Set(current.map((i) => i.id)))].slice(0, 200), ...(held.rules ? { rules: held.rules } : {}) }];
+    });
+    if (updates.length === 0) return;
+    setTables((ts) => ts.map((t) => (updates.some((u) => u.tableId === t.id) ? { ...t, table_items: updates.find((u) => u.tableId === t.id)!.items as typeof t.table_items } : t)));
+    say({ kind: "paste", count: held.items.length * updates.length });
+    startTransition(async () => {
+      const r = await track(updates.length === 1 ? "Pasted table décor" : `Pasted table décor on ${updates.length} tables`, () => setTableItems(eventId, layoutId, updates));
       if (!r.ok) setError(r.error);
       refresh();
     });
@@ -1306,7 +1354,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         ...(tableBodies.length > 0
           ? ([
               "sep",
-              ...(one && one.kind === "table" ? ([{ label: "Open close-up", onSelect: () => openTable(one.id) }] as MenuItem[]) : []),
+              ...(one && one.kind === "table"
+                ? ([
+                    { label: "Open close-up", onSelect: () => openTable(one.id) },
+                    { label: "Add table décor", disabled: !editable, onSelect: () => openDecor(one.id) },
+                    { label: "Copy table décor", onSelect: () => copyDecorOf(one.id) },
+                  ] as MenuItem[])
+                : []),
+              { label: "Paste table décor", disabled: !editable || !hasHeldDecor(), onSelect: () => pasteDecorOn(tableIds) },
               { label: "Apply style", disabled: !editable || data.styles.length === 0, children: styleItems },
             ] as MenuItem[])
           : []),
@@ -1471,9 +1526,17 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       ) : null}
       {selectedTable ? (
         focus ? (
-          <TableInspector table={selectedTable} seats={<SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />} />
+          <TableInspector table={selectedTable} openTab={inspectorTab} seats={<SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />} />
         ) : (
-          <SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />
+          <>
+            <SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />
+            <details className="card p-2" open={inspectorTab !== null}>
+              <summary className="cursor-pointer text-sm font-medium">Décor on {selectedTable.label}</summary>
+              <div className="pt-2">
+                <TableItemsEditor table={selectedTable} />
+              </div>
+            </details>
+          </>
         )
       ) : null}
       {selectedFixture ? <SelectedFixturePanel fixture={selectedFixture} onDone={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} /> : null}
@@ -1598,6 +1661,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
                     rings={rings}
                     fontSize={fontSize}
                     detail={detail}
+                    showItems={zoomPct >= 100}
+                    itemNames={itemNames}
                     where={describePosition({ x: t.pos_x_cm ?? 0, y: t.pos_y_cm ?? 0 }, roomW, roomD)}
                     onPointerDown={stableDown}
                     onHover={setHoverKey}
@@ -1980,6 +2045,8 @@ function TableShapeBase({
   rings,
   fontSize,
   detail,
+  showItems,
+  itemNames,
   where,
   onPointerDown,
   onHover,
@@ -1992,6 +2059,9 @@ function TableShapeBase({
   rings: boolean;
   fontSize: number;
   detail: ChairDetail;
+  /** Spec 59 D.1: what is on the table's top is drawn to scale from 100% zoom, and left out below it. */
+  showItems: boolean;
+  itemNames: Readonly<Record<string, string>>;
   where: string;
   onPointerDown: (e: RPointerEvent, key: string) => void;
   onHover: (key: string | null) => void;
@@ -2000,6 +2070,12 @@ function TableShapeBase({
   const clearance = settings.walkway.comfortable;
   const { setNodeRef, isOver } = useDroppable({ id: `table:${table.id}` });
   const { length, width } = tableSize(table);
+  const onTop = useMemo(() => {
+    if (!showItems) return [];
+    const style = data.styles.find((s) => s.id === table.style_id);
+    const rules = effectiveRules(style?.item_rules ?? [], parseStyleChanges(table.style_changes)?.item_rules ?? null);
+    return [...parseTableItems(table.table_items), ...ruleItems(table, rules)];
+  }, [showItems, data.styles, table]);
   const occ = occupancy.get(table.id)!;
   const warn = (warningsByTable.get(table.id) ?? []).some((w) => w.severity === "warning");
   const seats = seatPositions({ ...table, pos_x_cm: 0, pos_y_cm: 0, rotation_deg: 0 }) ?? [];
@@ -2121,6 +2197,14 @@ function TableShapeBase({
           strokeWidth={selected ? 6 : 4}
         />
       )}
+      {/* What is on the table, to scale, from 100% zoom (spec 59 D.1); dashed ones are placed by a rule. */}
+      {onTop.length > 0 ? (
+        <g style={{ pointerEvents: "none" }} aria-hidden>
+          {onTop.map((it) => (
+            <TableItemGlyph key={it.id} item={it} length={length} width={width} ghost={"fromRule" in it} name={it.ref ? itemNames[it.ref] : undefined} textSize={8} />
+          ))}
+        </g>
+      ) : null}
       <g transform={`rotate(${-table.rotation_deg})`} style={{ pointerEvents: "none" }}>
         <text textAnchor="middle" y={-fs * 0.15} fontSize={fs} fill="#1a1a1a">
           {table.label}

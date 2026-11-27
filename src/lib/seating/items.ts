@@ -6,6 +6,7 @@
  */
 
 import type { SeatingFixtureKind } from "@/lib/types/database";
+import { parseItemRules, type ItemRule } from "./table-items";
 
 export const PLACE_ITEMS = ["charger", "dinner_plate", "side_plate", "napkin", "cutlery", "glasses", "name_card", "menu_card"] as const;
 export type PlaceKey = (typeof PLACE_ITEMS)[number];
@@ -32,10 +33,13 @@ export type CentreSetting = { on: boolean; note?: string; count?: number; tall?:
 export type CentreExtra = { name: string; count: number };
 export type StyleCentre = Partial<Record<CentreKey, CentreSetting>> & { extras?: CentreExtra[] };
 
-/** Changes on one table, over its style: a key present replaces the style's, `extras` replaces the whole list. */
-export type StyleChanges = { place?: StylePlace; centre?: StyleCentre };
+/**
+ * Changes on one table, over its style: a key present replaces the style's, `extras` replaces the whole list. `item_rules`
+ * (spec 59 D.2) replaces the style's whole list of placed-by-rule items; an empty list means "none on this table".
+ */
+export type StyleChanges = { place?: StylePlace; centre?: StyleCentre; item_rules?: ItemRule[] };
 
-export type TableStyle = { id: string; name: string; place: StylePlace; centre: StyleCentre };
+export type TableStyle = { id: string; name: string; place: StylePlace; centre: StyleCentre; /** Items placed by rule (spec 59 D.2). */ item_rules?: ItemRule[] };
 
 export const STYLE_LIMITS = { extras: 5, note: 80, name: 60, count: 999 } as const;
 
@@ -82,7 +86,8 @@ export function parseStyleChanges(raw: unknown): StyleChanges | null {
   const out: StyleChanges = {};
   if (raw.place !== undefined) out.place = parseStylePlace(raw.place);
   if (raw.centre !== undefined) out.centre = parseStyleCentre(raw.centre);
-  return out.place || out.centre ? out : null;
+  if (raw.item_rules !== undefined) out.item_rules = parseItemRules(raw.item_rules);
+  return out.place || out.centre || out.item_rules ? out : null;
 }
 
 /** A table's style with its own changes laid over it. */

@@ -216,6 +216,10 @@ grant execute on function public.restore_seating_state(uuid, jsonb, text, uuid) 
 --   stamp    { kind: 'fixture', fixture_kind, x, y, width, depth, label?, custom_item_id?, marquee_id? }
 --            { kind: 'table', shape, capacity, reserved_seats?, x, y }   new things, into p_space_id.
 --   lock     { kind, id, locked }                   Lock item / unlock (A.3).
+--   items    { kind: 'table', id, table_items, style_changes? }   sets what is placed on a table's top (spec 59
+--                                                   D.1), and, when style_changes is present, its own rules and
+--                                                   changes over its style (null clears them). A held table can
+--                                                   still be dressed.
 --   front, back  { kind: 'fixture', id }            Bring to front / Send to back (A.4); tables are
 --                                                   always above furniture and décor, so they are skipped.
 --
@@ -256,7 +260,7 @@ declare
   v_count int := 0;
   v_single boolean;
 begin
-  if p_op is null or p_op not in ('move', 'resize', 'copy', 'delete', 'stamp', 'lock', 'front', 'back') then
+  if p_op is null or p_op not in ('move', 'resize', 'copy', 'delete', 'stamp', 'lock', 'items', 'front', 'back') then
     raise exception 'unknown operation' using errcode = '22023';
   end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array'
@@ -377,6 +381,11 @@ begin
         delete from public.seating_tables where id = v_id;   -- the guests go back to the tray (their seats cascade)
       elsif p_op = 'lock' then
         update public.seating_tables set locked = coalesce((v_item->>'locked')::boolean, true) where id = v_id;
+      elsif p_op = 'items' then
+        update public.seating_tables
+           set table_items = coalesce(v_item->'table_items', '[]'::jsonb),
+               style_changes = case when v_item ? 'style_changes' then nullif(v_item->'style_changes', 'null'::jsonb) else style_changes end
+         where id = v_id;
       elsif p_op in ('front', 'back') then
         null; -- tables always draw above furniture and décor: nothing to order
       end if;
@@ -397,6 +406,10 @@ begin
            or v_f.depth_cm is distinct from coalesce((v_from->>'depth')::int, v_f.depth_cm) then
           raise exception 'seating_stale' using errcode = '40001';
         end if;
+      end if;
+
+      if p_op = 'items' then
+        raise exception 'only a table carries items' using errcode = '22023';
       end if;
 
       if p_op = 'move' then

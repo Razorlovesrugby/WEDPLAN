@@ -3,7 +3,8 @@ import { dietaryText, hasAllergy, hasAnyDietary } from "@/lib/dietary";
 import { colourCounts, colourLegend, guestColour, type ColourBy } from "@/lib/seating/colour";
 import { tableSize } from "@/lib/seating/geometry";
 import { closeupFood, buildKitchen, mealQuestion, type Kitchen } from "@/lib/seating/kitchen";
-import { effectiveStyle, parseStyleChanges, CENTRE_LABEL, type ItemLine } from "@/lib/seating/items";
+import { effectiveStyle, parseStyleChanges, CENTRE_LABEL, type ItemLine, type TableStyle } from "@/lib/seating/items";
+import { effectiveRules, parseTableItems, ruleItems, type TableItem } from "@/lib/seating/table-items";
 import { itemLines, tableCounts } from "@/lib/seating/item-lines";
 import { fixtureGroup } from "@/lib/seating/library";
 import { compareBySurname, guestName, type SeatingTable } from "@/lib/seating/model";
@@ -57,6 +58,18 @@ function Page({ title, children, last = false }: { title: string; children: Reac
 /** The paper the browser prints on. */
 export function PaperStyle({ paper }: { paper: Paper }) {
   return <style>{`@media print { @page { size: ${paper.size.toUpperCase()} ${paper.orient}; margin: 10mm; } }`}</style>;
+}
+
+/** What is on a table's top: placed by hand, and placed by its rules (its own, or its style's). Spec 59 Part D. */
+function tableTopItems(t: SeatingTable, styles: readonly TableStyle[]): (TableItem & { fromRule?: string })[] {
+  const style = t.style_id ? styles.find((s) => s.id === t.style_id) : undefined;
+  const rules = effectiveRules(style?.item_rules ?? [], parseStyleChanges(t.style_changes)?.item_rules ?? null);
+  return [...parseTableItems(t.table_items), ...ruleItems(t, rules)];
+}
+/** Names for the dishes and the couple's own items that sit on tables. */
+function itemNamesOf(i: ExportInput): Record<string, string> {
+  const m = parseMenu(i.data.plan?.menu);
+  return Object.fromEntries([...(m.ok ? m.menu : []).flatMap((c) => c.dishes.map((d) => [d.id, d.name] as const)), ...i.data.customItems.map((c) => [c.id, c.name] as const)]);
 }
 
 function chosenSpaces(i: ExportInput) {
@@ -216,7 +229,7 @@ export function CatererExport(i: ExportInput) {
         return (
           <Page key={t.id} title={`${tableName(t)}`} last={k === i.data.tables.length - 1}>
             <div className="max-w-md">
-              <TableCloseup table={t} style={style} food={food} />
+              <TableCloseup table={t} style={style} food={food} items={tableTopItems(t, i.data.styles)} dishNames={itemNamesOf(i)} />
             </div>
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -400,6 +413,17 @@ export function FloristExport(i: ExportInput) {
                 ))}
               </ul>
             ) : null}
+            {/* Each decorated table's close-up, so the florist sees which way up the arrangements go (spec 59 Part E). */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {tables
+                .filter((t) => tableTopItems(t, i.data.styles).length > 0)
+                .map((t) => (
+                  <div key={t.id} className="break-inside-avoid">
+                    <h4 className="text-sm font-medium">{t.label}</h4>
+                    <TableCloseup table={t} style={t.style_id ? (i.data.styles.find((st) => st.id === t.style_id) ?? null) : null} items={tableTopItems(t, i.data.styles)} dishNames={itemNamesOf(i)} />
+                  </div>
+                ))}
+            </div>
           </Page>
         );
       })}
@@ -469,6 +493,17 @@ export function HireExport(i: ExportInput) {
                 ))}
               </ol>
             ) : null}
+            {/* Each styled table's close-up, with what sits on it. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {i.data.tables
+                .filter((t) => t.space_id === space.id && t.pos_x_cm !== null && (t.style_id || tableTopItems(t, i.data.styles).length > 0))
+                .map((t) => (
+                  <div key={t.id} className="break-inside-avoid">
+                    <h4 className="text-sm font-medium">{t.label}</h4>
+                    <TableCloseup table={t} style={t.style_id ? (i.data.styles.find((st) => st.id === t.style_id) ?? null) : null} items={tableTopItems(t, i.data.styles)} dishNames={itemNamesOf(i)} />
+                  </div>
+                ))}
+            </div>
           </Page>
         );
       })}
