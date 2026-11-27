@@ -26,7 +26,7 @@
 - Tags on the guest page, in the guest table's Dietary cell and in the seating table drawer.
 - Everything that reads tags: chair dots, Colour by, chips, exports, the day-link Seating module, the guest CSV.
 - The `guest_dietary_needs` table, `saveGuestDietaryNeeds`, `replaceGuestNeeds` and `DietaryNeedsEditor`. The editor's
-  `legendClass`, `inputClass` and `help` props were added for the RSVP form and are now unused; they stay.
+  `legendClass`, `inputClass` and `help` props were added for the RSVP form and are unused; they stay.
 
 ## 4. Not in this spec
 
