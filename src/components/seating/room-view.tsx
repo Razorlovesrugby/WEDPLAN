@@ -115,7 +115,7 @@ const kindOf = (key: string) => parseKey(key)!;
  * Guests still drop onto tables here, and tap-to-place works as in the Tables view.
  */
 export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onLeaveFocus?: () => void } = {}) {
-  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show, locked, leftTab, setLeftTab, openTable, settings, assignments } = useSeating();
+  const { eventId, layoutId, spaceId, data, tables, setTables, fixtures, setFixtures, holdSync, refresh, setError, held, hold, move, track, tool, setTool, show, locked, leftTab, setLeftTab, openTable, settings, assignments } = useSeating();
   // Below tablet width the room is for looking at and seating people: no moving furniture, no drawing (spec 57 Part A). A locked room is the same (Part D).
   const editable = useMediaQuery(TABLET_UP) && !locked;
   const plan = data.plan;
@@ -177,7 +177,6 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [snapOn, setSnapOn] = useState(true);
   const [rings, setRings] = useState(false);
-  const [fixtures, setFixtures] = useState<SeatingFixture[]>(data.fixtures);
   const [calibrating, setCalibrating] = useState<Point[] | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -186,7 +185,6 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const [box, setBox] = useState<Box | null>(null);
   const [, startTransition] = useTransition();
 
-  useEffect(() => setFixtures(data.fixtures), [data.fixtures]);
   useEffect(() => setSelection(new Set()), [spaceId, layoutId]);
 
   const unit = view.w / size.w;
@@ -389,12 +387,15 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       }),
       p.label,
     );
-  }, [commitMoves]);
+    // The write is queued (and counted) by now, so the server's copy stays held until it lands.
+    holdSync("nudges", false);
+  }, [commitMoves, holdSync]);
   // Only on unmount: a re-render must never cut a run of key presses short.
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => flushRef.current(), []);
   const later = (keys: string[], label: string) => {
+    holdSync("nudges", true);
     const timer = setTimeout(flush, 400);
     if (pending.current) clearTimeout(pending.current.timer);
     pending.current = { keys: new Set([...(pending.current?.keys ?? []), ...keys]), label, timer };
@@ -595,13 +596,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
 
   // ---- the pointer -----------------------------------------------------------
   const drag = useRef<Drag>(null);
+  /** A drag, a selection box or a stamp line holds the server's copy back until it ends (spec 60 E.1); a pan writes nothing. */
+  const setDrag = (d: Drag) => {
+    drag.current = d;
+    holdSync("gesture", d !== null && d.mode !== "pan");
+  };
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; view: View; mid: Point } | null>(null);
   const panBy = tool.kind === "hand" || spaceHeld;
 
   const startPan = (e: RPointerEvent) => {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false };
+    setDrag({ mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false });
     setPanning(true);
   };
 
@@ -634,7 +640,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     const startBox = unionBox(movable.map((b) => boundsOf(b.poly)))!;
     const moving = new Set(movable.map((b) => b.key));
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = {
+    setDrag({
       mode: "move",
       keys: movable.map((b) => b.key),
       primary: movable.some((b) => b.key === key) ? key : movable[0]!.key,
@@ -648,7 +654,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       wasSelected,
       shift: e.shiftKey,
       delta: { dx: 0, dy: 0 },
-    };
+    });
   };
 
   const onRotatePointerDown = (e: RPointerEvent, key: string) => {
@@ -657,7 +663,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     if (!b) return;
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = { mode: "rotate", key, centre: { x: b.x, y: b.y }, last: b.rotation, origin: b };
+    setDrag({ mode: "rotate", key, centre: { x: b.x, y: b.y }, last: b.rotation, origin: b });
   };
 
   const onBackgroundPointerDown = (e: RPointerEvent) => {
@@ -667,7 +673,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
-      drag.current = null;
+      setDrag(null);
       setPanning(false);
       pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y), view: viewRef.current, mid: toRoom((a!.x + b!.x) / 2, (a!.y + b!.y) / 2) };
       return;
@@ -675,17 +681,17 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     if (tool.kind === "place" && editable && e.shiftKey && e.button === 0 && e.pointerType !== "touch" && !panBy) {
       const raw = toRoom(e.clientX, e.clientY);
       const start = { x: snap(raw.x, snapOn ? GRID_CM : 0), y: snap(raw.y, snapOn ? GRID_CM : 0) };
-      drag.current = { mode: "line", start, item: tool.item };
+      setDrag({ mode: "line", start, item: tool.item });
       setLineAt({ item: tool.item, stops: [start] });
       return;
     }
     // Pan: the middle button, Space, the Hand tool, a finger, and any tool that draws (a click is its click, a drag moves the view).
     // Otherwise the Select tool draws a selection box.
     if (e.button === 1 || panBy || e.pointerType === "touch" || tool.kind !== "select") {
-      drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false };
+      setDrag({ mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false });
       if (e.button === 1 || panBy) setPanning(true);
     } else {
-      drag.current = { mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey ? new Set(sel) : new Set(), moved: false };
+      setDrag({ mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey ? new Set(sel) : new Set(), moved: false });
     }
   };
 
@@ -767,7 +773,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
     const d = drag.current;
-    drag.current = null;
+    setDrag(null);
     setPanning(false);
     setBox(null);
     if (!d) return;
