@@ -24,14 +24,6 @@
 
 ## Recent sessions
 
-**Session 66 (spec 61, RSVP dietary picker removed, no migration):** on branch `claude/rsvp-dietary-spec-uf32vf`, not merged.
-
-- **Built:** the five RSVP files are back to their content before spec 57 Part H, so guests see one free-text dietary box and
-  the save no longer reads or writes tags. Tags stay on the guest page, guest table, table drawer and seating screens.
-- **Verified:** typecheck, 1897 unit tests, `npm run build`. **Not verified:** a browser, a phone, live. The planner checked
-  live: no guest has saved a tag, so nothing was cleared. The editor's three RSVP style props are unused and left in.
-- **Trap:** the Supabase connector in a session shows an unrelated project; never query it for this app.
-
 **Session 65 (spec 59, Parts A to C built, no migration):** on branch `claude/awesome-mendel-bdg1ak`, asked to "build the newest
 spec". The planner's Q8 order is Parts A to C first (no migration), then D and E with `0062`; this session built **A, B (most)
 and C**. **No migration; nothing to apply to live; the next free number is still `0062`, claimed by Parts D and E.** Nothing is
@@ -68,7 +60,7 @@ a real iPad, a printer, `/p/<token>`.
 
 - **Built, each as its own commit:** drafts (`0059`: one seat per guest per layout, `v_live_*` views for everything
   outside the designer, state / hash / restore / History per layout, try a layout and make it live, the Layout tabs);
-  structured dietary needs (guest page, guest table, table drawer; the RSVP picker was removed, spec 61); spaces and the Library; the venue
+  structured dietary needs (guest page, guest table, table drawer, RSVP form); spaces and the Library; the venue
   drawing tools and PDF plans; per-table changes, the Kids style, supplier and budget links; food service (menu,
   platters, own plates, kids' meals, kitchen summary); Lock room and the settings sheet; the caterer, venue, florist
   and hire exports, PNG, the share link (`0061`) and its public page, and the entrance board in A2 to A0. `0060`

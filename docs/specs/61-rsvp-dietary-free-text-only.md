@@ -1,6 +1,6 @@
 # Feature spec: The RSVP form has no dietary tag picker
 
-**Status: built (see Build status). No migration.**
+**Status: proposed, not built. The build waits for "build it". No migration.**
 
 **Depends on:** spec 57 (Part H: dietary tags for the seating plan), spec 35 (the RSVP form in the site theme).
 
@@ -26,18 +26,23 @@
 - Tags on the guest page, in the guest table's Dietary cell and in the seating table drawer.
 - Everything that reads tags: chair dots, Colour by, chips, exports, the day-link Seating module, the guest CSV.
 - The `guest_dietary_needs` table, `saveGuestDietaryNeeds`, `replaceGuestNeeds` and `DietaryNeedsEditor`. The editor's
-  `legendClass`, `inputClass` and `help` props were added for the RSVP form and are unused; they stay.
+  `legendClass`, `inputClass` and `help` props exist for the RSVP form; they stay when the picker is removed.
 
 ## 4. Not in this spec
 
 - Offering tags to guests, or choosing a meal per guest, is a separate spec. The tag list today is vegetarian, vegan, gluten
   free, dairy free, tree nuts, peanuts, shellfish, fish, egg, soy, sesame, halal, kosher and other. It has no pescatarian.
 
-## 5. Build status
+## 5. What the build touches
 
-- **Done:** `rsvp-form.tsx`, `render.tsx`, `actions/rsvp.ts`, `rsvp/resolve.ts` and `queries/site-render.ts` are back to their
-  content before spec 57 Part H; no other change had touched them. Spec 57 and HANDOFF no longer say the RSVP form has tags.
-- **Verified:** typecheck, 1897 unit tests, `npm run build`. The SQL suite was not run: no SQL changed.
-- **Not verified:** the form in a browser or on a phone, a submit against live Supabase, a form that was open in a guest's
+- `rsvp-form.tsx`, `render.tsx`, `actions/rsvp.ts`, `rsvp/resolve.ts` and `queries/site-render.ts` go back to their content
+  before spec 57 Part H; no other change has touched them since.
+- Spec 57 (Part H, its build order and its Build status) and HANDOFF stop saying the RSVP form has tags.
+- No SQL, no migration, no data change.
+
+## 6. Checks at build
+
+- Typecheck, unit tests and `npm run build`.
+- Not checkable from a session: the form in a browser or on a phone, a submit against live Supabase, a form open in a guest's
   browser during the release.
-- **Live when:** the change reaches `main`. This branch is not merged.
+- Live when the change reaches `main`.
