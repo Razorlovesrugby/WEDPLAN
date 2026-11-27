@@ -1,13 +1,26 @@
 # Feature spec: The seating canvas on a laptop: room to work, clear tools, fast placing
 
-**Status: proposed, not built.** Open questions in §11 need answers before
-anything is built.
+**Status: answered, not built.** Every question answered 2026-11-27 (see
+**Answered**).
 
 **Depends on:** spec 57 (the venue designer: spaces, layouts, library, drawing
 tools, table styles, close-up, food service, exports, share link), spec 53
 (undo/redo through whole-plan state, multi-select of guests), spec 46 (command
 palette and shortcuts), spec 45 (every drag has a click alternative), spec 48
 (phone view). All built.
+
+## Answered — 2026-11-27
+
+The planner took every recommendation. In one line each:
+
+Q1 the Room view always opens in focus mode · Q2 Trackpad is the default
+navigation mode · Q3 a library click starts Stamp, which stays until Esc · Q4
+rules live on table styles, overridable per table · Q5 placed and ruled dishes
+drive the platter suggestion · Q6 no minimap · Q7 notes can be addressed to
+vendors · Q8 build Parts A–C first (no migration), then D–E (`0062`). Two
+follow-ups took the defaults below: "every *N* seats" counts chairs along one
+side of a long table (D.2), and multi-select in the room picks tables and items,
+while place settings stay drawn from the table's style (A.5).
 
 ## 1. What was asked
 
@@ -132,6 +145,10 @@ The pointer over the canvas never scrolls or zooms the page.
   selection box over the room picks furniture, not the building. Layer locks
   are per device, separate from Lock room (spec 57 Part D), which binds
   everyone.
+- **What can be selected** in the room: tables (with their chairs), room
+  furniture, décor, table items (Part D) and notes. Place settings (plates,
+  glasses, cutlery) are drawn from the table's style (spec 57 C.1) and are
+  changed there or by a per-table change, not dragged one by one.
 - **Select similar** (right-click, or ⌘/Ctrl+Shift+A): every item of the
   selection's kind and size in the space (all 180 cm rounds, all candles).
 - **Drag** any selected item to move the whole selection; arrow keys nudge it
@@ -228,6 +245,11 @@ An item can be placed by a **rule** instead of by hand. A rule is one of:
 | **In the centre** | One arrangement on a round |
 | **At each seat** | A bud vase per place |
 
+- **Counting seats:** on a long or banquet table with chairs on both sides,
+  *N* counts chairs along one side, and each position serves the chairs on both
+  sides level with it (every 3 seats feeds about six people). On a table seated
+  on one side only, and on a round or oval, *N* counts chairs in order around
+  it. The inspector shows how many guests each position serves.
 - On a long or banquet table the positions run along its centre line; on a
   round or oval, around a ring inside the place settings.
 - A rule lives on a **table style** (spec 57 C.1), so "Long, family style:
@@ -298,31 +320,14 @@ centre and equal-spacing matches), wheel/pinch delta to zoom factor.
 
 ## 10. Out of scope
 
-3D views and a large 3D object library; live co-editing; a minimap (question 6); touch and phone changes beyond keeping
+3D views and a large 3D object library; live co-editing; a minimap (Fit and Shift+2 cover big venues); touch and phone changes beyond keeping
 today's pinch-to-zoom and tap-to-seat.
 
 ## 11. Open questions
 
-1. **Focus mode by default?** (a) Room view always opens full-window (recommended),
-   (b) a "Focus" button on today's page, (c) both, with the choice remembered.
-2. **Default navigation mode** (A.4): (a) Trackpad, the wheel pans
-   (recommended: trackpads are the laptop case), (b) Mouse, the wheel zooms, as
-   today. Either way the mode is switched in one right-click and never guessed.
-3. **Placing from the library:** (a) a tile click starts Stamp and stays until
-   Esc (recommended), (b) one placement then back to Select, with a lock toggle
-   to stay.
-4. **Rules on styles or per table?** (a) on styles, overridable per table
-   (recommended: one change reaches every long table), (b) per table only.
-5. **Dishes:** should placed or ruled dishes drive the platter suggestion (D.2,
-   recommended), or stay separate from the platter counts?
-6. **Minimap** in a corner for big venues and several spaces: (a) no
-   (recommended; Fit and Shift+2 cover it), (b) yes.
-7. **Notes:** addressed to vendors (Part E, recommended), or plain notes with no
-   addressee?
-8. **Build order:** Parts A–C first (screen, navigation, selection, Stamp: no
-   migration) then D–E (migration `0062`), recommended; or all together.
+None.
 
-## 12. Build order (once answered)
+## 12. Build order
 
 1. Navigation and selection model (A.3–A.6, Part B): navigation modes, pinch,
    Space, Hand, selection box, layers and their locks, multi-select moves, snap
