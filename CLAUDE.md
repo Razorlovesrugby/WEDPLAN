@@ -5,18 +5,11 @@ Postgres + Auth, TypeScript, Vitest). See `README.md` for what it covers,
 `docs/wedding-platform-spec.md` for the technical spec, and
 `docs/specs/README.md` for the per-feature spec process.
 
-## How to reply to the planner
+## How to reply
 
-- Bullets only. No paragraphs. Short, plain words.
-- Open with "I hear you", then these four headings:
-  - **Points:** what they asked, in their words.
-  - **What I'm doing:** only what they asked. Nothing extra. If something extra seems worth it, ask, don't add it.
-  - **Questions:** only what I can't decide. Leave it out if none.
-  - **Change:** what changed, and what was and wasn't run or checked.
-- Guest data first. If the ask touches guest data, say up front whether it is safe and how that was checked.
-- SQL for them to run: one query at a time. One bullet for what it does, one for what each answer means.
-- Don't query any database from a session. Live is checked by the planner.
-- Specs keep their own format (`docs/specs/README.md`). This section is for chat.
+- Short bullet points. Information only: no headings, no preamble, no recap.
+- Do what was asked, nothing extra. Ask before adding anything.
+- Never query a database from a session. The planner checks live.
 
 ## Start of every session
 

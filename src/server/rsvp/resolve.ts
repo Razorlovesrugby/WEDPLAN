@@ -2,7 +2,6 @@ import "server-only";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashClientIp, hashInviteToken, looksLikeToken } from "@/lib/tokens";
-import type { DietaryNeed } from "@/lib/dietary";
 import type {
   EventRow,
   GuestRow,
@@ -57,8 +56,6 @@ export type RsvpContext = {
   questions: RsvpQuestionRow[];
   rsvps: RsvpRow[];
   answers: RsvpAnswerRow[];
-  /** Structured dietary needs of this household's guests, by guest (spec 57 Part H). */
-  dietaryNeeds: Record<string, DietaryNeed[]>;
   locked: boolean;
 };
 
@@ -67,19 +64,6 @@ export type RsvpContext = {
  * editor's preview holds: a household's real data and no credential.
  */
 export type RsvpData = Omit<RsvpContext, "invitationId">;
-
-/** This household's own guests' needs only: the query above is scoped by wedding, which is wider. */
-function needsByGuest(
-  rows: { guest_id: string; tag: DietaryNeed["tag"]; is_allergy: boolean; other_text: string | null }[],
-  ownGuestIds: Set<string>,
-): Record<string, DietaryNeed[]> {
-  const out: Record<string, DietaryNeed[]> = {};
-  for (const r of rows) {
-    if (!ownGuestIds.has(r.guest_id)) continue;
-    (out[r.guest_id] ??= []).push({ tag: r.tag, isAllergy: r.is_allergy, otherText: r.other_text });
-  }
-  return out;
-}
 
 export type ResolveFailure =
   | { reason: "malformed" }
@@ -167,7 +151,7 @@ export async function loadRsvpData(
   const invites = eventInvites.filter((row) => row.asks_rsvp).map(({ guest_id, event_id }) => ({ guest_id, event_id }));
   const invitedEventIds = [...new Set(eventInvites.map((row) => row.event_id))];
 
-  const [wedding, household, guests, events, questions, rsvps, answers, needs] = await Promise.all([
+  const [wedding, household, guests, events, questions, rsvps, answers] = await Promise.all([
     supabase
       .from("weddings")
       .select("id, name, wedding_date, timezone, rsvp_lock_at")
@@ -208,7 +192,6 @@ export async function loadRsvpData(
       .order("sort_order"),
     supabase.from("rsvps").select("*").eq("wedding_id", weddingId).in("event_id", invitedEventIds),
     supabase.from("rsvp_answers").select("*").eq("wedding_id", weddingId),
-    supabase.from("guest_dietary_needs").select("guest_id, tag, is_allergy, other_text").eq("wedding_id", weddingId),
   ]);
 
   if (wedding.error || !wedding.data || household.error || !household.data) return null;
@@ -235,7 +218,6 @@ export async function loadRsvpData(
         (row.guest_id !== null && householdGuestIds.has(row.guest_id)) ||
         row.household_id === householdId,
     ),
-    dietaryNeeds: needsByGuest(needs.data ?? [], householdGuestIds),
     locked: wedding.data.rsvp_lock_at !== null && new Date(wedding.data.rsvp_lock_at) < new Date(),
   };
 }
