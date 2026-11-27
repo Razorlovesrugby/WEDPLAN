@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { SeatingScreen } from "@/components/seating/seating-screen";
 import { parseColourBy } from "@/lib/seating/colour";
 import { signPath } from "@/lib/supabase/storage";
-import { getSeatingDayActivity, getSeatingPlan, listSeatingSnapshots } from "@/server/queries/seating";
+import { getSeatingDayActivity, getSeatingPlan, listSeatingSnapshots, listShareLinks } from "@/server/queries/seating";
 import { getCollaborators, getEvents, requireWedding } from "@/server/queries/wedding";
 
 export const metadata = { title: "Seating" };
@@ -13,10 +13,10 @@ export default async function EventSeatingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ colour?: string }>;
+  searchParams: Promise<{ colour?: string; layout?: string; space?: string }>;
 }) {
   const { id } = await params;
-  const { colour } = await searchParams;
+  const { colour, layout, space } = await searchParams;
   const wedding = await requireWedding();
   const events = await getEvents(wedding.id);
   const event = events.find((e) => e.id === id);
@@ -42,11 +42,12 @@ export default async function EventSeatingPage({
     );
   }
 
-  const [data, snapshots, collaborators, dayActivity] = await Promise.all([
-    getSeatingPlan(wedding.id, id),
-    listSeatingSnapshots(wedding.id, id),
+  const data = await getSeatingPlan(wedding.id, id, layout, space);
+  const [snapshots, collaborators, dayActivity, shareLinks] = await Promise.all([
+    listSeatingSnapshots(wedding.id, id, data.layoutId),
     getCollaborators(wedding.id),
     getSeatingDayActivity(wedding.id),
+    listShareLinks(wedding.id, id),
   ]);
   // Signed here, not in the query: the print page and the CSV share the query and never draw the image.
   const backgroundUrl = data.plan?.background_path ? await signPath(data.plan.background_path) : null;
@@ -66,6 +67,8 @@ export default async function EventSeatingPage({
 
       <SeatingScreen
         eventId={id}
+        eventName={event.name}
+        shareLinks={shareLinks}
         timeZone={wedding.timezone}
         data={{ ...data, backgroundUrl }}
         snapshots={snapshots}

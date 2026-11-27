@@ -4,6 +4,24 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 61 (specs 52, 53, 55, built):** on branch `claude/pensive-mayer-b0d5sr`, after "do the next tasks and
+specs". Migrations **`0052`, `0053`, `0054` must be applied to live** (with `0049`–`0051` from session 60). The specs
+named `0051`–`0053`; each shifted up because 54 used two numbers, and each spec's file says what it became.
+
+- **52 (shot list):** `/shots` (sections, shots, people, call-back ordering, suggested groups, slot fit, faces, print,
+  CSV) and the Shot list day-link module (Now / All shots / Faces, offline taps, latest-tap-wins).
+- **53 (seating workspace):** undo/redo for every seating write through whole-plan state with a hash guard, automatic
+  versions and History, seat-first and select-several, room template, bulk tables, duplicate and renumber, highchair
+  and wheelchair, Colour by Fit, the Seating day-link module (find a seat, arrived, move, walk-in, blocked chairs).
+- **55 (the master):** `/day` readiness / live / summary, alerts with escalation, shifting with a preview and undo,
+  announcements, People, module cards, day lead and alerts switch, Live on the phone tab bar on the day.
+- **Verified:** typecheck, 1601 unit tests, `npm run build`, SQL suite (918 assertions); the helper page (session 60)
+  and the master's Live screen were rendered in headless Chromium with sample data. **Not verified:** `/shots`, the
+  seating changes, the shot list and seating module tabs, the readiness and summary modes, any of it on a phone or an
+  iPad, push, or live Supabase. The spec 55 acceptance check (two real phones) hasn't been done.
+- **Every spec's "Build status" lists what differs.** The larger ones: seating undo is whole-plan (refused if anything
+  changed); "Show" and meal colours reach only the table drawer's chairs; the master's own writes aren't queued offline.
+
 **Session 60 (specs 51 and 54, built):** on branch `claude/pensive-mayer-b0d5sr`, asked to "build 51 and 54".
 Migrations **`0049` and `0050` must be applied to live** (nothing has been run against live).
 

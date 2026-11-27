@@ -59,6 +59,13 @@ script that can be pasted straight into the Supabase SQL editor.
 | 52 | `0052_shot_list.sql` | `shot_sections`, `shots`, `shot_people`, the `shot_kind` / `shot_status` enums, and `guests.relationship` / `photo_path` / `vendor_note`. Spec 52. | 43, 44, 48, 50 |
 | 53 | `0053_seating_workspace.sql` | `seating_state()` / `seating_state_hash()` / `restore_seating_state()` (undo and redo guard), `take_seating_snapshot` pruned to the newest 30 automatic and `restore_seating_snapshot` rebuilt on them, `guests.needs_highchair` / `uses_wheelchair`, `seating_chairs_blocked`, `seating_checkins`. Spec 53. | 36, 44, 52 |
 | 54 | `0054_day_master.sql` | `collaborators.day_alerts`, `people.day_alerts`, `weddings.day_lead_person_id` / `day_lead_user_id` (one at most), `v_wedding_basics` gains the day lead, `set_my_day_alerts()`. Spec 55. | 43, 44, 45, 50 |
+| 55 | `0055_venue_designer_enums.sql` | The new `seating_table_shape` and `seating_fixture_kind` values, **alone** (the 55P04 rule). Spec 57. | 36 |
+| 56 | `0056_seating_layouts_and_spaces.sql` | `seating_layouts` and `seating_spaces`; every event with seating gets one live layout and one space, and its tables, fixtures and seats are pointed at them (no audit rows, no `updated_at` change). Spec 57. | 36, 53, 55 |
+| 57 | `0057_venue_designer.sql` | Table styles, the couple's own décor, marquee templates, final item counts, share links; menu, service style and settings on `seating_plans`; `seating_state()` / `restore_seating_state()` version 2. Spec 57. | 53, 56 |
+| 58 | `0058_guest_dietary_needs.sql` | `guest_dietary_needs` (structured tags beside the free-text note). Spec 57 Part H. | 1 |
+| 59 | `0059_seating_drafts.sql` | One seat per guest per layout, the room on the space, `v_live_seat_assignments` / `v_live_seating_tables`, state / hash / restore / snapshots per layout, `seating_try_layout()`, `seating_make_live()`. Spec 57 Part G. | 56, 57 |
+| 60 | `0060_seating_large_blocks.sql` | Ceremony rows and banquet runs may seat up to 400. Spec 57. | 36 |
+| 61 | `0061_seating_share_check.sql` | `seating_share_check()` (security definer, service role only) and a passcode lockout on share links. Spec 57 E.3. | 57 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding

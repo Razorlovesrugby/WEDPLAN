@@ -128,6 +128,7 @@ export function SeatingModuleScreen({ token }: ModuleScreenProps) {
               </button>
             </div>
             {g.vendorNote ? <div style={{ color: "var(--dl-orange)", marginTop: 4 }}>{g.vendorNote}</div> : null}
+            {g.dietary ? <div style={{ color: "var(--dl-orange)", marginTop: 4 }}>{g.dietary}</div> : null}
             {g.mates.length ? <div className="dl-meta" style={{ marginTop: 4 }}>With {g.mates.join(", ")}</div> : null}
             <div style={{ marginTop: 6 }}>
               <button className="dl-link" style={{ minHeight: 44 }} onClick={() => setMoving(g)}>Move to another chair</button>

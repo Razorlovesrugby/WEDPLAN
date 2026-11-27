@@ -37,6 +37,8 @@ function guest(id: string, over: Partial<SeatingGuest> = {}): SeatingGuest {
     rsvp: "yes",
     needsHighchair: false,
     usesWheelchair: false,
+    dietaryNeeds: [],
+    replyChangedAt: null,
     arrivedAt: null,
     ...over,
   };

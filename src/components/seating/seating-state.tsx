@@ -9,6 +9,10 @@ import { computeFit } from "@/lib/seating/fit";
 import { undoRedoFor, isTypingTarget } from "@/lib/shortcuts";
 import type { ColourBy, ColourContext } from "@/lib/seating/colour";
 import type { StoredCount, TableStyle } from "@/lib/seating/items";
+import type { LayoutSummary } from "@/lib/seating/layouts";
+import { SELECT, type Tool } from "@/lib/seating/tools";
+import { parseSettings, type PlanSettings } from "@/lib/seating/plan-settings";
+import type { SeatingCustomItemRow, SeatingMarqueeRow, SeatingSpaceRow } from "@/lib/types/database";
 import type {
   SeatingAssignment,
   SeatingFixture,
@@ -29,6 +33,10 @@ import {
   type TableOccupancy,
 } from "@/lib/seating/warnings";
 
+/** The Show menu: chair names and numbers, and the layers of the room (Venue, Furniture, Flowers & décor). */
+export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; furniture: boolean; decor: boolean };
+const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, furniture: true, decor: true };
+
 export type SeatingData = {
   plan: SeatingPlan | null;
   backgroundUrl: string | null;
@@ -41,6 +49,15 @@ export type SeatingData = {
   colour: ColourContext;
   styles: TableStyle[];
   layoutId: string | null;
+  /** Every layout of the event (the tabs), and the shown layout's spaces. */
+  layouts: LayoutSummary[];
+  spaces: SeatingSpaceRow[];
+  /** The room on screen: the one asked for in the address, else the first. */
+  spaceId: string | null;
+  customItems: SeatingCustomItemRow[];
+  marquees: SeatingMarqueeRow[];
+  vendors: { id: string; name: string }[];
+  budgetLines: { id: string; label: string }[];
   counts: StoredCount[];
 };
 
@@ -50,6 +67,16 @@ export type Held = { guestIds: string[]; label: string } | null;
 type SeatingState = {
   eventId: string;
   timeZone: string;
+  /** The layout on screen: the live one, or a draft (spec 57 Part G). Every write names it. */
+  layoutId: string | undefined;
+  /** The room (space) on screen; room and drawing writes name it. */
+  spaceId: string | undefined;
+  /** This plan's thresholds and default sizes (spec 57 Part I), always complete. */
+  settings: PlanSettings;
+  /** True when the screen shows a draft: nothing a guest or a day link reads changes until it is made live. */
+  isDraft: boolean;
+  /** Part D: the shown layout's room is locked (walls, drawing, furniture and décor are held still). */
+  locked: boolean;
   data: SeatingData;
   /** The optimistic copies: what the screen shows while an action is in flight. */
   assignments: SeatingAssignment[];
@@ -76,9 +103,12 @@ type SeatingState = {
   setSelected: (ids: Set<string>) => void;
   /** Spec 53 Part E: the guest a search just found, ringed on their chair. */
   highlightGuestId: string | null;
-  /** Spec 53 Part F: what the chairs show. Remembered per device. */
-  show: { names: boolean; numbers: boolean };
-  setShow: (s: { names: boolean; numbers: boolean }) => void;
+  /** What the next click on the canvas does (spec 57 A.1). */
+  tool: Tool;
+  setTool: (t: Tool) => void;
+  /** Spec 53 Part F and spec 57 A.2: what the canvas shows. Remembered per device. */
+  show: ShowSettings;
+  setShow: (s: ShowSettings) => void;
   /** Opens a seated guest's table and rings their chair. */
   focusGuest: (guestId: string) => void;
   /** Seat guests at a table, in a chair, or back in the tray (null). Optimistic. */
@@ -135,6 +165,7 @@ export function SeatingProvider({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const layoutId = data.layoutId ?? undefined;
   const [pending, startTransition] = useTransition();
   const [assignments, setAssignments] = useState(data.assignments);
   const [tables, setTablesState] = useState(data.tables);
@@ -147,16 +178,26 @@ export function SeatingProvider({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const lastToggled = useRef<string | null>(null);
   const [highlightGuestId, setHighlightGuestId] = useState<string | null>(null);
-  const [show, setShowState] = useState({ names: false, numbers: false });
+  const [tool, setTool] = useState<Tool>(SELECT);
+  const [show, setShowState] = useState<ShowSettings>(DEFAULT_SHOW);
   useEffect(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem("wedplan.seating.show") ?? "null");
-      if (saved && typeof saved === "object") setShowState({ names: Boolean(saved.names), numbers: Boolean(saved.numbers) });
+      if (saved && typeof saved === "object") {
+        const on = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+        setShowState({
+          names: Boolean(saved.names),
+          numbers: Boolean(saved.numbers),
+          venue: on(saved.venue, true),
+          furniture: on(saved.furniture, true),
+          decor: on(saved.decor, true),
+        });
+      }
     } catch {
       /* storage blocked: the default is fine */
     }
   }, []);
-  const setShow = useCallback((next: { names: boolean; numbers: boolean }) => {
+  const setShow = useCallback((next: ShowSettings) => {
     setShowState(next);
     try {
       window.localStorage.setItem("wedplan.seating.show", JSON.stringify(next));
@@ -189,10 +230,10 @@ export function SeatingProvider({
   const track = useCallback(
     <T extends { ok: boolean }>(label: string, write: () => Promise<T>): Promise<T> => {
       const job = queue.current.then(async () => {
-        const before = await captureSeatingState(eventId, true).catch(() => null);
+        const before = await captureSeatingState(eventId, true, layoutId).catch(() => null);
         const result = await write();
         if (result.ok && before?.ok) {
-          const after = await captureSeatingState(eventId, false).catch(() => null);
+          const after = await captureSeatingState(eventId, false, layoutId).catch(() => null);
           if (after?.ok && after.data.hash !== before.data.hash) {
             undoStack.current = [
               ...undoStack.current,
@@ -207,7 +248,7 @@ export function SeatingProvider({
       queue.current = job.catch(() => undefined);
       return job;
     },
-    [eventId],
+    [eventId, layoutId],
   );
 
   const step = useCallback(
@@ -219,7 +260,7 @@ export function SeatingProvider({
         if (!entry) return;
         const payload = direction === "undo" ? entry.before : entry.after;
         const expected = direction === "undo" ? entry.afterHash : entry.beforeHash;
-        const result = await restoreSeatingState(eventId, payload, expected).catch(() => null);
+        const result = await restoreSeatingState(eventId, payload, expected, layoutId).catch(() => null);
         from.current = from.current.slice(0, -1);
         if (result?.ok) {
           const next: UndoEntry =
@@ -235,7 +276,7 @@ export function SeatingProvider({
         router.refresh();
       });
     },
-    [eventId, router],
+    [eventId, layoutId, router],
   );
   const undo = useCallback(() => step("undo"), [step]);
   const redo = useCallback(() => step("redo"), [step]);
@@ -270,7 +311,7 @@ export function SeatingProvider({
       const where = tableId ? tables.find((t) => t.id === tableId)?.label : null;
       const label = where ? `Seated ${who} at ${where}` : `Unseated ${who}`;
       startTransition(async () => {
-        const result = await track(label, () => assignGuests(eventId, tableId, guestIds, seatIndex ?? null));
+        const result = await track(label, () => assignGuests(eventId, tableId, guestIds, seatIndex ?? null, layoutId));
         if (!result.ok) {
           setAssignments(before);
           setError(result.error);
@@ -278,7 +319,7 @@ export function SeatingProvider({
         router.refresh();
       });
     },
-    [eventId, router, data.guests, tables, track],
+    [eventId, layoutId, router, data.guests, tables, track],
   );
 
   const toggleSelected = useCallback(
@@ -335,6 +376,11 @@ export function SeatingProvider({
     return {
       eventId,
       timeZone,
+      layoutId,
+      spaceId: data.spaceId ?? undefined,
+      settings: parseSettings(data.plan?.settings),
+      isDraft: data.layouts.find((l) => l.id === data.layoutId)?.isLive === false,
+      locked: Boolean(data.layouts.find((l) => l.id === data.layoutId)?.lockedAt),
       data: dataWithFit,
       assignments,
       tables,
@@ -358,6 +404,8 @@ export function SeatingProvider({
       setSelected,
       highlightGuestId,
       focusGuest,
+      tool,
+      setTool,
       show,
       setShow,
       move,
@@ -375,7 +423,7 @@ export function SeatingProvider({
       undoLabel: undoStack.current.at(-1)?.label ?? null,
       redoLabel: redoStack.current.at(-1)?.label ?? null,
     };
-  }, [eventId, timeZone, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, show, setShow]);
+  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, tool, show, setShow]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

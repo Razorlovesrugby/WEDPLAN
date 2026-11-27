@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveInvitation } from "@/server/rsvp/resolve";
 import { coerceAnswer } from "@/lib/rsvp-answers";
 import { GUEST_REPLY_STATUSES } from "@/lib/rsvp-household";
+import { parseDietaryNeeds } from "@/lib/dietary";
+import { replaceGuestNeeds } from "@/server/dietary-write";
 import { fail, ok, type ActionResult } from "./result";
 import type { GuestRow } from "@/lib/types/database";
 
@@ -37,6 +39,12 @@ const submissionSchema = z.object({
         /** Only used for a plus-one whose name the household is filling in. */
         name: z.string().trim().max(80).optional(),
         dietary: z.string().trim().max(500).optional(),
+        // Structured needs (spec 57 Part H). Absent means "leave them alone" (an old cached form); the
+        // list that arrives is the guest's whole set, cleaned by parseDietaryNeeds.
+        dietaryNeeds: z
+          .array(z.object({ tag: z.string().max(40), isAllergy: z.boolean().optional(), otherText: z.string().max(200).nullable().optional() }))
+          .max(40)
+          .optional(),
         accessibility: z.string().trim().max(500).optional(),
         responses: z.array(
           z.object({
@@ -118,6 +126,11 @@ export async function submitRsvp(payload: unknown): Promise<ActionResult<{ saved
         .eq("wedding_id", weddingId)
         .eq("household_id", context.household.id);
       if (error) return fail("Could not save one of the answers. Nothing was lost — try again.");
+    }
+
+    if (guest.dietaryNeeds !== undefined) {
+      const problem = await replaceGuestNeeds(supabase, weddingId, guest.guestId, parseDietaryNeeds(guest.dietaryNeeds));
+      if (problem) return fail("Could not save one of the answers. Nothing was lost — try again.");
     }
 
     for (const response of guest.responses) {

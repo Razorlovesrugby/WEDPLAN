@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { guestName } from "@/lib/format";
+import { dietarySummary, type DietaryNeed } from "@/lib/dietary";
 import { clampTapTime } from "@/lib/day-links/state";
 import { resolveDayLink, type ResolvedDayLink } from "@/server/day-links/resolve";
 import { fail, ok, type ActionResult } from "./result";
@@ -59,6 +60,8 @@ export type SeatingModuleGuest = {
   seat: number | null;
   mates: string[];
   vendorNote: string | null;
+  /** The structured dietary tags only ("Allergy: Peanuts. Vegetarian"), never the free-text note (spec 52 §4.3, spec 57 Part H). */
+  dietary: string | null;
   arrived: boolean;
 };
 
@@ -81,14 +84,21 @@ export async function loadSeatingModule(token: string): Promise<ActionResult<Sea
   const weddingId = ctx.wedding.id;
 
   const [tables, assignments, blocked, checkins] = await Promise.all([
-    supabase.from("seating_tables").select("id, label, capacity, reserved_seats, sort_order").eq("wedding_id", weddingId).eq("event_id", eventId).order("sort_order").order("label"),
-    supabase.from("seat_assignments").select("guest_id, table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
+    // The live layout only (spec 57 Part G): a draft is never what the day runs on.
+    supabase.from("v_live_seating_tables").select("id, label, capacity, reserved_seats, sort_order").eq("wedding_id", weddingId).eq("event_id", eventId).order("sort_order").order("label"),
+    supabase.from("v_live_seat_assignments").select("guest_id, table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
     supabase.from("seating_chairs_blocked").select("table_id, seat_index").eq("wedding_id", weddingId).eq("event_id", eventId),
     supabase.from("seating_checkins").select("guest_id").eq("wedding_id", weddingId).eq("event_id", eventId),
   ]);
   for (const r of [tables, assignments, blocked, checkins]) if (r.error) return fail(r.error.message);
 
   const guestIds = (assignments.data ?? []).map((a) => a.guest_id);
+  const needs = guestIds.length
+    ? await supabase.from("guest_dietary_needs").select("guest_id, tag, is_allergy, other_text").eq("wedding_id", weddingId).in("guest_id", guestIds)
+    : { data: [], error: null };
+  if (needs.error) return fail(needs.error.message);
+  const needsBy = new Map<string, DietaryNeed[]>();
+  for (const n of needs.data ?? []) needsBy.set(n.guest_id, [...(needsBy.get(n.guest_id) ?? []), { tag: n.tag, isAllergy: n.is_allergy, otherText: n.other_text }]);
   const guests = guestIds.length
     ? await supabase.from("guests").select("id, first_name, last_name, preferred_name, vendor_note, age_band, uses_wheelchair").eq("wedding_id", weddingId).is("deleted_at", null).in("id", guestIds)
     : { data: [], error: null };
@@ -112,11 +122,12 @@ export async function loadSeatingModule(token: string): Promise<ActionResult<Sea
       seat: a.seat_index,
       mates: (byTable.get(t.id) ?? []).filter((x) => x.guest_id !== g.id).map((x) => guestName(guestById.get(x.guest_id)!)).sort((x, y) => x.localeCompare(y, "en-GB")),
       vendorNote: g.vendor_note,
+      dietary: dietarySummary(needsBy.get(g.id) ?? []) || null,
       arrived: arrived.has(g.id),
     };
   });
 
-  const blockedKeys = new Set((blocked.data ?? []).map((b) => `${b.table_id}:${b.seat_index}`));
+  const blockedKeys = new Set((blocked.data ?? []).filter((b) => tableById.has(b.table_id)).map((b) => `${b.table_id}:${b.seat_index}`));
   const moduleTables: SeatingModuleTable[] = (tables.data ?? []).map((t) => {
     const taken = new Set((byTable.get(t.id) ?? []).filter((a) => a.seat_index !== null).map((a) => a.seat_index!));
     const usable = Math.max(0, t.capacity - t.reserved_seats);
@@ -154,7 +165,7 @@ const idSchema = z.string().uuid();
 
 async function seatedAt(ctx: ResolvedDayLink, eventId: string, guestId: string) {
   const { data, error } = await createAdminClient()
-    .from("seat_assignments")
+    .from("v_live_seat_assignments")
     .select("guest_id, table_id, seat_index")
     .eq("wedding_id", ctx.wedding.id)
     .eq("event_id", eventId)
@@ -200,7 +211,7 @@ export async function moveGuestOnTheDay(token: string, guestId: string, tableId:
   const auth = await authorise(token);
   if (!("ctx" in auth)) return auth;
   if (!idSchema.safeParse(guestId).success || !idSchema.safeParse(tableId).success) return fail("Unknown guest or table");
-  const chair = seatIndex === null ? null : z.number().int().min(0).max(59).safeParse(seatIndex);
+  const chair = seatIndex === null ? null : z.number().int().min(0).max(399).safeParse(seatIndex);
   if (chair && !chair.success) return fail("That chair doesn't exist");
   const { ctx, eventId } = auth;
   const supabase = createAdminClient();
@@ -209,7 +220,7 @@ export async function moveGuestOnTheDay(token: string, guestId: string, tableId:
   if (seat.error) return fail(seat.error.message);
   if (!seat.data) return fail("That guest isn't on the plan.");
 
-  const { data: table, error: tableError } = await supabase.from("seating_tables").select("id, label, capacity, reserved_seats").eq("id", tableId).eq("wedding_id", ctx.wedding.id).eq("event_id", eventId).maybeSingle();
+  const { data: table, error: tableError } = await supabase.from("v_live_seating_tables").select("id, label, capacity, reserved_seats, layout_id").eq("id", tableId).eq("wedding_id", ctx.wedding.id).eq("event_id", eventId).maybeSingle();
   if (tableError) return fail(tableError.message);
   if (!table) return fail("That table isn't on the plan.");
 
@@ -240,8 +251,8 @@ export async function moveGuestOnTheDay(token: string, guestId: string, tableId:
   const { error } = await supabase
     .from("seat_assignments")
     .upsert(
-      { wedding_id: ctx.wedding.id, event_id: eventId, guest_id: guestId, table_id: tableId, seat_index: chair ? chair.data : null },
-      { onConflict: "guest_id,event_id" },
+      { wedding_id: ctx.wedding.id, event_id: eventId, layout_id: table.layout_id, guest_id: guestId, table_id: tableId, seat_index: chair ? chair.data : null },
+      { onConflict: "guest_id,layout_id" },
     );
   if (error) return fail(error.message);
   const problem = await record(ctx, "seat_moved", { guest_id: guestId, table_id: tableId, table: table.label, seat: chair ? chair.data + 1 : null }, clampTapTime(tappedAtInput));
@@ -257,7 +268,7 @@ export async function seatWalkIn(token: string, tableId: string, note: string, t
   const { ctx, eventId } = auth;
   const supabase = createAdminClient();
 
-  const { data: table, error } = await supabase.from("seating_tables").select("id, label, capacity, reserved_seats, reserved_note").eq("id", tableId).eq("wedding_id", ctx.wedding.id).eq("event_id", eventId).maybeSingle();
+  const { data: table, error } = await supabase.from("v_live_seating_tables").select("id, label, capacity, reserved_seats, reserved_note").eq("id", tableId).eq("wedding_id", ctx.wedding.id).eq("event_id", eventId).maybeSingle();
   if (error) return fail(error.message);
   if (!table) return fail("That table isn't on the plan.");
 

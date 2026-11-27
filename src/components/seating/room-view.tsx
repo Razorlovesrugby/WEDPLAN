@@ -4,21 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 import { useDroppable } from "@dnd-kit/core";
 import {
   calibrateSeatingRoom,
-  confirmSeatingBackground,
   createSeatingFixture,
+  createSeatingTable,
   deleteSeatingFixture,
   moveSeatingTable,
   removeSeatingBackground,
-  requestSeatingBackgroundUpload,
   updateSeatingFixture,
   updateSeatingRoom,
 } from "@/server/actions/seating";
-import { toWebp } from "@/lib/site/encode-image";
 import { chairDetail, chairFirstName, chairMarks, initials, readableText, type ChairDetail } from "@/lib/seating/chairs";
-import { guestColour } from "@/lib/seating/colour";
+import { colourCounts, guestColour } from "@/lib/seating/colour";
+import { declinedSeats } from "@/lib/seating/declined";
 import {
-  CLEARANCE_CM,
   FIXTURE_DEFAULTS,
+  banquetPieces,
+  rowBlocks,
   normaliseDegrees,
   seatPositions,
   serpentinePath,
@@ -29,7 +29,13 @@ import {
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
 import type { SeatingFixtureKind } from "@/lib/types/database";
 import { useSeating } from "./seating-state";
-import { UPLOAD_CACHE_CONTROL } from "@/lib/storage-cache";
+import { useBackgroundUpload } from "./background-upload";
+import { PdfPagePicker } from "./pdf-picker";
+import { useDrawingTools } from "./drawing-tools";
+import { DRAG_ITEM_TYPE } from "./library-panel";
+import { carriesQuantity, fixtureGroup } from "@/lib/seating/library";
+import { isDrawing, SELECT, toolAfterPlacing, TOOL_LABEL, type PlaceItem } from "@/lib/seating/tools";
+import { TABLET_UP, useMediaQuery } from "@/components/ui/use-media-query";
 
 const GRID_CM = 25;
 type Selected = { kind: "table" | "fixture"; id: string } | null;
@@ -46,7 +52,9 @@ type ViewBox = { x: number; y: number; w: number; h: number };
  * target too — and tap-to-place works the same as in the Tables view.
  */
 export function RoomView() {
-  const { eventId, data, tables, setTables, refresh, setError, held, hold, move, track } = useSeating();
+  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show, locked } = useSeating();
+  // Below tablet width the room is for looking at and seating people: no moving furniture, no drawing (spec 57 Part A). A locked room is the same (Part D).
+  const editable = useMediaQuery(TABLET_UP) && !locked;
   const plan = data.plan;
   const roomW = plan?.room_width_cm ?? 2000;
   const roomD = plan?.room_depth_cm ?? 1500;
@@ -64,8 +72,14 @@ export function RoomView() {
   // 1 when the whole room fits; 2 when the view is half as wide.
   const detail = chairDetail(fit(roomW, roomD).w / view.w);
 
-  const placed = tables.filter((t) => t.pos_x_cm !== null);
+  // Each room shows its own tables and furniture; a table with no place yet waits to be put in whichever room is open.
+  const placed = tables.filter((t) => t.pos_x_cm !== null && (!spaceId || t.space_id === spaceId));
   const unplaced = tables.filter((t) => t.pos_x_cm === null);
+  const hereFixtures = fixtures.filter((f) => {
+    if (spaceId && f.space_id !== spaceId) return false;
+    const group = fixtureGroup(f.kind);
+    return group === "decor" ? show.decor : show.furniture;
+  });
 
   /** Screen point → room centimetres. */
   const toRoom = useCallback((clientX: number, clientY: number): Point => {
@@ -75,6 +89,42 @@ export function RoomView() {
     const p = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
     return { x: p.x, y: p.y };
   }, []);
+
+  // The venue drawing and its tools. `unit` is room centimetres per screen pixel, so lines and text stay readable at any zoom.
+  const unit = view.w / (svgRef.current?.clientWidth || 1000);
+  const tools = useDrawingTools({ toRoom, snapOn, roomW, roomD, unit });
+
+  /** Puts a library item down at a point: a table becomes a table, anything else a fixture. */
+  const placeAt = (item: PlaceItem, p: Point) => {
+    const at = { x: clamp(snap(p.x, snapOn ? GRID_CM : 0), 0, roomW), y: clamp(snap(p.y, snapOn ? GRID_CM : 0), 0, roomD) };
+    startTransition(async () => {
+      const r =
+        item.type === "table"
+          ? await track(`Added ${item.label.toLowerCase()}`, () =>
+              createSeatingTable(eventId, { shape: item.shape, capacity: item.capacity, pos_x_cm: at.x, pos_y_cm: at.y, ...item.extra }, layoutId, spaceId),
+            )
+          : await track(`Added ${item.label.toLowerCase()} to the room`, () =>
+              createSeatingFixture(
+                eventId,
+                {
+                  kind: item.kind,
+                  pos_x_cm: at.x,
+                  pos_y_cm: at.y,
+                  width_cm: item.width,
+                  depth_cm: item.depth,
+                  label: item.kind === "custom" || item.kind === "marquee" ? item.label : null,
+                  custom_item_id: item.customItemId ?? null,
+                  marquee_id: item.marqueeId ?? null,
+                },
+                layoutId,
+                spaceId,
+              ),
+            );
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+    setTool(SELECT);
+  };
 
   // ---- dragging items, panning, pinching -------------------------------------
   const drag = useRef<
@@ -125,7 +175,7 @@ export function RoomView() {
     startTransition(async () => {
       const r =
         sel.kind === "table"
-          ? await track("Moved a table", () => moveSeatingTable(sel.id, eventId, { x: at.x, y: at.y, rotation: at.rotation }))
+          ? await track("Moved a table", () => moveSeatingTable(sel.id, eventId, { x: at.x, y: at.y, rotation: at.rotation, spaceId }))
           : await track("Moved an item in the room", () =>
               updateSeatingFixture(sel.id, eventId, {
                 pos_x_cm: at.x ?? 0,
@@ -144,7 +194,7 @@ export function RoomView() {
       : fixtures.find((f) => f.id === sel.id)?.rotation_deg ?? 0;
 
   const onItemPointerDown = (e: RPointerEvent, sel: NonNullable<Selected>) => {
-    if (calibrating) return;
+    if (calibrating || isDrawing(tool)) return;
     e.stopPropagation();
     const pos = itemPos(sel);
     if (!pos) return;
@@ -161,6 +211,7 @@ export function RoomView() {
   };
 
   const onRotatePointerDown = (e: RPointerEvent, sel: NonNullable<Selected>) => {
+    if (!editable) return;
     e.stopPropagation();
     const pos = itemPos(sel);
     if (!pos) return;
@@ -177,9 +228,11 @@ export function RoomView() {
       setView(zoomAbout(pinch.current.view, pinch.current.mid, k));
       return;
     }
+    if (isDrawing(tool) || tool.kind === "place") tools.onCanvasMove(toRoom(e.clientX, e.clientY), e.shiftKey);
     const d = drag.current;
     if (!d) return;
     if (d.mode === "move") {
+      if (!editable) return;
       const p = toRoom(e.clientX, e.clientY);
       const dx = p.x - d.start.x;
       const dy = p.y - d.start.y;
@@ -222,12 +275,18 @@ export function RoomView() {
     } else if (d.mode === "rotate") {
       save(d.sel, { x: d.centre.x, y: d.centre.y, rotation: d.last });
     } else if (d.mode === "pan" && !d.moved) {
+      const p = toRoom(e.clientX, e.clientY);
       if (calibrating) {
-        const p = toRoom(e.clientX, e.clientY);
         const next = [...calibrating, p];
         if (next.length === 2) finishCalibration(next);
         else setCalibrating(next);
-      } else setSelected(null);
+      } else if (editable && tool.kind === "place") placeAt(tool.item, p);
+      else if (editable && tools.onCanvasClick(p, e)) {
+        // The tool took the click.
+      } else {
+        setSelected(null);
+        tools.setSelected(null);
+      }
     }
   };
 
@@ -262,7 +321,8 @@ export function RoomView() {
 
   // Arrow keys nudge the selection; R turns it.
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (!selected) return;
+    if (editable && tools.onKey(e)) return;
+    if (!editable || !selected) return;
     const pos = itemPos(selected);
     if (!pos) return;
     const step = e.shiftKey ? 25 : 5;
@@ -293,7 +353,7 @@ export function RoomView() {
     // Room centimetres → image pixels: the room box is the image.
     const toPx = (p: Point) => ({ x: (p.x / roomW) * plan.background_w_px!, y: (p.y / roomD) * plan.background_h_px! });
     startTransition(async () => {
-      const r = await track("Calibrated the room", () => calibrateSeatingRoom(eventId, toPx(points[0]!), toPx(points[1]!), real));
+      const r = await track("Calibrated the room", () => calibrateSeatingRoom(eventId, toPx(points[0]!), toPx(points[1]!), real, layoutId, spaceId));
       if (!r.ok) setError(r.error);
       refresh();
     });
@@ -316,7 +376,14 @@ export function RoomView() {
         setRings={setRings}
         calibrating={calibrating !== null}
         setCalibrating={(on) => setCalibrating(on ? [] : null)}
+        editable={editable}
       />
+
+      {tools.status || tool.kind === "place" ? (
+        <p className="rounded bg-accent/10 px-3 py-2 text-sm" role="status">
+          {tool.kind === "place" ? `Click the spot to put ${tool.item.label} there. Esc to stop.` : tools.status}
+        </p>
+      ) : null}
 
       {calibrating ? (
         <p className="rounded bg-accent/10 px-3 py-2 text-sm">
@@ -327,7 +394,8 @@ export function RoomView() {
         <p className="rounded bg-accent/10 px-3 py-2 text-sm">Tap a table to seat {held.label}.</p>
       ) : null}
 
-      <div className="card overflow-hidden">
+      <div className="card relative overflow-hidden">
+        <CanvasLegend />
         <svg
           ref={svgRef}
           viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
@@ -337,6 +405,23 @@ export function RoomView() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          onDoubleClick={() => editable && tools.onDoubleClick()}
+          onDragOver={(e) => {
+            if (editable && e.dataTransfer.types.includes(DRAG_ITEM_TYPE)) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDrop={(e) => {
+            const raw = e.dataTransfer.getData(DRAG_ITEM_TYPE);
+            if (!editable || !raw) return;
+            e.preventDefault();
+            try {
+              placeAt(JSON.parse(raw) as PlaceItem, toRoom(e.clientX, e.clientY));
+            } catch {
+              /* not one of ours */
+            }
+          }}
           aria-label="Floor plan"
           role="application"
         >
@@ -350,7 +435,7 @@ export function RoomView() {
           />
           <g style={{ pointerEvents: "none" }}>
             <rect x={0} y={0} width={roomW} height={roomD} fill="#ffffff" stroke="#8a8580" strokeWidth={view.w / 400} />
-            {data.backgroundUrl ? (
+            {data.backgroundUrl && show.venue ? (
               <image
                 href={data.backgroundUrl}
                 x={0}
@@ -358,39 +443,46 @@ export function RoomView() {
                 width={roomW}
                 height={roomD}
                 preserveAspectRatio="none"
-                opacity={0.55}
+                opacity={(data.spaces.find((s) => s.id === spaceId)?.background_opacity ?? 55) / 100}
               />
             ) : null}
             <Grid roomW={roomW} roomD={roomD} strokeWidth={view.w / 1200} />
           </g>
 
-          {fixtures.map((f) => (
-            <FixtureShape
-              key={f.id}
-              fixture={f}
-              selected={selectedFixture?.id === f.id}
-              onPointerDown={(e) => onItemPointerDown(e, { kind: "fixture", id: f.id })}
-              fontSize={Math.max(14, view.w / 70)}
-            />
-          ))}
+          {tools.showHere(show.venue)}
 
-          {placed.map((t) => (
-            <TableShape
-              key={t.id}
-              table={t}
-              selected={selectedTable?.id === t.id}
-              rings={rings}
-              fontSize={Math.max(14, view.w / 70)}
-              detail={detail}
-              onPointerDown={(e) => onItemPointerDown(e, { kind: "table", id: t.id })}
-            />
-          ))}
+          {/* While a drawing tool is in hand, a click goes to the plan underneath, not to a table or a bar. */}
+          <g style={isDrawing(tool) || tool.kind === "place" ? { pointerEvents: "none" } : undefined}>
+            {hereFixtures.map((f) => (
+              <FixtureShape
+                key={f.id}
+                fixture={f}
+                selected={selectedFixture?.id === f.id}
+                onPointerDown={(e) => onItemPointerDown(e, { kind: "fixture", id: f.id })}
+                fontSize={Math.max(14, view.w / 70)}
+              />
+            ))}
+
+            {placed.map((t) => (
+              <TableShape
+                key={t.id}
+                table={t}
+                selected={selectedTable?.id === t.id}
+                rings={rings}
+                fontSize={Math.max(14, view.w / 70)}
+                detail={detail}
+                onPointerDown={(e) => onItemPointerDown(e, { kind: "table", id: t.id })}
+              />
+            ))}
+          </g>
+
+          {tools.overlay}
 
           {calibrating?.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={view.w / 150} fill="#b0532b" style={{ pointerEvents: "none" }} />
           ))}
 
-          {selected && (selectedTable?.pos_x_cm != null || selectedFixture) ? (
+          {editable && selected && (selectedTable?.pos_x_cm != null || selectedFixture) ? (
             <RotateHandle
               item={selectedTable ?? selectedFixture!}
               r={handleR}
@@ -423,11 +515,59 @@ export function RoomView() {
         </div>
       ) : null}
 
-      {selectedTable ? <SelectedTablePanel table={selectedTable} onUnplace={() => setSelected(null)} /> : null}
-      {selectedFixture ? <SelectedFixturePanel fixture={selectedFixture} onDone={() => setSelected(null)} /> : null}
+      {tools.selectionPanel}
+      {selectedTable ? <SelectedTablePanel table={selectedTable} onUnplace={() => setSelected(null)} editable={editable} /> : null}
+      {selectedFixture ? <SelectedFixturePanel fixture={selectedFixture} onDone={() => setSelected(null)} editable={editable} /> : null}
 
-      <AddFixture view={view} roomW={roomW} roomD={roomD} />
-      <RoomSettings />
+      {editable ? (
+        <>
+          <AddFixture view={view} roomW={roomW} roomD={roomD} />
+          <RoomSettings />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** What the chair colours mean, counted, with the dashed outline and dietary dots (spec 57 A.2). */
+function CanvasLegend() {
+  const { colourBy, data, assignments, guestById } = useSeating();
+  const seated = assignments.map((a) => guestById.get(a.guestId)).filter((g): g is NonNullable<typeof g> => Boolean(g));
+  const rows = colourCounts(seated, colourBy, data.colour);
+  const declined = declinedSeats(data.guests, assignments).length;
+  const allergy = seated.filter((g) => g.dietaryNeeds.some((n) => n.isAllergy)).length;
+  const preference = seated.filter((g) => g.dietaryNeeds.length > 0 && !g.dietaryNeeds.some((n) => n.isAllergy)).length;
+  if (rows.length === 0 && declined === 0 && allergy === 0 && preference === 0) return null;
+  return (
+    <div className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[14rem] space-y-0.5 rounded border border-line bg-white/90 px-2 py-1.5 text-[0.7rem] leading-snug shadow-sm" aria-label="Legend">
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.colour }} />
+          <span className="truncate">{r.label}</span>
+          <span className="ml-auto text-muted">{r.count}</span>
+        </div>
+      ))}
+      {declined > 0 ? (
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full border-2 border-dashed border-orange-600" />
+          <span>Declined, in a seat</span>
+          <span className="ml-auto text-muted">{declined}</span>
+        </div>
+      ) : null}
+      {allergy > 0 ? (
+        <div className="flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#c81e1e]" />
+          <span>Allergy</span>
+          <span className="ml-auto text-muted">{allergy}</span>
+        </div>
+      ) : null}
+      {preference > 0 ? (
+        <div className="flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-[#d97706]" />
+          <span>Dietary preference</span>
+          <span className="ml-auto text-muted">{preference}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -474,7 +614,8 @@ function TableShape({
   detail: ChairDetail;
   onPointerDown: (e: RPointerEvent) => void;
 }) {
-  const { occupancy, warningsByTable, assignments, guestById, colourBy, data, held } = useSeating();
+  const { occupancy, warningsByTable, assignments, guestById, colourBy, data, held, settings } = useSeating();
+  const clearance = settings.walkway.comfortable;
   const { setNodeRef, isOver } = useDroppable({ id: `table:${table.id}` });
   const { length, width } = tableSize(table);
   const occ = occupancy.get(table.id)!;
@@ -498,19 +639,28 @@ function TableShape({
     >
       {rings ? (
         table.shape === "round" ? (
-          <circle r={length / 2 + CLEARANCE_CM} fill="none" stroke="#c9c4bb" strokeDasharray="12 10" strokeWidth={3} />
+          <circle r={length / 2 + clearance} fill="none" stroke="#c9c4bb" strokeDasharray="12 10" strokeWidth={3} />
         ) : (
           <rect
-            x={-length / 2 - CLEARANCE_CM}
-            y={-width / 2 - CLEARANCE_CM}
-            width={length + 2 * CLEARANCE_CM}
-            height={width + 2 * CLEARANCE_CM}
+            x={-length / 2 - clearance}
+            y={-width / 2 - clearance}
+            width={length + 2 * clearance}
+            height={width + 2 * clearance}
             fill="none"
             stroke="#c9c4bb"
             strokeDasharray="12 10"
             strokeWidth={3}
           />
         )
+      ) : null}
+      {table.shape === "rows" ? (
+        <g>
+          {rowBlocks(table).map((b, i) => (
+            <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 5 : 3} />
+          ))}
+          {/* An invisible box over the whole block, so it is one thing to pick up. */}
+          <rect x={-length / 2} y={-width / 2} width={length} height={width} fill="transparent" />
+        </g>
       ) : null}
       {seats.map((p, i) => {
         const gid = byChair.get(i);
@@ -551,11 +701,17 @@ function TableShape({
                 ) : null}
               </g>
             ) : null}
-            {marks?.dietary ? <circle cx={p.x + 14} cy={p.y - 14} r={6} fill="#c81e1e" stroke="#ffffff" strokeWidth={1.5} style={{ pointerEvents: "none" }} /> : null}
+            {marks?.dietaryDot ? <circle cx={p.x + 14} cy={p.y - 14} r={6} fill={marks.dietaryDot === "allergy" ? "#c81e1e" : marks.dietaryDot === "preference" ? "#d97706" : "#8a8580"} stroke="#ffffff" strokeWidth={1.5} style={{ pointerEvents: "none" }} /> : null}
           </g>
         );
       })}
-      {table.shape === "round" ? (
+      {table.shape === "rows" ? null : table.shape === "banquet" ? (
+        <g>
+          {banquetPieces(table.segments, table.capacity).map((poly, i) => (
+            <polygon key={i} points={poly.map((p) => `${p.x},${p.y}`).join(" ")} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 5 : 3} />
+          ))}
+        </g>
+      ) : table.shape === "round" ? (
         <circle r={length / 2} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
       ) : table.shape === "serpentine" ? (
         <path d={serpentinePath(length / 2, width / 2)} fill={isOver ? "#efe6da" : "#f3efe8"} stroke={stroke} strokeWidth={selected ? 6 : 4} />
@@ -596,6 +752,24 @@ function TableShape({
   );
 }
 
+const FIXTURE_LOOK: Record<string, { fill: string; stroke?: string; round?: boolean }> = {
+  dance_floor: { fill: "#e9e1f2" },
+  floral_arch: { fill: "#e3efd9" },
+  garland: { fill: "#e3efd9" },
+  aisle_flowers: { fill: "#f6dce6", round: true },
+  candles: { fill: "#f8ecc4" },
+  plant: { fill: "#d6e8c9", round: true },
+  sign: { fill: "#efe6d6" },
+  lantern: { fill: "#f8ecc4", round: true },
+  drape: { fill: "#efe8f2" },
+  tree: { fill: "#cfe3c4", round: true },
+  path: { fill: "#e4e0d8" },
+  pool: { fill: "#cde6f3" },
+  garden_bed: { fill: "#e1d3bf" },
+  slope: { fill: "#e8e3d3" },
+  marquee: { fill: "#fbfaf6" },
+};
+
 function FixtureShape({
   fixture,
   selected,
@@ -607,25 +781,43 @@ function FixtureShape({
   fontSize: number;
   onPointerDown: (e: RPointerEvent) => void;
 }) {
-  const label = fixture.label ?? FIXTURE_DEFAULTS[fixture.kind]?.label ?? fixture.kind;
+  const { data } = useSeating();
+  const custom = fixture.custom_item_id ? data.customItems.find((c) => c.id === fixture.custom_item_id) : undefined;
+  const marquee = fixture.marquee_id ? data.marquees.find((m) => m.id === fixture.marquee_id) : undefined;
+  const label = fixture.label ?? custom?.name ?? FIXTURE_DEFAULTS[fixture.kind]?.label ?? fixture.kind;
+  const look = FIXTURE_LOOK[fixture.kind] ?? { fill: "#ece9e3" };
+  const round = custom ? custom.shape === "round" : look.round;
+  const fill = custom?.colour ?? look.fill;
+  const stroke = selected ? "#1a1a1a" : "#a39d94";
+  const w = fixture.width_cm;
+  const d = fixture.depth_cm;
   return (
     <g
       transform={`translate(${fixture.pos_x_cm} ${fixture.pos_y_cm}) rotate(${fixture.rotation_deg})`}
       onPointerDown={onPointerDown}
       style={{ cursor: "move" }}
       role="button"
-      aria-label={label}
+      aria-label={fixture.quantity > 1 ? `${label}, ${fixture.quantity}` : label}
     >
-      <rect
-        x={-fixture.width_cm / 2}
-        y={-fixture.depth_cm / 2}
-        width={fixture.width_cm}
-        height={fixture.depth_cm}
-        fill={fixture.kind === "dance_floor" ? "#e9e1f2" : "#ece9e3"}
-        stroke={selected ? "#1a1a1a" : "#a39d94"}
-        strokeWidth={selected ? 6 : 3}
-        strokeDasharray={fixture.kind === "entrance" ? "14 8" : undefined}
-      />
+      {marquee ? (
+        <MarqueeBody width={w} length={d} template={marquee} fill={fill} stroke={stroke} strokeWidth={selected ? 6 : 3} />
+      ) : round ? (
+        <ellipse rx={w / 2} ry={d / 2} fill={fill} stroke={stroke} strokeWidth={selected ? 6 : 3} />
+      ) : (
+        <rect
+          x={-w / 2}
+          y={-d / 2}
+          width={w}
+          height={d}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={selected ? 6 : 3}
+          strokeDasharray={fixture.kind === "entrance" ? "14 8" : fixture.kind === "slope" ? "10 6" : undefined}
+        />
+      )}
+      {fixture.kind === "slope" ? (
+        <path d={`M ${-w / 4} ${-d / 6} L ${w / 4} ${-d / 6} L ${w / 4} ${-d / 3} L ${w / 2.4} 0 L ${w / 4} ${d / 3} L ${w / 4} ${d / 6} L ${-w / 4} ${d / 6} Z`} fill="#b9ad8e" opacity={0.5} style={{ pointerEvents: "none" }} />
+      ) : null}
       <text
         transform={`rotate(${-fixture.rotation_deg})`}
         textAnchor="middle"
@@ -635,7 +827,50 @@ function FixtureShape({
         style={{ pointerEvents: "none" }}
       >
         {label}
+        {fixture.quantity > 1 ? ` ×${fixture.quantity}` : ""}
       </text>
+    </g>
+  );
+}
+
+/** A hired marquee: its outline, rounded at the ends if it is, and its poles down the sides (and the middle). */
+function MarqueeBody({
+  width,
+  length,
+  template,
+  fill,
+  stroke,
+  strokeWidth,
+}: {
+  width: number;
+  length: number;
+  template: { pole_spacing_cm: number | null; middle_poles: boolean; rounded_ends: boolean };
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+}) {
+  const hw = width / 2;
+  const hl = length / 2;
+  const r = Math.min(hw, hl);
+  const outline = template.rounded_ends
+    ? `M ${-hw} ${-hl + r} A ${hw} ${r} 0 0 1 ${hw} ${-hl + r} L ${hw} ${hl - r} A ${hw} ${r} 0 0 1 ${-hw} ${hl - r} Z`
+    : `M ${-hw} ${-hl} H ${hw} V ${hl} H ${-hw} Z`;
+  const spacing = template.pole_spacing_cm;
+  const rows = spacing ? Math.max(1, Math.floor(length / spacing)) : 0;
+  const poles: { x: number; y: number }[] = [];
+  if (spacing) {
+    for (let i = 0; i <= rows; i++) {
+      const y = -hl + (length * i) / rows;
+      poles.push({ x: -hw, y }, { x: hw, y });
+      if (template.middle_poles) poles.push({ x: 0, y });
+    }
+  }
+  return (
+    <g>
+      <path d={outline} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
+      {poles.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={Math.max(6, width / 80)} fill="#6b6560" />
+      ))}
     </g>
   );
 }
@@ -684,7 +919,9 @@ function RoomToolbar({
   setRings,
   calibrating,
   setCalibrating,
+  editable,
 }: {
+  editable: boolean;
   view: ViewBox;
   setView: (v: ViewBox) => void;
   roomW: number;
@@ -696,10 +933,19 @@ function RoomToolbar({
   calibrating: boolean;
   setCalibrating: (v: boolean) => void;
 }) {
-  const { data } = useSeating();
+  const { data, tool, setTool } = useSeating();
   const centre = { x: view.x + view.w / 2, y: view.y + view.h / 2 };
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
+      {editable ? (
+        <div role="toolbar" aria-label="Tools" className="flex flex-wrap gap-1">
+          {(["select", "wall", "arc", "area", "text", "measure"] as const).map((k) => (
+            <button key={k} type="button" aria-pressed={tool.kind === k} className={`btn py-1 ${tool.kind === k ? "ring-2 ring-ink" : ""}`} onClick={() => setTool(tool.kind === k ? SELECT : { kind: k })}>
+              {TOOL_LABEL[k]}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <button type="button" className="btn py-1" aria-label="Zoom in" onClick={() => setView(zoomAbout(view, centre, 1 / 1.25))}>
         +
       </button>
@@ -728,7 +974,7 @@ function RoomToolbar({
   );
 }
 
-function SelectedTablePanel({ table, onUnplace }: { table: SeatingTable; onUnplace: () => void }) {
+function SelectedTablePanel({ table, onUnplace, editable }: { table: SeatingTable; onUnplace: () => void; editable: boolean }) {
   const { eventId, openTable, refresh, setError, setTables, track } = useSeating();
   const [, startTransition] = useTransition();
   return (
@@ -757,17 +1003,24 @@ function SelectedTablePanel({ table, onUnplace }: { table: SeatingTable; onUnpla
   );
 }
 
-function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; onDone: () => void }) {
-  const { eventId, refresh, setError, track } = useSeating();
+function SelectedFixturePanel({ fixture, onDone, editable }: { fixture: SeatingFixture; onDone: () => void; editable: boolean }) {
+  const { eventId, data, refresh, setError, track } = useSeating();
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState(fixture.label ?? "");
   const [w, setW] = useState(fixture.width_cm);
   const [d, setD] = useState(fixture.depth_cm);
+  const [quantity, setQuantity] = useState(fixture.quantity);
+  const [vendor, setVendor] = useState(fixture.vendor_id ?? "");
   useEffect(() => {
     setLabel(fixture.label ?? "");
     setW(fixture.width_cm);
     setD(fixture.depth_cm);
-  }, [fixture.id, fixture.label, fixture.width_cm, fixture.depth_cm]);
+    setQuantity(fixture.quantity);
+    setVendor(fixture.vendor_id ?? "");
+  }, [fixture.id, fixture.label, fixture.width_cm, fixture.depth_cm, fixture.quantity, fixture.vendor_id]);
+  // Décor carries a quantity ("aisle flowers × 12") and a supplier, which feed the florist's and hire company's totals.
+  const decor = carriesQuantity(fixture.kind) || fixture.kind === "custom";
+  if (!editable) return null;
 
   return (
     <form
@@ -775,7 +1028,7 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {
-          const r = await track("Edited an item in the room", () => updateSeatingFixture(fixture.id, eventId, { label: label || null, width_cm: w, depth_cm: d }));
+          const r = await track("Edited an item in the room", () => updateSeatingFixture(fixture.id, eventId, { label: label || null, width_cm: w, depth_cm: d, ...(decor ? { quantity, vendor_id: vendor || null } : {}) }));
           if (!r.ok) setError(r.error);
           refresh();
         });
@@ -799,6 +1052,25 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
         <span className="mb-1 block text-xs text-muted">Depth (cm)</span>
         <input className="field w-24" type="number" min={20} max={5000} value={d} onChange={(e) => setD(Number(e.target.value))} />
       </label>
+      {decor ? (
+        <>
+          <label>
+            <span className="mb-1 block text-xs text-muted">Quantity</span>
+            <input className="field w-20" type="number" min={1} max={9999} value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))} />
+          </label>
+          <label>
+            <span className="mb-1 block text-xs text-muted">Supplier</span>
+            <select className="field" value={vendor} onChange={(e) => setVendor(e.target.value)}>
+              <option value="">None</option>
+              {data.vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      ) : null}
       <button type="submit" className="btn">
         Save
       </button>
@@ -821,7 +1093,7 @@ function SelectedFixturePanel({ fixture, onDone }: { fixture: SeatingFixture; on
 }
 
 function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; roomD: number }) {
-  const { eventId, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, spaceId, refresh, setError, track } = useSeating();
   const [kind, setKind] = useState<SeatingFixtureKind>("dance_floor");
   const [pending, startTransition] = useTransition();
   return (
@@ -838,7 +1110,7 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
               pos_y_cm: clamp(snap(view.y + view.h / 2, GRID_CM), 0, roomD),
               width_cm: size.width,
               depth_cm: size.depth,
-            }),
+            }, layoutId, spaceId),
           );
           if (!r.ok) setError(r.error);
           refresh();
@@ -864,46 +1136,16 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
 
 /** Room size, and the venue's own floor plan to draw over (§C.3). */
 function RoomSettings() {
-  const { eventId, data, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, spaceId, data, refresh, setError, track } = useSeating();
   const plan = data.plan;
   const [w, setW] = useState(String((plan?.room_width_cm ?? 2000) / 100));
   const [d, setD] = useState(String((plan?.room_depth_cm ?? 1500) / 100));
-  const [busy, setBusy] = useState<string | null>(null);
+  const { busy, upload, pdf, takePdfPage, cancelPdf } = useBackgroundUpload();
   const [, startTransition] = useTransition();
   useEffect(() => {
     setW(String((plan?.room_width_cm ?? 2000) / 100));
     setD(String((plan?.room_depth_cm ?? 1500) / 100));
   }, [plan?.room_width_cm, plan?.room_depth_cm]);
-
-  const upload = async (file: File) => {
-    setBusy("Uploading…");
-    const encoded = await toWebp(file, 3000);
-    if (!encoded) {
-      setBusy(null);
-      setError("Couldn't read that image — a JPEG, PNG or WebP works best.");
-      return;
-    }
-    const slot = await requestSeatingBackgroundUpload(eventId, { content_type: "image/webp", byte_size: encoded.blob.size });
-    if (!slot.ok) {
-      setBusy(null);
-      setError(slot.error);
-      return;
-    }
-    const put = await fetch(slot.data.uploadUrl, {
-      method: "PUT",
-      body: encoded.blob,
-      headers: { "content-type": "image/webp", "cache-control": UPLOAD_CACHE_CONTROL },
-    }).catch(() => null);
-    if (!put?.ok) {
-      setBusy(null);
-      setError("That upload didn't finish. Try again?");
-      return;
-    }
-    const done = await confirmSeatingBackground(eventId, { path: slot.data.path, width: encoded.width, height: encoded.height });
-    setBusy(null);
-    if (!done.ok) setError(done.error);
-    refresh();
-  };
 
   return (
     <details className="card p-3 text-sm">
@@ -917,7 +1159,7 @@ function RoomSettings() {
               updateSeatingRoom(eventId, {
                 room_width_cm: Math.round(Number(w) * 100),
                 room_depth_cm: Math.round(Number(d) * 100),
-              }),
+              }, layoutId, spaceId),
             );
             if (!r.ok) setError(r.error);
             refresh();
@@ -937,12 +1179,13 @@ function RoomSettings() {
         </button>
       </form>
 
+      {pdf ? <PdfPagePicker plan={pdf} onUse={(page) => void takePdfPage(page)} onCancel={cancelPdf} /> : null}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label className="btn cursor-pointer">
           {plan?.background_path ? "Replace the venue's floor plan" : "Upload the venue's floor plan"}
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
             className="sr-only"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -957,7 +1200,7 @@ function RoomSettings() {
             className="btn text-red-700"
             onClick={() =>
               startTransition(async () => {
-                const r = await removeSeatingBackground(eventId);
+                const r = await removeSeatingBackground(eventId, layoutId, spaceId);
                 if (!r.ok) setError(r.error);
                 refresh();
               })

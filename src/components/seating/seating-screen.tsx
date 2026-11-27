@@ -12,12 +12,23 @@ import { serialiseColourBy, type ColourBy } from "@/lib/seating/colour";
 import type { SeatingDayActivity, SeatingSnapshotSummary } from "@/server/queries/seating";
 import { DragPreview, type DragPayload } from "./guest-chip";
 import { trayHouseholds } from "@/lib/seating/tray";
+import { DeclinedSeats } from "./declined-seats";
+import { ExportDialog } from "./export-dialog";
+import { ShareDialog } from "./share-dialog";
+import type { ShareLinkSummary } from "@/server/queries/seating";
+import { LayoutTabs } from "./layout-tabs";
+import { LibraryPanel } from "./library-panel";
+import { VenuePanel } from "./venue-panel";
 import { RoomSetup } from "./room-setup";
+import { SpaceTabs } from "./space-tabs";
+import { TABLET_UP, useMediaQuery } from "@/components/ui/use-media-query";
 import { RoomView } from "./room-view";
 import { RulesPanel } from "./rules-panel";
 import { SeatingProvider, useSeating, type SeatingData } from "./seating-state";
 import { RevealPanel, SnapshotsPanel } from "./snapshots-panel";
 import { DayActivityPanel } from "./day-activity-panel";
+import { FoodPanel } from "./food-panel";
+import { SettingsPanel } from "./settings-panel";
 import { StylesPanel } from "./styles-panel";
 import { SummaryBar } from "./summary-bar";
 import { TableDrawer } from "./table-drawer";
@@ -30,15 +41,19 @@ const VIEW_KEY = "wedplan.seating.view";
 
 export function SeatingScreen({
   eventId,
+  eventName,
   timeZone,
   data,
   snapshots,
   dayActivity,
   collaborators,
+  shareLinks = [],
   initialColourBy,
 }: {
   eventId: string;
+  eventName: string;
   timeZone: string;
+  shareLinks?: ShareLinkSummary[];
   data: SeatingData;
   snapshots: SeatingSnapshotSummary[];
   dayActivity: SeatingDayActivity[];
@@ -47,25 +62,34 @@ export function SeatingScreen({
 }) {
   return (
     <SeatingProvider eventId={eventId} timeZone={timeZone} data={data} initialColourBy={initialColourBy}>
-      <Screen snapshots={snapshots} dayActivity={dayActivity} collaborators={collaborators} />
+      <Screen timeZone={timeZone} eventName={eventName} shareLinks={shareLinks} snapshots={snapshots} dayActivity={dayActivity} collaborators={collaborators} />
     </SeatingProvider>
   );
 }
 
 function Screen({
+  timeZone,
+  eventName,
+  shareLinks,
   snapshots,
   dayActivity,
   collaborators,
 }: {
+  timeZone: string;
+  eventName: string;
+  shareLinks: ShareLinkSummary[];
   snapshots: SeatingSnapshotSummary[];
   dayActivity: SeatingDayActivity[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
 }) {
-  const { eventId, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
+  const { eventId, layoutId, isDraft, locked, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
   const unseated = trayHouseholds(data.guests, assignments, trayMode).reduce((n, h) => n + h.guests.length, 0);
   const [skippedSetup, setSkippedSetup] = useState(false);
   const [view, setView] = useState<View>("tables");
+  const [leftTab, setLeftTab] = useState<"guests" | "library" | "venue">("guests");
   const [dragging, setDragging] = useState<DragPayload | null>(null);
+  // Below tablet width the designer views the room and seats people only (spec 57 Part A).
+  const canEdit = useMediaQuery(TABLET_UP) && !locked;
 
   // The Room view needs room to work in (§C.4): phones open on Tables, and a
   // planner's last choice is remembered on this device only.
@@ -104,12 +128,14 @@ function Screen({
 
   const colourParam = serialiseColourBy(colourBy);
   const printHref = (v: string) =>
-    `/events/${eventId}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}`;
+    `/events/${eventId}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}${isDraft && layoutId ? `&layout=${layoutId}` : ""}`;
 
   return (
     <DndContext id="seating" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
       <div className="space-y-4">
         <SummaryBar />
+        <LayoutTabs collaborators={collaborators} timeZone={timeZone} />
+        <DeclinedSeats />
 
         {tables.length === 0 && data.fixtures.length === 0 && !skippedSetup ? <RoomSetup onSkip={() => setSkippedSetup(true)} /> : null}
 
@@ -134,8 +160,34 @@ function Screen({
         ) : null}
 
         <div className="grid items-start gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
-          <div className="lg:sticky lg:top-4">
-            <Tray />
+          <div className="space-y-2 lg:sticky lg:top-4">
+            {view === "room" ? (
+              <div role="tablist" aria-label="Left panel" className="flex gap-1">
+                {(canEdit ? (["guests", "library", "venue"] as const) : (["guests", "venue"] as const)).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    aria-selected={leftTab === t}
+                    onClick={() => setLeftTab(t)}
+                    className={`rounded px-3 py-1 text-sm ${leftTab === t ? "bg-ink text-white" : "text-muted hover:bg-line/50"}`}
+                  >
+                    {t === "guests" ? "Guests" : t === "library" ? "Library" : "Venue"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {view !== "room" || leftTab === "guests" ? (
+              <Tray />
+            ) : leftTab === "library" && canEdit ? (
+              <div className="card max-h-[75vh] overflow-y-auto p-3">
+                <LibraryPanel />
+              </div>
+            ) : (
+              <div className="card max-h-[75vh] overflow-y-auto p-3">
+                <VenuePanel editable={canEdit} />
+              </div>
+            )}
           </div>
           <div className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -171,11 +223,19 @@ function Screen({
                 <div className="absolute z-30 mt-1 w-52 space-y-1 rounded border border-line bg-white p-3 text-sm shadow-lg">
                   <label className="flex items-center gap-2"><input type="checkbox" checked={show.names} onChange={(e) => setShow({ ...show, names: e.target.checked })} /> Names on chairs</label>
                   <label className="flex items-center gap-2"><input type="checkbox" checked={show.numbers} onChange={(e) => setShow({ ...show, numbers: e.target.checked })} /> Seat numbers</label>
+                  <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted">In the room</p>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={show.venue} onChange={(e) => setShow({ ...show, venue: e.target.checked })} /> Venue (walls, doors, plan)</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={show.furniture} onChange={(e) => setShow({ ...show, furniture: e.target.checked })} /> Furniture</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={show.decor} onChange={(e) => setShow({ ...show, decor: e.target.checked })} /> Flowers &amp; décor</label>
                   <p className="text-xs text-muted">Meal colours: pick an answer under Colour by.</p>
                 </div>
               </details>
-              <details className="relative ml-auto">
-                <summary className="btn cursor-pointer list-none py-1">Print &amp; share</summary>
+              <div className="ml-auto flex items-center gap-1">
+                <ShareDialog links={shareLinks} timeZone={timeZone} />
+                <ExportDialog eventName={eventName} />
+              </div>
+              <details className="relative">
+                <summary className="btn cursor-pointer list-none py-1">Print</summary>
                 <ul className="absolute right-0 z-30 mt-1 w-64 rounded border border-line bg-white py-1 text-sm shadow-lg">
                   {unseated > 0 ? (
                     <li className="border-b border-line px-3 py-1.5 text-amber-800">
@@ -208,12 +268,21 @@ function Screen({
               </details>
             </div>
 
-            {view === "tables" ? <TablesGrid /> : <RoomView />}
+            {view === "tables" ? (
+              <TablesGrid />
+            ) : (
+              <>
+                <SpaceTabs editable={canEdit} />
+                <RoomView />
+              </>
+            )}
           </div>
         </div>
 
         <RulesPanel />
         <StylesPanel />
+        <FoodPanel />
+        <SettingsPanel />
         <SnapshotsPanel snapshots={snapshots} collaborators={collaborators} />
         <DayActivityPanel activity={dayActivity} />
         <RevealPanel />

@@ -11,6 +11,12 @@ describe("isPublicPath", () => {
    * feature and NOT added here, so every share link bounced the recipient to
    * a login screen — which looks exactly like a broken link.
    */
+  it("lets a supplier open a shared seating plan, and nothing that merely starts with p", () => {
+    expect(isPublicPath("/p/aVeryLongToken")).toBe(true);
+    expect(isPublicPath("/p/aVeryLongToken/print")).toBe(true);
+    for (const path of ["/people", "/planning", "/print"]) expect(isPublicPath(path), path).toBe(false);
+  });
+
   it("lets a photographer open a share link", () => {
     expect(isPublicPath("/m")).toBe(true);
     expect(isPublicPath("/m/aVeryLongBase64UrlTokenGoesHere")).toBe(true);

@@ -153,7 +153,7 @@ function TableCard({ table }: { table: SeatingTable }) {
 }
 
 function AddTable() {
-  const { eventId, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, spaceId, refresh, setError, track } = useSeating();
   const [shape, setShape] = useState<(typeof PICKABLE_SHAPES)[number]>("round");
   const [capacity, setCapacity] = useState(8);
   const [count, setCount] = useState(1);
@@ -167,8 +167,8 @@ function AddTable() {
         startTransition(async () => {
           const result =
             count > 1
-              ? await track(`Added ${count} tables`, () => createSeatingTables(eventId, { count, shape, capacity }))
-              : await track("Added a table", () => createSeatingTable(eventId, { shape, capacity }));
+              ? await track(`Added ${count} tables`, () => createSeatingTables(eventId, { count, shape, capacity }, layoutId, spaceId))
+              : await track("Added a table", () => createSeatingTable(eventId, { shape, capacity }, layoutId, spaceId));
           if (!result.ok) setError(result.error);
           refresh();
         });

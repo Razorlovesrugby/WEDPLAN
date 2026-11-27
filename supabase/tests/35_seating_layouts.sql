@@ -143,22 +143,24 @@ select pg_temp.expect((select count(*) from public.seating_tables where label = 
 rollback;
 
 -- ---------------------------------------------------------------------------
--- 3. The room on seating_plans reaches the first space
+-- 3. A plan starts the layout; the room is then the space's (0059)
 -- ---------------------------------------------------------------------------
 begin;
 select set_config('request.jwt.claim.sub', :alex, true);
 set local role authenticated;
 insert into public.seating_plans (wedding_id, event_id, room_width_cm, room_depth_cm)
 values (:w1, :reception, 3000, 1800);
-select pg_temp.expect_true(
-  (select s.room_width_cm = 3000 and s.room_depth_cm = 1800
-     from public.seating_spaces s join public.seating_layouts l on l.id = s.layout_id where l.event_id = :reception),
-  'a new plan''s room size is the first space''s');
+select pg_temp.expect((select count(*) from public.seating_layouts where event_id = :reception and is_live), 1,
+  'a new plan leaves the event with one live layout');
+select pg_temp.expect((select count(*) from public.seating_spaces s join public.seating_layouts l on l.id = s.layout_id where l.event_id = :reception), 1,
+  '… with one space');
+create temp table room_before as
+  select s.room_width_cm w, s.calibrated c from public.seating_spaces s join public.seating_layouts l on l.id = s.layout_id where l.event_id = :reception;
 update public.seating_plans set room_width_cm = 2500, calibrated = true where event_id = :reception;
 select pg_temp.expect_true(
-  (select s.room_width_cm = 2500 and s.calibrated
-     from public.seating_spaces s join public.seating_layouts l on l.id = s.layout_id where l.event_id = :reception),
-  'editing the plan''s room edits the first space');
+  (select s.room_width_cm = r.w and s.calibrated = r.c
+     from public.seating_spaces s join public.seating_layouts l on l.id = s.layout_id, room_before r where l.event_id = :reception),
+  'editing the plan''s room columns no longer moves the space (the room lives on the space)');
 select pg_temp.expect((select count(*) from public.seating_layouts where event_id = :reception), 1,
   'and made no second layout');
 

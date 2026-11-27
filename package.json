@@ -29,6 +29,7 @@
     "@supabase/supabase-js": "^2.45.4",
     "@tanstack/react-virtual": "^3.10.8",
     "next": "^15.0.3",
+    "pdfjs-dist": "3.11.174",
     "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",

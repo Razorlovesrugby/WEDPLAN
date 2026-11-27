@@ -1,3 +1,4 @@
+import { dietaryText, hasAnyDietary } from "@/lib/dietary";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +10,8 @@ import { chairsNeeded, nameIndex, placeCardOrder, tableListings } from "@/lib/se
 import { guestName, guestNameSurnameFirst } from "@/lib/seating/model";
 import { resolveTheme, themeCssVars } from "@/lib/theme/presets";
 import { PrintButton } from "@/components/seating/print-button";
+import { CatererExport, FloristExport, HireExport, PaperStyle, VenueExport, isExportView, parsePaper } from "@/components/seating/exports";
+import { signPath } from "@/lib/supabase/storage";
 import { getSeatingPlan } from "@/server/queries/seating";
 import { getEvents, requireWedding } from "@/server/queries/wedding";
 
@@ -21,6 +24,11 @@ const VIEWS = [
   ["floor", "Floor plan"],
   ["escort", "Escort cards"],
   ["cards", "Place cards"],
+  // The exports for suppliers (spec 57 Part E).
+  ["caterer", "Caterer"],
+  ["venue", "Venue"],
+  ["florist", "Florist"],
+  ["hire", "Hire company"],
 ] as const;
 type View = (typeof VIEWS)[number][0];
 
@@ -34,7 +42,7 @@ export default async function SeatingPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: string; colour?: string }>;
+  searchParams: Promise<{ view?: string; colour?: string; layout?: string; paper?: string; orient?: string; spaces?: string; size?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -43,17 +51,28 @@ export default async function SeatingPrintPage({
   const event = (await getEvents(wedding.id)).find((e) => e.id === id);
   if (!event) notFound();
 
-  const data = await getSeatingPlan(wedding.id, id);
+  // A draft can be printed to compare (?layout=), and says so on the page; with no layout it is the live one.
+  const data = await getSeatingPlan(wedding.id, id, sp.layout);
+  const shownLayout = data.layouts.find((l) => l.id === data.layoutId);
+  const draftName = shownLayout && !shownLayout.isLive ? shownLayout.name : null;
   const colourBy = parseColourBy(sp.colour);
   const legend = colourLegend(colourBy, data.colour);
   const listings = tableListings(data);
   const colourParam = serialiseColourBy(colourBy);
-  const href = (v: string) => `/events/${id}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}`;
+  const layoutParam = draftName && data.layoutId ? `&layout=${data.layoutId}` : "";
+  const paper = parsePaper(sp.paper, sp.orient);
+  const spaceIds = (sp.spaces ?? "").split(",").filter(Boolean);
+  const paperParams = `&paper=${paper.size}&orient=${paper.orient}${spaceIds.length ? `&spaces=${spaceIds.join(",")}` : ""}`;
+  const href = (v: string) => `/events/${id}/seating/print?view=${v}${colourParam ? `&colour=${encodeURIComponent(colourParam)}` : ""}${layoutParam}${isExportView(v) ? paperParams : ""}`;
+  const backgrounds = isExportView(view)
+    ? Object.fromEntries(await Promise.all(data.spaces.map(async (s) => [s.id, s.background_path ? await signPath(s.background_path) : null] as const)))
+    : {};
+  const exportInput = { data, eventName: event.name, paper, spaceIds, backgrounds, colourBy: parseColourBy(sp.colour ?? data.plan?.colour_by) };
 
   return (
     <div className="space-y-5">
       <div className="no-print flex flex-wrap items-center gap-2">
-        <Link href={`/events/${id}/seating${colourParam ? `?colour=${encodeURIComponent(colourParam)}` : ""}`} className="btn">
+        <Link href={`/events/${id}/seating${draftName && data.layoutId ? `?layout=${data.layoutId}` : ""}${colourParam ? `${draftName ? "&" : "?"}colour=${encodeURIComponent(colourParam)}` : ""}`} className="btn">
           ← Back to seating
         </Link>
         <nav aria-label="Print views" className="flex flex-wrap gap-1">
@@ -72,6 +91,14 @@ export default async function SeatingPrintPage({
           <PrintButton />
         </span>
       </div>
+
+      {draftName ? (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          This is the draft “{draftName}”, not the live layout. Guests and day links don&rsquo;t see it.
+        </p>
+      ) : null}
+
+      {isExportView(view) ? <PaperStyle paper={paper} /> : null}
 
       {data.tables.length === 0 ? (
         <p className="card p-8 text-center text-sm text-muted">No tables yet, so there&rsquo;s nothing to print.</p>
@@ -101,7 +128,9 @@ export default async function SeatingPrintPage({
                         <span className="flex-1">
                           {guestName(s.guest)}
                           {s.guest.ageBand !== "adult" ? <span className="text-muted"> ({s.guest.ageBand})</span> : null}
-                          {s.guest.dietary ? <span className="block text-xs text-muted">Dietary: {s.guest.dietary}</span> : null}
+                          {hasAnyDietary(s.guest.dietaryNeeds, s.guest.dietary) ? (
+                            <span className="block text-xs text-muted">Dietary: {dietaryText(s.guest.dietaryNeeds, s.guest.dietary)}</span>
+                          ) : null}
                           {s.guest.accessibility ? (
                             <span className="block text-xs text-muted">Access: {s.guest.accessibility}</span>
                           ) : null}
@@ -120,8 +149,22 @@ export default async function SeatingPrintPage({
             ))}
           </div>
         </div>
+      ) : view === "caterer" ? (
+        <CatererExport {...exportInput} />
+      ) : view === "venue" ? (
+        <VenueExport {...exportInput} />
+      ) : view === "florist" ? (
+        <FloristExport {...exportInput} />
+      ) : view === "hire" ? (
+        <HireExport {...exportInput} />
       ) : view === "names" ? (
-        <EntranceBoard weddingId={wedding.id} eventName={event.name} entries={nameIndex(data)} />
+        <EntranceBoard
+          weddingId={wedding.id}
+          eventName={event.name}
+          entries={nameIndex(data)}
+          spaces={data.spaces}
+          board={parseBoard(sp.size, sp.orient)}
+        />
       ) : view === "catering" ? (
         <div>
           <PrintTitle title={`${event.name} — numbers for the caterer`} />
@@ -158,8 +201,8 @@ export default async function SeatingPrintPage({
                   ) : null}
                   <td className="py-2">
                     {l.guests
-                      .filter((s) => s.guest.dietary)
-                      .map((s) => `${guestName(s.guest)}: ${s.guest.dietary}`)
+                      .filter((s) => hasAnyDietary(s.guest.dietaryNeeds, s.guest.dietary))
+                      .map((s) => `${guestName(s.guest)}: ${dietaryText(s.guest.dietaryNeeds, s.guest.dietary)}`)
                       .join("; ") || "—"}
                   </td>
                 </tr>
@@ -287,14 +330,25 @@ function Legend({ entries }: { entries: { label: string; colour: string }[] }) {
  * The entrance board, in the site's own colours and faces (spec 31's tokens),
  * at poster size — so it can go straight to a print shop as a PDF.
  */
+/** The entrance board's paper (spec 57 E.4): A4 and A3 as before, and A2, A1 or A0 for a poster, portrait or landscape. */
+const BOARD_SIZES = { a4: { px: 16, cols: [2, 3] }, a3: { px: 22, cols: [3, 3] }, a2: { px: 34, cols: [3, 4] }, a1: { px: 48, cols: [4, 5] }, a0: { px: 68, cols: [4, 5] } } as const;
+type BoardSize = keyof typeof BOARD_SIZES;
+function parseBoard(size: unknown, orient: unknown): { size: BoardSize; orient: "portrait" | "landscape" } {
+  return { size: (typeof size === "string" && size in BOARD_SIZES ? size : "a4") as BoardSize, orient: orient === "landscape" ? "landscape" : "portrait" };
+}
+
 async function EntranceBoard({
   weddingId,
   eventName,
   entries,
+  spaces,
+  board,
 }: {
   weddingId: string;
   eventName: string;
   entries: ReturnType<typeof nameIndex>;
+  spaces: { id: string; name: string }[];
+  board: { size: BoardSize; orient: "portrait" | "landscape" };
 }) {
   const supabase = await createClient();
   const { data } = await supabase
@@ -304,22 +358,33 @@ async function EntranceBoard({
     .eq("block_key", "theme")
     .maybeSingle();
   const theme = resolveTheme(data?.payload ?? null);
+  const { px, cols } = BOARD_SIZES[board.size];
+  const columns = cols[board.orient === "landscape" ? 1 : 0];
+  // More than one space: grouped by space, as the venue's rooms are (A to Z inside each).
+  const groups = spaces.length > 1 ? spaces.map((s) => ({ name: s.name, rows: entries.filter((e) => e.table.space_id === s.id) })).filter((g) => g.rows.length > 0) : [{ name: null as string | null, rows: entries }];
 
   return (
     <div
       style={themeCssVars(theme)}
-      className={`${script.variable} ${body.variable} rounded border border-line bg-paper p-8 font-body text-ink print:border-0 print:p-0`}
+      className={`entrance-board ${script.variable} ${body.variable} rounded border border-line bg-paper p-8 font-body text-ink print:border-0 print:p-0`}
     >
-      <h1 className="mb-1 text-center font-script text-5xl">Find your seat</h1>
-      <p className="mb-6 text-center text-xs uppercase tracking-[0.18em] text-muted">{eventName}</p>
-      <ol className="columns-1 gap-8 text-base sm:columns-2 lg:columns-3 print:columns-3">
-        {entries.map((e) => (
-          <li key={e.guest.id} className="flex break-inside-avoid justify-between gap-3 border-b border-line/60 py-1">
-            <span>{guestNameSurnameFirst(e.guest)}</span>
-            <span className="text-muted">{e.table.label}</span>
-          </li>
-        ))}
-      </ol>
+      {/* The paper and a type size that reads from across a room: the board is sized for print, the screen shows it small. */}
+      <style>{`@media print { @page { size: ${board.size.toUpperCase()} ${board.orient}; margin: 12mm; } .entrance-board { font-size: ${px}px; } .entrance-board ol { column-count: ${columns}; column-gap: ${Math.round(px * 1.5)}px; } }`}</style>
+      <h1 className="mb-1 text-center font-script" style={{ fontSize: "3.2em" }}>Find your seat</h1>
+      <p className="mb-6 text-center uppercase tracking-[0.18em] text-muted" style={{ fontSize: "0.7em" }}>{eventName}</p>
+      {groups.map((g) => (
+        <section key={g.name ?? "all"} className="mb-6">
+          {g.name ? <h2 className="mb-2 font-script" style={{ fontSize: "1.6em" }}>{g.name}</h2> : null}
+          <ol className="columns-1 gap-8 text-base sm:columns-2 lg:columns-3">
+            {g.rows.map((e) => (
+              <li key={e.guest.id} className="flex break-inside-avoid justify-between gap-3 border-b border-line/60 py-1">
+                <span>{guestNameSurnameFirst(e.guest)}</span>
+                <span className="text-muted">{e.table.label}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
     </div>
   );
 }

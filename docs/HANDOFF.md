@@ -24,35 +24,32 @@
 
 ## Recent sessions
 
-**Session 63 (spec 57, partly built):** on branch `claude/visual-seating-plan-gkbppo`, asked to design the venue
-designer (spec 57, 40 questions answered) and then "build it all". **Only part of it is built.** Migrations **`0055`
-to `0058` must be applied to live** (apply `0055` on its own, then `0056`–`0058`; `scripts/verify-migrations-single-tx.sh`
-passes). The next free migration number is `0059`. This session numbered its spec 57 because another session took 56.
+**Session 64 (spec 57, the rest built):** on branch `claude/nifty-fermi-rel802`, asked to continue spec 57 and
+"build it all". Migrations **`0055` to `0061` must be applied to live, in order** (`0055` alone first; `0059` changes the
+seat key, so apply it when nobody is seating). The next free number is `0062`. Nothing has been applied to live.
 
-- **Built and verified by the SQL suite:** layouts and spaces (`0056`: every event with seating gets one live layout
-  and one space; the backfill was run on a throwaway cluster against legacy data and wrote no audit rows), the storage
-  for styles, décor, marquees, item counts, share links, service style and menu, plan settings and structured dietary
-  needs (`0057`, `0058`), and `seating_state()` / `restore_seating_state()` as version 2 (version 1 History entries
-  still restore).
-- **Built and unit-tested:** `src/lib/seating/` drawing, service (platters, own plates, kids' meals), items (styles and
-  totals), plan-settings, chairs, and geometry for sweetheart, oval, half-moon, serpentine, ceremony rows and banquet runs.
-- **Built in the app:** chairs in the Room view show initials, a dietary dot and a declined outline; Colour by gains
-  Dietary needs and is saved on the plan (undoable); sweetheart, oval, half-moon and serpentine tables can be added;
-  table styles (panel on the seating page, a close-up in each table's drawer, totals with the couple's final numbers,
-  CSV). The close-up was rendered for six shapes in headless Chromium.
-- **Not built:** space tabs, the Library, the Venue tab and every drawing tool (walls, doors, areas, marquees, PDF
-  upload); the declined-guest "Free the seat?" card; the dietary editor and the RSVP change; supplier and budget-line
-  linking and the per-table changes editor; the menu, platters and own-plate screens; draft layouts (and with them the
-  move of `seat_assignments` to one seat per guest per layout, and filtering every read to the live layout); the lock;
-  the settings sheet; the venue, florist, hire and caterer exports; the share link; the entrance board sizes.
-- **Verified:** typecheck, 1696 unit tests, SQL suite (990 assertions), the single-transaction migration check,
-  `npm run build`. **Not verified:** the Room view, the styles panel and the drawer in a browser, a phone or iPad,
-  live Supabase. Nothing has been applied to live.
-- **Traps for whoever builds the rest:** `seating_plans` still owns the room size and a trigger copies it to the
-  event's first space, so drop that trigger and the plan's room columns in the migration that moves the room onto
-  spaces. While every event has one layout, nothing filters reads by layout; the drafts migration must, in every query
-  and action that reads tables, fixtures or seats (`src/server/queries/seating*.ts`, `day-master.ts`, the three
-  seating action files). The state functions already scope to the live layout.
+- **Built, each as its own commit:** drafts (`0059`: one seat per guest per layout, `v_live_*` views for everything
+  outside the designer, state / hash / restore / History per layout, try a layout and make it live, the Layout tabs);
+  structured dietary needs (guest page, guest table, table drawer, RSVP form); spaces and the Library; the venue
+  drawing tools and PDF plans; per-table changes, the Kids style, supplier and budget links; food service (menu,
+  platters, own plates, kids' meals, kitchen summary); Lock room and the settings sheet; the caterer, venue, florist
+  and hire exports, PNG, the share link (`0061`) and its public page, and the entrance board in A2 to A0. `0060`
+  lets rows and banquet runs seat up to 400.
+- **Verified:** typecheck, 1828 unit tests, SQL suite (1067 assertions; in this container it needs
+  `LC_ALL=C.UTF-8` or test 06's accents fail), the single-transaction check, `npm run build`. In headless Chromium with
+  the real components and the server actions stubbed: the Room view and every drawing tool, the library, the Food
+  panel, the phone view, a PDF turned into a plan page, and the caterer, florist and shared pages as static HTML.
+  **Not verified:** any of it against live Supabase, on a real iPad or phone, through a print dialog, or `/p/<token>`
+  under Next with a database; the budget line following a final number; the backfill on a copy of live data.
+- **The spec's Build status lists what is still missing** (no event tabs or right panel, no whole-wall drag, a T run is
+  two runs, deleted drafts are never purged, share addresses can't be copied again after they are made).
+- **Traps:** `seating_plans`' room columns are now unused (the space owns the room): a later migration can drop them
+  once live is checked. Anything new that reads tables, fixtures or seats outside the designer must use
+  `v_live_seat_assignments` / `v_live_seating_tables` or name a layout, or a draft will reach a guest. `pdfjs-dist` is
+  pinned at `3.11.174` and `next.config.mjs` aliases its optional `canvas` import away; the build fails without that.
+
+**Session 63 (spec 57, partly built):** designed the venue designer (40 questions answered) and built the storage
+(`0055`–`0058`), the pure libraries, chairs and colour-by, table styles and the close-up. Session 64 built the rest.
 
 **Session 62 (spec 56, built):** on branch `claude/blissful-carson-0c4i5s`, asked to find a way through tasks, the run
 sheet and who's doing what, then "Let's build". **No migration; nothing to apply to live.**
@@ -68,24 +65,6 @@ sheet and who's doing what, then "Let's build". **No migration; nothing to apply
 - **Verified:** typecheck, 1622 unit tests, `npm run build`. **Not verified:** any of it in a browser, on a phone or
   against live Supabase; the SQL suite wasn't run (no migration). The new routes and the `?who=` / `?event=` links
   have never been rendered with real data.
-
-**Session 61 (specs 52, 53, 55, built):** on branch `claude/pensive-mayer-b0d5sr`, after "do the next tasks and
-specs". Migrations **`0052`, `0053`, `0054` must be applied to live** (with `0049`–`0051` from session 60). The specs
-named `0051`–`0053`; each shifted up because 54 used two numbers, and each spec's file says what it became.
-
-- **52 (shot list):** `/shots` (sections, shots, people, call-back ordering, suggested groups, slot fit, faces, print,
-  CSV) and the Shot list day-link module (Now / All shots / Faces, offline taps, latest-tap-wins).
-- **53 (seating workspace):** undo/redo for every seating write through whole-plan state with a hash guard, automatic
-  versions and History, seat-first and select-several, room template, bulk tables, duplicate and renumber, highchair
-  and wheelchair, Colour by Fit, the Seating day-link module (find a seat, arrived, move, walk-in, blocked chairs).
-- **55 (the master):** `/day` readiness / live / summary, alerts with escalation, shifting with a preview and undo,
-  announcements, People, module cards, day lead and alerts switch, Live on the phone tab bar on the day.
-- **Verified:** typecheck, 1601 unit tests, `npm run build`, SQL suite (918 assertions); the helper page (session 60)
-  and the master's Live screen were rendered in headless Chromium with sample data. **Not verified:** `/shots`, the
-  seating changes, the shot list and seating module tabs, the readiness and summary modes, any of it on a phone or an
-  iPad, push, or live Supabase. The spec 55 acceptance check (two real phones) hasn't been done.
-- **Every spec's "Build status" lists what differs.** The larger ones: seating undo is whole-plan (refused if anything
-  changed); "Show" and meal colours reach only the table drawer's chairs; the master's own writes aren't queued offline.
 
 ---
 
@@ -142,6 +121,8 @@ by triggers or by application code. `tier` is derived in a view, never stored.
 | `/lists` | Sidebar of lists + smart views (Today, Scheduled, Flagged, All, Assigned to me) |
 | `/lists/[id]` | One list: sections, inline add/edit/tick/flag/date/assign, sub-items, drag reorder (within a section) |
 | `/run-sheet`, `/run-sheet/people`, `/run-sheet/links` | The run sheet's three tabs (spec 56): Schedule (By the hour / List, `?view=`, `?who=`, `?event=`), Who's doing what, Day links |
+| `/events/[id]/seating`, `/events/[id]/seating/print` | The venue designer (specs 33, 53, 57): layouts and drafts, spaces, the Library, the drawing tools, table styles, food service, dietary needs, Lock room, Export and Share; the print pack (by table, by name, numbers, floor plan, escort and place cards, and the caterer, venue, florist and hire exports) |
+| `/p/[token]`, `/p/[token]/print` | A seating plan shared by link (spec 57 E.3): view only, optional passcode and expiry, noindex, the same exports; the database decides whether a link opens (`seating_share_check`) |
 | `/timeline` | Every dated item, chronological, week/month/quarter zoom, drag-to-reschedule (snaps to the zoom's bucket) |
 | `/calendar` | Month grid of the same dated items, color-coded, drag-to-reschedule, overdue/due-soon marked |
 | `/board` | Kanban — Not started / In progress / Done, drag between columns |

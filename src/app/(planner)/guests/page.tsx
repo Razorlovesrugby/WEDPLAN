@@ -1,3 +1,4 @@
+import { getDietaryNeeds } from "@/server/queries/dietary";
 import Link from "next/link";
 import { EventSummary } from "@/components/guests/event-summary";
 import { FilterBar } from "@/components/guests/filter-bar";
@@ -25,7 +26,7 @@ export default async function GuestsPage({
   const query = guestFiltersToQuery(filters);
   const wedding = await requireWedding();
 
-  const [guests, everyone, tags, allEvents, households, cutLines, collaborators, invites, invitationIds, saveTheDateOpens] =
+  const [guests, everyone, tags, allEvents, households, cutLines, collaborators, invites, invitationIds, saveTheDateOpens, dietaryNeeds] =
     await Promise.all([
     listGuests(wedding.id, filters),
     // The same cached read as the line above: the reply bars and household
@@ -39,6 +40,7 @@ export default async function GuestsPage({
     listInvites(wedding.id),
     listInvitationIds(wedding.id),
     listSaveTheDateOpens(wedding.id),
+    getDietaryNeeds(wedding.id),
   ]);
 
   // Spec 51: events that don't ask for replies have no RSVP column, count or filter.
@@ -116,6 +118,7 @@ export default async function GuestsPage({
       />
 
       <GuestsTable
+        dietaryNeeds={dietaryNeeds}
         guests={guests}
         tags={tags}
         events={events}

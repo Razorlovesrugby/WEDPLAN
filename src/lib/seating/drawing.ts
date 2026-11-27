@@ -304,3 +304,167 @@ export function formatLength(cm: number): string {
   if (cm < 100) return `${Math.round(cm)} cm`;
   return `${(cm / 100).toFixed(2).replace(/\.?0+$/, "")} m`;
 }
+
+// ---------------------------------------------------------------------------
+// Walls as geometry: arcs, points along a wall, the nearest wall, splitting
+// ---------------------------------------------------------------------------
+
+type Arc = { cx: number; cy: number; r: number; a0: number; span: number; dir: 1 | -1 };
+
+/** The circle a bulging wall lies on, or null when it is straight. Angles are `atan2` in room coordinates (y down). */
+function arcOf(w: Pick<Wall, "a" | "b" | "bulge">): Arc | null {
+  const r = wallRadius(w);
+  if (r === null) return null;
+  const dx = w.b[0] - w.a[0];
+  const dy = w.b[1] - w.a[1];
+  const chord = Math.hypot(dx, dy);
+  const nx = -dy / chord;
+  const ny = dx / chord;
+  const mx = (w.a[0] + w.b[0]) / 2;
+  const my = (w.a[1] + w.b[1]) / 2;
+  // The arc's middle is `bulge` off the chord along the normal; the centre is on the other side of it.
+  const px = mx + nx * w.bulge;
+  const py = my + ny * w.bulge;
+  const cx = mx + nx * (w.bulge - Math.sign(w.bulge) * r);
+  const cy = my + ny * (w.bulge - Math.sign(w.bulge) * r);
+  const cross = (w.a[0] - cx) * (py - cy) - (w.a[1] - cy) * (px - cx);
+  return { cx, cy, r, a0: Math.atan2(w.a[1] - cy, w.a[0] - cx), span: wallLength(w) / r, dir: cross >= 0 ? 1 : -1 };
+}
+
+/** The point `t` (0 to 1) of the way along a wall, and the direction it runs there, in degrees. */
+export function wallPoint(w: Pick<Wall, "a" | "b" | "bulge">, t: number): { x: number; y: number; angle: number } {
+  const k = Math.min(1, Math.max(0, t));
+  const arc = arcOf(w);
+  if (!arc) {
+    return {
+      x: w.a[0] + (w.b[0] - w.a[0]) * k,
+      y: w.a[1] + (w.b[1] - w.a[1]) * k,
+      angle: (Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]) * 180) / Math.PI,
+    };
+  }
+  const theta = arc.a0 + arc.dir * arc.span * k;
+  return {
+    x: arc.cx + arc.r * Math.cos(theta),
+    y: arc.cy + arc.r * Math.sin(theta),
+    angle: ((theta + (arc.dir * Math.PI) / 2) * 180) / Math.PI,
+  };
+}
+
+/** An SVG path along a wall's centre line: a straight line, or an arc. */
+export function wallPath(w: Pick<Wall, "a" | "b" | "bulge">): string {
+  const arc = arcOf(w);
+  if (!arc) return `M ${w.a[0]} ${w.a[1]} L ${w.b[0]} ${w.b[1]}`;
+  const chord = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+  const large = Math.abs(w.bulge) > chord / 2 ? 1 : 0;
+  return `M ${w.a[0]} ${w.a[1]} A ${arc.r.toFixed(1)} ${arc.r.toFixed(1)} 0 ${large} ${arc.dir > 0 ? 1 : 0} ${w.b[0]} ${w.b[1]}`;
+}
+
+/** How far (signed, cm) `p` is from the chord a→b, on the side a bulge of that sign bends towards: what dragging a curve's middle sets. */
+export function bulgeFromPoint(a: Pt, b: Pt, p: Pt): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return 0;
+  const d = ((p[0] - a[0]) * -dy + (p[1] - a[1]) * dx) / len;
+  // A bulge past a full circle's width has no arc; a hair's breadth is straight.
+  const limited = Math.max(-len * 2, Math.min(len * 2, d));
+  return Math.abs(limited) < 1 ? 0 : Math.round(limited);
+}
+
+/** The wall nearest `p` within `within` cm, with how far along it (0 to 1) the nearest point is. */
+export function nearestOnWall(
+  walls: readonly Wall[],
+  p: Pt,
+  within: number,
+): { wall: Wall; t: number; x: number; y: number; dist: number } | null {
+  let best: { wall: Wall; t: number; x: number; y: number; dist: number } | null = null;
+  for (const wall of walls) {
+    const arc = arcOf(wall);
+    let t: number;
+    if (!arc) {
+      const dx = wall.b[0] - wall.a[0];
+      const dy = wall.b[1] - wall.a[1];
+      const len2 = dx * dx + dy * dy;
+      t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p[0] - wall.a[0]) * dx + (p[1] - wall.a[1]) * dy) / len2));
+    } else {
+      const phi = Math.atan2(p[1] - arc.cy, p[0] - arc.cx);
+      const TAU = Math.PI * 2;
+      const along = (((phi - arc.a0) * arc.dir) % TAU + TAU) % TAU;
+      // Past the end of the arc: whichever end is nearer in angle.
+      t = along <= arc.span ? along / arc.span : along - arc.span < TAU - along ? 1 : 0;
+    }
+    const at = wallPoint(wall, t);
+    const dist = Math.hypot(p[0] - at.x, p[1] - at.y);
+    if (dist <= within && (!best || dist < best.dist)) best = { wall, t, x: at.x, y: at.y, dist };
+  }
+  return best;
+}
+
+/**
+ * Splits a wall in the middle into two that carry on from each other, handing
+ * its openings to whichever half they now sit on. The second half gets
+ * `newId`. A curve splits into two curves of the same circle.
+ */
+export function splitWall(d: Drawing, wallId: string, newId: string): Drawing {
+  const w = d.walls.find((x) => x.id === wallId);
+  if (!w || d.walls.some((x) => x.id === newId)) return d;
+  const mid = wallPoint(w, 0.5);
+  const m: Pt = [Math.round(mid.x), Math.round(mid.y)];
+  let bulge = 0;
+  const r = wallRadius(w);
+  if (r !== null) {
+    const half = wallLength(w) / r / 4;
+    bulge = Math.sign(w.bulge) * Math.round(r * (1 - Math.cos(half)));
+  }
+  const first: Wall = { ...w, b: m, bulge };
+  const second: Wall = { ...w, id: newId, a: m, bulge };
+  return {
+    ...d,
+    walls: d.walls.flatMap((x) => (x.id === wallId ? [first, second] : [x])),
+    openings: d.openings.map((o) => {
+      if (o.wall !== wallId) return o;
+      return o.at < 0.5 ? { ...o, at: o.at * 2 } : { ...o, wall: newId, at: o.at * 2 - 1, hinge: o.hinge };
+    }),
+  };
+}
+
+/** The drawing without a wall, and without the doors and windows that were on it. */
+export function removeWall(d: Drawing, wallId: string): Drawing {
+  return { ...d, walls: d.walls.filter((w) => w.id !== wallId), openings: d.openings.filter((o) => o.wall !== wallId) };
+}
+
+/** A door or window's two ends along its wall, as room points, for drawing its gap. */
+export function openingEnds(w: Pick<Wall, "a" | "b" | "bulge">, o: Pick<Opening, "at" | "width">): { from: Pt; to: Pt; centre: Pt; angle: number } {
+  const len = wallLength(w) || 1;
+  const half = o.width / 2 / len;
+  const c = wallPoint(w, o.at);
+  const f = wallPoint(w, Math.max(0, o.at - half));
+  const t = wallPoint(w, Math.min(1, o.at + half));
+  return { from: [f.x, f.y], to: [t.x, t.y], centre: [c.x, c.y], angle: c.angle };
+}
+
+/** A fresh id for a drawing item: a short random run of letters and digits. */
+export function newDrawingId(prefix: string, taken: ReadonlySet<string>, random: () => number = Math.random): string {
+  for (let i = 0; i < 20; i++) {
+    const id = `${prefix}${Math.floor(random() * 36 ** 6).toString(36).padStart(6, "0")}`;
+    if (!taken.has(id)) return id;
+  }
+  return `${prefix}${taken.size + 1}`;
+}
+
+/** Every id in use in a drawing, for `newDrawingId`. */
+export function drawingIds(d: Drawing): Set<string> {
+  return new Set([...d.walls, ...d.openings, ...d.markers, ...d.areas, ...d.labels, ...d.dimensions].map((x) => x.id));
+}
+
+/** The bounding box of an area's points, for placing its name. */
+export function polygonCentre(points: readonly Pt[]): Pt {
+  if (points.length === 0) return [0, 0];
+  let x = 0;
+  let y = 0;
+  for (const p of points) {
+    x += p[0];
+    y += p[1];
+  }
+  return [x / points.length, y / points.length];
+}

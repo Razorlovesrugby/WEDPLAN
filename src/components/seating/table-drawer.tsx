@@ -8,6 +8,12 @@ import { guestColour } from "@/lib/seating/colour";
 import { localSeatPositions, serpentinePath, tableSize, CHAIR_OFFSET_CM } from "@/lib/seating/geometry";
 import { guestName, type SeatingTable } from "@/lib/seating/model";
 import type { SeatingTableShape } from "@/lib/types/database";
+import { GuestDietaryNeeds } from "@/components/guest-dietary-needs";
+import { dietaryText, hasAllergy, hasAnyDietary } from "@/lib/dietary";
+import { setSeatFood } from "@/server/actions/seating-service";
+import { buildKitchen, mealQuestion, sharedFlags } from "@/lib/seating/kitchen";
+import { effectiveStyle, parseStyleChanges } from "@/lib/seating/items";
+import { courseStyle, isServiceStyle, isKidsMeal, parseMenu } from "@/lib/seating/service";
 import { GuestChip } from "./guest-chip";
 import { useSeating } from "./seating-state";
 import { PICKABLE_SHAPES, SHAPE_LABEL } from "./tables-grid";
@@ -71,6 +77,8 @@ function DrawerBody({ table }: { table: SeatingTable }) {
       </div>
 
       <Chairs table={table} />
+      <DietaryAtTable table={table} />
+      <FoodAtTable table={table} />
       <TableStyleSection table={table} />
 
       <form
@@ -265,6 +273,136 @@ function DrawerBody({ table }: { table: SeatingTable }) {
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * What this table eats (spec 57 F.3 to F.5): platters per shared dish, the
+ * flags for a tight or tall table, and who has an own plate or shares. Only
+ * shown when the menu has a course that isn't plated.
+ */
+function FoodAtTable({ table }: { table: SeatingTable }) {
+  const { eventId, layoutId, data, tables, assignments, settings, colourBy, track, refresh, setError, guestById } = useSeating();
+  const [pending, startTransition] = useTransition();
+  const parsed = parseMenu(data.plan?.menu);
+  const menu = parsed.ok ? parsed.menu : [];
+  const defaultStyle = isServiceStyle(data.plan?.service_style) ? data.plan.service_style : "plated";
+  const courses = menu.filter((c) => courseStyle(c, defaultStyle) !== "plated");
+  if (courses.length === 0) return null;
+
+  const meal = mealQuestion(data.colour.questions, data.colour.answers, colourBy.kind === "question" ? colourBy.questionId : null);
+  const kitchen = buildKitchen({ menu, defaultStyle, tables, seats: assignments, guests: data.guests, settings, meal });
+  const seated = assignments.filter((a) => a.tableId === table.id && guestById.has(a.guestId));
+  const style = table.style_id ? (data.styles.find((s) => s.id === table.style_id) ?? null) : null;
+  const flags = courses.some((c) => courseStyle(c, defaultStyle) === "shared") ? sharedFlags(table, effectiveStyle(style, parseStyleChanges(table.style_changes)).centre, settings) : [];
+  const shared = kitchen.courses.filter((c) => c.style === "shared");
+
+  const change = (guestId: string, courseId: string, patch: { ownPlate?: boolean; kidsMeal?: boolean }, label: string) =>
+    startTransition(async () => {
+      const r = await track(label, () => setSeatFood(eventId, guestId, courseId, patch, layoutId));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+
+  return (
+    <section className="mt-3 border-t border-line pt-2" aria-label="Food at this table">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Food</h3>
+      {flags.map((f) => (
+        <p key={f} className="mb-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          {f}
+        </p>
+      ))}
+      {shared.map((c) => (
+        <div key={c.courseId} className="mb-2 text-xs">
+          <p className="font-medium">{c.name}</p>
+          {c.shared.length === 0 ? <p className="text-muted">No dishes yet.</p> : null}
+          {c.shared.map((d) => {
+            const t = d.tables.find((x) => x.tableId === table.id);
+            return (
+              <p key={d.dishId} className="text-muted">
+                {d.name || "Dish"}: {d.needsServes ? "set “serves” in Food service" : t?.platters === null || t?.platters === undefined ? "nobody sharing" : `${t.platters} ${d.vessel}${t.platters === 1 ? "" : "s"}`}
+                {t?.stale ? <span className="ml-1 text-amber-800">Check platters</span> : null}
+              </p>
+            );
+          })}
+        </div>
+      ))}
+      <ul className="space-y-1.5 text-sm">
+        {seated.map((a) => {
+          const g = guestById.get(a.guestId)!;
+          const child = g.ageBand !== "adult";
+          return (
+            <li key={a.guestId} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span className="w-32 shrink-0 truncate font-medium">{guestName(g)}</span>
+              {courses.map((c) => {
+                const kids = isKidsMeal({ ageBand: g.ageBand, kidsMeal: a.kidsMeal ?? {} }, c.id);
+                return (
+                  <span key={c.id} className="flex items-center gap-1 text-xs">
+                    <span className="text-muted">{c.name}:</span>
+                    {child ? (
+                      <label className="flex items-center gap-1">
+                        <input type="checkbox" checked={kids} disabled={pending} onChange={(e) => change(a.guestId, c.id, { kidsMeal: e.target.checked }, `${guestName(g)}: ${e.target.checked ? "kids' meal" : "shares"} at ${c.name}`)} />
+                        <span className={kids ? "text-purple-800" : undefined}>Kids&rsquo; meal</span>
+                      </label>
+                    ) : null}
+                    {!kids ? (
+                      <label className="flex items-center gap-1">
+                        <input type="checkbox" checked={a.ownPlate?.[c.id] === true} disabled={pending} onChange={(e) => change(a.guestId, c.id, { ownPlate: e.target.checked }, `${guestName(g)}: ${e.target.checked ? "own plate" : "shares"} at ${c.name}`)} />
+                        <span className={a.ownPlate?.[c.id] === true ? "text-orange-700" : undefined}>Own plate</span>
+                      </label>
+                    ) : null}
+                  </span>
+                );
+              })}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Who at this table has a dietary need, and a way to change it (spec 57 Part H). */
+function DietaryAtTable({ table }: { table: SeatingTable }) {
+  const { assignments, guestById, refresh } = useSeating();
+  const [editing, setEditing] = useState<string | null>(null);
+  const guests = assignments
+    .filter((a) => a.tableId === table.id && guestById.has(a.guestId))
+    .map((a) => guestById.get(a.guestId)!)
+    .sort((a, b) => guestName(a).localeCompare(guestName(b), "en-GB"));
+  if (guests.length === 0) return null;
+  return (
+    <section className="mt-3 border-t border-line pt-2" aria-label="Dietary needs at this table">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Dietary needs</h3>
+      <ul className="space-y-1 text-sm">
+        {guests.map((g) => (
+          <li key={g.id}>
+            <div className="flex items-start gap-2">
+              <span className="w-32 shrink-0 truncate font-medium">{guestName(g)}</span>
+              <span className={`flex-1 ${hasAllergy(g.dietaryNeeds) ? "text-red-800" : "text-muted"}`}>
+                {hasAnyDietary(g.dietaryNeeds, g.dietary) ? dietaryText(g.dietaryNeeds, g.dietary) : "None given"}
+              </span>
+              <button type="button" className="text-xs underline" onClick={() => setEditing(editing === g.id ? null : g.id)}>
+                {editing === g.id ? "Close" : "Edit"}
+              </button>
+            </div>
+            {editing === g.id ? (
+              <div className="mt-1 rounded border border-line p-2">
+                <GuestDietaryNeeds
+                  guestId={g.id}
+                  initial={g.dietaryNeeds}
+                  label={`${guestName(g)}'s dietary needs`}
+                  onSaved={() => {
+                    setEditing(null);
+                    refresh();
+                  }}
+                />
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

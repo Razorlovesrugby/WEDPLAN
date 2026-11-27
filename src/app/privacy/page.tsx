@@ -152,6 +152,13 @@ export default function PrivacyPage() {
             receive your contact details or the planning notes.
           </li>
           <li>
+            <strong>Suppliers, by link.</strong> A couple may share their seating plan with the
+            people providing the day — a caterer, a venue, a florist, a hire company — by a link
+            that shows guests&rsquo; names, where they sit and any dietary needs or allergies. The
+            link is view-only, can have a passcode and an end date, and the couple can switch it
+            off at any time.
+          </li>
+          <li>
             <strong>Other guests, for photos only.</strong> A photo you upload is checked by the
             couple and, once they approve it, shown in the gallery on their wedding website. Ask
             the couple and they will take it down.

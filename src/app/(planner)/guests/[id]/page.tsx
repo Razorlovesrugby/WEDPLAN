@@ -4,6 +4,8 @@ import { GuestForm } from "@/components/guests/guest-form";
 import { HouseholdPicker } from "@/components/guests/household-picker";
 import { TasksOnTheDay } from "@/components/day-link/tasks-on-the-day";
 import { AnswerList } from "@/components/questions/answer-list";
+import { GuestDietaryNeeds } from "@/components/guest-dietary-needs";
+import { getDietaryNeeds } from "@/server/queries/dietary";
 import { getGuest, listHouseholds } from "@/server/queries/guests";
 import { moveGuest } from "@/server/actions/guests";
 import { getGuestAnswers } from "@/server/queries/questions";
@@ -22,12 +24,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function GuestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const wedding = await requireWedding();
-  const [guest, events, answers, households, collaborators] = await Promise.all([
+  const [guest, events, answers, households, collaborators, needsByGuest] = await Promise.all([
     getGuest(wedding.id, id),
     getEvents(wedding.id),
     getGuestAnswers(wedding.id, id),
     listHouseholds(wedding.id),
     getCollaborators(wedding.id),
+    getDietaryNeeds(wedding.id),
   ]);
 
   if (!guest) notFound();
@@ -67,7 +70,15 @@ export default async function GuestPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[2fr,1fr]">
-        <GuestForm guest={guest} householdId={guest.household_id} collaborators={collaborators} />
+        <div className="space-y-5">
+          <GuestForm guest={guest} householdId={guest.household_id} collaborators={collaborators} />
+          <section className="card p-4" aria-label="Dietary needs">
+            <GuestDietaryNeeds guestId={guest.id} initial={needsByGuest[guest.id] ?? []} />
+            <p className="mt-2 text-xs text-muted">
+              Tags are what the seating plan, the caterer&rsquo;s list and the day links use. The note under Dietary requirements is kept exactly as written and shown beside them.
+            </p>
+          </section>
+        </div>
 
         <div className="space-y-5">
           <aside className="card h-fit p-4">

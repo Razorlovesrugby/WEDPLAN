@@ -1,5 +1,7 @@
 "use client";
 
+import { DietaryCell } from "./dietary-cell";
+import type { DietaryNeed } from "@/lib/dietary";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
@@ -73,7 +75,10 @@ export function GuestsTable({
   householdSummaries,
   weddingName,
   dateLabel,
+  dietaryNeeds = {},
 }: {
+  /** Structured dietary needs by guest (spec 57 Part H). */
+  dietaryNeeds?: Record<string, DietaryNeed[]>;
   guests: GuestListItem[];
   tags: TagRow[];
   events: EventRow[];
@@ -457,12 +462,14 @@ export function GuestsTable({
       case "dietary":
         return (
           <td className={`${td} min-w-[11rem] ${fade}`}>
-            <InlineText
-              value={guest.dietary}
-              placeholder="None given"
-              ariaLabel={`Dietary requirements for ${guestName(guest)}`}
-              onSave={(next) => updateGuest(guest.id, { dietary: next })}
-            />
+            <DietaryCell guestId={guest.id} name={guestName(guest)} needs={dietaryNeeds[guest.id] ?? []}>
+              <InlineText
+                value={guest.dietary}
+                placeholder="None given"
+                ariaLabel={`Dietary requirements for ${guestName(guest)}`}
+                onSave={(next) => updateGuest(guest.id, { dietary: next })}
+              />
+            </DietaryCell>
           </td>
         );
       case "coming":

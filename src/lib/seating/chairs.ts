@@ -4,6 +4,7 @@
  * dietary need and a dashed outline for a guest who can't come any more. Pure.
  */
 
+import { dietaryDot, type DietaryDot } from "@/lib/dietary";
 import type { SeatingGuest } from "./model";
 
 export type ChairDetail = "dot" | "initials" | "name";
@@ -35,15 +36,19 @@ export function chairFirstName(g: Pick<SeatingGuest, "firstName" | "preferredNam
 }
 
 export type ChairMarks = {
-  /** Any dietary note: a red dot on the chair. */
+  /** Any dietary note or tag. */
   dietary: boolean;
+  /** Which dot: red for an allergy, amber for a preference tag, grey for a note alone (spec 57 A.2). */
+  dietaryDot: DietaryDot;
   /** Told us they can't come, or replied No, and still in a chair: a dashed orange outline. */
   declined: boolean;
 };
 
-export function chairMarks(g: Pick<SeatingGuest, "dietary" | "excluded" | "rsvp">): ChairMarks {
+export function chairMarks(g: Pick<SeatingGuest, "dietary" | "dietaryNeeds" | "excluded" | "rsvp">): ChairMarks {
+  const dot = dietaryDot(g.dietaryNeeds, g.dietary);
   return {
-    dietary: (g.dietary ?? "").trim() !== "",
+    dietary: dot !== null,
+    dietaryDot: dot,
     declined: g.excluded || g.rsvp === "no",
   };
 }

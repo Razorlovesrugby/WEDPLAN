@@ -46,8 +46,9 @@ export async function getHouseholdSeating(
     .is("deleted_at", null);
   if (!members || members.length === 0) return [];
 
+  // The live layout only (spec 57 Part G): guests never see a draft.
   const { data: seats } = await supabase
-    .from("seat_assignments")
+    .from("v_live_seat_assignments")
     .select("guest_id, event_id, table_id, seat_index")
     .eq("wedding_id", weddingId)
     .in(
@@ -67,9 +68,9 @@ export async function getHouseholdSeating(
       .eq("has_seating", true)
       .eq("guest_facing", true)
       .in("id", eventIds),
-    supabase.from("seating_tables").select("id, label").eq("wedding_id", weddingId).in("id", tableIds),
+    supabase.from("v_live_seating_tables").select("id, label").eq("wedding_id", weddingId).in("id", tableIds),
     supabase
-      .from("seat_assignments")
+      .from("v_live_seat_assignments")
       .select("table_id, guests!inner(id, first_name, last_name, preferred_name, household_id, deleted_at)")
       .eq("wedding_id", weddingId)
       .in("table_id", tableIds),

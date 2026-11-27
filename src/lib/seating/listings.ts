@@ -4,6 +4,7 @@
  * the print page and the export, so the paper and the spreadsheet agree.
  */
 
+import { dietaryText } from "@/lib/dietary";
 import {
   compareBySurname,
   guestName,
@@ -96,7 +97,7 @@ export function seatingCsvRows(eventName: string, plan: PlanLike): (string | num
       guestName(s.guest),
       s.guest.householdName,
       s.guest.ageBand,
-      s.guest.dietary ?? "",
+      dietaryText(s.guest.dietaryNeeds, s.guest.dietary),
       s.guest.accessibility ?? "",
       s.guest.needsHighchair ? "yes" : "",
       s.guest.usesWheelchair ? "yes" : "",

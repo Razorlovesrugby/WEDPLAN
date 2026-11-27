@@ -129,7 +129,7 @@ export const getMasterData = cache(async (wedding: { id: string; timezone: strin
     supabase.from("shot_sections").select("id, name, run_sheet_item_id").eq("wedding_id", weddingId).order("sort_order"),
     supabase.from("shots").select("section_id, kind, minutes, status").eq("wedding_id", weddingId),
     supabase.from("seating_checkins").select("guest_id").eq("wedding_id", weddingId),
-    supabase.from("seat_assignments").select("guest_id").eq("wedding_id", weddingId),
+    supabase.from("v_live_seat_assignments").select("guest_id").eq("wedding_id", weddingId),
     Promise.resolve(null),
   ]);
   void files;

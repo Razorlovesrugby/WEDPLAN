@@ -24,7 +24,7 @@ export function SnapshotsPanel({
   snapshots: SeatingSnapshotSummary[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
 }) {
-  const { eventId, timeZone, refresh, setError, track } = useSeating();
+  const { eventId, layoutId, timeZone, refresh, setError, track } = useSeating();
   const [name, setName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -50,7 +50,7 @@ export function SnapshotsPanel({
         onSubmit={(e) => {
           e.preventDefault();
           startTransition(async () => {
-            const r = await saveSeatingSnapshot(eventId, name || `Copy of ${when(new Date().toISOString())}`);
+            const r = await saveSeatingSnapshot(eventId, name || `Copy of ${when(new Date().toISOString())}`, layoutId);
             if (!r.ok) setError(r.error);
             else {
               setName("");
