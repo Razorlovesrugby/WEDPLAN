@@ -1,14 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { deleteCustomItem, deleteMarquee, saveCustomItem, saveMarquee } from "@/server/actions/seating-library";
 import { banquetPreset } from "@/lib/seating/geometry";
-import { GROUP_LABEL, LIBRARY, searchLibrary, tileDrawSize, type LibraryGroup, type LibraryTile } from "@/lib/seating/library";
+import { GROUP_LABEL, isStampable, libraryTiles, searchLibrary, tileByRef, tileDrawSize, type LibraryGroup, type LibraryTile } from "@/lib/seating/library";
+import { moveFavourite, toggleFavourite } from "@/lib/seating/stamp";
+import { setSeatingFavourites } from "@/server/actions/seating-workspace";
+import { useRecentStamps } from "./canvas-prefs";
 import { SELECT, type PlaceItem } from "@/lib/seating/tools";
 import { useSeating } from "./seating-state";
 
 /** The data a tile carries when it is dragged onto the canvas. */
 export const DRAG_ITEM_TYPE = "application/x-wedplan-item";
+/** What a favourite carries when it is dragged along the Favourites row, to reorder it. */
+const DRAG_FAVOURITE_TYPE = "application/x-wedplan-favourite";
 
 const GROUPS: LibraryGroup[] = ["tables", "room", "decor", "outdoors"];
 
@@ -24,36 +29,40 @@ export function LibraryPanel() {
   const [adding, setAdding] = useState<"item" | "marquee" | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const mine: LibraryTile[] = data.customItems.map((c) => ({
-    id: `custom:${c.id}`,
-    group: "decor",
-    label: c.name,
-    item: { type: "fixture", kind: "custom", label: c.name, width: c.width_cm, depth: c.depth_cm, customItemId: c.id },
-    w: c.width_cm,
-    d: c.depth_cm,
-  }));
-  const marquees: LibraryTile[] = data.marquees.map((m) => ({
-    id: `marquee:${m.id}`,
-    group: "outdoors",
-    label: m.name,
-    item: { type: "fixture", kind: "marquee", label: m.name, width: m.width_cm, depth: m.length_cm, marqueeId: m.id },
-    w: m.width_cm,
-    d: m.length_cm,
-  }));
-  // The plan's own default sizes (Part I) replace the built-in footprint of a built-in fixture.
-  const sized = LIBRARY.map((t) => {
-    const own = t.item.type === "fixture" ? settings.defaultSizes[t.item.kind] : undefined;
-    return own && t.item.type === "fixture" ? { ...t, w: own.width, d: own.depth, item: { ...t.item, width: own.width, depth: own.depth } } : t;
-  });
-  const tiles = searchLibrary([...sized, ...mine, ...marquees], query);
+  const all = libraryTiles(data.customItems, data.marquees, settings.defaultSizes);
+  const tiles = searchLibrary(all, query);
   const placing = tool.kind === "place" ? tool.item : null;
+  // The tile in hand: compared by what it is, since the couple's own tiles are rebuilt on every render.
+  const isActive = (tile: LibraryTile) => placing !== null && JSON.stringify(placing) === JSON.stringify(tile.item);
+
+  // Favourites (spec 59 Part C): wedding-wide, kept in the plan's settings; the star shows at once and is put back if the save fails.
+  const stored = settings.favourites;
+  const storedKey = stored.join("|");
+  const [favs, setFavs] = useState(stored);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setFavs(stored), [storedKey]);
+  const [recent] = useRecentStamps();
+  const saveFavs = (next: string[]) => {
+    setFavs(next);
+    startTransition(async () => {
+      const r = await setSeatingFavourites(eventId, next);
+      if (!r.ok) {
+        setError(r.error);
+        setFavs(stored);
+      }
+      refresh();
+    });
+  };
+  const favTiles = favs.flatMap((ref) => tileByRef(all, ref) ?? []);
+  const recentTiles = recent.filter((ref) => !favs.includes(ref)).flatMap((ref) => tileByRef(all, ref) ?? []);
 
   const choose = (tile: LibraryTile) => {
     if (tile.needsSetup) {
       setSetup(setup?.id === tile.id ? null : tile);
       return;
     }
-    setTool(placing === tile.item ? SELECT : { kind: "place", item: tile.item });
+    // Choosing a tile starts Stamp with it: each click on the plan puts one down, until Esc (spec 59 Part C).
+    setTool(isActive(tile) ? SELECT : { kind: "place", item: tile.item });
   };
 
   return (
@@ -61,11 +70,56 @@ export function LibraryPanel() {
       <input className="field w-full" type="search" placeholder="Search the library" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search the library" />
       {placing ? (
         <p className="rounded bg-accent/10 px-2 py-1.5 text-xs">
-          Click the spot on the plan to put <strong>{placing.label}</strong> there. <button type="button" className="underline" onClick={() => setTool(SELECT)}>Cancel</button>
+          Stamping <strong>{placing.label}</strong>: click the plan to put one down, as many as you like. <button type="button" className="underline" onClick={() => setTool(SELECT)}>Stop (Esc)</button>
         </p>
       ) : (
-        <p className="text-xs text-muted">Drag a tile onto the plan, or click it and then click the spot.</p>
+        <p className="text-xs text-muted">Drag a tile onto the plan to put one down, or click it to stamp as many as you like. ★ keeps a tile at the top.</p>
       )}
+
+      {favTiles.length > 0 && query.trim() === "" ? (
+        <section aria-label="Favourites">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Favourites</h3>
+          <ul className="grid grid-cols-3 gap-1.5">
+            {favTiles.map((tile, i) => (
+              <li
+                key={tile.id}
+                className="group relative"
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData(DRAG_FAVOURITE_TYPE, tile.id)}
+                onDragOver={(e) => e.dataTransfer.types.includes(DRAG_FAVOURITE_TYPE) && e.preventDefault()}
+                onDrop={(e) => {
+                  const ref = e.dataTransfer.getData(DRAG_FAVOURITE_TYPE);
+                  if (!ref || ref === tile.id) return;
+                  e.preventDefault();
+                  saveFavs(moveFavourite(favs, ref, i));
+                }}
+              >
+                <TileCell tile={tile} active={isActive(tile) || setup?.id === tile.id} starred onChoose={() => choose(tile)} onStar={() => saveFavs(toggleFavourite(favs, tile.id))} />
+                <div className="absolute inset-x-0 -bottom-2 z-10 hidden justify-between px-0.5 group-focus-within:flex group-hover:flex">
+                  <button type="button" className="rounded bg-white/90 px-1 text-xs shadow-sm disabled:opacity-30" disabled={i === 0} aria-label={`Move ${tile.label} earlier`} onClick={() => saveFavs(moveFavourite(favs, tile.id, i - 1))}>
+                    ‹
+                  </button>
+                  <button type="button" className="rounded bg-white/90 px-1 text-xs shadow-sm disabled:opacity-30" disabled={i === favTiles.length - 1} aria-label={`Move ${tile.label} later`} onClick={() => saveFavs(moveFavourite(favs, tile.id, i + 1))}>
+                    ›
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {recentTiles.length > 0 && query.trim() === "" ? (
+        <section aria-label="Recent">
+          <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Recent</h3>
+          <ul className="grid grid-cols-3 gap-1.5">
+            {recentTiles.map((tile) => (
+              <li key={tile.id}>
+                <TileCell tile={tile} active={isActive(tile) || setup?.id === tile.id} starred={favs.includes(tile.id)} onChoose={() => choose(tile)} onStar={() => saveFavs(toggleFavourite(favs, tile.id))} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {GROUPS.map((group) => {
         const inGroup = tiles.filter((t) => t.group === group);
@@ -76,7 +130,7 @@ export function LibraryPanel() {
             <ul className="grid grid-cols-3 gap-1.5">
               {inGroup.map((tile) => (
                 <li key={tile.id}>
-                  <Tile tile={tile} active={placing === tile.item || setup?.id === tile.id} onChoose={() => choose(tile)} />
+                  <TileCell tile={tile} active={isActive(tile) || setup?.id === tile.id} starred={favs.includes(tile.id)} onChoose={() => choose(tile)} onStar={() => saveFavs(toggleFavourite(favs, tile.id))} />
                 </li>
               ))}
             </ul>
@@ -158,6 +212,25 @@ export function LibraryPanel() {
           </ul>
         </details>
       ) : null}
+    </div>
+  );
+}
+
+/** A tile with its star: the star is a button of its own, beside the tile's, never inside it. */
+function TileCell({ tile, active, starred, onChoose, onStar }: { tile: LibraryTile; active: boolean; starred: boolean; onChoose: () => void; onStar: () => void }) {
+  return (
+    <div className="relative">
+      <Tile tile={tile} active={active} onChoose={onChoose} />
+      <button
+        type="button"
+        aria-pressed={starred}
+        aria-label={starred ? `Take ${tile.label} off your favourites` : `Add ${tile.label} to your favourites`}
+        title={starred ? "Favourite" : "Add to favourites"}
+        className={`absolute right-0.5 top-0.5 rounded px-1 text-sm leading-none ${starred ? "text-amber-600" : "text-muted/60 hover:text-amber-600"}`}
+        onClick={onStar}
+      >
+        {starred ? "★" : "☆"}
+      </button>
     </div>
   );
 }

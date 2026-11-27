@@ -5,7 +5,7 @@ import type { SeatingDayActivity } from "@/server/queries/seating";
 import { guestName } from "@/lib/seating/model";
 
 /** Day-of arrivals, moves and walk-ins from day links, with who made them (spec 53 Part I). */
-export function DayActivityPanel({ activity }: { activity: SeatingDayActivity[] }) {
+export function DayActivityPanel({ activity, defaultOpen = false }: { activity: SeatingDayActivity[]; defaultOpen?: boolean }) {
   const { data, timeZone } = useSeating();
   if (activity.length === 0) return null;
   const name = (id: string | null) => {
@@ -22,7 +22,7 @@ export function DayActivityPanel({ activity }: { activity: SeatingDayActivity[] 
           ? `${name(a.guestId)} moved to ${a.table ?? "another table"}${a.seat ? `, chair ${a.seat}` : ""}`
           : `Walk-in seated at ${a.table ?? "a table"}${a.note ? `: ${a.note}` : ""}`;
   return (
-    <details className="card p-3 text-sm">
+    <details open={defaultOpen} className="card p-3 text-sm">
       <summary className="cursor-pointer font-medium">On the day <span className="font-normal text-muted">({activity.length})</span></summary>
       <ul className="mt-2 divide-y divide-line">
         {activity.map((a) => (

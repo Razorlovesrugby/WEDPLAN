@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, parseSettings, type PlanSettings } from "@/lib/seatin
 import { FIXTURE_DEFAULTS } from "@/lib/seating/geometry";
 import { LIBRARY } from "@/lib/seating/library";
 import { useSeating } from "./seating-state";
+import { useNavMode } from "./canvas-prefs";
 
 const FIXTURE_KINDS = LIBRARY.filter((t) => t.item.type === "fixture").map((t) => ({ kind: (t.item as { kind: string }).kind, label: t.label }));
 
@@ -14,11 +15,12 @@ const FIXTURE_KINDS = LIBRARY.filter((t) => t.item.type === "fixture").map((t) =
  * guesses, each starting at its default and changeable per plan. Leaving a
  * box empty puts its default back.
  */
-export function SettingsPanel() {
+export function SettingsPanel({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { eventId, settings, setError, refresh } = useSeating();
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState(() => toFields(settings));
   const [saved, setSaved] = useState(false);
+  const [navMode, setNavMode] = useNavMode();
   const set = (key: keyof ReturnType<typeof toFields>, value: string) => {
     setDraft({ ...draft, [key]: value });
     setSaved(false);
@@ -41,8 +43,24 @@ export function SettingsPanel() {
     });
 
   return (
-    <details className="card p-3 text-sm">
+    <details open={defaultOpen} className="card p-3 text-sm">
       <summary className="cursor-pointer font-medium">Plan settings</summary>
+      <fieldset className="mt-3 space-y-1.5">
+        <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Moving around the plan, on this device</legend>
+        <label className="flex items-start gap-2">
+          <input type="radio" name="nav-mode" className="mt-1" checked={navMode === "trackpad"} onChange={() => setNavMode("trackpad")} />
+          <span>
+            <strong>Trackpad</strong> <span className="text-muted">(the usual): two-finger scroll or the wheel pans; pinch or ⌘/Ctrl + scroll zooms.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="radio" name="nav-mode" className="mt-1" checked={navMode === "mouse"} onChange={() => setNavMode("mouse")} />
+          <span>
+            <strong>Mouse</strong> <span className="text-muted">: the wheel zooms about the pointer; Shift + wheel pans sideways, ⌘/Ctrl + wheel up and down.</span>
+          </span>
+        </label>
+        <p className="text-xs text-muted">Never guessed from your device: it stays as you set it. Right-click the plan, or use the zoom box, to switch quickly.</p>
+      </fieldset>
       <form
         className="mt-3 space-y-4"
         onSubmit={(e) => {

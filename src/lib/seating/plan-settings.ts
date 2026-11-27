@@ -1,3 +1,5 @@
+import { parseRefs } from "./stamp";
+
 /**
  * A plan's settings sheet (spec 57 Part I): the thresholds that were the
  * app's own guesses, each changeable per plan. Stored as one jsonb on
@@ -15,6 +17,8 @@ export type PlanSettings = {
   longTableCm: number | null;
   /** Default footprint per fixture kind, over the built-in ones. */
   defaultSizes: Record<string, { width: number; depth: number }>;
+  /** The Library's starred items, in the order starred (spec 59 Part C): references, shared by everyone on the wedding. */
+  favourites: string[];
 };
 
 export const DEFAULT_SETTINGS: PlanSettings = {
@@ -23,6 +27,7 @@ export const DEFAULT_SETTINGS: PlanSettings = {
   tallCm: 30,
   longTableCm: null,
   defaultSizes: {},
+  favourites: [],
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -38,8 +43,10 @@ export function parseSettings(raw: unknown): PlanSettings {
     tallCm: DEFAULT_SETTINGS.tallCm,
     longTableCm: null,
     defaultSizes: {},
+    favourites: [],
   };
   if (!isObj(raw)) return s;
+  s.favourites = parseRefs(raw.favourites);
   if (isObj(raw.walkway)) {
     const c = int(raw.walkway.comfortable, 30, 400);
     const t = int(raw.walkway.tight, 20, 400);

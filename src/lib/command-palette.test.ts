@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { goCommands, ilikePattern, makeCommands, matchScore, rankCommands, type Command } from "./command-palette";
+import { designerCommands, goCommands, ilikePattern, makeCommands, matchScore, rankCommands, type Command } from "./command-palette";
+import { DESIGNER_COMMANDS } from "./seating/designer-commands";
 import { navGroupsFor } from "./nav-groups";
 import { isTypingTarget, shortcutFor, type KeyLike } from "./shortcuts";
 
@@ -131,5 +132,40 @@ describe("shortcuts", () => {
     expect(isTypingTarget({ tagName: "DIV", isContentEditable: true })).toBe(true);
     expect(isTypingTarget({ tagName: "BUTTON" })).toBe(false);
     expect(isTypingTarget(null)).toBe(false);
+  });
+});
+
+describe("the seating plan's commands (spec 59 A.6)", () => {
+  it("lists every designer command once, as a plan command that runs through the bridge", () => {
+    const commands = designerCommands();
+    expect(commands).toHaveLength(DESIGNER_COMMANDS.length);
+    expect(new Set(commands.map((c) => c.id)).size).toBe(commands.length);
+    for (const c of commands) {
+      expect(c.group).toBe("plan");
+      expect(c.action?.kind).toBe("designer");
+      expect(c.href).toBeUndefined();
+    }
+  });
+
+  it("matches them by name and by what they're about, not on every query", () => {
+    const find = (label: string) => designerCommands().find((c) => c.label === label)!;
+    expect(matchScore(find("Fit the room"), "fit")).toBeGreaterThan(0);
+    expect(matchScore(find("Select similar"), "same")).toBeGreaterThan(0);
+    expect(matchScore(find("Align left"), "line")).toBeGreaterThan(0);
+    expect(matchScore(find("Fit the room"), "invoice")).toBe(0);
+    // Unlike a typed "Add … to a list" command, which always matches.
+    const typed = makeCommands("couple", "invoice", [{ id: "l1", title: "Tasks" }])[0]!;
+    expect(matchScore(typed, "invoice")).toBeGreaterThan(0);
+  });
+
+  it("puts the plan's commands first when they're offered, and leaves a section out when they aren't", () => {
+    const withPlan = rankCommands([...designerCommands(), ...goCommands("couple")], "");
+    expect(withPlan[0]!.group).toBe("plan");
+    expect(rankCommands(goCommands("couple"), "").some((s) => s.group === "plan")).toBe(false);
+  });
+
+  it("finds one with text typed, alongside the usual screens", () => {
+    const sections = rankCommands([...designerCommands(), ...goCommands("couple")], "seating");
+    expect(sections.find((s) => s.group === "plan")?.commands.length).toBeGreaterThan(0);
   });
 });

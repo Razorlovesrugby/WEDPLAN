@@ -24,6 +24,32 @@
 
 ## Recent sessions
 
+**Session 65 (spec 59, Parts A to C built, no migration):** on branch `claude/awesome-mendel-bdg1ak`, asked to "build the newest
+spec". The planner's Q8 order is Parts A to C first (no migration), then D and E with `0062`; this session built **A, B (most)
+and C**. **No migration; nothing to apply to live; the next free number is still `0062`, claimed by Parts D and E.** Nothing is
+committed or pushed yet.
+
+- **Built:** the Room view opens **full-window** (a fixed overlay, `focus-shell.tsx`) with a left rail, a pinned or floating
+  panel, the inspector on the right, and a floating tool bar with a zoom box; **design-tool navigation** (`canvas.ts`:
+  Trackpad or Mouse mode per device, pinch, Space or Hand to pan, 10% to 800%), a **selection box and multi-select** (one write
+  and one undo step for a whole selection: `src/server/actions/seating-items.ts`), snap guides, lockable layers, the
+  right-click menu, the `?` sheet and ⌘K commands; **Stamp** that stays on, favourites (in the plan's settings), recent items,
+  keys 1 to 9, Shift+drag along a line, Repeat. `RoomView` was rewritten around a `Set` of picked items; its shapes are
+  memoised so a drag redraws only what moved.
+- **Verified:** typecheck, 1897 unit tests (69 new), `npm run build`, and a real headless Chromium (wheel, zoom, box, drags,
+  keyboard, menus, locks, guides, touch, focus mode, Stamp, favourites, line, Repeat) against the real components with the
+  **server actions stubbed**. **Not verified:** any of the new server actions against a database (typechecked only; their
+  compensation paths have never run), a real trackpad or mouse, Safari's pinch gesture events, a real iPad. The SQL suite wasn't
+  run (no migration).
+- **Not built:** Part D (table items and rules, the close-up, `0062`), Part E (notes for vendors), **Lock item** (needs
+  `seating_fixtures.locked`, so `0062`), **Bring to front / Send to back** (no column to keep an order in). The spec's **Build
+  status** has the rest, including the two places this deviates (the "one transaction" is check-then-write with a put-back;
+  Alt before a drag copies, Alt during one turns snapping off).
+- **Traps:** the venue's layer is **locked by default per device**, so a click on a wall picks nothing until the Venue panel is
+  open or a drawing tool is in hand (that is the design, A.5). `saveSeatingSettings` now keeps the stored favourites, because the
+  thresholds form never sends them. Anything that reads `data.plan.settings` must go through `parseSettings`. A new `?`
+  handler on the plan stops the shell's own `?` sheet; keep that if you move the key handling.
+
 **Session 64 (spec 57, the rest built):** on branch `claude/nifty-fermi-rel802`, asked to continue spec 57 and
 "build it all". Migrations **`0055` to `0061` are applied to live** (the planner applied them by hand; on 2026-11-27
 `supabase/checks/verify_migrations_applied.sql` reported 63 applied, 0 missing, 1 not checkable (`0028`)). The next free
@@ -54,21 +80,6 @@ a real iPad, a printer, `/p/<token>`.
 
 **Session 63 (spec 57, partly built):** designed the venue designer (40 questions answered) and built the storage
 (`0055`–`0058`), the pure libraries, chairs and colour-by, table styles and the close-up. Session 64 built the rest.
-
-**Session 62 (spec 56, built):** on branch `claude/blissful-carson-0c4i5s`, asked to find a way through tasks, the run
-sheet and who's doing what, then "Let's build". **No migration; nothing to apply to live.**
-
-- **Sidebar:** "The day" is Events, Run sheet, Shot list, On the day (Run sheet is its own entry and a planner login
-  sees it). The run sheet has three tabs: Schedule `/run-sheet`, Who's doing what `/run-sheet/people` (new route),
-  Day links `/run-sheet/links`; ⌘K lists them. By the hour / List is `?view=list`, the Show filter `?who=`, and an
-  event's "Run sheet →" opens `?event=<id>`. The browser-remembered view is gone. Run sheet entries are "jobs" on
-  planner screens (the helper page is unchanged); readiness's Fix links point at the right tab.
-- **People:** Settings → People shows "N jobs on the day · N tasks" as links; guest and vendor pages say "Jobs on the
-  day" and link to that person's row; All tasks has a Who filter (`?who=p:<id>` or `u:<id>`, the assign picker's
-  encoding, not the spec's first draft of `person:<id>`).
-- **Verified:** typecheck, 1622 unit tests, `npm run build`. **Not verified:** any of it in a browser, on a phone or
-  against live Supabase; the SQL suite wasn't run (no migration). The new routes and the `?who=` / `?event=` links
-  have never been rendered with real data.
 
 ---
 

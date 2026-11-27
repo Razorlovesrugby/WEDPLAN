@@ -33,9 +33,12 @@ import {
   type TableOccupancy,
 } from "@/lib/seating/warnings";
 
-/** The Show menu: chair names and numbers, and the layers of the room (Venue, Furniture, Flowers & décor). */
-export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; furniture: boolean; decor: boolean };
-const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, furniture: true, decor: true };
+/** The Show menu: chair names and numbers, and the layers of the room (Venue, Tables, Furniture, Flowers & décor). */
+export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; tables: boolean; furniture: boolean; decor: boolean };
+const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, tables: true, furniture: true, decor: true };
+
+/** The panel open beside the Room view: who to seat, the Library, or the venue's drawing tools. */
+export type LeftTab = "guests" | "library" | "venue";
 
 export type SeatingData = {
   plan: SeatingPlan | null;
@@ -106,6 +109,9 @@ type SeatingState = {
   /** What the next click on the canvas does (spec 57 A.1). */
   tool: Tool;
   setTool: (t: Tool) => void;
+  /** The panel open beside the Room view. The canvas reads it: the venue's layer is locked unless this is "venue" (spec 59 A.5). */
+  leftTab: LeftTab;
+  setLeftTab: (t: LeftTab) => void;
   /** Spec 53 Part F and spec 57 A.2: what the canvas shows. Remembered per device. */
   show: ShowSettings;
   setShow: (s: ShowSettings) => void;
@@ -118,6 +124,8 @@ type SeatingState = {
   error: string | null;
   setError: (e: string | null) => void;
   pending: boolean;
+  /** True while any tracked write is in flight or queued: the top bar's "Saving…". */
+  saving: boolean;
   refresh: () => void;
   /**
    * Runs a write as one undoable step (spec 53 Part C): the plan is captured
@@ -179,6 +187,7 @@ export function SeatingProvider({
   const lastToggled = useRef<string | null>(null);
   const [highlightGuestId, setHighlightGuestId] = useState<string | null>(null);
   const [tool, setTool] = useState<Tool>(SELECT);
+  const [leftTab, setLeftTab] = useState<LeftTab>("guests");
   const [show, setShowState] = useState<ShowSettings>(DEFAULT_SHOW);
   useEffect(() => {
     try {
@@ -189,6 +198,7 @@ export function SeatingProvider({
           names: Boolean(saved.names),
           numbers: Boolean(saved.numbers),
           venue: on(saved.venue, true),
+          tables: on(saved.tables, true),
           furniture: on(saved.furniture, true),
           decor: on(saved.decor, true),
         });
@@ -225,10 +235,12 @@ export function SeatingProvider({
   const redoStack = useRef<UndoEntry[]>([]);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const [stackVersion, bump] = useState(0);
+  const [inflight, setInflight] = useState(0);
   const touch = () => bump((n) => n + 1);
 
   const track = useCallback(
     <T extends { ok: boolean }>(label: string, write: () => Promise<T>): Promise<T> => {
+      setInflight((n) => n + 1);
       const job = queue.current.then(async () => {
         const before = await captureSeatingState(eventId, true, layoutId).catch(() => null);
         const result = await write();
@@ -246,6 +258,11 @@ export function SeatingProvider({
         return result;
       });
       queue.current = job.catch(() => undefined);
+      // Saved once the write has finished, whether it worked or not (a failure shows its own error).
+      void job.then(
+        () => setInflight((n) => n - 1),
+        () => setInflight((n) => n - 1),
+      );
       return job;
     },
     [eventId, layoutId],
@@ -406,6 +423,8 @@ export function SeatingProvider({
       focusGuest,
       tool,
       setTool,
+      leftTab,
+      setLeftTab,
       show,
       setShow,
       move,
@@ -414,6 +433,7 @@ export function SeatingProvider({
       error,
       setError,
       pending,
+      saving: inflight > 0,
       refresh,
       track,
       undo,
@@ -423,7 +443,7 @@ export function SeatingProvider({
       undoLabel: undoStack.current.at(-1)?.label ?? null,
       redoLabel: redoStack.current.at(-1)?.label ?? null,
     };
-  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, tool, show, setShow]);
+  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, inflight, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, tool, leftTab, show, setShow]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

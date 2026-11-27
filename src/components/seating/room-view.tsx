@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type PointerEvent as RPointerEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import {
   calibrateSeatingRoom,
@@ -12,6 +12,8 @@ import {
   updateSeatingFixture,
   updateSeatingRoom,
 } from "@/server/actions/seating";
+import { createSeatingFixtures, deleteSeatingItems, duplicateSeatingItems, moveSeatingItems } from "@/server/actions/seating-items";
+import { applyTableStyle } from "@/server/actions/seating-styles";
 import { chairDetail, chairFirstName, chairMarks, initials, readableText, type ChairDetail } from "@/lib/seating/chairs";
 import { colourCounts, guestColour } from "@/lib/seating/colour";
 import { declinedSeats } from "@/lib/seating/declined";
@@ -26,6 +28,37 @@ import {
   tableSize,
   type Point,
 } from "@/lib/seating/geometry";
+import {
+  LAYERS,
+  alignBodies,
+  boundsOf,
+  boxFrom,
+  boxHits,
+  clampDelta,
+  distributeBodies,
+  fitBox,
+  fixtureBody,
+  gestureFactor,
+  gridBodies,
+  panView,
+  parseKey,
+  selectSimilar,
+  snapGuides,
+  tableBody,
+  unionBox,
+  viewAtPercent,
+  wheelAction,
+  zoomPercent,
+  zoomViewAbout,
+  type Align,
+  type Body,
+  type Box,
+  type Delta,
+  type Guide,
+  type View,
+} from "@/lib/seating/canvas";
+import { classifyWalkway } from "@/lib/seating/plan-settings";
+import { isTypingTarget } from "@/lib/shortcuts";
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
 import type { SeatingFixtureKind } from "@/lib/types/database";
 import { useSeating } from "./seating-state";
@@ -33,53 +66,165 @@ import { useBackgroundUpload } from "./background-upload";
 import { PdfPagePicker } from "./pdf-picker";
 import { useDrawingTools } from "./drawing-tools";
 import { DRAG_ITEM_TYPE } from "./library-panel";
-import { carriesQuantity, fixtureGroup } from "@/lib/seating/library";
-import { isDrawing, SELECT, toolAfterPlacing, TOOL_LABEL, type PlaceItem } from "@/lib/seating/tools";
+import { carriesQuantity, fixtureGroup, isStampable, libraryTiles, tileByRef } from "@/lib/seating/library";
+import { choiceForKey, defaultStep, lineStops, pushRecent, repeatStops, stampChoices } from "@/lib/seating/stamp";
+import { isDrawing, SELECT, toolForKey, type PlaceItem } from "@/lib/seating/tools";
 import { TABLET_UP, useMediaQuery } from "@/components/ui/use-media-query";
+import { useFlag, useLayerLocks, useNavMode, useRail, useRecentStamps } from "./canvas-prefs";
+import { FloatingToolbar } from "./canvas-toolbar";
+import { CanvasMenu, type MenuItem } from "./canvas-menu";
+import { FirstVisitTips, ShortcutSheet } from "./canvas-help";
+import { MultiSelectionPanel } from "./selection-inspector";
+import { TableInspector } from "./table-inspector";
+import { setDesignerHandler } from "./designer-bridge";
 
 const GRID_CM = 25;
-type Selected = { kind: "table" | "fixture"; id: string } | null;
-type ViewBox = { x: number; y: number; w: number; h: number };
+/** How close, on screen, a dragged outline must come to a neighbour's edge or centre before it snaps (spec 59 A.5). */
+const SNAP_PX = 8;
+const WALKWAY_COLOUR = { comfortable: "#2f7d4f", tight: "#c27c0e", too_tight: "#b91c1c" } as const;
+
+/** What Copy last took, with where the group's centre was, so Paste puts that centre at the pointer. Held for this visit, not stored. */
+let clipboard: { layoutId: string | undefined; items: { kind: "table" | "fixture"; id: string; x: number; y: number; rotation: number }[]; centre: Point } | null = null;
+
+type Drag =
+  | { mode: "move"; keys: string[]; primary: string; start: Point; origins: Map<string, Body>; startBox: Box; others: Box[]; moved: boolean; copy: boolean; wasSelected: boolean; shift: boolean; delta: Delta }
+  | { mode: "rotate"; key: string; centre: Point; last: number; origin: Body }
+  | { mode: "pan"; start: { x: number; y: number }; view: View; moved: boolean }
+  | { mode: "box"; start: Point; base: Set<string>; moved: boolean }
+  /** Stamp along a line: Shift+drag with Stamp in hand. */
+  | { mode: "line"; start: Point; item: PlaceItem }
+  | null;
+
+/** The view with its height following the window's shape, so a screen pixel is the same distance both ways. */
+const withAspect = (v: View, size: { w: number; h: number }): View => ({ ...v, h: (v.w * size.h) / size.w });
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const kindOf = (key: string) => parseKey(key)!;
 
 /**
- * The Room view (spec 33 Part C): an SVG floor plan in room centimetres, so
- * it's to scale by construction. Drag a table or fixture to move it, the
- * round handle to turn it; drag the background to pan, pinch or scroll to
- * zoom. Moves save once, on release — never per frame.
+ * The Room view (spec 33 Part C, spec 59): an SVG floor plan in room
+ * centimetres, so it's to scale by construction.
  *
- * Pointer events throughout, not dnd-kit (amendment 23: geometry, not
- * lists). Guests still drop onto tables here — each table is a dnd-kit drop
- * target too — and tap-to-place works the same as in the Tables view.
+ * Navigation is the design-tool model: scroll or the wheel pans or zooms
+ * (Trackpad or Mouse mode, per device), pinch zooms, Space+drag or the Hand
+ * tool pans, and a drag on empty floor draws a selection box. Click, Shift-click
+ * and the box pick tables, furniture and décor; a drag moves the whole
+ * selection, snapping to neighbours. Every selection edit is one write and one
+ * undo step. Moves save once, on release, never per frame.
+ *
+ * Pointer events throughout, not dnd-kit (amendment 23: geometry, not lists).
+ * Guests still drop onto tables here, and tap-to-place works as in the Tables view.
  */
-export function RoomView() {
-  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show, locked } = useSeating();
+export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onLeaveFocus?: () => void } = {}) {
+  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show, locked, leftTab, setLeftTab, openTable, settings, assignments } = useSeating();
   // Below tablet width the room is for looking at and seating people: no moving furniture, no drawing (spec 57 Part A). A locked room is the same (Part D).
   const editable = useMediaQuery(TABLET_UP) && !locked;
   const plan = data.plan;
   const roomW = plan?.room_width_cm ?? 2000;
   const roomD = plan?.room_depth_cm ?? 1500;
   const svgRef = useRef<SVGSVGElement>(null);
-  const [view, setView] = useState<ViewBox>(() => fit(roomW, roomD));
-  const [selected, setSelected] = useState<Selected>(null);
+  const [navMode, setNavMode] = useNavMode();
+  const [locks, setLocks] = useLayerLocks();
+  const [navHintSeen, setNavHintSeen] = useFlag("wedplan.seating.navhint");
+  const [navNote, setNavNote] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const [menu, setMenu] = useState<{ at: { x: number; y: number }; items: MenuItem[] } | null>(null);
+
+  // The window's size, and the view: its width and corner are state, its height follows the window.
+  const [size, setSize] = useState({ w: 1000, h: 650 });
+  const sizeRef = useRef(size);
+  const [view, setViewState] = useState<View>(() => withAspect(fitBox({ x0: 0, y0: 0, x1: roomW, y1: roomD }, 1000 / 650, 0.05), { w: 1000, h: 650 }));
+  const setView = useCallback((next: View | ((v: View) => View)) => {
+    setViewState((v) => {
+      const base = withAspect(v, sizeRef.current);
+      return withAspect(typeof next === "function" ? next(base) : next, sizeRef.current);
+    });
+  }, []);
+  const viewRef = useRef(view);
+  viewRef.current = withAspect(view, size);
+  const fitView = useCallback((): View => fitBox({ x0: 0, y0: 0, x1: roomW, y1: roomD }, sizeRef.current.w / sizeRef.current.h, 0.05), [roomW, roomD]);
+
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || typeof ResizeObserver === "undefined") return;
+    let first = true;
+    const ro = new ResizeObserver(() => {
+      const w = svg.clientWidth;
+      const h = svg.clientHeight;
+      if (!w || !h) return;
+      const prev = sizeRef.current;
+      if (!first && prev.w === w && prev.h === h) return;
+      sizeRef.current = { w, h };
+      setSize({ w, h });
+      if (first) {
+        // The first measure, and a new room size: show the whole room.
+        first = false;
+        setViewState(fitBox({ x0: 0, y0: 0, x1: roomW, y1: roomD }, w / h, 0.05));
+      } else {
+        // The window changed shape (a panel opened): keep the centre and the zoom.
+        setViewState((v) => {
+          const cx = v.x + v.w / 2;
+          const cy = v.y + (v.w * prev.h) / prev.w / 2;
+          const nw = (v.w * w) / prev.w;
+          return { x: cx - nw / 2, y: cy - (nw * h) / w / 2, w: nw, h: (nw * h) / w };
+        });
+      }
+    });
+    ro.observe(svg);
+    return () => ro.disconnect();
+  }, [roomW, roomD]);
+
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [snapOn, setSnapOn] = useState(true);
   const [rings, setRings] = useState(false);
   const [fixtures, setFixtures] = useState<SeatingFixture[]>(data.fixtures);
   const [calibrating, setCalibrating] = useState<Point[] | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const [dragView, setDragView] = useState<{ keys: Set<string>; dx: number; dy: number; copy: boolean } | null>(null);
+  const [guides, setGuides] = useState<Guide[]>([]);
+  const [box, setBox] = useState<Box | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => setFixtures(data.fixtures), [data.fixtures]);
-  useEffect(() => setView(fit(roomW, roomD)), [roomW, roomD]);
+  useEffect(() => setSelection(new Set()), [spaceId, layoutId]);
+
+  const unit = view.w / size.w;
   // 1 when the whole room fits; 2 when the view is half as wide.
-  const detail = chairDetail(fit(roomW, roomD).w / view.w);
+  const detail = chairDetail(fitView().w / view.w);
+  const zoomPct = zoomPercent(view.w, size.w);
 
   // Each room shows its own tables and furniture; a table with no place yet waits to be put in whichever room is open.
-  const placed = tables.filter((t) => t.pos_x_cm !== null && (!spaceId || t.space_id === spaceId));
+  const placed = useMemo(() => tables.filter((t) => t.pos_x_cm !== null && (!spaceId || t.space_id === spaceId) && show.tables), [tables, spaceId, show.tables]);
   const unplaced = tables.filter((t) => t.pos_x_cm === null);
-  const hereFixtures = fixtures.filter((f) => {
-    if (spaceId && f.space_id !== spaceId) return false;
-    const group = fixtureGroup(f.kind);
-    return group === "decor" ? show.decor : show.furniture;
-  });
+  const hereFixtures = useMemo(
+    () =>
+      fixtures.filter((f) => {
+        if (spaceId && f.space_id !== spaceId) return false;
+        return fixtureGroup(f.kind) === "decor" ? show.decor : show.furniture;
+      }),
+    [fixtures, spaceId, show.decor, show.furniture],
+  );
+
+  // What can be picked: tables, furniture and décor in this room, on layers that are shown. A locked layer is drawn but never picked.
+  const bodies = useMemo(() => {
+    const list: Body[] = [];
+    for (const t of placed) {
+      const b = tableBody(t);
+      if (b) list.push(b);
+    }
+    for (const f of hereFixtures) list.push(fixtureBody(f));
+    return list;
+  }, [placed, hereFixtures]);
+  const bodiesRef = useRef(bodies);
+  bodiesRef.current = bodies;
+  const bodyByKey = useMemo(() => new Map(bodies.map((b) => [b.key, b])), [bodies]);
+  const pickable = useCallback((b: Body) => !locks[b.layer] && !b.locked, [locks]);
+  // Keys of things that are gone (deleted, or in another room) drop out of the selection without a second render.
+  const sel = useMemo(() => new Set([...selection].filter((k) => bodyByKey.has(k))), [selection, bodyByKey]);
+  const selBodies = useMemo(() => [...sel].map((k) => bodyByKey.get(k)!).filter(pickable), [sel, bodyByKey, pickable]);
+  const selRef = useRef(sel);
+  selRef.current = sel;
 
   /** Screen point → room centimetres. */
   const toRoom = useCallback((clientX: number, clientY: number): Point => {
@@ -91,11 +236,272 @@ export function RoomView() {
   }, []);
 
   // The venue drawing and its tools. `unit` is room centimetres per screen pixel, so lines and text stay readable at any zoom.
-  const unit = view.w / (svgRef.current?.clientWidth || 1000);
   const tools = useDrawingTools({ toRoom, snapOn, roomW, roomD, unit });
+  // The building is locked until asked for: it unlocks while the Venue panel is open or a drawing tool is active (spec 59 A.5).
+  const [rail, setRail] = useRail();
+  const panelsHidden = focus && rail.hidden;
+  // Stamp (spec 59 Part C): the Library's tiles, the last six stamped (this device), and where a Shift+drag line is heading.
+  const [recent, setRecent] = useRecentStamps();
+  const tiles = useMemo(() => libraryTiles(data.customItems, data.marquees, settings.defaultSizes), [data.customItems, data.marquees, settings.defaultSizes]);
+  const [stampStep, setStampStep] = useState<number | null>(null);
+  const [lineAt, setLineAt] = useState<{ item: PlaceItem; stops: Point[] } | null>(null);
+  const lastStamp = useRef<PlaceItem | null>(null);
+  useEffect(() => {
+    if (tool.kind === "place") lastStamp.current = tool.item;
+    setStampStep(null);
+  }, [tool]);
+  const venueOpen = !locks.venue || (focus ? rail.panel === "venue" && !rail.hidden : leftTab === "venue") || isDrawing(tool);
 
+  // One thing is selected at a time across the building and the furniture.
+  useEffect(() => {
+    if (tools.hasSelection) setSelection(new Set());
+  }, [tools.hasSelection]);
+  useEffect(() => {
+    if (!venueOpen) tools.setSelected(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueOpen]);
+
+  const lastPointer = useRef<Point | null>(null);
+
+  // ---- writing ---------------------------------------------------------------
+  /** Puts the items where they now are, on screen, ahead of the server. */
+  const applyMoves = useCallback(
+    (moves: { key: string; x: number; y: number; rotation?: number }[]) => {
+      const byKey = new Map(moves.map((m) => [m.key, m]));
+      setTables((ts) =>
+        ts.map((t) => {
+          const m = byKey.get(`t:${t.id}`);
+          return m ? { ...t, pos_x_cm: Math.round(m.x), pos_y_cm: Math.round(m.y), rotation_deg: m.rotation === undefined ? t.rotation_deg : normaliseDegrees(m.rotation) } : t;
+        }),
+      );
+      setFixtures((fs) =>
+        fs.map((f) => {
+          const m = byKey.get(`f:${f.id}`);
+          return m ? { ...f, pos_x_cm: Math.round(m.x), pos_y_cm: Math.round(m.y), rotation_deg: m.rotation === undefined ? f.rotation_deg : normaliseDegrees(m.rotation) } : f;
+        }),
+      );
+    },
+    [setTables],
+  );
+
+  /** One write for the whole selection, and one undo step. */
+  const commitMoves = useCallback(
+    (moves: { key: string; x: number; y: number; rotation?: number }[], label: string) => {
+      if (moves.length === 0) return;
+      startTransition(async () => {
+        const r = await track(label, () =>
+          moveSeatingItems(
+            eventId,
+            layoutId,
+            moves.map((m) => ({ ...kindOf(m.key), x: m.x, y: m.y, rotation: m.rotation })),
+          ),
+        );
+        if (!r.ok) setError(r.error);
+        refresh();
+      });
+    },
+    [eventId, layoutId, track, setError, refresh],
+  );
+
+  const moveLabel = (keys: string[]) => (keys.length === 1 ? (keys[0]!.startsWith("t:") ? "Moved a table" : "Moved an item in the room") : `Moved ${keys.length} things`);
+
+  /** Copies of `items` at their new centres (Duplicate, Alt-drag, Paste), selected once they exist. */
+  const copyItems = useCallback(
+    (items: { kind: "table" | "fixture"; id: string; x: number; y: number; rotation?: number }[], label: string) => {
+      if (items.length === 0) return;
+      startTransition(async () => {
+        const r = await track(label, () => duplicateSeatingItems(eventId, layoutId, { spaceId, items }));
+        if (!r.ok) setError(r.error);
+        else setSelection(new Set([...r.data.tables.map((id) => `t:${id}`), ...r.data.fixtures.map((id) => `f:${id}`)]));
+        refresh();
+      });
+    },
+    [eventId, layoutId, spaceId, track, setError, refresh],
+  );
+
+  const inRoom = (p: Point): Point => ({ x: Math.round(clamp(p.x, 0, roomW)), y: Math.round(clamp(p.y, 0, roomD)) });
+
+  const duplicateSelection = (list: Body[] = selBodies) => {
+    if (!editable) return;
+    copyItems(
+      list.map((b) => {
+        const at = inRoom({ x: b.x + 50, y: b.y + 50 });
+        return { kind: b.kind, id: b.id, x: at.x, y: at.y };
+      }),
+      list.length === 1 ? "Duplicated an item" : `Duplicated ${list.length} things`,
+    );
+  };
+
+  const copySelection = (list: Body[] = selBodies) => {
+    if (list.length === 0) return;
+    const box = unionBox(list.map((b) => boundsOf(b.poly)))!;
+    clipboard = {
+      layoutId,
+      centre: { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 },
+      items: list.map((b) => ({ kind: b.kind, id: b.id, x: b.x, y: b.y, rotation: b.rotation })),
+    };
+  };
+
+  /** Paste with the group's centre at `at` (the pointer, or the view's centre). Also into another room of the same layout. */
+  const pasteAt = (at: Point | null) => {
+    if (!editable || !clipboard) return;
+    if (clipboard.layoutId !== layoutId) return setError("That was copied from another layout. Copy and paste work within one layout.");
+    const v = viewRef.current;
+    const target = at ?? { x: v.x + v.w / 2, y: v.y + v.h / 2 };
+    const dx = target.x - clipboard.centre.x;
+    const dy = target.y - clipboard.centre.y;
+    copyItems(
+      clipboard.items.map((i) => {
+        const p = inRoom({ x: i.x + dx, y: i.y + dy });
+        return { kind: i.kind, id: i.id, x: p.x, y: p.y, rotation: i.rotation };
+      }),
+      clipboard.items.length === 1 ? "Pasted an item" : `Pasted ${clipboard.items.length} things`,
+    );
+  };
+
+  const deleteSelection = (list: Body[] = selBodies) => {
+    if (!editable || list.length === 0) return;
+    const tableIds = new Set(list.filter((b) => b.kind === "table").map((b) => b.id));
+    const seated = assignments.filter((a) => tableIds.has(a.tableId)).length;
+    if (seated > 0 && !window.confirm(`Delete ${list.length === 1 ? "this table" : `these ${tableIds.size} tables`}? ${seated} ${seated === 1 ? "guest goes" : "guests go"} back to the tray. You can undo it.`)) return;
+    const gone = new Set(list.map((b) => b.key));
+    setSelection(new Set());
+    setTables((ts) => ts.filter((t) => !gone.has(`t:${t.id}`)));
+    setFixtures((fs) => fs.filter((f) => !gone.has(`f:${f.id}`)));
+    startTransition(async () => {
+      const r = await track(list.length === 1 ? "Deleted an item" : `Deleted ${list.length} things`, () => deleteSeatingItems(eventId, layoutId, list.map((b) => ({ kind: b.kind, id: b.id }))));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+  };
+
+  // Arrow keys and R repeat quickly: the screen follows every press, and one write goes out when they stop.
+  const pending = useRef<{ keys: Set<string>; label: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const flush = useCallback(() => {
+    const p = pending.current;
+    if (!p) return;
+    clearTimeout(p.timer);
+    pending.current = null;
+    commitMoves(
+      [...p.keys].flatMap((k) => {
+        const b = bodiesRef.current.find((x) => x.key === k);
+        return b ? [{ key: k, x: b.x, y: b.y, rotation: b.rotation }] : [];
+      }),
+      p.label,
+    );
+  }, [commitMoves]);
+  // Only on unmount: a re-render must never cut a run of key presses short.
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => () => flushRef.current(), []);
+  const later = (keys: string[], label: string) => {
+    const timer = setTimeout(flush, 400);
+    if (pending.current) clearTimeout(pending.current.timer);
+    pending.current = { keys: new Set([...(pending.current?.keys ?? []), ...keys]), label, timer };
+  };
+
+  const nudge = (dx: number, dy: number) => {
+    if (!editable || selBodies.length === 0) return;
+    const d = clampDelta(selBodies, { dx, dy }, roomW, roomD);
+    applyMoves(selBodies.map((b) => ({ key: b.key, x: b.x + d.dx, y: b.y + d.dy, rotation: b.rotation })));
+    later(selBodies.map((b) => b.key), moveLabel(selBodies.map((b) => b.key)));
+  };
+
+  /** Each item turns about its own centre. */
+  const turn = (deg: number, now = false) => {
+    if (!editable || selBodies.length === 0) return;
+    const moves = selBodies.map((b) => ({ key: b.key, x: b.x, y: b.y, rotation: normaliseDegrees(b.rotation + deg) }));
+    applyMoves(moves);
+    const label = selBodies.length === 1 ? "Turned an item" : `Turned ${selBodies.length} things`;
+    if (now) commitMoves(moves, label);
+    else later(selBodies.map((b) => b.key), label);
+  };
+
+  const arrange = (deltas: Map<string, Delta>, label: string) => {
+    if (!editable || deltas.size === 0) return;
+    const moves = selBodies.flatMap((b) => {
+      const d = deltas.get(b.key);
+      return d && (d.dx !== 0 || d.dy !== 0) ? [{ key: b.key, x: clamp(b.x + d.dx, 0, roomW), y: clamp(b.y + d.dy, 0, roomD), rotation: b.rotation }] : [];
+    });
+    if (moves.length === 0) return;
+    applyMoves(moves);
+    commitMoves(moves, label);
+  };
+  const align = (how: Align) => arrange(alignBodies(selBodies, how), `Aligned ${selBodies.length} things`);
+  const distribute = (axis: "x" | "y") => arrange(distributeBodies(selBodies, axis), `Spaced ${selBodies.length} things evenly`);
+  const grid = (gap: number) => arrange(gridBodies(selBodies, gap), `Arranged ${selBodies.length} things in a grid`);
+
+  const selectAll = () => setSelection(new Set(bodies.filter(pickable).map((b) => b.key)));
+  const selectLike = () => setSelection(new Set(selectSimilar(bodies.filter(pickable), sel)));
+
+  // ---- the view --------------------------------------------------------------
+  /** Keyboard shortcuts live on the plan: after a toolbar button, put focus back there. */
+  const focusPlan = () => svgRef.current?.focus({ preventScroll: true });
+  const zoomBy = (factor: number) => setView((v) => zoomViewAbout(v, { x: v.x + v.w / 2, y: v.y + v.h / 2 }, factor, sizeRef.current.w));
+  const setPercent = (pct: number) => setView((v) => viewAtPercent(v, pct, sizeRef.current.w));
+  const showFit = () => setView(fitView());
+  const showSelection = () => {
+    const b = unionBox(selBodies.map((x) => boundsOf(x.hit)));
+    if (b) setView(fitBox(b, sizeRef.current.w / sizeRef.current.h, 0.15));
+  };
+
+  // Wheel and pinch, as native listeners: React's are passive and can't stop the page scrolling or zooming. The page never moves
+  // while the pointer is over the plan. Safari's pinch is a gesture event, not a wheel, so both are taken.
+  const navRef = useRef(navMode);
+  navRef.current = navMode;
+  const hintSeenRef = useRef(navHintSeen);
+  hintSeenRef.current = navHintSeen;
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const at = (v: View, cx: number, cy: number): Point => {
+      const r = svg.getBoundingClientRect();
+      return { x: v.x + ((cx - r.left) * v.w) / r.width, y: v.y + ((cy - r.top) * v.w) / r.width };
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (!hintSeenRef.current) {
+        hintSeenRef.current = true;
+        setNavHintSeen(true);
+        setNavNote(true);
+        setTimeout(() => setNavNote(false), 9000);
+      }
+      const a = wheelAction(e, navRef.current);
+      if (a.kind === "zoom") setView((v) => zoomViewAbout(v, at(v, e.clientX, e.clientY), a.factor, svg.clientWidth));
+      else setView((v) => panView(v, a.dx, a.dy, svg.clientWidth));
+    };
+    let last = 1;
+    const onGestureStart = (e: Event) => {
+      e.preventDefault();
+      last = 1;
+    };
+    const onGestureChange = (e: Event) => {
+      e.preventDefault();
+      const g = e as Event & { scale: number; clientX: number; clientY: number };
+      const f = gestureFactor(g.scale, last);
+      last = g.scale;
+      setView((v) => zoomViewAbout(v, at(v, g.clientX, g.clientY), f, svg.clientWidth));
+    };
+    const stop = (e: Event) => e.preventDefault();
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    svg.addEventListener("gesturestart", onGestureStart);
+    svg.addEventListener("gesturechange", onGestureChange);
+    svg.addEventListener("gestureend", stop);
+    return () => {
+      svg.removeEventListener("wheel", onWheel);
+      svg.removeEventListener("gesturestart", onGestureStart);
+      svg.removeEventListener("gesturechange", onGestureChange);
+      svg.removeEventListener("gestureend", stop);
+    };
+  }, [setView, setNavHintSeen]);
+
+  // ---- placing from the Library ----------------------------------------------
   /** Puts a library item down at a point: a table becomes a table, anything else a fixture. */
-  const placeAt = (item: PlaceItem, p: Point) => {
+  const tileOf = (item: PlaceItem) => tiles.find((t) => JSON.stringify(t.item) === JSON.stringify(item));
+  /** `stay`: a click with Stamp in hand puts one down and keeps the tool; a drop from the Library puts one down and returns to Select. */
+  const placeAt = (item: PlaceItem, p: Point, stay = false) => {
+    const ref = tileOf(item)?.id;
+    if (ref) setRecent(pushRecent(recent, ref));
     const at = { x: clamp(snap(p.x, snapOn ? GRID_CM : 0), 0, roomW), y: clamp(snap(p.y, snapOn ? GRID_CM : 0), 0, roomD) };
     startTransition(async () => {
       const r =
@@ -123,140 +529,237 @@ export function RoomView() {
       if (!r.ok) setError(r.error);
       refresh();
     });
-    setTool(SELECT);
+    if (!stay) setTool(SELECT);
   };
 
-  // ---- dragging items, panning, pinching -------------------------------------
-  const drag = useRef<
-    | { mode: "move"; sel: NonNullable<Selected>; start: Point; origin: Point; moved: boolean; last: Point; rotation: number }
-    | { mode: "rotate"; sel: NonNullable<Selected>; centre: Point; last: number }
-    | { mode: "pan"; start: { x: number; y: number }; view: ViewBox; moved: boolean }
-    | null
-  >(null);
-  const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ dist: number; view: ViewBox; mid: Point } | null>(null);
-
-  const itemPos = (sel: NonNullable<Selected>): Point | null => {
-    if (sel.kind === "table") {
-      const t = tables.find((x) => x.id === sel.id);
-      return t && t.pos_x_cm !== null ? { x: t.pos_x_cm, y: t.pos_y_cm! } : null;
-    }
-    const f = fixtures.find((x) => x.id === sel.id);
-    return f ? { x: f.pos_x_cm, y: f.pos_y_cm } : null;
-  };
-
-  const setItem = (sel: NonNullable<Selected>, patch: { x?: number; y?: number; rotation?: number }) => {
-    if (sel.kind === "table") {
-      setTables((ts) =>
-        ts.map((t) =>
-          t.id === sel.id
-            ? {
-                ...t,
-                pos_x_cm: patch.x ?? t.pos_x_cm,
-                pos_y_cm: patch.y ?? t.pos_y_cm,
-                rotation_deg: patch.rotation ?? t.rotation_deg,
-              }
-            : t,
-        ),
-      );
-    } else {
-      setFixtures((fs) =>
-        fs.map((f) =>
-          f.id === sel.id
-            ? { ...f, pos_x_cm: patch.x ?? f.pos_x_cm, pos_y_cm: patch.y ?? f.pos_y_cm, rotation_deg: patch.rotation ?? f.rotation_deg }
-            : f,
-        ),
-      );
-    }
-  };
-
-  /** One write per drag, with the values the drag ended on. */
-  const save = (sel: NonNullable<Selected>, at: { x: number | null; y: number | null; rotation: number }) => {
+  /** Stamp along a line: one write and one undo step for the lot. Fixtures go in as one insert; tables one at a time inside the one step. */
+  const placeLine = (item: PlaceItem, stops: Point[]) => {
+    // Exact spacing: only where the line starts is snapped (at the pointer's press), never each stamp, or "every 80 cm" would wobble 75, 100, 75.
+    const pts = stops.map((p) => ({ x: clamp(Math.round(p.x), 0, roomW), y: clamp(Math.round(p.y), 0, roomD) }));
+    const ref = tileOf(item)?.id;
+    if (ref) setRecent(pushRecent(recent, ref));
     startTransition(async () => {
-      const r =
-        sel.kind === "table"
-          ? await track("Moved a table", () => moveSeatingTable(sel.id, eventId, { x: at.x, y: at.y, rotation: at.rotation, spaceId }))
-          : await track("Moved an item in the room", () =>
-              updateSeatingFixture(sel.id, eventId, {
-                pos_x_cm: at.x ?? 0,
-                pos_y_cm: at.y ?? 0,
-                rotation_deg: at.rotation,
-              }),
-            );
-      if (!r.ok) setError(r.error);
+      const r = await track(`Stamped ${pts.length} ${item.label.toLowerCase()}`, async () => {
+        if (item.type === "fixture") {
+          return createSeatingFixtures(eventId, layoutId, {
+            spaceId,
+            items: pts.map((p) => ({
+              kind: item.kind,
+              x: p.x,
+              y: p.y,
+              width_cm: item.width,
+              depth_cm: item.depth,
+              label: item.kind === "custom" || item.kind === "marquee" ? item.label : null,
+              custom_item_id: item.customItemId ?? null,
+              marquee_id: item.marqueeId ?? null,
+            })),
+          });
+        }
+        let last: { ok: boolean; error?: string } = { ok: true };
+        for (const p of pts) {
+          last = await createSeatingTable(eventId, { shape: item.shape, capacity: item.capacity, pos_x_cm: p.x, pos_y_cm: p.y, ...item.extra }, layoutId, spaceId);
+          if (!last.ok) break;
+        }
+        return last as { ok: boolean; error: string };
+      });
+      if (!r.ok) setError((r as { error: string }).error);
       refresh();
     });
   };
 
-  const itemRotation = (sel: NonNullable<Selected>): number =>
-    sel.kind === "table"
-      ? tables.find((t) => t.id === sel.id)?.rotation_deg ?? 0
-      : fixtures.find((f) => f.id === sel.id)?.rotation_deg ?? 0;
+  /** S: Stamp with the last thing stamped, else the first favourite or recent item; with none, open the Library to pick one. */
+  const startStamp = () => {
+    if (!editable) return;
+    const fromRef = (ref: string | undefined) => {
+      const t = ref ? tileByRef(tiles, ref) : undefined;
+      return t && isStampable(t) ? t.item : null;
+    };
+    const item = lastStamp.current ?? fromRef(settings.favourites[0]) ?? fromRef(recent[0]);
+    if (item) setTool({ kind: "place", item });
+    else if (focus) setRail({ panel: "library", hidden: false });
+    else setLeftTab("library");
+  };
+  /** Repeat: N more of the one selected item, in a row across or a column down, each a gap clear of the last. */
+  const repeatSelection = (count: number, gap: number, dir: "across" | "down") => {
+    const b = selBodies.length === 1 ? selBodies[0]! : null;
+    if (!editable || !b) return;
+    const box = boundsOf(b.poly);
+    const stops = repeatStops({ x: b.x, y: b.y }, { w: box.x1 - box.x0, h: box.y1 - box.y0 }, count, gap, dir);
+    const fits = stops.filter((p) => p.x >= 0 && p.x <= roomW && p.y >= 0 && p.y <= roomD);
+    if (fits.length < stops.length) setError(`Only ${fits.length} of ${stops.length} fit in the room.`);
+    copyItems(
+      fits.map((p) => ({ kind: b.kind, id: b.id, x: Math.round(p.x), y: Math.round(p.y), rotation: b.rotation })),
+      `Repeated an item ${fits.length} times`,
+    );
+  };
 
-  const onItemPointerDown = (e: RPointerEvent, sel: NonNullable<Selected>) => {
-    if (calibrating || isDrawing(tool)) return;
+  // ---- the pointer -----------------------------------------------------------
+  const drag = useRef<Drag>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; view: View; mid: Point } | null>(null);
+  const panBy = tool.kind === "hand" || spaceHeld;
+
+  const startPan = (e: RPointerEvent) => {
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false };
+    setPanning(true);
+  };
+
+  const onItemPointerDown = (e: RPointerEvent, key: string) => {
+    if (calibrating || isDrawing(tool) || tool.kind === "place") return;
+    if (e.button === 1) return startPan(e);
+    if (e.button !== 0) return;
+    const body = bodyByKey.get(key);
+    if (!body) return;
     e.stopPropagation();
-    const pos = itemPos(sel);
-    if (!pos) return;
+    svgRef.current?.focus({ preventScroll: true });
+    tools.setSelected(null);
+    // A guest in hand seats at the table tapped; picking and moving are for when nobody is held.
+    let keys = [...sel];
+    const wasSelected = sel.has(key);
+    if (!held) {
+      if (e.shiftKey) {
+        const next = new Set(sel);
+        if (!next.delete(key)) next.add(key);
+        setSelection(next);
+        if (!next.has(key)) return;
+        keys = [...next];
+      } else if (!wasSelected) {
+        setSelection(new Set([key]));
+        keys = [key];
+      }
+    } else keys = [key];
+    const movable = keys.map((k) => bodyByKey.get(k)).filter((b): b is Body => Boolean(b) && pickable(b!));
+    if (movable.length === 0) return;
+    const startBox = unionBox(movable.map((b) => boundsOf(b.poly)))!;
+    const moving = new Set(movable.map((b) => b.key));
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     drag.current = {
       mode: "move",
-      sel,
+      keys: movable.map((b) => b.key),
+      primary: movable.some((b) => b.key === key) ? key : movable[0]!.key,
       start: toRoom(e.clientX, e.clientY),
-      origin: pos,
+      origins: new Map(movable.map((b) => [b.key, b])),
+      startBox,
+      others: bodies.filter((b) => !moving.has(b.key)).map((b) => boundsOf(b.poly)),
       moved: false,
-      last: pos,
-      rotation: itemRotation(sel),
+      // Alt before the drag copies; Alt during one turns snapping off.
+      copy: e.altKey && editable && !held,
+      wasSelected,
+      shift: e.shiftKey,
+      delta: { dx: 0, dy: 0 },
     };
   };
 
-  const onRotatePointerDown = (e: RPointerEvent, sel: NonNullable<Selected>) => {
+  const onRotatePointerDown = (e: RPointerEvent, key: string) => {
     if (!editable) return;
+    const b = bodyByKey.get(key);
+    if (!b) return;
     e.stopPropagation();
-    const pos = itemPos(sel);
-    if (!pos) return;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = { mode: "rotate", sel, centre: pos, last: itemRotation(sel) };
+    drag.current = { mode: "rotate", key, centre: { x: b.x, y: b.y }, last: b.rotation, origin: b };
+  };
+
+  const onBackgroundPointerDown = (e: RPointerEvent) => {
+    svgRef.current?.focus({ preventScroll: true });
+    if (e.button === 2) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      drag.current = null;
+      setPanning(false);
+      pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y), view: viewRef.current, mid: toRoom((a!.x + b!.x) / 2, (a!.y + b!.y) / 2) };
+      return;
+    }
+    if (tool.kind === "place" && editable && e.shiftKey && e.button === 0 && e.pointerType !== "touch" && !panBy) {
+      const raw = toRoom(e.clientX, e.clientY);
+      const start = { x: snap(raw.x, snapOn ? GRID_CM : 0), y: snap(raw.y, snapOn ? GRID_CM : 0) };
+      drag.current = { mode: "line", start, item: tool.item };
+      setLineAt({ item: tool.item, stops: [start] });
+      return;
+    }
+    // Pan: the middle button, Space, the Hand tool, a finger, and any tool that draws (a click is its click, a drag moves the view).
+    // Otherwise the Select tool draws a selection box.
+    if (e.button === 1 || panBy || e.pointerType === "touch" || tool.kind !== "select") {
+      drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false };
+      if (e.button === 1 || panBy) setPanning(true);
+    } else {
+      drag.current = { mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey ? new Set(sel) : new Set(), moved: false };
+    }
   };
 
   const onPointerMove = (e: RPointerEvent) => {
+    lastPointer.current = toRoom(e.clientX, e.clientY);
     if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2 && pinch.current) {
       const [a, b] = [...pointers.current.values()];
       const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y);
-      const k = pinch.current.dist / Math.max(dist, 1);
-      setView(zoomAbout(pinch.current.view, pinch.current.mid, k));
+      const base = pinch.current;
+      setView(zoomViewAbout(base.view, base.mid, dist / Math.max(base.dist, 1), sizeRef.current.w));
       return;
     }
-    if (isDrawing(tool) || tool.kind === "place") tools.onCanvasMove(toRoom(e.clientX, e.clientY), e.shiftKey);
+    if (isDrawing(tool) || tool.kind === "place") tools.onCanvasMove(lastPointer.current, e.shiftKey);
     const d = drag.current;
     if (!d) return;
     if (d.mode === "move") {
       if (!editable) return;
-      const p = toRoom(e.clientX, e.clientY);
-      const dx = p.x - d.start.x;
-      const dy = p.y - d.start.y;
-      if (!d.moved && Math.hypot(dx, dy) < 8) return;
+      const p = lastPointer.current;
+      const raw = { dx: p.x - d.start.x, dy: p.y - d.start.y };
+      if (!d.moved && Math.hypot(raw.dx, raw.dy) < 4 * unit) return;
       d.moved = true;
-      const step = snapOn && !e.altKey ? GRID_CM : 0;
-      d.last = {
-        x: clamp(snap(d.origin.x + dx, step), 0, roomW),
-        y: clamp(snap(d.origin.y + dy, step), 0, roomD),
-      };
-      setItem(d.sel, d.last);
+      const prim = d.origins.get(d.primary)!;
+      let dx: number;
+      let dy: number;
+      if (snapOn && !(e.altKey && !d.copy)) {
+        // Guides first, the grid on whichever axis found no neighbour.
+        const g = snapGuides({ x0: d.startBox.x0 + raw.dx, y0: d.startBox.y0 + raw.dy, x1: d.startBox.x1 + raw.dx, y1: d.startBox.y1 + raw.dy }, d.others, SNAP_PX * unit);
+        dx = g.x ? raw.dx + g.dx : snap(prim.x + raw.dx, GRID_CM) - prim.x;
+        dy = g.y ? raw.dy + g.dy : snap(prim.y + raw.dy, GRID_CM) - prim.y;
+        setGuides(g.guides);
+      } else {
+        dx = Math.round(prim.x + raw.dx) - prim.x;
+        dy = Math.round(prim.y + raw.dy) - prim.y;
+        setGuides([]);
+      }
+      d.delta = clampDelta([...d.origins.values()], { dx, dy }, roomW, roomD);
+      setDragView({ keys: new Set(d.keys), dx: d.delta.dx, dy: d.delta.dy, copy: d.copy });
     } else if (d.mode === "rotate") {
-      const p = toRoom(e.clientX, e.clientY);
+      const p = lastPointer.current;
       const deg = (Math.atan2(p.y - d.centre.y, p.x - d.centre.x) * 180) / Math.PI + 90;
       d.last = normaliseDegrees(e.shiftKey ? deg : Math.round(deg / 15) * 15);
-      setItem(d.sel, { rotation: d.last });
+      applyMoves([{ key: d.key, x: d.centre.x, y: d.centre.y, rotation: d.last }]);
     } else if (d.mode === "pan") {
-      const svg = svgRef.current;
-      if (!svg) return;
-      const scale = d.view.w / svg.clientWidth;
+      const scale = d.view.w / sizeRef.current.w;
       const dx = (e.clientX - d.start.x) * scale;
       const dy = (e.clientY - d.start.y) * scale;
       if (Math.hypot(dx, dy) > 4 * scale) d.moved = true;
       setView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy });
+    } else if (d.mode === "line") {
+      setLineAt({ item: d.item, stops: lineStops(d.start, lastPointer.current, stampStep ?? defaultStep(tileOf(d.item)?.w ?? 60)) });
+    } else if (d.mode === "box") {
+      const p = lastPointer.current;
+      if (!d.moved && Math.hypot(p.x - d.start.x, p.y - d.start.y) < 4 * unit) return;
+      d.moved = true;
+      const rect = boxFrom(d.start, p);
+      setBox(rect);
+      const hits = boxHits(bodies.filter(pickable), rect, e.altKey ? "contain" : "touch");
+      setSelection(new Set([...d.base, ...hits]));
+    }
+  };
+
+  /** A click on empty floor: the calibration's point, a tool's click, or "pick nothing". */
+  const clickEmpty = (p: Point, e: { shiftKey: boolean }) => {
+    if (calibrating) {
+      const next = [...calibrating, p];
+      if (next.length === 2) finishCalibration(next);
+      else setCalibrating(next);
+    } else if (editable && tool.kind === "place") placeAt(tool.item, p, true);
+    else if (editable && tools.onCanvasClick(p, e)) {
+      // The tool took the click.
+    } else {
+      if (!e.shiftKey) setSelection(new Set());
+      tools.setSelected(null);
     }
   };
 
@@ -265,83 +768,111 @@ export function RoomView() {
     if (pointers.current.size < 2) pinch.current = null;
     const d = drag.current;
     drag.current = null;
+    setPanning(false);
+    setBox(null);
     if (!d) return;
     if (d.mode === "move") {
-      if (d.moved) save(d.sel, { x: d.last.x, y: d.last.y, rotation: d.rotation });
-      else if (held && d.sel.kind === "table") {
-        move(held.guestIds, d.sel.id);
+      setDragView(null);
+      setGuides([]);
+      if (d.moved) {
+        const moves = d.keys.map((k) => {
+          const o = d.origins.get(k)!;
+          return { key: k, x: o.x + d.delta.dx, y: o.y + d.delta.dy, rotation: o.rotation };
+        });
+        if (d.copy) copyItems(moves.map((m) => ({ ...kindOf(m.key), x: m.x, y: m.y, rotation: m.rotation })), moves.length === 1 ? "Copied an item" : `Copied ${moves.length} things`);
+        else {
+          applyMoves(moves);
+          commitMoves(moves, moveLabel(d.keys));
+        }
+      } else if (held && d.origins.get(d.primary)?.kind === "table") {
+        move(held.guestIds, d.origins.get(d.primary)!.id);
         hold(null);
-      } else setSelected(d.sel);
-    } else if (d.mode === "rotate") {
-      save(d.sel, { x: d.centre.x, y: d.centre.y, rotation: d.last });
-    } else if (d.mode === "pan" && !d.moved) {
-      const p = toRoom(e.clientX, e.clientY);
-      if (calibrating) {
-        const next = [...calibrating, p];
-        if (next.length === 2) finishCalibration(next);
-        else setCalibrating(next);
-      } else if (editable && tool.kind === "place") placeAt(tool.item, p);
-      else if (editable && tools.onCanvasClick(p, e)) {
-        // The tool took the click.
-      } else {
-        setSelected(null);
-        tools.setSelected(null);
+      } else if (d.wasSelected && !d.shift && sel.size > 1) {
+        // A plain click on one of several picks just that one.
+        setSelection(new Set([d.primary]));
       }
+    } else if (d.mode === "rotate") {
+      commitMoves([{ key: d.key, x: d.centre.x, y: d.centre.y, rotation: d.last }], "Turned an item");
+    } else if (d.mode === "line") {
+      setLineAt(null);
+      // A cancelled pointer (the window lost focus) is not a drop: nothing is placed.
+      if (e.type === "pointercancel") return;
+      placeLine(d.item, lineStops(d.start, toRoom(e.clientX, e.clientY), stampStep ?? defaultStep(tileOf(d.item)?.w ?? 60)));
+    } else if (d.mode === "pan" && !d.moved) {
+      clickEmpty(toRoom(e.clientX, e.clientY), e);
+    } else if (d.mode === "box" && !d.moved) {
+      clickEmpty(toRoom(e.clientX, e.clientY), e);
     }
   };
 
-  const onBackgroundPointerDown = (e: RPointerEvent) => {
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    if (pointers.current.size === 2) {
-      const [a, b] = [...pointers.current.values()];
-      drag.current = null;
-      pinch.current = {
-        dist: Math.hypot(a!.x - b!.x, a!.y - b!.y),
-        view,
-        mid: toRoom((a!.x + b!.x) / 2, (a!.y + b!.y) / 2),
-      };
+  // ---- the keyboard ----------------------------------------------------------
+  const onKeyDown = (e: RKeyboardEvent) => {
+    if (isTypingTarget(e.target as HTMLElement)) return;
+    if (e.key === " ") {
+      e.preventDefault();
+      if (!e.repeat) setSpaceHeld(true);
       return;
     }
-    drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view, moved: false };
-  };
-
-  // Wheel zoom about the cursor. A native listener: React's is passive and can't preventDefault.
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const onWheel = (e: WheelEvent) => {
+    if (e.key === "?") {
       e.preventDefault();
-      const p = toRoom(e.clientX, e.clientY);
-      setView((v) => zoomAbout(v, p, e.deltaY > 0 ? 1.12 : 1 / 1.12));
-    };
-    svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
-  }, [toRoom]);
-
-  // Arrow keys nudge the selection; R turns it.
-  const onKeyDown = (e: React.KeyboardEvent) => {
+      // Not also the shell's "all shortcuts" sheet: on the plan, ? is about the plan.
+      e.stopPropagation();
+      setSheet(true);
+      return;
+    }
     if (editable && tools.onKey(e)) return;
-    if (!editable || !selected) return;
-    const pos = itemPos(selected);
-    if (!pos) return;
+    const command = e.metaKey || e.ctrlKey;
+    if (command) {
+      const k = e.key.toLowerCase();
+      if (k === "a") {
+        e.preventDefault();
+        if (e.shiftKey) selectLike();
+        else selectAll();
+      } else if (k === "d" && editable) {
+        e.preventDefault();
+        duplicateSelection();
+      } else if (k === "c" && selBodies.length > 0) {
+        e.preventDefault();
+        copySelection();
+      } else if (k === "v" && editable) {
+        e.preventDefault();
+        pasteAt(lastPointer.current);
+      }
+      return;
+    }
+    if (e.altKey) return;
+    // While Stamp is in hand, 1 to 9 switch between the favourites and the recent items (spec 59 Part C).
+    if (tool.kind === "place" && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+      const ref = choiceForKey(e.key, stampChoices(settings.favourites, recent));
+      const t = ref ? tileByRef(tiles, ref) : undefined;
+      if (t && isStampable(t)) setTool({ kind: "place", item: t.item });
+      return;
+    }
+    if ((e.key === "s" || e.key === "S") && !e.shiftKey) return startStamp();
     const step = e.shiftKey ? 25 : 5;
-    const moves: Record<string, Point> = {
-      ArrowLeft: { x: -step, y: 0 },
-      ArrowRight: { x: step, y: 0 },
-      ArrowUp: { x: 0, y: -step },
-      ArrowDown: { x: 0, y: step },
-    };
-    if (moves[e.key]) {
-      e.preventDefault();
-      const next = { x: clamp(pos.x + moves[e.key]!.x, 0, roomW), y: clamp(pos.y + moves[e.key]!.y, 0, roomD) };
-      setItem(selected, next);
-      save(selected, { ...next, rotation: itemRotation(selected) });
-    } else if (e.key === "r" || e.key === "R") {
-      const rotation = normaliseDegrees(itemRotation(selected) + (e.shiftKey ? -15 : 15));
-      setItem(selected, { rotation });
-      save(selected, { ...pos, rotation });
-    } else if (e.key === "Escape") setSelected(null);
+    if (e.key === "+" || e.key === "=") zoomBy(1.25);
+    else if (e.key === "-" || e.key === "_") zoomBy(1 / 1.25);
+    else if (e.key === "0") setPercent(100);
+    else if (e.shiftKey && e.code === "Digit1") showFit();
+    else if (e.shiftKey && e.code === "Digit2") showSelection();
+    else if (e.key === "Escape") {
+      if (sel.size) setSelection(new Set());
+      // Nothing picked and no tool in hand: Esc leaves focus mode.
+      else if (focus && tool.kind === "select" && !tools.hasSelection) onLeaveFocus?.();
+    }
+    else if (e.key === "ArrowLeft" && sel.size) (e.preventDefault(), nudge(-step, 0));
+    else if (e.key === "ArrowRight" && sel.size) (e.preventDefault(), nudge(step, 0));
+    else if (e.key === "ArrowUp" && sel.size) (e.preventDefault(), nudge(0, -step));
+    else if (e.key === "ArrowDown" && sel.size) (e.preventDefault(), nudge(0, step));
+    else if ((e.key === "r" || e.key === "R") && sel.size) turn(e.shiftKey ? -15 : 15);
+    else if ((e.key === "Delete" || e.key === "Backspace") && sel.size) (e.preventDefault(), deleteSelection());
+    else {
+      const next = toolForKey(e.key);
+      if (next && !e.shiftKey && (editable || next.kind === "select" || next.kind === "hand")) setTool(tool.kind === next.kind && next.kind !== "select" ? SELECT : next);
+    }
+  };
+  const onKeyUp = (e: RKeyboardEvent) => {
+    if (e.key === " ") setSpaceHeld(false);
   };
 
   const finishCalibration = (points: Point[]) => {
@@ -359,80 +890,296 @@ export function RoomView() {
     });
   };
 
-  const selectedTable = selected?.kind === "table" ? tables.find((t) => t.id === selected.id) : undefined;
-  const selectedFixture = selected?.kind === "fixture" ? fixtures.find((f) => f.id === selected.id) : undefined;
+  // ---- right-click -----------------------------------------------------------
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (calibrating || isDrawing(tool)) return;
+    const el = (e.target as Element).closest("[data-key]");
+    const key = el?.getAttribute("data-key") ?? null;
+    const at = { x: e.clientX, y: e.clientY };
+    const here = toRoom(e.clientX, e.clientY);
+    const navigation: MenuItem = {
+      label: "Navigation",
+      children: [
+        { label: "Trackpad: scroll pans, pinch zooms", checked: navMode === "trackpad", onSelect: () => setNavMode("trackpad") },
+        { label: "Mouse: the wheel zooms", checked: navMode === "mouse", onSelect: () => setNavMode("mouse") },
+      ],
+    };
+    if (!key || !bodyByKey.has(key)) {
+      setMenu({
+        at,
+        items: [
+          { label: "Paste here", keys: "⌘V", disabled: !editable || !clipboard, onSelect: () => pasteAt(here) },
+          "sep",
+          { label: "Fit the room", keys: "⇧1", onSelect: showFit },
+          navigation,
+          {
+            label: "Lock or unlock a layer",
+            children: LAYERS.filter((l) => l.id !== "notes").map((l) => ({ label: l.label, checked: locks[l.id], onSelect: () => setLocks({ ...locks, [l.id]: !locks[l.id] }) })),
+          },
+        ],
+      });
+      return;
+    }
+    const body = bodyByKey.get(key)!;
+    if (!pickable(body)) return;
+    const list = sel.has(key) ? selBodies : [body];
+    if (!sel.has(key)) setSelection(new Set([key]));
+    const one = list.length === 1 ? list[0]! : null;
+    const tableIds = list.filter((b) => b.kind === "table").map((b) => b.id);
+    const tableBodies = list.filter((b) => b.kind === "table");
+    const styleItems: MenuItem[] = [
+      { label: "No style", onSelect: () => applyStyle(tableIds, null) },
+      ...data.styles.map((s): MenuItem => ({ label: s.name, onSelect: () => applyStyle(tableIds, s.id) })),
+    ];
+    const aligns: [string, Align][] = [["Left", "left"], ["Centre across", "centre"], ["Right", "right"], ["Top", "top"], ["Middle down", "middle"], ["Bottom", "bottom"]];
+    setMenu({
+      at,
+      items: [
+        { label: "Duplicate", keys: "⌘D", disabled: !editable, onSelect: () => duplicateSelection(list) },
+        { label: "Copy", keys: "⌘C", onSelect: () => copySelection(list) },
+        { label: "Paste", keys: "⌘V", disabled: !editable || !clipboard, onSelect: () => pasteAt(here) },
+        { label: "Delete", keys: "Del", disabled: !editable, onSelect: () => deleteSelection(list) },
+        "sep",
+        { label: "Turn 90°", disabled: !editable, onSelect: () => turn(90, true) },
+        { label: "Select similar", keys: "⌘⇧A", onSelect: () => setSelection(new Set(selectSimilar(bodies.filter(pickable), list.map((b) => b.key)))) },
+        ...(list.length > 1
+          ? ([
+              {
+                label: "Align and space",
+                disabled: !editable,
+                children: [
+                  ...aligns.map(([label, how]): MenuItem => ({ label, onSelect: () => align(how) })),
+                  { label: "Space evenly across", disabled: list.length < 3, onSelect: () => distribute("x") },
+                  { label: "Space evenly down", disabled: list.length < 3, onSelect: () => distribute("y") },
+                  { label: "Arrange in a grid (50 cm gap)", onSelect: () => grid(50) },
+                ],
+              },
+            ] as MenuItem[])
+          : []),
+        ...(tableBodies.length > 0
+          ? ([
+              "sep",
+              ...(one && one.kind === "table" ? ([{ label: "Open close-up", onSelect: () => openTable(one.id) }] as MenuItem[]) : []),
+              { label: "Apply style", disabled: !editable || data.styles.length === 0, children: styleItems },
+            ] as MenuItem[])
+          : []),
+      ],
+    });
+  };
+
+  const applyStyle = (ids: string[], styleId: string | null) =>
+    startTransition(async () => {
+      const r = await track(styleId ? "Applied a table style" : "Took a style off", () => applyTableStyle(eventId, styleId, ids));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+
+  // ⌘K reaches the plan through one handler, registered while this view is on screen and kept current by a ref.
+  const commandRef = useRef<(id: string) => void>(() => {});
+  commandRef.current = (id) => {
+    const aligns: Record<string, Align> = { "align-left": "left", "align-centre": "centre", "align-right": "right", "align-top": "top", "align-middle": "middle", "align-bottom": "bottom" };
+    if (aligns[id]) return align(aligns[id]!);
+    switch (id) {
+      case "fit": return showFit();
+      case "zoom-selection": return showSelection();
+      case "zoom-100": return setPercent(100);
+      case "zoom-in": return zoomBy(1.25);
+      case "zoom-out": return zoomBy(1 / 1.25);
+      case "tool-select": return setTool(SELECT);
+      case "tool-hand": return setTool({ kind: "hand" });
+      case "tool-wall": return editable ? setTool({ kind: "wall" }) : undefined;
+      case "tool-arc": return editable ? setTool({ kind: "arc" }) : undefined;
+      case "tool-area": return editable ? setTool({ kind: "area" }) : undefined;
+      case "tool-text": return editable ? setTool({ kind: "text" }) : undefined;
+      case "tool-measure": return editable ? setTool({ kind: "measure" }) : undefined;
+      case "select-all": return selectAll();
+      case "select-similar": return selectLike();
+      case "duplicate": return duplicateSelection();
+      case "delete": return deleteSelection();
+      case "turn": return turn(90, true);
+      case "space-across": return distribute("x");
+      case "space-down": return distribute("y");
+      case "grid": return grid(50);
+      case "nav-trackpad": return setNavMode("trackpad");
+      case "nav-mouse": return setNavMode("mouse");
+      case "shortcuts": return setSheet(true);
+    }
+  };
+  useEffect(() => {
+    setDesignerHandler((id) => commandRef.current(id));
+    return () => setDesignerHandler(null);
+  }, []);
+
+  // ---- drawing ---------------------------------------------------------------
+  const single = sel.size === 1 ? [...sel][0]! : null;
+  const selectedTable = single?.startsWith("t:") ? tables.find((t) => `t:${t.id}` === single) : undefined;
+  const selectedFixture = single?.startsWith("f:") ? fixtures.find((f) => `f:${f.id}` === single) : undefined;
   const handleR = view.w / 40;
+  const fontSize = Math.max(14, view.w / 70);
 
-  return (
-    <div className="space-y-2">
-      <RoomToolbar
-        view={view}
-        setView={setView}
-        roomW={roomW}
-        roomD={roomD}
-        snapOn={snapOn}
-        setSnapOn={setSnapOn}
-        rings={rings}
-        setRings={setRings}
-        calibrating={calibrating !== null}
-        setCalibrating={(on) => setCalibrating(on ? [] : null)}
-        editable={editable}
-      />
+  const itemCursor = !editable ? (locked ? "not-allowed" : "pointer") : held ? "copy" : "move";
+  const cursor = panning ? "grabbing" : panBy ? "grab" : isDrawing(tool) || tool.kind === "place" ? "crosshair" : "default";
+  const shift = (key: string) => (dragView && !dragView.copy && dragView.keys.has(key) ? `translate(${dragView.dx} ${dragView.dy})` : undefined);
 
-      {tools.status || tool.kind === "place" ? (
-        <p className="rounded bg-accent/10 px-3 py-2 text-sm" role="status">
-          {tool.kind === "place" ? `Click the spot to put ${tool.item.label} there. Esc to stop.` : tools.status}
-        </p>
+  // Stable handlers, so a drag redraws only what moved: every shape is memoised on these.
+  const handlers = useRef({ down: onItemPointerDown });
+  handlers.current = { down: onItemPointerDown };
+  const stableDown = useCallback((e: RPointerEvent, key: string) => handlers.current.down(e, key), []);
+
+  const selectionOutline = useMemo(() => {
+    if (selBodies.length < 2) return null;
+    return unionBox(selBodies.map((b) => boundsOf(b.poly)));
+  }, [selBodies]);
+
+  const summary = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const b of selBodies) {
+      const f = b.kind === "fixture" ? fixtures.find((x) => x.id === b.id) : undefined;
+      const label = b.kind === "table" ? "table" : (f?.label ?? FIXTURE_DEFAULTS[f?.kind ?? ""]?.label ?? "item").toLowerCase();
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return [...counts].map(([label, n]) => (label === "table" ? `${n} table${n === 1 ? "" : "s"}` : `${n} ${label}`)).join(", ");
+  }, [selBodies, fixtures]);
+
+  const hint = calibrating
+    ? `Click two points on the floor plan whose real distance you know — two walls, a doorway.${calibrating.length === 1 ? " Now the second." : ""}`
+    : held
+      ? `Tap a table to seat ${held.label}.`
+      : navNote
+        ? navMode === "trackpad"
+          ? "Trackpad mode: two-finger scroll pans, pinch or ⌘/Ctrl+scroll zooms. On a mouse, switch to Mouse mode in the zoom box or by right-clicking the plan."
+          : "Mouse mode: the wheel zooms, Shift+wheel pans sideways. On a trackpad, switch to Trackpad mode in the zoom box or by right-clicking the plan."
+        : tool.kind === "place"
+          ? `Stamp: ${tool.item.label} · click to place · Shift+drag a line · 1–9 switch · Esc to stop`
+          : tools.status
+            ? tools.status
+            : tool.kind === "hand" || spaceHeld
+              ? "Hand: drag to pan · V for Select"
+              : sel.size > 0
+                ? `${sel.size} selected · drag to move · arrows nudge · R turns · Alt before dragging copies · Delete removes`
+                : "Select: click, or drag a box · Shift adds · Space+drag pans · ? for shortcuts";
+
+  const strip = (
+    <RoomStrip
+      roomW={roomW}
+      roomD={roomD}
+      snapOn={snapOn}
+      setSnapOn={setSnapOn}
+      rings={rings}
+      setRings={setRings}
+      calibrating={calibrating !== null}
+      setCalibrating={(on) => setCalibrating(on ? [] : null)}
+      editable={editable}
+      onFit={() => (showFit(), focusPlan())}
+    />
+  );
+
+  const unplacedChips =
+    unplaced.length > 0 ? (
+      <div className={focus ? "flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-white px-2 py-1 text-sm" : "card flex flex-wrap items-center gap-2 p-2 text-sm"}>
+        <span className="text-xs text-muted">Not in the room yet:</span>
+        {unplaced.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="btn py-1"
+            onClick={() => {
+              const v = viewRef.current;
+              const at = {
+                x: clamp(snap(v.x + v.w / 2, GRID_CM), 0, roomW),
+                y: clamp(snap(v.y + v.h / 2, GRID_CM), 0, roomD),
+              };
+              applyMoves([{ key: `t:${t.id}`, x: at.x, y: at.y, rotation: t.rotation_deg }]);
+              startTransition(async () => {
+                const r = await track("Put a table in the room", () => moveSeatingTable(t.id, eventId, { x: at.x, y: at.y, rotation: t.rotation_deg, spaceId }));
+                if (!r.ok) setError(r.error);
+                refresh();
+              });
+            }}
+          >
+            Place {t.label}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  // What the inspector shows: the venue's own selection, one table (Seats, Style, Notes), one fixture, or several things.
+  const inspector = (
+    <>
+      {tools.selectionPanel}
+      {selectedTable ? (
+        focus ? (
+          <TableInspector table={selectedTable} seats={<SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />} />
+        ) : (
+          <SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />
+        )
       ) : null}
-
-      {calibrating ? (
-        <p className="rounded bg-accent/10 px-3 py-2 text-sm">
-          Tap two points on the floor plan whose real distance you know — two walls, a doorway.{" "}
-          {calibrating.length === 1 ? "Now the second." : ""}
-        </p>
-      ) : held ? (
-        <p className="rounded bg-accent/10 px-3 py-2 text-sm">Tap a table to seat {held.label}.</p>
+      {selectedFixture ? <SelectedFixturePanel fixture={selectedFixture} onDone={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} /> : null}
+      {sel.size > 1 ? (
+        <MultiSelectionPanel
+          summary={summary}
+          count={sel.size}
+          editable={editable}
+          onAlign={align}
+          onDistribute={distribute}
+          onGrid={grid}
+          onSimilar={selectLike}
+          onDuplicate={() => duplicateSelection()}
+          onTurn={() => turn(90, true)}
+          onDelete={() => deleteSelection()}
+          onClear={() => setSelection(new Set())}
+        />
       ) : null}
+    </>
+  );
+  const hasInspector = Boolean(tools.selectionPanel) || sel.size > 0;
 
-      <div className="card relative overflow-hidden">
-        <CanvasLegend />
-        <svg
-          ref={svgRef}
-          viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-          className="block h-[65vh] w-full touch-none select-none bg-[#f6f3ee] outline-none"
-          tabIndex={0}
-          onKeyDown={onKeyDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          onDoubleClick={() => editable && tools.onDoubleClick()}
-          onDragOver={(e) => {
-            if (editable && e.dataTransfer.types.includes(DRAG_ITEM_TYPE)) {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "copy";
-            }
-          }}
-          onDrop={(e) => {
-            const raw = e.dataTransfer.getData(DRAG_ITEM_TYPE);
-            if (!editable || !raw) return;
+  const overlays = (
+    <>
+      {menu ? <CanvasMenu at={menu.at} items={menu.items} onClose={() => setMenu(null)} /> : null}
+      {sheet ? <ShortcutSheet onClose={() => { setSheet(false); svgRef.current?.focus({ preventScroll: true }); }} /> : null}
+    </>
+  );
+
+  const canvas = (
+    <>
+      <CanvasLegend />
+      {editable ? <FirstVisitTips /> : null}
+      <svg
+        ref={svgRef}
+        viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+        className={`block w-full touch-none select-none bg-[#f6f3ee] outline-none ${focus ? "h-full" : "h-[72vh] min-h-[28rem]"}`}
+        style={{ cursor }}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        onKeyUp={onKeyUp}
+        onBlur={() => setSpaceHeld(false)}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onContextMenu={onContextMenu}
+        onDoubleClick={() => editable && tools.onDoubleClick()}
+        onDragOver={(e) => {
+          if (editable && e.dataTransfer.types.includes(DRAG_ITEM_TYPE)) {
             e.preventDefault();
-            try {
-              placeAt(JSON.parse(raw) as PlaceItem, toRoom(e.clientX, e.clientY));
-            } catch {
-              /* not one of ours */
-            }
-          }}
-          aria-label="Floor plan"
-          role="application"
-        >
-          <rect
-            x={-roomW}
-            y={-roomD}
-            width={roomW * 3}
-            height={roomD * 3}
-            fill="transparent"
-            onPointerDown={onBackgroundPointerDown}
-          />
+            e.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={(e) => {
+          const raw = e.dataTransfer.getData(DRAG_ITEM_TYPE);
+          if (!editable || !raw) return;
+          e.preventDefault();
+          try {
+            placeAt(JSON.parse(raw) as PlaceItem, toRoom(e.clientX, e.clientY));
+          } catch {
+            /* not one of ours */
+          }
+        }}
+        aria-label="Floor plan"
+        role="application"
+      >
+          <rect x={view.x - view.w} y={view.y - view.h} width={view.w * 3} height={view.h * 3} fill="transparent" onPointerDown={onBackgroundPointerDown} />
           <g style={{ pointerEvents: "none" }}>
             <rect x={0} y={0} width={roomW} height={roomD} fill="#ffffff" stroke="#8a8580" strokeWidth={view.w / 400} />
             {data.backgroundUrl && show.venue ? (
@@ -449,31 +1196,47 @@ export function RoomView() {
             <Grid roomW={roomW} roomD={roomD} strokeWidth={view.w / 1200} />
           </g>
 
-          {tools.showHere(show.venue)}
+          {tools.showHere(show.venue, venueOpen)}
 
-          {/* While a drawing tool is in hand, a click goes to the plan underneath, not to a table or a bar. */}
-          <g style={isDrawing(tool) || tool.kind === "place" ? { pointerEvents: "none" } : undefined}>
-            {hereFixtures.map((f) => (
-              <FixtureShape
-                key={f.id}
-                fixture={f}
-                selected={selectedFixture?.id === f.id}
-                onPointerDown={(e) => onItemPointerDown(e, { kind: "fixture", id: f.id })}
-                fontSize={Math.max(14, view.w / 70)}
-              />
-            ))}
+          {/* While a drawing tool, the Hand or Space is in hand, a click goes to the plan underneath, not to a table or a bar. */}
+          <g style={isDrawing(tool) || tool.kind === "place" || panBy ? { pointerEvents: "none" } : undefined}>
+            {hereFixtures.map((f) => {
+              const key = `f:${f.id}`;
+              return (
+                <g key={f.id} transform={shift(key)} style={locks[fixtureBodyLayer(f)] ? { pointerEvents: "none" } : undefined}>
+                  <FixtureShape
+                    fixture={f}
+                    itemKey={key}
+                    selected={sel.has(key)}
+                    hovered={hoverKey === key}
+                    cursor={itemCursor}
+                    fontSize={fontSize}
+                    onPointerDown={stableDown}
+                    onHover={setHoverKey}
+                  />
+                </g>
+              );
+            })}
 
-            {placed.map((t) => (
-              <TableShape
-                key={t.id}
-                table={t}
-                selected={selectedTable?.id === t.id}
-                rings={rings}
-                fontSize={Math.max(14, view.w / 70)}
-                detail={detail}
-                onPointerDown={(e) => onItemPointerDown(e, { kind: "table", id: t.id })}
-              />
-            ))}
+            {placed.map((t) => {
+              const key = `t:${t.id}`;
+              return (
+                <g key={t.id} transform={shift(key)} style={locks.tables ? { pointerEvents: "none" } : undefined}>
+                  <TableShape
+                    table={t}
+                    itemKey={key}
+                    selected={sel.has(key)}
+                    hovered={hoverKey === key}
+                    cursor={itemCursor}
+                    rings={rings}
+                    fontSize={fontSize}
+                    detail={detail}
+                    onPointerDown={stableDown}
+                    onHover={setHoverKey}
+                  />
+                </g>
+              );
+            })}
           </g>
 
           {tools.overlay}
@@ -482,110 +1245,241 @@ export function RoomView() {
             <circle key={i} cx={p.x} cy={p.y} r={view.w / 150} fill="#b0532b" style={{ pointerEvents: "none" }} />
           ))}
 
-          {editable && selected && (selectedTable?.pos_x_cm != null || selectedFixture) ? (
-            <RotateHandle
-              item={selectedTable ?? selectedFixture!}
-              r={handleR}
-              onPointerDown={(e) => onRotatePointerDown(e, selected)}
+          {/* An Alt-drag leaves the originals where they are and shows where the copies will land. */}
+          {dragView?.copy ? (
+            <g transform={`translate(${dragView.dx} ${dragView.dy})`} style={{ pointerEvents: "none" }} opacity={0.6}>
+              {[...dragView.keys].map((k) => {
+                const b = bodyByKey.get(k);
+                return b ? <polygon key={k} points={b.poly.map((p) => `${p.x},${p.y}`).join(" ")} fill="#fbeee6" stroke="#b0532b" strokeWidth={unit * 2} strokeDasharray={`${unit * 6} ${unit * 4}`} /> : null;
+              })}
+            </g>
+          ) : null}
+
+          {selectionOutline ? (
+            <rect
+              x={selectionOutline.x0 + (dragView && !dragView.copy ? dragView.dx : 0) - 10 * unit}
+              y={selectionOutline.y0 + (dragView && !dragView.copy ? dragView.dy : 0) - 10 * unit}
+              width={selectionOutline.x1 - selectionOutline.x0 + 20 * unit}
+              height={selectionOutline.y1 - selectionOutline.y0 + 20 * unit}
+              fill="none"
+              stroke="#b0532b"
+              strokeWidth={unit * 1.5}
+              strokeDasharray={`${unit * 6} ${unit * 4}`}
+              style={{ pointerEvents: "none" }}
             />
           ) : null}
-        </svg>
-      </div>
 
-      {unplaced.length > 0 ? (
-        <div className="card flex flex-wrap items-center gap-2 p-2 text-sm">
-          <span className="text-xs text-muted">Not in the room yet:</span>
-          {unplaced.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="btn py-1"
-              onClick={() => {
-                const at = {
-                  x: clamp(snap(view.x + view.w / 2, GRID_CM), 0, roomW),
-                  y: clamp(snap(view.y + view.h / 2, GRID_CM), 0, roomD),
-                };
-                setItem({ kind: "table", id: t.id }, at);
-                save({ kind: "table", id: t.id }, { ...at, rotation: t.rotation_deg });
+          {box ? <rect x={box.x0} y={box.y0} width={box.x1 - box.x0} height={box.y1 - box.y0} fill="#b0532b" fillOpacity={0.08} stroke="#b0532b" strokeWidth={unit * 1.5} strokeDasharray={`${unit * 5} ${unit * 3}`} style={{ pointerEvents: "none" }} /> : null}
+
+          {guides.length > 0 ? <GuideLines guides={guides} unit={unit} settings={settings} /> : null}
+
+          {lineAt ? (
+            <g style={{ pointerEvents: "none" }}>
+              {lineAt.stops.map((p, i) => {
+                const t = tileOf(lineAt.item);
+                const w = t?.w ?? 60;
+                const d = t?.d ?? 60;
+                return lineAt.item.type === "table" && lineAt.item.shape === "round" ? (
+                  <ellipse key={i} cx={p.x} cy={p.y} rx={w / 2} ry={d / 2} fill="#fbeee6" fillOpacity={0.7} stroke="#b0532b" strokeWidth={unit * 1.5} strokeDasharray={`${unit * 5} ${unit * 3}`} />
+                ) : (
+                  <rect key={i} x={p.x - w / 2} y={p.y - d / 2} width={w} height={d} fill="#fbeee6" fillOpacity={0.7} stroke="#b0532b" strokeWidth={unit * 1.5} strokeDasharray={`${unit * 5} ${unit * 3}`} />
+                );
+              })}
+              <text x={lineAt.stops[lineAt.stops.length - 1]!.x} y={lineAt.stops[lineAt.stops.length - 1]!.y - 24 * unit} textAnchor="middle" fontSize={13 * unit} fill="#b0532b" stroke="#ffffff" strokeWidth={3.5 * unit} paintOrder="stroke">
+                {lineAt.stops.length} × {lineAt.item.label.toLowerCase()}
+              </text>
+            </g>
+          ) : null}
+
+          {editable && selectedTable && !dragView && selectedTable.pos_x_cm !== null ? (
+            <RotateHandle item={selectedTable} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `t:${selectedTable.id}`)} />
+          ) : null}
+          {editable && selectedFixture && !dragView ? <RotateHandle item={selectedFixture} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `f:${selectedFixture.id}`)} /> : null}
+      </svg>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-1.5 px-3">
+        <FloatingToolbar
+          tool={tool}
+          setTool={(t) => setTool(t)}
+          canDraw={editable}
+          toolsHidden={panelsHidden}
+          zoomPct={zoomPct}
+          zoomBy={zoomBy}
+          onFit={showFit}
+          onSelection={showSelection}
+          hasSelection={selBodies.length > 0}
+          onPercent={setPercent}
+          navMode={navMode}
+          setNavMode={setNavMode}
+          onDone={focusPlan}
+          onStamp={startStamp}
+        />
+        {panelsHidden ? null : (
+          <p className="max-w-full rounded bg-white/90 px-2 py-0.5 text-center text-xs text-muted shadow-sm" role="status" aria-live="polite">
+            {hint}
+          </p>
+        )}
+        {tool.kind === "place" && !panelsHidden ? (
+          // How far apart a Shift+drag line stamps: the item's width and 20 cm by default, typed here to change it.
+          <label className="pointer-events-auto flex items-center gap-1.5 rounded bg-white/90 px-2 py-0.5 text-xs text-muted shadow-sm">
+            Shift+drag stamps every
+            <input
+              type="number"
+              min={5}
+              max={2000}
+              className="field w-16 py-0 text-xs"
+              aria-label="Distance between stamps along a line, in centimetres"
+              value={stampStep ?? defaultStep(tileOf(tool.item)?.w ?? 60)}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setStampStep(Number.isFinite(n) && n > 0 ? Math.min(2000, Math.max(5, Math.round(n))) : null);
               }}
-            >
-              Place {t.label}
-            </button>
-          ))}
+            />
+            cm
+          </label>
+        ) : null}
+      </div>
+    </>
+  );
+
+  if (focus) {
+    return (
+      <div className="flex h-full min-h-0 w-full">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {panelsHidden ? null : <div className="shrink-0 border-b border-line bg-white px-2 py-1">{strip}</div>}
+          {panelsHidden ? null : unplacedChips}
+          {/* Filled absolutely: a percentage height doesn't resolve inside a flex item, and the plan must fit the window exactly. */}
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            <div className="absolute inset-0">{canvas}</div>
+          </div>
         </div>
-      ) : null}
+        {hasInspector && !panelsHidden ? (
+          <aside aria-label="Inspector" className="w-80 shrink-0 space-y-2 overflow-y-auto border-l border-line bg-paper p-2">
+            {inspector}
+          </aside>
+        ) : null}
+        {overlays}
+      </div>
+    );
+  }
 
-      {tools.selectionPanel}
-      {selectedTable ? <SelectedTablePanel table={selectedTable} onUnplace={() => setSelected(null)} editable={editable} /> : null}
-      {selectedFixture ? <SelectedFixturePanel fixture={selectedFixture} onDone={() => setSelected(null)} editable={editable} /> : null}
-
+  return (
+    <div className="space-y-2">
+      {strip}
+      <div className="card relative overflow-hidden">{canvas}</div>
+      {unplacedChips}
+      {inspector}
       {editable ? (
         <>
           <AddFixture view={view} roomW={roomW} roomD={roomD} />
           <RoomSettings />
         </>
       ) : null}
+      {overlays}
     </div>
+  );
+}
+
+/** The layer a fixture is on: décor, or furniture. */
+function fixtureBodyLayer(f: SeatingFixture): "decor" | "furniture" {
+  return fixtureGroup(f.kind) === "decor" ? "decor" : "furniture";
+}
+
+/** The lines a drag draws: edges and centres it lined up with, and the equal gaps it kept, labelled in cm and coloured by the walkway thresholds. */
+function GuideLines({ guides, unit, settings }: { guides: Guide[]; unit: number; settings: Parameters<typeof classifyWalkway>[1] }) {
+  const GUIDE = "#d6336c";
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      {guides.map((g, i) => {
+        const horizontal = g.axis === "y";
+        if (g.kind !== "spacing") {
+          return horizontal ? (
+            <line key={i} x1={g.from} y1={g.at} x2={g.to} y2={g.at} stroke={GUIDE} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
+          ) : (
+            <line key={i} x1={g.at} y1={g.from} x2={g.at} y2={g.to} stroke={GUIDE} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
+          );
+        }
+        // A spacing guide: a dimension line across the gap with end ticks and its length.
+        const colour = WALKWAY_COLOUR[classifyWalkway(g.gap ?? 0, settings)];
+        const x1 = g.axis === "y" ? g.from : g.at;
+        const y1 = g.axis === "y" ? g.at : g.from;
+        const x2 = g.axis === "y" ? g.to : g.at;
+        const y2 = g.axis === "y" ? g.at : g.to;
+        const tick = 5 * unit;
+        return (
+          <g key={i}>
+            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={colour} strokeWidth={1.5 * unit} />
+            {g.axis === "y" ? (
+              <>
+                <line x1={x1} y1={y1 - tick} x2={x1} y2={y1 + tick} stroke={colour} strokeWidth={1.5 * unit} />
+                <line x1={x2} y1={y2 - tick} x2={x2} y2={y2 + tick} stroke={colour} strokeWidth={1.5 * unit} />
+              </>
+            ) : (
+              <>
+                <line x1={x1 - tick} y1={y1} x2={x1 + tick} y2={y1} stroke={colour} strokeWidth={1.5 * unit} />
+                <line x1={x2 - tick} y1={y2} x2={x2 + tick} y2={y2} stroke={colour} strokeWidth={1.5 * unit} />
+              </>
+            )}
+            <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 6 * unit} textAnchor="middle" fontSize={12 * unit} fill={colour} stroke="#ffffff" strokeWidth={3.5 * unit} paintOrder="stroke">
+              {Math.round(g.gap ?? 0)} cm
+            </text>
+          </g>
+        );
+      })}
+    </g>
   );
 }
 
 /** What the chair colours mean, counted, with the dashed outline and dietary dots (spec 57 A.2). */
 function CanvasLegend() {
   const { colourBy, data, assignments, guestById } = useSeating();
+  const [open, setOpen] = useState(false);
   const seated = assignments.map((a) => guestById.get(a.guestId)).filter((g): g is NonNullable<typeof g> => Boolean(g));
   const rows = colourCounts(seated, colourBy, data.colour);
   const declined = declinedSeats(data.guests, assignments).length;
   const allergy = seated.filter((g) => g.dietaryNeeds.some((n) => n.isAllergy)).length;
   const preference = seated.filter((g) => g.dietaryNeeds.length > 0 && !g.dietaryNeeds.some((n) => n.isAllergy)).length;
   if (rows.length === 0 && declined === 0 && allergy === 0 && preference === 0) return null;
+  // One small chip until asked for (spec 59 A.2): the key is rarely the thing being looked at.
   return (
-    <div className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[14rem] space-y-0.5 rounded border border-line bg-white/90 px-2 py-1.5 text-[0.7rem] leading-snug shadow-sm" aria-label="Legend">
-      {rows.map((r) => (
-        <div key={r.label} className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.colour }} />
-          <span className="truncate">{r.label}</span>
-          <span className="ml-auto text-muted">{r.count}</span>
-        </div>
-      ))}
-      {declined > 0 ? (
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full border-2 border-dashed border-orange-600" />
-          <span>Declined, in a seat</span>
-          <span className="ml-auto text-muted">{declined}</span>
-        </div>
-      ) : null}
-      {allergy > 0 ? (
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-[#c81e1e]" />
-          <span>Allergy</span>
-          <span className="ml-auto text-muted">{allergy}</span>
-        </div>
-      ) : null}
-      {preference > 0 ? (
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-[#d97706]" />
-          <span>Dietary preference</span>
-          <span className="ml-auto text-muted">{preference}</span>
+    <div className="absolute right-2 top-2 z-10 flex flex-col items-end gap-1">
+      <button type="button" aria-expanded={open} className="rounded border border-line bg-white/90 px-2 py-0.5 text-[0.7rem] shadow-sm hover:bg-white" onClick={() => setOpen((o) => !o)}>
+        Key {open ? "▴" : "▾"}
+      </button>
+      {open ? (
+        <div className="pointer-events-none max-w-[14rem] space-y-0.5 rounded border border-line bg-white/90 px-2 py-1.5 text-[0.7rem] leading-snug shadow-sm" aria-label="Legend">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.colour }} />
+              <span className="truncate">{r.label}</span>
+              <span className="ml-auto text-muted">{r.count}</span>
+            </div>
+          ))}
+          {declined > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full border-2 border-dashed border-orange-600" />
+              <span>Declined, in a seat</span>
+              <span className="ml-auto text-muted">{declined}</span>
+            </div>
+          ) : null}
+          {allergy > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[#c81e1e]" />
+              <span>Allergy</span>
+              <span className="ml-auto text-muted">{allergy}</span>
+            </div>
+          ) : null}
+          {preference > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[#d97706]" />
+              <span>Dietary preference</span>
+              <span className="ml-auto text-muted">{preference}</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
-}
-
-function fit(roomW: number, roomD: number): ViewBox {
-  const pad = Math.max(roomW, roomD) * 0.05;
-  return { x: -pad, y: -pad, w: roomW + pad * 2, h: roomD + pad * 2 };
-}
-
-function zoomAbout(v: ViewBox, p: Point, k: number): ViewBox {
-  const w = clamp(v.w * k, 200, 40000);
-  const ratio = w / v.w;
-  const h = v.h * ratio;
-  return { x: p.x - (p.x - v.x) * ratio, y: p.y - (p.y - v.y) * ratio, w, h };
-}
-
-function clamp(v: number, lo: number, hi: number) {
-  return Math.min(hi, Math.max(lo, v));
 }
 
 function Grid({ roomW, roomD, strokeWidth }: { roomW: number; roomD: number; strokeWidth: number }) {
@@ -599,20 +1493,30 @@ function Grid({ roomW, roomD, strokeWidth }: { roomW: number; roomD: number; str
   );
 }
 
-function TableShape({
+const TableShape = memo(TableShapeBase);
+
+function TableShapeBase({
   table,
+  itemKey,
   selected,
+  hovered,
+  cursor,
   rings,
   fontSize,
   detail,
   onPointerDown,
+  onHover,
 }: {
   table: SeatingTable;
+  itemKey: string;
   selected: boolean;
+  hovered: boolean;
+  cursor: string;
   rings: boolean;
   fontSize: number;
   detail: ChairDetail;
-  onPointerDown: (e: RPointerEvent) => void;
+  onPointerDown: (e: RPointerEvent, key: string) => void;
+  onHover: (key: string | null) => void;
 }) {
   const { occupancy, warningsByTable, assignments, guestById, colourBy, data, held, settings } = useSeating();
   const clearance = settings.walkway.comfortable;
@@ -624,7 +1528,7 @@ function TableShape({
   const byChair = new Map(
     assignments.filter((a) => a.tableId === table.id && a.seatIndex !== null).map((a) => [a.seatIndex!, a.guestId]),
   );
-  const stroke = selected ? "#1a1a1a" : warn ? "#b45309" : isOver ? "#7c5c3e" : "#8a8580";
+  const stroke = selected ? "#1a1a1a" : hovered ? "#b0532b" : warn ? "#b45309" : isOver ? "#7c5c3e" : "#8a8580";
   // Big enough to read zoomed out, never wider than the table it names.
   const fs = Math.min(fontSize, Math.max(length, width) / (0.62 * Math.max(4, table.label.length)));
 
@@ -632,8 +1536,11 @@ function TableShape({
     <g
       ref={setNodeRef as unknown as React.Ref<SVGGElement>}
       transform={`translate(${table.pos_x_cm} ${table.pos_y_cm}) rotate(${table.rotation_deg})`}
-      onPointerDown={onPointerDown}
-      style={{ cursor: held ? "copy" : "move" }}
+      data-key={itemKey}
+      onPointerDown={(e) => onPointerDown(e, itemKey)}
+      onPointerEnter={() => onHover(itemKey)}
+      onPointerLeave={() => onHover(null)}
+      style={{ cursor }}
       role="button"
       aria-label={`${table.label}, ${occ.chairsTaken} of ${table.capacity}`}
     >
@@ -770,16 +1677,26 @@ const FIXTURE_LOOK: Record<string, { fill: string; stroke?: string; round?: bool
   marquee: { fill: "#fbfaf6" },
 };
 
-function FixtureShape({
+const FixtureShape = memo(FixtureShapeBase);
+
+function FixtureShapeBase({
   fixture,
+  itemKey,
   selected,
+  hovered,
+  cursor,
   fontSize,
   onPointerDown,
+  onHover,
 }: {
   fixture: SeatingFixture;
+  itemKey: string;
   selected: boolean;
+  hovered: boolean;
+  cursor: string;
   fontSize: number;
-  onPointerDown: (e: RPointerEvent) => void;
+  onPointerDown: (e: RPointerEvent, key: string) => void;
+  onHover: (key: string | null) => void;
 }) {
   const { data } = useSeating();
   const custom = fixture.custom_item_id ? data.customItems.find((c) => c.id === fixture.custom_item_id) : undefined;
@@ -788,14 +1705,17 @@ function FixtureShape({
   const look = FIXTURE_LOOK[fixture.kind] ?? { fill: "#ece9e3" };
   const round = custom ? custom.shape === "round" : look.round;
   const fill = custom?.colour ?? look.fill;
-  const stroke = selected ? "#1a1a1a" : "#a39d94";
+  const stroke = selected ? "#1a1a1a" : hovered ? "#b0532b" : "#a39d94";
   const w = fixture.width_cm;
   const d = fixture.depth_cm;
   return (
     <g
       transform={`translate(${fixture.pos_x_cm} ${fixture.pos_y_cm}) rotate(${fixture.rotation_deg})`}
-      onPointerDown={onPointerDown}
-      style={{ cursor: "move" }}
+      data-key={itemKey}
+      onPointerDown={(e) => onPointerDown(e, itemKey)}
+      onPointerEnter={() => onHover(itemKey)}
+      onPointerLeave={() => onHover(null)}
+      style={{ cursor }}
       role="button"
       aria-label={fixture.quantity > 1 ? `${label}, ${fixture.quantity}` : label}
     >
@@ -908,9 +1828,7 @@ function RotateHandle({
   );
 }
 
-function RoomToolbar({
-  view,
-  setView,
+function RoomStrip({
   roomW,
   roomD,
   snapOn,
@@ -920,10 +1838,9 @@ function RoomToolbar({
   calibrating,
   setCalibrating,
   editable,
+  onFit,
 }: {
   editable: boolean;
-  view: ViewBox;
-  setView: (v: ViewBox) => void;
   roomW: number;
   roomD: number;
   snapOn: boolean;
@@ -932,32 +1849,19 @@ function RoomToolbar({
   setRings: (v: boolean) => void;
   calibrating: boolean;
   setCalibrating: (v: boolean) => void;
+  onFit: () => void;
 }) {
-  const { data, tool, setTool } = useSeating();
-  const centre = { x: view.x + view.w / 2, y: view.y + view.h / 2 };
+  const { data } = useSeating();
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      {editable ? (
-        <div role="toolbar" aria-label="Tools" className="flex flex-wrap gap-1">
-          {(["select", "wall", "arc", "area", "text", "measure"] as const).map((k) => (
-            <button key={k} type="button" aria-pressed={tool.kind === k} className={`btn py-1 ${tool.kind === k ? "ring-2 ring-ink" : ""}`} onClick={() => setTool(tool.kind === k ? SELECT : { kind: k })}>
-              {TOOL_LABEL[k]}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <button type="button" className="btn py-1" aria-label="Zoom in" onClick={() => setView(zoomAbout(view, centre, 1 / 1.25))}>
-        +
-      </button>
-      <button type="button" className="btn py-1" aria-label="Zoom out" onClick={() => setView(zoomAbout(view, centre, 1.25))}>
-        −
-      </button>
-      <button type="button" className="btn py-1" onClick={() => setView(fit(roomW, roomD))}>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <button type="button" className="btn py-1" onClick={onFit}>
         Fit room
       </button>
-      <label className="flex items-center gap-1.5">
-        <input type="checkbox" checked={snapOn} onChange={(e) => setSnapOn(e.target.checked)} /> Snap to 25 cm
-      </label>
+      {editable ? (
+        <label className="flex items-center gap-1.5" title="Snaps to neighbours' edges and centres, and to a 25 cm grid. Hold Alt during a drag to turn it off.">
+          <input type="checkbox" checked={snapOn} onChange={(e) => setSnapOn(e.target.checked)} /> Snap to neighbours and 25 cm
+        </label>
+      ) : null}
       <label className="flex items-center gap-1.5">
         <input type="checkbox" checked={rings} onChange={(e) => setRings(e.target.checked)} /> Space around tables
       </label>
@@ -974,7 +1878,7 @@ function RoomToolbar({
   );
 }
 
-function SelectedTablePanel({ table, onUnplace, editable }: { table: SeatingTable; onUnplace: () => void; editable: boolean }) {
+function SelectedTablePanel({ table, onUnplace, editable, onRepeat }: { table: SeatingTable; onUnplace: () => void; editable: boolean; onRepeat: (count: number, gap: number, dir: "across" | "down") => void }) {
   const { eventId, openTable, refresh, setError, setTables, track } = useSeating();
   const [, startTransition] = useTransition();
   return (
@@ -999,11 +1903,42 @@ function SelectedTablePanel({ table, onUnplace, editable }: { table: SeatingTabl
       >
         Take out of the room
       </button>
+      {editable ? <RepeatForm onRepeat={onRepeat} /> : null}
     </div>
   );
 }
 
-function SelectedFixturePanel({ fixture, onDone, editable }: { fixture: SeatingFixture; onDone: () => void; editable: boolean }) {
+/** Repeat (spec 59 Part C): N more of the selected item at a gap, across or down: one write, one undo step. */
+function RepeatForm({ onRepeat }: { onRepeat: (count: number, gap: number, dir: "across" | "down") => void }) {
+  const [count, setCount] = useState("3");
+  const [gap, setGap] = useState("40");
+  const [dir, setDir] = useState<"across" | "down">("across");
+  const num = (v: string, fallback: number) => (Number.isFinite(Number(v.replace(",", "."))) && v.trim() !== "" ? Number(v.replace(",", ".")) : fallback);
+  return (
+    <div className="flex w-full flex-wrap items-end gap-2 border-t border-line pt-2" role="group" aria-label="Repeat">
+      <label>
+        <span className="mb-1 block text-xs text-muted">Repeat it</span>
+        <input className="field w-16" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value)} aria-label="How many more" />
+      </label>
+      <label>
+        <span className="mb-1 block text-xs text-muted">Gap (cm)</span>
+        <input className="field w-16" inputMode="numeric" value={gap} onChange={(e) => setGap(e.target.value)} />
+      </label>
+      <label>
+        <span className="mb-1 block text-xs text-muted">Direction</span>
+        <select className="field" value={dir} onChange={(e) => setDir(e.target.value as "across" | "down")}>
+          <option value="across">Across</option>
+          <option value="down">Down</option>
+        </select>
+      </label>
+      <button type="button" className="btn" onClick={() => onRepeat(Math.max(1, Math.round(num(count, 1))), Math.max(0, num(gap, 0)), dir)}>
+        Repeat
+      </button>
+    </div>
+  );
+}
+
+function SelectedFixturePanel({ fixture, onDone, editable, onRepeat }: { fixture: SeatingFixture; onDone: () => void; editable: boolean; onRepeat: (count: number, gap: number, dir: "across" | "down") => void }) {
   const { eventId, data, refresh, setError, track } = useSeating();
   const [, startTransition] = useTransition();
   const [label, setLabel] = useState(fixture.label ?? "");
@@ -1023,6 +1958,7 @@ function SelectedFixturePanel({ fixture, onDone, editable }: { fixture: SeatingF
   if (!editable) return null;
 
   return (
+    <>
     <form
       className="card flex flex-wrap items-end gap-2 p-2 text-sm"
       onSubmit={(e) => {
@@ -1088,11 +2024,15 @@ function SelectedFixturePanel({ fixture, onDone, editable }: { fixture: SeatingF
       >
         Remove
       </button>
-    </form>
+        </form>
+    <div className="card p-2 text-sm">
+      <RepeatForm onRepeat={onRepeat} />
+    </div>
+    </>
   );
 }
 
-function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; roomD: number }) {
+function AddFixture({ view, roomW, roomD }: { view: View; roomW: number; roomD: number }) {
   const { eventId, layoutId, spaceId, refresh, setError, track } = useSeating();
   const [kind, setKind] = useState<SeatingFixtureKind>("dance_floor");
   const [pending, startTransition] = useTransition();
@@ -1135,7 +2075,7 @@ function AddFixture({ view, roomW, roomD }: { view: ViewBox; roomW: number; room
 }
 
 /** Room size, and the venue's own floor plan to draw over (§C.3). */
-function RoomSettings() {
+export function RoomSettings() {
   const { eventId, layoutId, spaceId, data, refresh, setError, track } = useSeating();
   const plan = data.plan;
   const [w, setW] = useState(String((plan?.room_width_cm ?? 2000) / 100));

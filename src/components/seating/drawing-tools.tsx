@@ -397,8 +397,9 @@ export function useDrawingTools({
   };
 
   // ---- what to draw on the canvas ----------------------------------------------
-  const showHere = (show: boolean) =>
-    show ? <VenueLayer drawing={drawing} unit={unit} selected={selected} onPick={tool.kind === "select" ? onPick : undefined} /> : null;
+  /** The venue's drawing; `pickable` is false while its layer is locked, so a click or a selection box goes through to the furniture. */
+  const showHere = (show: boolean, pickable = true) =>
+    show ? <VenueLayer drawing={drawing} unit={unit} selected={selected} onPick={tool.kind === "select" && pickable ? onPick : undefined} /> : null;
 
   const nearTable = (pt: Pt): Point[] | null => {
     const probe: Point[] = [

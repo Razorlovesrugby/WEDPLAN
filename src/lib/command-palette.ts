@@ -1,14 +1,16 @@
 import { navGroupsFor, type Viewer } from "./nav-groups";
 import { DESIGN_TABS, GUESTS_TABS, REGISTRY_TABS, RUN_SHEET_TABS, TASKS_TABS } from "./nav-tabs";
+import { DESIGNER_COMMANDS } from "./seating/designer-commands";
 
 /**
  * ⌘K (spec 46): go anywhere, find anything, make something. Pure, so the
  * ranking and the planner filter are tested rather than trusted to a dialog.
  */
 
-export type CommandGroup = "go" | "find" | "make";
-export const GROUP_LABEL: Record<CommandGroup, string> = { go: "Go to", find: "Find", make: "Make" };
-const GROUP_ORDER: CommandGroup[] = ["go", "find", "make"];
+/** `plan` is the seating plan's own commands (spec 59): offered only while the Room view is on screen, and first, because they are what you're in the middle of. */
+export type CommandGroup = "plan" | "go" | "find" | "make";
+export const GROUP_LABEL: Record<CommandGroup, string> = { plan: "On the plan", go: "Go to", find: "Find", make: "Make" };
+const GROUP_ORDER: CommandGroup[] = ["plan", "go", "find", "make"];
 
 /** A command either navigates (`href`) or runs a named action the dialog knows how to do. */
 export type Command = {
@@ -18,7 +20,12 @@ export type Command = {
   /** Small grey text: the section, or what kind of thing it is. */
   hint?: string;
   href?: string;
-  action?: { kind: "add-task"; listId: string; title: string } | { kind: "add-vendor"; name: string } | { kind: "add-moodboard"; title: string };
+  action?:
+    | { kind: "add-task"; listId: string; title: string }
+    | { kind: "add-vendor"; name: string }
+    | { kind: "add-moodboard"; title: string }
+    /** A command of the seating plan's Room view, run through `designer-bridge`. */
+    | { kind: "designer"; id: string };
   /** Extra words it answers to, e.g. "preferences" for Settings. */
   keywords?: string[];
 };
@@ -61,6 +68,18 @@ export function goCommands(viewer: Viewer): Command[] {
     if (settings) settings.keywords = ["preferences", "timezone", "currency"];
   }
   return commands;
+}
+
+/** The Room view's commands, for the palette to offer while it is on screen. */
+export function designerCommands(): Command[] {
+  return DESIGNER_COMMANDS.map((c) => ({
+    id: `plan:${c.id}`,
+    group: "plan",
+    label: c.label,
+    hint: c.keys ? `Seating plan · ${c.keys}` : "Seating plan",
+    keywords: ["seating", "room", "plan", "designer", ...(c.keywords ?? [])],
+    action: { kind: "designer", id: c.id },
+  }));
 }
 
 /** "Make" commands. With text typed, the ones that can take a name use it directly. */
@@ -112,7 +131,8 @@ function normalise(value: string): string {
 export function matchScore(command: Command, query: string): number {
   const q = normalise(query.trim());
   if (!q) return 1;
-  if (command.action) return 1;
+  // A typed "Make" command is built from the query, so it always matches; a designer command is a fixed name and is matched like one.
+  if (command.action && command.action.kind !== "designer") return 1;
   const label = normalise(command.label);
   if (label.startsWith(q)) return 3;
   if (label.split(/[\s&·,/-]+/).some((word) => word.startsWith(q))) return 2;

@@ -1,6 +1,7 @@
 # Feature spec: The seating canvas on a laptop: room to work, clear tools, fast placing
 
-**Status: answered, not built.** Every question answered 2026-11-27 (see
+**Status: answered; Parts A, B (most) and C built in session 65, no migration; Parts D and E (and
+`0062`) not built.** See **Build status** at the end. Every question answered 2026-11-27 (see
 **Answered**).
 
 **Depends on:** spec 57 (the venue designer: spaces, layouts, library, drawing
@@ -357,3 +358,70 @@ a room of 40 tables. Say which were run.
   cover every shape spec 57 draws, tested per shape.
 - **Batch writes on a locked room or a stale layout** must refuse as a whole,
   never move half a selection.
+
+## Build status
+
+Built in session 65 on branch `claude/awesome-mendel-bdg1ak`: **build-order steps 1 to 3 (Parts A, B and C), which need no
+migration.** Steps 4 and 5 (Part D table items and rules, Part E notes, and migration `0062`) are **not built**; the planner's
+Q8 order puts them after these, and a migration is a confirm-first step in `CLAUDE.md`.
+
+**Built.**
+
+- **A.1 Focus mode:** the Room view opens full-window on 1024 px and wider (a fixed overlay over the app shell, body scroll
+  locked); 44 px top bar with ← Seating, the event, the layout and room (as dropdowns holding the existing layout and space
+  controls, not tabs in the bar), undo and redo, "Saving… / saved", Lock room, Share, Export and Print; Esc with nothing
+  picked and no tool leaves it; "Focus on the plan" goes back in.
+- **A.2 Panels:** the 48 px rail opens Guests, Library, Venue, Styles, Food, Rules, History and Settings in a 320 px panel,
+  pinned beside the plan or floating over it; the inspector docks on the right when something is picked (one table: Seats,
+  Style, Notes; one fixture; several things); `\` and ⌘/Ctrl+`.` hide the rail, inspector and tools; open panel, pin and hidden
+  are remembered per device; the legend is a "Key" chip.
+- **A.3 to A.6:** the Select (V), Hand (H) and drawing tools on a floating bar with a zoom box (Fit, Selection, 50, 100, 200
+  and the navigation mode); pinch and Ctrl/⌘+scroll zoom in proportion (a mouse notch is 10%), Trackpad (default) and Mouse
+  modes per device, switched in Settings, the zoom box and the right-click menu; Space, middle-button and Hand pan; 10% to 800%;
+  `+ − 0`, Shift+1 and Shift+2; click, Shift-click, selection box (Alt: only what it holds), ⌘/Ctrl+A, select similar; layers
+  (Venue, Tables, Room furniture, Flowers & décor) shown, hidden and locked per device, the venue locked until the Venue panel
+  or a drawing tool is in use; one move, copy, paste, align, space, grid, turn or delete of a selection is one write and one undo
+  step; arrow nudges (5 and 25 cm) and R are debounced into one write; Alt before dragging copies; snap guides (edges,
+  centres, equal gaps with the gap in cm coloured by the walkway thresholds), Alt during a drag turns snapping off; cursors,
+  hover outline, the hint line, the `?` sheet, the three first-visit tips; the designer's commands in ⌘K ("On the plan",
+  offered only while the Room view is on screen).
+- **Part B right-click:** Duplicate, Copy, Paste, Delete, Turn 90°, Select similar, Align and space, Open close-up, Apply
+  style; on empty floor Paste here, Fit, Navigation, Lock or unlock a layer.
+- **Part C:** a library click starts Stamp, which stays until Esc, V or another tool (a drop still places one and returns to
+  Select); `S`; Favourites (starred in the Library, kept in the plan's settings, reordered by drag or by ‹ ›); Recent (last six,
+  per device); keys 1 to 9; Shift+drag stamps along a line, every N cm (typed under the toolbar; default the width + 20), as one
+  write and one undo step; Repeat in the inspector.
+- **Server actions** (`src/server/actions/seating-items.ts`): `moveSeatingItems`, `duplicateSeatingItems`,
+  `deleteSeatingItems`, `createSeatingFixtures`; `setSeatingFavourites` in `seating-workspace.ts`.
+  **Pure, tested** (`src/lib/seating/canvas.ts`, `stamp.ts`, `designer-commands.ts`): wheel and pinch to zoom, `boxHits`,
+  align, distribute, grid, `snapGuides`, select similar, line and repeat stops, favourites and recent.
+
+**Not built, or built differently.**
+
+- **Lock item** (A.5, Part B) needs `seating_fixtures.locked`, so it waits for `0062`. **Bring to front / Send to back**
+  (Part B) has no column in §9 to keep an order in, so it is not built. **Add a note here** and the Note tool wait for Part E;
+  **Add table décor** and table items for Part D.
+- **"One transaction"** (§9): PostgREST has no multi-statement transaction. Each batch action checks the whole request first
+  (this layout, not locked, every item in it) and refuses it whole; after that a failed later statement puts the earlier ones
+  back (moves restore the positions they read, a paste deletes the copies it made, a delete re-creates the fixtures it took).
+  A true single transaction would be an RPC, which could join `0062`.
+- **Alt** means two things in the spec (A.5 copy, snap guides). Alt held **before** the drag starts copies; Alt pressed
+  **during** a drag turns snapping off.
+- **Favourites** are in the **event's plan settings** (the spec's "plan settings"), shared by everyone on the wedding, so a
+  wedding with two events that seat has two sets. Dishes can't be starred until Part D makes them placeable.
+- **Snap guides** use each table's body, not its chairs. The Stamp button sits after Measure on the toolbar.
+
+**Verified in session 65.** Typecheck, unit tests (1897: 69 new for `canvas`, `stamp` and the palette's plan commands) and
+`npm run build`. The SQL suite was **not** run (no migration). In **headless Chromium** (1440 px, the real `RoomView` and
+`SeatingScreen` bundled with the server actions stubbed and sample data; touch through the DevTools protocol): wheel and
+Ctrl+wheel in both modes (exactly 10.0% a notch, the page never moves, the point under the cursor stays put), the 10% and 800%
+limits, box select through a whole-room area, one write for a 3-table and a 33-table drag, Space, Hand and middle pan, arrow,
+R, ⌘D, ⌘C/⌘V, Alt-drag, Delete, ⌘A, select similar, align and grid, both right-click menus, the layer locks and the venue lock,
+guides drawn and cleared, Alt during a drag, a 33-of-40-table drag holding 60 fps (software-rendered), two-finger pinch,
+one-finger pan and tap by touch, focus mode (window size, 44 and 48 px, pin, overlay, `\`, the inspector, Esc and
+← Seating), Stamp, favourites, 1 to 9, line stamping and Repeat.
+**Not verified:** any server action against a database (all stubbed; `moveSeatingItems`, `duplicateSeatingItems`,
+`deleteSeatingItems`, `createSeatingFixtures` and `setSeatingFavourites` are typechecked only, and the compensation paths
+have never run); **a real trackpad or mouse** (pinch, two-finger scroll, a wheel's real deltas) and **Safari's gesture
+events**, which headless Chromium can't produce; a real iPad; the shell's own `?` sheet not also opening beside the plan's.
+

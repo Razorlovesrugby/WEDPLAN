@@ -3,6 +3,7 @@
  * onto a space. Pure — the panel, the Show layers and the tests share it.
  */
 
+import type { SeatingCustomItemRow, SeatingMarqueeRow } from "@/lib/types/database";
 import { FIXTURE_DEFAULTS } from "./geometry";
 import type { PlaceItem } from "./tools";
 
@@ -92,4 +93,49 @@ export function carriesQuantity(kind: string): boolean {
 export function tileDrawSize(t: Pick<LibraryTile, "w" | "d">, box: number): { w: number; h: number } {
   const k = box / Math.max(t.w, t.d, 1);
   return { w: Math.max(4, Math.round(t.w * k)), h: Math.max(4, Math.round(t.d * k)) };
+}
+
+/**
+ * Every tile the Library can show: the built-in ones (at the plan's own default
+ * sizes, Part I), the couple's own items and their marquee templates. Their ids
+ * are the references Favourites and Recent keep (spec 59 Part C): `round`,
+ * `candles`, `custom:<id>`, `marquee:<id>`.
+ */
+export function libraryTiles(
+  customItems: readonly Pick<SeatingCustomItemRow, "id" | "name" | "width_cm" | "depth_cm">[],
+  marquees: readonly Pick<SeatingMarqueeRow, "id" | "name" | "width_cm" | "length_cm">[],
+  defaultSizes: Record<string, { width: number; depth: number }> = {},
+): LibraryTile[] {
+  const mine: LibraryTile[] = customItems.map((c) => ({
+    id: `custom:${c.id}`,
+    group: "decor",
+    label: c.name,
+    item: { type: "fixture", kind: "custom", label: c.name, width: c.width_cm, depth: c.depth_cm, customItemId: c.id },
+    w: c.width_cm,
+    d: c.depth_cm,
+  }));
+  const tents: LibraryTile[] = marquees.map((m) => ({
+    id: `marquee:${m.id}`,
+    group: "outdoors",
+    label: m.name,
+    item: { type: "fixture", kind: "marquee", label: m.name, width: m.width_cm, depth: m.length_cm, marqueeId: m.id },
+    w: m.width_cm,
+    d: m.length_cm,
+  }));
+  // The plan's own default sizes replace the built-in footprint of a built-in fixture.
+  const sized = LIBRARY.map((t) => {
+    const own = t.item.type === "fixture" ? defaultSizes[t.item.kind] : undefined;
+    return own && t.item.type === "fixture" ? { ...t, w: own.width, d: own.depth, item: { ...t.item, width: own.width, depth: own.depth } } : t;
+  });
+  return [...sized, ...mine, ...tents];
+}
+
+/** The tile a stored reference names, or undefined when it has gone (a deleted item of the couple's own). */
+export function tileByRef(tiles: readonly LibraryTile[], ref: string): LibraryTile | undefined {
+  return tiles.find((t) => t.id === ref);
+}
+
+/** Rows and banquet runs need a setup form first, so they can't be stamped straight from a key. */
+export function isStampable(tile: LibraryTile): boolean {
+  return !tile.needsSetup;
 }
