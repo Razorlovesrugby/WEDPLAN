@@ -25,8 +25,12 @@
 ## Recent sessions
 
 **Session 64 (spec 57, the rest built):** on branch `claude/nifty-fermi-rel802`, asked to continue spec 57 and
-"build it all". Migrations **`0055` to `0061` must be applied to live, in order** (`0055` alone first; `0059` changes the
-seat key, so apply it when nobody is seating). The next free number is `0062`. Nothing has been applied to live.
+"build it all". Migrations **`0055` to `0061` are applied to live** (the planner applied them by hand; on 2026-11-27
+`supabase/checks/verify_migrations_applied.sql` reported 63 applied, 0 missing, 1 not checkable (`0028`)). The next free
+number is `0062`. The app code is on `main` through PR #110, and PR #111 fixes a crash found right after: the seating
+query asked `vendors` for a `deleted_at` column it doesn't have, so every seating page showed "Something went wrong"
+(typecheck can't catch a wrong column name in `.is()` / `.eq()`). Still never run by a person on live data past that:
+a real iPad, a printer, `/p/<token>`.
 
 - **Built, each as its own commit:** drafts (`0059`: one seat per guest per layout, `v_live_*` views for everything
   outside the designer, state / hash / restore / History per layout, try a layout and make it live, the Layout tabs);
