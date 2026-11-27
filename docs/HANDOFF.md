@@ -7,7 +7,7 @@
 
 **What this is.** WEDPLAN: a wedding planning platform. Couples sign themselves up at `/start` and plan with their collaborators; guests reach RSVP links and wedding websites without an account. Next.js App Router on Vercel, Supabase (Postgres, Auth, RLS keyed to `wedding_id`), TypeScript, Vitest. `README.md` is the overview; `docs/wedding-platform-spec.md` is the technical spec; `docs/specs/README.md` is the index of per-feature specs and how the spec process works.
 
-**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is not recorded here. Specs 1–47 are built and merged to `main` (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0047`.
+**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is checked only by the planner. Specs 1–59 are built (spec 59 in part) and merged to `main` (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0061`, and **the planner said on 2026-11-27 that all of them are applied to live** (`0062` is the next, written in session 66).
 
 **What that changes.** Every migration now runs against real guest data: no destructive change to a column without a backfill, and check what a live database already holds before assuming a fresh one. Guest-facing pages (`/w`, `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`) are used by people with no account and no way to report a bug except to the couple. The app serves many weddings, so nothing may assume there is only one (session 55 found the privacy notice doing exactly that).
 
@@ -87,7 +87,7 @@ a real iPad, a printer, `/p/<token>`.
 
 ### Database — `supabase/migrations/`
 
-Numbered migrations `0001`–`0047`, applied in order; the table below covers the
+Numbered migrations `0001`–`0061` (and `0062`, session 66), applied in order; the table below covers the
 early ones (later ones are named in each spec). `bootstrap.sql` makes a wedding by hand;
 `/start` is the normal way since spec 40. Full instructions in `supabase/migrations/README.md`.
 

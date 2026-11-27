@@ -1,6 +1,6 @@
 # Feature spec: The seating canvas, round two: reach it without a mouse, resize and turn, steady edits, and the holes in spec 59
 
-**Status: proposed, not built. The questions in §9 need answers before anything is built.**
+**Status: answered 2026-11-27 (every question took its recommendation, on the planner's "do everything not done"); being built in session 66. See **Build status** at the end.**
 
 **Depends on:** spec 59 (the seating canvas on a laptop: focus mode, navigation, selection, Stamp), spec 57 (the venue
 designer: spaces, layouts, the close-up, the share link), spec 53 (undo and redo through whole-plan state), spec 45 (every
@@ -167,7 +167,8 @@ decides when the screen may take the server's copy (E.1), and the view-only zoom
 
 ## 9. Open questions
 
-Each has a recommendation; nothing is built until the answers are in.
+**Answered 2026-11-27: all 13 took the recommendation.** The planner asked for everything not yet done to be built; the
+recommendations are the answers, and the other option in each is not built.
 
 1. **Favourites scope (A.1).** *Recommended: per event's plan, as stored, with the Library saying so.* Or one row for the
    whole wedding, which needs a wedding-level setting and means dishes, which belong to an event's menu, can't be in it.
