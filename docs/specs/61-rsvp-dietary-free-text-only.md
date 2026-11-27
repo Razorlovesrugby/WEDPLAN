@@ -1,6 +1,6 @@
 # Feature spec: The RSVP form asks for dietary needs in one free-text box; tags are the couple's to set
 
-**Status: proposed, not built. §7 has one question. Answering it is not a build request: the build waits for "build it".**
+**Status: answered 2026-11-27, not built. The build waits for "build it".**
 
 **Depends on:** spec 57 (Part H: the dietary tags, and the guest page, guest table, table drawer and seating screens that
 read them), spec 35 (the RSVP form in the site theme: a guest who is not coming is not asked about food). **No migration.**
@@ -62,9 +62,9 @@ that guest's "Add tags". Nothing new is built for this.
 
 ## 5. Data
 
-No migration; `0062` stays with spec 59. No row is deleted or changed. Tags a guest saved from the RSVP form stay on that
-guest, appear on the guest page and the seating screens, and the couple can edit or clear them. The table does not record
-whether a tag came from a guest or the couple, so the two cannot be told apart afterwards (§7 Q1).
+No migration and no schema change; `0062` stays with spec 59. The only rows deleted are the planner's wedding's tags that
+a guest saved from an RSVP link, by a one-off script the planner runs by hand (§7). Every other row, in this wedding and in
+any other, stays. A guest's free-text note is never changed.
 
 ## 6. What the build touches
 
@@ -78,29 +78,56 @@ Removed from the RSVP side only:
 | `src/server/rsvp/resolve.ts` | The `dietaryNeeds` field of `RsvpContext`, `needsByGuest`, the `guest_dietary_needs` query. |
 | `src/server/queries/site-render.ts` | `dietaryNeeds: {}` in the blank preview. |
 | `supabase/tests/38_dietary_needs.sql` | One comment that says the RSVP form uses the upsert; the assertions stay (the guest page still uses it). |
+| `supabase/one-off/clear_rsvp_dietary_tags.sql` | New. The two-step script in §7, run by hand in the Supabase SQL editor. The app never runs it. |
+| `supabase/tests/40_clear_rsvp_dietary_tags.sql` | New. Runs the script's rule against seeded rows (§9). |
 
 With the change, the RSVP form's dietary fields match the form as it was before spec 57 Part H added the picker.
 
 At build, the change also updates spec 57's Part H (§12, its build order and its Build status line, which name the RSVP
 form), this spec's status, and the spec index.
 
-## 7. Open question
+## 7. The one-off clear
 
-**Q1. Tags guests already saved from the RSVP form.** Leave them where they are, or clear them?
-*Recommendation: leave them.* They are guest data, the couple sees them on the guest page and can change any of them, and
-clearing would also remove tags the couple set themselves, since the two can't be told apart. If you would rather start
-clean, say so and this spec will name what to clear.
+Removes the tags guests saved from the RSVP form in the planner's wedding. A guest-saved tag is told apart from one the
+couple set by the audit log, which records whether each write came from a signed-in planner or from a guest on their link.
 
-## 8. Verification
+**Which rows.** A tag row in one wedding, the id of which is set at the top of the script, whose most recent insert or
+update in the audit log was by a guest (`actor_kind = 'public'`). A tag whose most recent write was by a planner stays, as
+does a tag with no audit record. A tag the couple set and a guest's save later changed counts as the guest's; the audit log
+holds the earlier value. No other wedding is touched: its couple can edit or clear its tags on the guest page.
 
-At build, typecheck, unit tests and `npm run build`; `./scripts/verify-migrations.sh` because a SQL test file is edited
-(comment only), run as a non-root user. A static-markup test that the RSVP form renders one "Dietary requirements" input and
-no "Dietary needs" group, and that the submit payload has `dietary` and no `dietaryNeeds`, if the form renders without a
-browser; if not, headless Chromium against the real form with the server action stubbed.
+**Step 1, read-only.** Lists each affected guest: name, their tags with allergies marked, and whether they have a free-text
+note, with a count. A guest with an allergy tag and no note is a guest whose allergy would be recorded nowhere after step 2.
+The planner types it into the note, or asks the guest, before running step 2.
 
-**Cannot be checked from a session:** a real submit against live Supabase, a real phone, and a form that was open in a
-guest's browser when the change went out. After release, open your own invitation link, change a dietary answer, save, and
-reopen: the box shows what you saved and no tag picker appears.
+**Step 2, one transaction.** Deletes exactly those rows and reports the count. The planner commits only if the count equals
+step 1's.
 
-**Release:** this is a guest-facing page on a live app. It ships as one change that only removes code. There is no database
-step, so the order of release does not matter. It goes live when it reaches `main`.
+**What remains.** The app shows none of it: not on the guest page, the seating screens or the exports. The audit log keeps a
+record of the saves and the deletes for its 12 months (Settings, Activity), and the nightly backups hold the rows for 30
+days. The script does not touch the audit log.
+
+**Order.** Release the code change first, then run the script. Run first, a guest on the form that still shows the picker
+could tick a tag again.
+
+## 8. Answered (2026-11-27)
+
+**Q1. Tags guests already saved from the RSVP form:** clear them, as if the picker had never existed. Folded into §5 and §7:
+the clear covers the planner's wedding and the tags guests saved, and leaves tags the couple set.
+
+## 9. Verification
+
+At build, typecheck, unit tests and `npm run build`; `./scripts/verify-migrations.sh` as a non-root user, because one SQL
+test file is edited (a comment) and one is added. A static-markup test that the RSVP form renders one "Dietary requirements"
+input and no "Dietary needs" group, and that the submit payload has `dietary` and no `dietaryNeeds`, if the form renders
+without a browser; if not, headless Chromium against the real form with the server action stubbed. The new SQL test seeds
+tag rows with audit entries written as a guest and as a planner, in two weddings, and asserts the script removes only the
+guest-written rows of the named wedding and keeps a planner-written row, a row with no audit entry and the other wedding's
+rows.
+
+**Cannot be checked from a session:** a real submit against live Supabase, a real phone, a form that was open in a guest's
+browser when the change went out, and the script against live data. After release, open your own invitation link, change a
+dietary answer, save, and reopen: the box shows what you saved and no tag picker appears.
+
+**Release:** the code change is a guest-facing page on a live app. It ships as one change that only removes code, with no
+database step, and goes live when it reaches `main`. The script is a separate step the planner runs after it (§7).
