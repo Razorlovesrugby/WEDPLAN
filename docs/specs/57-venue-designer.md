@@ -459,9 +459,8 @@ free-text detail beside them.
   fish, egg, soy, sesame, halal, kosher, and **Other** (a short text). Each tag a
   guest has is marked **allergy** or **preference**.
 - Edited on the guest, in the guest table (spec 47), and in the seating right
-  panel. On the RSVP form the dietary question becomes the tag list with the
-  allergy/preference choice and the existing free-text box; what the RSVP
-  asks otherwise is unchanged.
+  panel. Guests are not asked for tags: the RSVP form keeps its one free-text
+  dietary box (spec 61).
 - Shown as the dots in A.2, in the exports, and in the day-link Seating module
   (spec 53 Part I).
 - Existing free-text notes are left exactly as they are, untagged, until
@@ -565,8 +564,8 @@ applied.
 - **`guest_dietary_needs`**: `wedding_id`, `guest_id`, `tag` (checked against
   Part H's list or `other`), `other_text`, `is_allergy`, unique per guest and
   tag; RLS; audit; guest data, so it follows the guest's soft delete.
-- The RSVP's write path (spec 49's checked upsert pattern) saves tags; the
-  `onConflict` target is tested in the SQL suite.
+- The guest page's write path (spec 49's checked upsert pattern) saves tags;
+  the `onConflict` target is tested in the SQL suite.
 
 SQL suite: tenancy for every new table; the backfill against seeded spec 33/53
 data (counts before and after match); one live layout per event; one seat per
@@ -583,7 +582,7 @@ wrong passcode, an expired and a revoked link; the dietary upsert.
    couple's items), space tabs.
 4. **Part B** drawing: upload choices, PDF, walls and curves, wall parts,
    marquees, areas, text, measure.
-5. **Part H** structured dietary needs (guest, table, RSVP).
+5. **Part H** structured dietary needs (guest, table).
 6. **Part C** styles, per-table changes, close-up, items and final numbers,
    vendor and budget links.
 7. **Part F** menu, course styles, platters, own plates, kids' meals.
@@ -646,7 +645,7 @@ not run under Next with a database.
 ### Built
 
 - **G (layouts):** try a layout (a copy with fresh ids, seating included, 20 drafts at most), switch, rename, delete a draft (kept in "Recently deleted" for 30 days and restorable), make live, which turns the old live layout into "*name* (before *date*)" and lists anyone coming with no seat or seated and no longer coming before it confirms. Undo, History and print work per layout. Every read outside the designer goes through the live views.
-- **H (dietary):** tags with allergy or preference and a short Other, on the guest page, in the guest table's Dietary cell, in the table drawer and on the RSVP form (a checked upsert, its `onConflict` pinned in `38_dietary_needs.sql`). Chair dots (red allergy, amber preference, grey note only), Colour by, chips, print, the CSV and the day-link seating module (tags only, never the free text) read them. Old free-text notes are untouched.
+- **H (dietary):** tags with allergy or preference and a short Other, on the guest page, in the guest table's Dietary cell, and in the table drawer; not on the RSVP form (spec 61) (a checked upsert, its `onConflict` pinned in `38_dietary_needs.sql`). Chair dots (red allergy, amber preference, grey note only), Colour by, chips, print, the CSV and the day-link seating module (tags only, never the free text) read them. Old free-text notes are untouched.
 - **A (canvas):** space tabs (add, rename, delete without unseating anyone), per-space room, plan and drawing; Guests / Library / Venue panels; the library (tables, room, décor, outdoors tiles, click then click or drag; ceremony rows and banquet runs with their own setup; the couple's own décor with a supplier; marquee templates with poles and rounded ends; décor quantity and supplier); Show layers (Venue, Furniture, Flowers & décor, Names, Seat numbers); an in-canvas legend with counts; "*Name* can't come any more. Free seat *N*?" with Free the seat and Keep for now (kept until their reply changes); below tablet width the room is for looking and seating only.
 - **B (drawing):** walls and curved walls (shift keeps 0/45/90°, snaps to the grid and to corners, closes on the first corner), doors, double doors, windows and openings that snap to a wall and slide along it, columns, stairs, power points, fire exits and toilets, areas (outdoor ones hatched), text, measure (kept as a dimension, coloured by the plan's walkway thresholds between two tables), select, drag a corner (the walls that meet it follow), bend, straighten, split, thickness, delete; three equal starting choices on an empty space; a fade; a PDF plan (page picker, drawn in the browser by pdf.js at 150 dpi, 6000 px at most, never uploaded). Every finished edit is one undoable write, validated by `drawing.ts`.
 - **C:** table styles (session 63), per-table changes over a style with "Changed from *style*" and Reset to style, the Kids starter style (offered when the first child is seated), an item's supplier and a budget line that follows its final number (manual-quantity lines only; clearing the number leaves the quantity), a supplier's page lists what the plan says they bring, serving utensils (two per platter) in the totals.
