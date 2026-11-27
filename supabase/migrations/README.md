@@ -66,6 +66,7 @@ script that can be pasted straight into the Supabase SQL editor.
 | 59 | `0059_seating_drafts.sql` | One seat per guest per layout, the room on the space, `v_live_seat_assignments` / `v_live_seating_tables`, state / hash / restore / snapshots per layout, `seating_try_layout()`, `seating_make_live()`. Spec 57 Part G. | 56, 57 |
 | 60 | `0060_seating_large_blocks.sql` | Ceremony rows and banquet runs may seat up to 400. Spec 57. | 36 |
 | 61 | `0061_seating_share_check.sql` | `seating_share_check()` (security definer, service role only) and a passcode lockout on share links. Spec 57 E.3. | 57 |
+| 62 | `0062_seating_canvas_round_two.sql` | `seating_tables.table_items` / `locked`, `seating_fixtures.locked` / `z`, `seating_table_styles.item_rules`; `restore_seating_state()` carries them; `seating_apply_items()` does a whole move, resize, copy, delete, stamp, lock or reorder in one transaction, refusing a stale position (spec 60 A.5, E.2). Specs 59 D and E, 60 A. | 53, 57, 59 |
 
 Then run **`../bootstrap.sql`** to create your own wedding and attach yourselves
 to it. That step is not optional — the app shows nothing until it has a wedding
