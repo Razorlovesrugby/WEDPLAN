@@ -164,7 +164,8 @@ export async function loadSeatingPlan(
       supabase.from("guest_dietary_needs").select("guest_id, tag, is_allergy, other_text").eq("wedding_id", weddingId),
       supabase.from("seating_custom_items").select("*").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
       supabase.from("seating_marquees").select("*").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
-      supabase.from("vendors").select("id, name").eq("wedding_id", weddingId).is("deleted_at", null).order("name"),
+      // Vendors have no deleted_at (they are archived by stage), so every one is offered as a supplier.
+      supabase.from("vendors").select("id, name").eq("wedding_id", weddingId).order("name"),
       supabase.from("budget_items").select("id, label").eq("wedding_id", weddingId).eq("quantity_basis", "manual").order("label"),
     ]);
 
