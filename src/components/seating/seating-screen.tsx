@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
@@ -16,6 +15,9 @@ import { DeclinedSeats } from "./declined-seats";
 import { ExportDialog } from "./export-dialog";
 import { ShareDialog } from "./share-dialog";
 import type { ShareLinkSummary } from "@/server/queries/seating";
+import { FocusShell } from "./focus-shell";
+import { LayersMenu } from "./layers-menu";
+import { PrintMenu } from "./print-menu";
 import { LayoutTabs } from "./layout-tabs";
 import { LibraryPanel } from "./library-panel";
 import { VenuePanel } from "./venue-panel";
@@ -82,11 +84,14 @@ function Screen({
   dayActivity: SeatingDayActivity[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
 }) {
-  const { eventId, layoutId, isDraft, locked, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode } = useSeating();
+  const { eventId, layoutId, isDraft, locked, move, error, setError, held, hold, colourBy, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tables, data, show, setShow, assignments, trayMode, leftTab, setLeftTab } = useSeating();
   const unseated = trayHouseholds(data.guests, assignments, trayMode).reduce((n, h) => n + h.guests.length, 0);
   const [skippedSetup, setSkippedSetup] = useState(false);
   const [view, setView] = useState<View>("tables");
-  const [leftTab, setLeftTab] = useState<"guests" | "library" | "venue">("guests");
+  // The Room view opens in focus mode on a laptop-sized window (spec 59 A.1); ← Seating, or Esc, comes back to the page.
+  const wide = useMediaQuery("(min-width: 1024px)", false);
+  const [focus, setFocus] = useState(true);
+  const inFocus = view === "room" && wide && focus;
   const [dragging, setDragging] = useState<DragPayload | null>(null);
   // Below tablet width the designer views the room and seats people only (spec 57 Part A).
   const canEdit = useMediaQuery(TABLET_UP) && !locked;
@@ -103,6 +108,7 @@ function Screen({
   }, []);
   const choose = (v: View) => {
     setView(v);
+    if (v === "room") setFocus(true);
     try {
       window.localStorage.setItem(VIEW_KEY, v);
     } catch {
@@ -132,6 +138,25 @@ function Screen({
 
   return (
     <DndContext id="seating" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}>
+      {inFocus ? (
+        <>
+          <FocusShell
+            eventName={eventName}
+            timeZone={timeZone}
+            shareLinks={shareLinks}
+            snapshots={snapshots}
+            dayActivity={dayActivity}
+            collaborators={collaborators}
+            canEdit={canEdit}
+            printHref={printHref}
+            unseated={unseated}
+            onLeave={() => setFocus(false)}
+          >
+            <RoomView focus onLeaveFocus={() => setFocus(false)} />
+          </FocusShell>
+          <TableDrawer />
+        </>
+      ) : (
       <div className="space-y-4">
         <SummaryBar />
         <LayoutTabs collaborators={collaborators} timeZone={timeZone} />
@@ -220,52 +245,25 @@ function Screen({
               </div>
               <details className="relative">
                 <summary className="btn cursor-pointer list-none py-1">Show</summary>
-                <div className="absolute z-30 mt-1 w-52 space-y-1 rounded border border-line bg-white p-3 text-sm shadow-lg">
+                <div className="absolute z-30 mt-1 w-60 space-y-1 rounded border border-line bg-white p-3 text-sm shadow-lg">
                   <label className="flex items-center gap-2"><input type="checkbox" checked={show.names} onChange={(e) => setShow({ ...show, names: e.target.checked })} /> Names on chairs</label>
                   <label className="flex items-center gap-2"><input type="checkbox" checked={show.numbers} onChange={(e) => setShow({ ...show, numbers: e.target.checked })} /> Seat numbers</label>
-                  <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted">In the room</p>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={show.venue} onChange={(e) => setShow({ ...show, venue: e.target.checked })} /> Venue (walls, doors, plan)</label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={show.furniture} onChange={(e) => setShow({ ...show, furniture: e.target.checked })} /> Furniture</label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={show.decor} onChange={(e) => setShow({ ...show, decor: e.target.checked })} /> Flowers &amp; décor</label>
+                  <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted">Layers of the room</p>
+                  <LayersMenu />
+                  <p className="text-xs text-muted">A locked layer is drawn but can&rsquo;t be picked or moved. Only on this device; Lock room binds everyone.</p>
                   <p className="text-xs text-muted">Meal colours: pick an answer under Colour by.</p>
                 </div>
               </details>
+              {view === "room" && wide ? (
+                <button type="button" className="btn py-1" onClick={() => setFocus(true)} title="Give the plan the whole window">
+                  Focus on the plan
+                </button>
+              ) : null}
               <div className="ml-auto flex items-center gap-1">
                 <ShareDialog links={shareLinks} timeZone={timeZone} />
                 <ExportDialog eventName={eventName} />
               </div>
-              <details className="relative">
-                <summary className="btn cursor-pointer list-none py-1">Print</summary>
-                <ul className="absolute right-0 z-30 mt-1 w-64 rounded border border-line bg-white py-1 text-sm shadow-lg">
-                  {unseated > 0 ? (
-                    <li className="border-b border-line px-3 py-1.5 text-amber-800">
-                      {unseated} {unseated === 1 ? "person isn't" : "people aren't"} seated yet —{" "}
-                      <button type="button" className="underline" onClick={() => document.getElementById("seating-tray")?.scrollIntoView({ behavior: "smooth" })}>
-                        see who
-                      </button>
-                    </li>
-                  ) : null}
-                  {[
-                    ["tables", "By table — for the venue"],
-                    ["names", "By name — the entrance board"],
-                    ["catering", "Numbers — for the caterer"],
-                    ["floor", "Floor plan"],
-                    ["escort", "Escort cards"],
-                    ["cards", "Place cards"],
-                  ].map(([v, label]) => (
-                    <li key={v}>
-                      <Link href={printHref(v!)} target="_blank" className="block px-3 py-1.5 hover:bg-paper">
-                        {label}
-                      </Link>
-                    </li>
-                  ))}
-                  <li className="border-t border-line">
-                    <a href={`/api/export/seating?event=${eventId}`} className="block px-3 py-1.5 hover:bg-paper">
-                      Download CSV
-                    </a>
-                  </li>
-                </ul>
-              </details>
+              <PrintMenu eventId={eventId} printHref={printHref} unseated={unseated} />
             </div>
 
             {view === "tables" ? (
@@ -288,6 +286,7 @@ function Screen({
         <RevealPanel />
         <TableDrawer />
       </div>
+      )}
 
       <DragOverlay dropAnimation={null}>
         {dragging ? <DragPreview label={dragging.label} count={dragging.guestIds.length} /> : null}

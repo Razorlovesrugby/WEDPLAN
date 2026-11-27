@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { buildTemplate, planRenumber, type TemplateInput } from "@/lib/seating/template";
+import { parseRefs } from "@/lib/seating/stamp";
 import { parseSettings } from "@/lib/seating/plan-settings";
 import { nextTableLabel } from "@/lib/seating/model";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
@@ -440,8 +441,32 @@ export async function keepDeclinedSeat(eventId: string, guestId: string, layoutI
 export async function saveSeatingSettings(eventId: string, input: unknown): Promise<ActionResult> {
   const wedding = await requireWedding();
   if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
-  const settings = parseSettings(input);
   const supabase = await createClient();
+  // The sheet edits thresholds and sizes, never the Library's stars: keep whatever is stored, so a stale sheet can't wipe them.
+  const { data: current, error: readError } = await supabase.from("seating_plans").select("settings").eq("event_id", eventId).eq("wedding_id", wedding.id).maybeSingle();
+  if (readError) return fail(readError.message);
+  const settings = { ...parseSettings(input), favourites: parseSettings(current?.settings).favourites };
+  const { error } = await supabase
+    .from("seating_plans")
+    .upsert({ wedding_id: wedding.id, event_id: eventId, settings }, { onConflict: "event_id" });
+  if (error) return fail(error.message);
+  revalidate(eventId);
+  return ok(undefined);
+}
+
+/**
+ * The Library's starred items (spec 59 Part C). They live in the plan's
+ * settings, so this reads what is stored and changes only the favourites: a
+ * threshold someone else just saved isn't overwritten by a star.
+ */
+export async function setSeatingFavourites(eventId: string, favourites: unknown): Promise<ActionResult> {
+  const wedding = await requireWedding();
+  if (!(await eventBelongs(wedding.id, eventId))) return fail("That event doesn't exist");
+  const supabase = await createClient();
+  const { data: current, error: readError } = await supabase.from("seating_plans").select("settings").eq("event_id", eventId).eq("wedding_id", wedding.id).maybeSingle();
+  if (readError) return fail(readError.message);
+  const stored = current?.settings && typeof current.settings === "object" && !Array.isArray(current.settings) ? (current.settings as Record<string, unknown>) : {};
+  const settings = parseSettings({ ...stored, favourites: parseRefs(favourites) });
   const { error } = await supabase
     .from("seating_plans")
     .upsert({ wedding_id: wedding.id, event_id: eventId, settings }, { onConflict: "event_id" });

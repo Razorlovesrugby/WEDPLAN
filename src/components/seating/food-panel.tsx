@@ -14,7 +14,7 @@ import { useSeating } from "./seating-state";
  * with each course's own style, and the kitchen summary that follows from who
  * sits where. Changing a style never touches RSVP questions, answers or dishes.
  */
-export function FoodPanel() {
+export function FoodPanel({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { eventId, data, tables, assignments, settings, colourBy, setError, refresh } = useSeating();
   const [pending, startTransition] = useTransition();
   const plan = data.plan;
@@ -61,7 +61,7 @@ export function FoodPanel() {
     edit(menu.map((c) => (c.id === courseId ? { ...c, dishes: c.dishes.map((d) => (d.id === dishId ? { ...d, ...patch } : d)) } : c)));
 
   return (
-    <details className="card p-3 text-sm">
+    <details open={defaultOpen} className="card p-3 text-sm">
       <summary className="cursor-pointer font-medium">
         Food service <span className="font-normal text-muted">({SERVICE_LABEL[defaultStyle].toLowerCase()}{menu.length ? `, ${pluralise(menu.length, "course")}` : ""})</span>
       </summary>

@@ -7,6 +7,8 @@ import type { MarkerKind, OpeningKind } from "./drawing";
 
 export type Tool =
   | { kind: "select" }
+  /** Pans on a drag, from any tool the Space bar does the same (spec 59 A.3). */
+  | { kind: "hand" }
   | { kind: "wall" }
   | { kind: "arc" }
   | { kind: "area" }
@@ -33,8 +35,9 @@ export type PlaceItem =
 
 export const SELECT: Tool = { kind: "select" };
 
-export const TOOL_LABEL: Record<"select" | "wall" | "arc" | "area" | "text" | "measure", string> = {
+export const TOOL_LABEL: Record<"select" | "hand" | "wall" | "arc" | "area" | "text" | "measure", string> = {
   select: "Select",
+  hand: "Hand",
   wall: "Walls",
   arc: "Curved wall",
   area: "Area",
@@ -71,7 +74,25 @@ export const MARKER_SIZE: Record<MarkerKind, { w: number; d: number }> = {
 
 /** True while a tool draws on the canvas (so a click is for the tool, and the room can't be dragged by accident). */
 export function isDrawing(t: Tool): boolean {
-  return t.kind !== "select" && t.kind !== "place";
+  return t.kind !== "select" && t.kind !== "place" && t.kind !== "hand";
+}
+
+/** The key that picks each tool while the plan has focus (spec 59 A.3). */
+export const TOOL_KEY: Record<"select" | "hand" | "wall" | "arc" | "area" | "text" | "measure", string> = {
+  select: "V",
+  hand: "H",
+  wall: "W",
+  arc: "C",
+  area: "A",
+  text: "T",
+  measure: "M",
+};
+
+/** The tool a bare key picks, or null. Case doesn't matter; the caller leaves keys with Ctrl, ⌘ or Alt alone. */
+export function toolForKey(key: string): Tool | null {
+  const k = key.toLowerCase();
+  for (const [kind, letter] of Object.entries(TOOL_KEY)) if (letter.toLowerCase() === k) return { kind } as Tool;
+  return null;
 }
 
 /** The tool a click on a drawn item should hand over to: placing something ends the tool that placed it. */

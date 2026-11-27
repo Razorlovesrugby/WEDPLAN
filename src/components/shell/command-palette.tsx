@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   GROUP_LABEL,
+  designerCommands,
   goCommands,
   makeCommands,
   rankCommands,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/command-palette";
 import type { Viewer } from "@/lib/nav-groups";
 import { SHORTCUTS } from "@/lib/shortcuts";
+import { hasDesignerHandler, runDesignerCommand } from "@/components/seating/designer-bridge";
 import { searchPalette } from "@/server/actions/search";
 import { quickAddItem } from "@/server/actions/lists";
 import { createVendor } from "@/server/actions/vendors";
@@ -109,8 +111,9 @@ export function CommandPalette({ viewer }: { viewer: Viewer }) {
   }, [open, query]);
 
   const sections = useMemo(
-    () => rankCommands([...goCommands(viewer), ...found, ...makeCommands(viewer, query, lists)], query),
-    [viewer, found, query, lists],
+    // The seating plan's commands only while its Room view is on screen (read when the palette opens).
+    () => rankCommands([...(open && hasDesignerHandler() ? designerCommands() : []), ...goCommands(viewer), ...found, ...makeCommands(viewer, query, lists)], query),
+    [viewer, found, query, lists, open],
   );
   const flat = sections.flatMap((section) => section.commands);
   const active = flat[Math.min(activeIndex, flat.length - 1)];
@@ -130,6 +133,12 @@ export function CommandPalette({ viewer }: { viewer: Viewer }) {
     }
     const action = command.action;
     if (!action) return;
+    if (action.kind === "designer") {
+      // Close first, so focus is back on the plan when the command runs.
+      close();
+      setTimeout(() => runDesignerCommand(action.id), 0);
+      return;
+    }
     startTransition(async () => {
       if (action.kind === "add-task") {
         const result = await quickAddItem(action.listId, null, action.title);

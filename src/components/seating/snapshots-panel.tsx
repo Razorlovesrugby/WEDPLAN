@@ -20,9 +20,11 @@ import { useSeating } from "./seating-state";
 export function SnapshotsPanel({
   snapshots,
   collaborators,
+  defaultOpen = false,
 }: {
   snapshots: SeatingSnapshotSummary[];
   collaborators: { user_id: string; display_name: string | null; role: string }[];
+  defaultOpen?: boolean;
 }) {
   const { eventId, layoutId, timeZone, refresh, setError, track } = useSeating();
   const [name, setName] = useState("");
@@ -38,7 +40,7 @@ export function SnapshotsPanel({
     new Intl.DateTimeFormat("en-NZ", { weekday: "long", day: "numeric", month: "long", timeZone }).format(new Date(iso));
 
   return (
-    <details className="card p-3 text-sm">
+    <details open={defaultOpen} className="card p-3 text-sm">
       <summary className="cursor-pointer font-medium">
         History <span className="font-normal text-muted">({snapshots.length})</span>
       </summary>
@@ -151,7 +153,7 @@ export function SnapshotsPanel({
 }
 
 /** Part F: from when each household's page shows them their table. */
-export function RevealPanel() {
+export function RevealPanel({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { eventId, timeZone, data, refresh, setError } = useSeating();
   const current = data.plan?.reveal_at ? utcToZonedInput(data.plan.reveal_at, timeZone) : "";
   const [at, setAt] = useState(current);
@@ -159,7 +161,7 @@ export function RevealPanel() {
   const revealed = data.plan?.reveal_at ? new Date(data.plan.reveal_at) <= new Date() : false;
 
   return (
-    <details className="card p-3 text-sm">
+    <details open={defaultOpen} className="card p-3 text-sm">
       <summary className="cursor-pointer font-medium">
         Showing guests their table{" "}
         <span className="font-normal text-muted">

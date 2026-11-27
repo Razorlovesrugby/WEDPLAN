@@ -19,7 +19,7 @@ const KIND_LABEL: Record<SeatingRuleKind, string> = {
  * the remembering. Pair and accessibility rules hold across every event;
  * "not at this table" belongs to a table and goes with it.
  */
-export function RulesPanel() {
+export function RulesPanel({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { eventId, data, guestById, tableById, tables, refresh, setError, track } = useSeating();
   const [pending, startTransition] = useTransition();
   const [kind, setKind] = useState<SeatingRuleKind>("apart");
@@ -58,7 +58,7 @@ export function RulesPanel() {
     });
 
   return (
-    <details className="card p-3">
+    <details open={defaultOpen} className="card p-3">
       <summary className="cursor-pointer font-medium">
         Seating rules <span className="text-sm font-normal text-muted">({rules.length})</span>
       </summary>

@@ -1,8 +1,23 @@
 # Session history
 
-The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–56), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 56 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
+The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 6–56), followed by the pre-launch sections retired from HANDOFF in session 55. Kept for the record and for specs that cite a session number or a HANDOFF section. For the current state of the project, read `docs/HANDOFF.md`, not this file. Sessions 63 onward are in `docs/HANDOFF.md`; everything older is in `git log`.
 
 ---
+
+**Session 62 (spec 56, built):** on branch `claude/blissful-carson-0c4i5s`, asked to find a way through tasks, the run
+sheet and who's doing what, then "Let's build". **No migration; nothing to apply to live.**
+
+- **Sidebar:** "The day" is Events, Run sheet, Shot list, On the day (Run sheet is its own entry and a planner login
+  sees it). The run sheet has three tabs: Schedule `/run-sheet`, Who's doing what `/run-sheet/people` (new route),
+  Day links `/run-sheet/links`; ⌘K lists them. By the hour / List is `?view=list`, the Show filter `?who=`, and an
+  event's "Run sheet →" opens `?event=<id>`. The browser-remembered view is gone. Run sheet entries are "jobs" on
+  planner screens (the helper page is unchanged); readiness's Fix links point at the right tab.
+- **People:** Settings → People shows "N jobs on the day · N tasks" as links; guest and vendor pages say "Jobs on the
+  day" and link to that person's row; All tasks has a Who filter (`?who=p:<id>` or `u:<id>`, the assign picker's
+  encoding, not the spec's first draft of `person:<id>`).
+- **Verified:** typecheck, 1622 unit tests, `npm run build`. **Not verified:** any of it in a browser, on a phone or
+  against live Supabase; the SQL suite wasn't run (no migration). The new routes and the `?who=` / `?event=` links
+  have never been rendered with real data.
 
 **Session 61 (specs 52, 53, 55, built):** on branch `claude/pensive-mayer-b0d5sr`, after "do the next tasks and
 specs". Migrations **`0052`, `0053`, `0054` must be applied to live** (with `0049`–`0051` from session 60). The specs
