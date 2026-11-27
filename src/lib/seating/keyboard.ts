@@ -83,7 +83,9 @@ export type Change =
   | { kind: "move"; count: number; name?: string; dx: number; dy: number }
   | { kind: "turn"; count: number; name?: string; deg: number; group?: boolean }
   | { kind: "paste" | "duplicate" | "delete" | "copy"; count: number }
-  | { kind: "resize"; name: string; width: number; depth: number };
+  | { kind: "resize"; name: string; width: number; depth: number }
+  | { kind: "lock"; count: number; locked: boolean }
+  | { kind: "order"; count: number; where: "front" | "back" };
 
 const things = (n: number) => `${n} ${n === 1 ? "thing" : "things"}`;
 const subject = (count: number, name?: string) => (count === 1 && name ? name : things(count));
@@ -115,6 +117,10 @@ export function describeChange(c: Change): string {
       return `Copied ${things(c.count)}`;
     case "resize":
       return `${c.name} is now ${Math.round(c.width)} by ${Math.round(c.depth)} cm`;
+    case "lock":
+      return `${c.locked ? "Locked" : "Unlocked"} ${things(c.count)}`;
+    case "order":
+      return `${things(c.count)} ${c.where === "front" ? "brought to the front" : "sent to the back"}`;
   }
 }
 

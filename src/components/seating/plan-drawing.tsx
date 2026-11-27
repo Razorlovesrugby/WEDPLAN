@@ -56,7 +56,11 @@ export function PlanDrawing({ space, tables, fixtures, customItems = [], marquee
   const unit = Math.max(w, d) / 900;
   const font = Math.max(16, Math.max(w, d) / 75);
   const placed = tables.filter((t) => t.pos_x_cm !== null && t.space_id === space.id);
-  const here = fixtures.filter((f) => f.space_id === space.id).filter((f) => (fixtureGroup(f.kind) === "decor" ? options.decor : options.furniture));
+  const here = fixtures
+    .filter((f) => f.space_id === space.id)
+    .filter((f) => (fixtureGroup(f.kind) === "decor" ? options.decor : options.furniture))
+    // The couple's order (Bring to front, Send to back); ties by when they were made. Tables draw above all of it.
+    .sort((a, b) => a.z - b.z || a.created_at.localeCompare(b.created_at));
   const customById = new Map(customItems.map((c) => [c.id, c]));
   const marqueeById = new Map(marquees.map((m) => [m.id, m]));
   let decorNo = 0;

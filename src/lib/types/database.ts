@@ -1659,6 +1659,10 @@ export type SeatingTableRow = {
   aisle_cm: number | null;
   /** Banquet runs only: `[{len, turn}]`, read by `readSegments`. */
   segments: Json | null;
+  /** Spec 59 D: what is placed on the table's top, shaped by `parseTableItems`. */
+  table_items: Json;
+  /** Spec 60 A.3: Lock item. Held still: can't be dragged, turned, resized or deleted. */
+  locked: boolean;
   style_id: string | null;
   /** Changes over the style, shaped by `parseStyleChanges`. */
   style_changes: Json | null;
@@ -1686,6 +1690,9 @@ export type SeatingFixtureRow = {
   vendor_id: string | null;
   custom_item_id: string | null;
   marquee_id: string | null;
+  /** Spec 60 A.3 and A.4: Lock item, and the draw order among furniture and décor in a space. */
+  locked: boolean;
+  z: number;
   created_at: string;
   updated_at: string;
 };
@@ -1752,6 +1759,8 @@ export type SeatingTableStyleRow = {
   place: Json;
   centre: Json;
   colour: string | null;
+  /** Spec 59 D.2: items placed by rule ("a platter every three seats"), shaped by `parseItemRules`. */
+  item_rules: Json;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -2712,16 +2721,18 @@ export type Database = {
         | "style_id"
         | "style_changes"
         | "platter_counts"
+        | "table_items"
+        | "locked"
       >;
       seating_fixtures: Table<
         SeatingFixtureRow,
-        "id" | Timestamps | "rotation_deg" | "space_id" | "layout_id" | "quantity" | "vendor_id" | "custom_item_id" | "marquee_id"
+        "id" | Timestamps | "rotation_deg" | "space_id" | "layout_id" | "quantity" | "vendor_id" | "custom_item_id" | "marquee_id" | "locked" | "z"
       >;
       seat_assignments: Table<
         SeatAssignmentRow,
         Timestamps | "layout_id" | "decline_kept_at" | "own_plate" | "kids_meal"
       >;
-      seating_table_styles: Table<SeatingTableStyleRow, "id" | Timestamps | "place" | "centre" | "colour" | "deleted_at">;
+      seating_table_styles: Table<SeatingTableStyleRow, "id" | Timestamps | "place" | "centre" | "colour" | "item_rules" | "deleted_at">;
       seating_custom_items: Table<
         SeatingCustomItemRow,
         "id" | Timestamps | "shape" | "width_cm" | "depth_cm" | "colour" | "vendor_id" | "deleted_at"
@@ -2841,6 +2852,11 @@ export type Database = {
       restore_seating_state: {
         Args: { p_event_id: string; p_payload: Record<string, unknown>; p_expected_hash?: string | null; p_layout_id?: string | null };
         Returns: { tables: number; fixtures: number; seated: number; skipped: number; hash: string };
+      };
+      /** Spec 60 A.5: a whole move, resize, copy, delete, stamp, lock or reorder in one transaction. Raises `seating_room_locked`, `seating_item_locked`, `seating_item_missing`, `seating_stale`, `seating_layout_not_found`, `seating_space_not_found`, `seating_shape_not_resizable`. */
+      seating_apply_items: {
+        Args: { p_event_id: string; p_layout_id: string; p_op: string; p_items: Record<string, unknown>[]; p_space_id?: string | null };
+        Returns: { count: number; tables: string[]; fixtures: string[] };
       };
       /** Spec 54 §10.2: a group member's claim on an open task, settled under a row lock. Service role only. */
       claim_open_task: {

@@ -76,6 +76,10 @@ describe("accessible names and the live region", () => {
     expect(describeChange({ kind: "turn", count: 1, name: "Cake table", deg: 15 })).toBe("Cake table turned 15° clockwise");
     expect(describeChange({ kind: "turn", count: 5, deg: -90, group: true })).toBe("5 things turned 90° anticlockwise as a group");
     expect(describeChange({ kind: "resize", name: "Stage", width: 400.4, depth: 300 })).toBe("Stage is now 400 by 300 cm");
+    expect(describeChange({ kind: "lock", count: 2, locked: true })).toBe("Locked 2 things");
+    expect(describeChange({ kind: "lock", count: 1, locked: false })).toBe("Unlocked 1 thing");
+    expect(describeChange({ kind: "order", count: 3, where: "front" })).toBe("3 things brought to the front");
+    expect(describeChange({ kind: "order", count: 1, where: "back" })).toBe("1 thing sent to the back");
     expect(describeChange({ kind: "select", count: 0 })).toBe("Nothing selected");
     expect(describeChange({ kind: "select", count: 3 })).toBe("3 things selected");
   });
