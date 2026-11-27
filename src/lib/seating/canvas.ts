@@ -395,6 +395,8 @@ export type Guide = {
   kind: "edge" | "centre" | "spacing";
   /** A spacing guide's gap, in cm. */
   gap?: number;
+  /** Set when the guide is to the building (walls, doors, markers, areas) rather than to other furniture: drawn in its own colour. */
+  source?: "building";
 };
 /** `x` / `y` say which axes found a match, so the caller can fall back to the grid on the other. */
 export type SnapResult = { dx: number; dy: number; x: boolean; y: boolean; guides: Guide[] };

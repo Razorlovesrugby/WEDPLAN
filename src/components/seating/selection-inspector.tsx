@@ -27,6 +27,7 @@ export function MultiSelectionPanel({
   onSimilar,
   onDuplicate,
   onTurn,
+  onTurnGroup,
   onDelete,
   onClear,
 }: {
@@ -40,6 +41,7 @@ export function MultiSelectionPanel({
   onSimilar: () => void;
   onDuplicate: () => void;
   onTurn: () => void;
+  onTurnGroup: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
@@ -94,8 +96,11 @@ export function MultiSelectionPanel({
             <button type="button" className={btn} onClick={onDuplicate} title="Duplicate (⌘/Ctrl+D)">
               Duplicate
             </button>
-            <button type="button" className={btn} onClick={onTurn} title="Turn each 90°">
+            <button type="button" className={btn} onClick={onTurn} title="Turn each one 90° about its own centre">
               Turn 90°
+            </button>
+            <button type="button" className={btn} onClick={onTurnGroup} title="Turn the whole formation 90° about its centre">
+              Turn 90° as a group
             </button>
             <button type="button" className={`${btn} text-red-700`} onClick={onDelete} title="Delete">
               Delete

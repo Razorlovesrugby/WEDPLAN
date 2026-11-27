@@ -57,7 +57,9 @@ const SECTIONS: { title: string; rows: Row[] }[] = [
   {
     title: "Changing",
     rows: [
-      ["Drag", "Move the whole selection (snaps to neighbours; hold Alt during the drag to turn snapping off)"],
+      ["Drag", "Move the whole selection (snaps to neighbours and to the building; hold Alt during the drag to turn snapping off). Pink guides are to furniture, violet to walls, doors and areas"],
+      ["Drag a handle on one item", "Resize it, to 5 cm (⇧ keeps the proportions, Alt resizes about the centre). A round or square table has one handle, for its size"],
+      ["Drag the turn handle on a selection", "Turn the whole formation about its centre, every 15° (⇧ for free)"],
       ["Alt, then drag", "Drag a copy"],
       ["Arrow keys · ⇧ + arrows", "Nudge 5 cm · 25 cm"],
       ["R · ⇧R", "Turn each 15° · back"],

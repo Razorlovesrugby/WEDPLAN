@@ -12,7 +12,7 @@ import {
   updateSeatingFixture,
   updateSeatingRoom,
 } from "@/server/actions/seating";
-import { createSeatingFixtures, deleteSeatingItems, duplicateSeatingItems, moveSeatingItems } from "@/server/actions/seating-items";
+import { createSeatingFixtures, deleteSeatingItems, duplicateSeatingItems, moveSeatingItems, resizeSeatingItem } from "@/server/actions/seating-items";
 import { applyTableStyle } from "@/server/actions/seating-styles";
 import { chairDetail, chairFirstName, chairMarks, initials, readableText, type ChairDetail } from "@/lib/seating/chairs";
 import { colourCounts, guestColour } from "@/lib/seating/colour";
@@ -58,6 +58,9 @@ import {
   type View,
 } from "@/lib/seating/canvas";
 import { classifyWalkway } from "@/lib/seating/plan-settings";
+import { FIXTURE_LIMITS, RESIZABLE_TABLE_SHAPES, SIZE_STEP_CM, TABLE_LIMITS, allInRoom, handleCursor, handlePoints, handlesVisible, resizeBody, turnAbout, type HandleId, type Resizable, type Resized } from "@/lib/seating/resize";
+import { buildingGuides, buildingLines, wallGaps } from "@/lib/seating/building";
+import { emptyDrawing, parseDrawing } from "@/lib/seating/drawing";
 import { LONG_PRESS_MS, describeChange, describeFixture, describePosition, describeTable, focusOrder, movedTooFar, nextFocus, type Change } from "@/lib/seating/keyboard";
 import { isTypingTarget } from "@/lib/shortcuts";
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
@@ -94,6 +97,10 @@ type Drag =
   | { mode: "box"; start: Point; base: Set<string>; moved: boolean }
   /** Stamp along a line: Shift+drag with Stamp in hand. */
   | { mode: "line"; start: Point; item: PlaceItem }
+  /** Spec 60 C.1: a handle on the one picked item. */
+  | { mode: "resize"; key: string; handle: HandleId; origin: Resizable; targets: { xs: number[]; ys: number[] }; last: Resized | null }
+  /** Spec 60 C.2: the turn handle on a selection of several. */
+  | { mode: "formation"; origins: Map<string, Body>; centre: Point; a0: number; last: number }
   | null;
 
 /** The view with its height following the window's shape, so a screen pixel is the same distance both ways. */
@@ -227,6 +234,12 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   }, [placed, hereFixtures]);
   const bodiesRef = useRef(bodies);
   bodiesRef.current = bodies;
+  // The building, for snapping (spec 60 C.3): the shown room's walls, doors, markers and areas, while the venue layer is shown.
+  const drawing = useMemo(() => {
+    const r = parseDrawing((data.spaces.find((x) => x.id === spaceId) ?? data.spaces[0])?.drawing);
+    return r.ok ? r.drawing : emptyDrawing();
+  }, [data.spaces, spaceId]);
+  const lines = useMemo(() => (show.venue ? buildingLines(drawing) : []), [drawing, show.venue]);
   const bodyByKey = useMemo(() => new Map(bodies.map((b) => [b.key, b])), [bodies]);
   const pickable = useCallback((b: Body) => !locks[b.layer] && !b.locked, [locks]);
   // Keys of things that are gone (deleted, or in another room) drop out of the selection without a second render.
@@ -738,6 +751,76 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     setDrag({ mode: "rotate", key, centre: { x: b.x, y: b.y }, last: b.rotation, origin: b });
   };
 
+  // ---- resize and formation turn (spec 60 C) ------------------------------------
+  /** What the one picked item is, for resizing; null when it can't be (a locked one, or a shape drawn from its own pieces). */
+  const resizableOf = (key: string): Resizable | null => {
+    const body = bodyByKey.get(key);
+    if (!body || body.locked || !pickable(body)) return null;
+    if (body.kind === "table") {
+      const t = tables.find((x) => x.id === body.id);
+      if (!t || t.pos_x_cm === null || t.pos_y_cm === null || !RESIZABLE_TABLE_SHAPES.includes(t.shape)) return null;
+      const size = tableSize(t);
+      return { x: t.pos_x_cm, y: t.pos_y_cm, rotation: t.rotation_deg, w: size.length, d: size.width, limits: TABLE_LIMITS, single: t.shape === "round" ? "round" : t.shape === "square" ? "square" : undefined };
+    }
+    const f = fixtures.find((x) => x.id === body.id);
+    return f ? { x: f.pos_x_cm, y: f.pos_y_cm, rotation: f.rotation_deg, w: f.width_cm, d: f.depth_cm, limits: FIXTURE_LIMITS } : null;
+  };
+  /** Shows the new size at once, ahead of the server. */
+  const applyResize = (key: string, r: Resized, single?: Resizable["single"]) => {
+    const { id } = kindOf(key);
+    if (key.startsWith("t:")) {
+      setTables((ts) => ts.map((t) => (t.id === id ? { ...t, pos_x_cm: r.x, pos_y_cm: r.y, length_cm: r.w, width_cm: single ? r.w : r.d } : t)));
+    } else {
+      setFixtures((fs) => fs.map((f) => (f.id === id ? { ...f, pos_x_cm: r.x, pos_y_cm: r.y, width_cm: r.w, depth_cm: r.d } : f)));
+    }
+  };
+  /** One write and one undo step for a whole drag of a handle. */
+  const commitResize = (key: string, r: Resized) => {
+    say({ kind: "resize", name: nameOf(bodyByKey.get(key)) ?? "Item", width: r.w, depth: r.d });
+    startTransition(async () => {
+      const res = await track("Resized an item", () => resizeSeatingItem(eventId, layoutId, { ...kindOf(key), x: r.x, y: r.y, width: r.w, depth: r.d }));
+      if (!res.ok) setError(res.error);
+      refresh();
+    });
+  };
+  const onResizePointerDown = (e: RPointerEvent, handle: HandleId) => {
+    const key = single;
+    const origin = key ? resizableOf(key) : null;
+    if (!editable || !key || !origin) return;
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    // The lines the moving edge may snap to: the other things' edges and centres, and the building's.
+    const xs = lines.filter((l) => l.axis === "x").map((l) => l.at);
+    const ys = lines.filter((l) => l.axis === "y").map((l) => l.at);
+    for (const b of bodies) {
+      if (b.key === key) continue;
+      const bx = boundsOf(b.poly);
+      xs.push(bx.x0, (bx.x0 + bx.x1) / 2, bx.x1);
+      ys.push(bx.y0, (bx.y0 + bx.y1) / 2, bx.y1);
+    }
+    setDrag({ mode: "resize", key, handle, origin, targets: { xs, ys }, last: null });
+  };
+  /** The turn handle on a selection: the whole formation turns about its centre. */
+  const onFormationPointerDown = (e: RPointerEvent) => {
+    if (!editable || selBodies.length < 2) return;
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    const box = unionBox(selBodies.map((b) => boundsOf(b.poly)))!;
+    const centre = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
+    const p = toRoom(e.clientX, e.clientY);
+    setDrag({ mode: "formation", origins: new Map(selBodies.map((b) => [b.key, b])), centre, a0: Math.atan2(p.y - centre.y, p.x - centre.x), last: 0 });
+  };
+  /** Turn 90° as a group (the menu, and the inspector). */
+  const turnGroup = (deg: number, list: Body[] = selBodies) => {
+    if (!editable || list.length < 2) return;
+    const box = unionBox(list.map((b) => boundsOf(b.poly)))!;
+    const moves = turnAbout(list, { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, deg);
+    if (!allInRoom(moves, roomW, roomD)) return setError("That would turn part of the group out of the room.");
+    applyMoves(moves);
+    say({ kind: "turn", count: list.length, deg, group: true });
+    commitMoves(moves, `Turned ${list.length} things as a group`);
+  };
+
   const onBackgroundPointerDown = (e: RPointerEvent) => {
     svgRef.current?.focus({ preventScroll: true });
     setKbFocus(null);
@@ -798,10 +881,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       let dy: number;
       if (snapOn && !(e.altKey && !d.copy)) {
         // Guides first, the grid on whichever axis found no neighbour.
-        const g = snapGuides({ x0: d.startBox.x0 + raw.dx, y0: d.startBox.y0 + raw.dy, x1: d.startBox.x1 + raw.dx, y1: d.startBox.y1 + raw.dy }, d.others, SNAP_PX * unit);
-        dx = g.x ? raw.dx + g.dx : snap(prim.x + raw.dx, GRID_CM) - prim.x;
-        dy = g.y ? raw.dy + g.dy : snap(prim.y + raw.dy, GRID_CM) - prim.y;
-        setGuides(g.guides);
+        const moved = { x0: d.startBox.x0 + raw.dx, y0: d.startBox.y0 + raw.dy, x1: d.startBox.x1 + raw.dx, y1: d.startBox.y1 + raw.dy };
+        const g = snapGuides(moved, d.others, SNAP_PX * unit);
+        // Then the building, on whichever axis no neighbour caught (C.3).
+        const b = buildingGuides(moved, lines, SNAP_PX * unit, { x: g.x, y: g.y });
+        dx = g.x ? raw.dx + g.dx : b.x ? raw.dx + b.dx : snap(prim.x + raw.dx, GRID_CM) - prim.x;
+        dy = g.y ? raw.dy + g.dy : b.y ? raw.dy + b.dy : snap(prim.y + raw.dy, GRID_CM) - prim.y;
+        const at = { x0: d.startBox.x0 + dx, y0: d.startBox.y0 + dy, x1: d.startBox.x1 + dx, y1: d.startBox.y1 + dy };
+        setGuides([...g.guides, ...b.guides, ...wallGaps(at, drawing)]);
       } else {
         dx = Math.round(prim.x + raw.dx) - prim.x;
         dy = Math.round(prim.y + raw.dy) - prim.y;
@@ -809,6 +896,26 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       }
       d.delta = clampDelta([...d.origins.values()], { dx, dy }, roomW, roomD);
       setDragView({ keys: new Set(d.keys), dx: d.delta.dx, dy: d.delta.dy, copy: d.copy });
+    } else if (d.mode === "resize") {
+      const r = resizeBody(d.origin, d.handle, lastPointer.current, {
+        shift: e.shiftKey,
+        alt: e.altKey,
+        step: snapOn ? SIZE_STEP_CM : 0,
+        targets: snapOn ? d.targets : undefined,
+        threshold: SNAP_PX * unit,
+      });
+      d.last = r;
+      applyResize(d.key, r, d.origin.single);
+    } else if (d.mode === "formation") {
+      const p = lastPointer.current;
+      const raw = ((Math.atan2(p.y - d.centre.y, p.x - d.centre.x) - d.a0) * 180) / Math.PI;
+      const deg = e.shiftKey ? Math.round(raw) : Math.round(raw / 15) * 15;
+      const moves = turnAbout([...d.origins.values()], d.centre, deg);
+      // Stops at the room's edge rather than turning part of the group out of it.
+      if (allInRoom(moves, roomW, roomD)) {
+        d.last = deg;
+        applyMoves(moves);
+      }
     } else if (d.mode === "rotate") {
       const p = lastPointer.current;
       const deg = (Math.atan2(p.y - d.centre.y, p.x - d.centre.x) * 180) / Math.PI + 90;
@@ -880,6 +987,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       }
     } else if (d.mode === "rotate") {
       commitMoves([{ key: d.key, x: d.centre.x, y: d.centre.y, rotation: d.last }], "Turned an item");
+    } else if (d.mode === "resize") {
+      if (d.last) commitResize(d.key, d.last);
+    } else if (d.mode === "formation") {
+      if (d.last !== 0) {
+        const moves = turnAbout([...d.origins.values()], d.centre, d.last);
+        say({ kind: "turn", count: moves.length, deg: d.last, group: true });
+        commitMoves(moves, `Turned ${moves.length} things as a group`);
+      }
     } else if (d.mode === "line") {
       setLineAt(null);
       // A cancelled pointer (the window lost focus) is not a drop: nothing is placed.
@@ -1097,6 +1212,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         { label: "Delete", keys: "Del", disabled: !editable, onSelect: () => deleteSelection(list) },
         "sep",
         { label: "Turn 90°", disabled: !editable, onSelect: () => turn(90, true) },
+        ...(list.length > 1 ? ([{ label: "Turn 90° as a group", disabled: !editable, onSelect: () => turnGroup(90, list) }] as MenuItem[]) : []),
         { label: "Select similar", keys: "⌘⇧A", onSelect: () => setSelection(new Set(selectSimilar(bodies.filter(pickable), list.map((b) => b.key)))) },
         ...(list.length > 1
           ? ([
@@ -1171,6 +1287,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const selectedTable = single?.startsWith("t:") ? tables.find((t) => `t:${t.id}` === single) : undefined;
   const selectedFixture = single?.startsWith("f:") ? fixtures.find((f) => `f:${f.id}` === single) : undefined;
   const handleR = view.w / 40;
+  const resizeFor = single ? resizableOf(single) : null;
   const fontSize = Math.max(14, view.w / 70);
 
   const itemCursor = !editable ? (locked ? "not-allowed" : "pointer") : held ? "copy" : "move";
@@ -1286,6 +1403,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           onSimilar={selectLike}
           onDuplicate={() => duplicateSelection()}
           onTurn={() => turn(90, true)}
+          onTurnGroup={() => turnGroup(90)}
           onDelete={() => deleteSelection()}
           onClear={() => setSelection(new Set())}
         />
@@ -1468,6 +1586,50 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             <RotateHandle item={selectedTable} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `t:${selectedTable.id}`)} />
           ) : null}
           {editable && selectedFixture && !dragView ? <RotateHandle item={selectedFixture} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `f:${selectedFixture.id}`)} /> : null}
+
+          {/* Resize handles (spec 60 C.1) on the one picked item, when it is big enough on screen for them not to crowd each other. */}
+          {editable && single && !dragView && resizeFor && handlesVisible(resizeFor, unit) ? (
+            <g>
+              {handlePoints(resizeFor).map((h) => {
+                const hs = (touchy ? 15 : 9) * unit;
+                return (
+                  <rect
+                    key={h.id}
+                    data-handle={h.id}
+                    x={h.at.x - hs / 2}
+                    y={h.at.y - hs / 2}
+                    width={hs}
+                    height={hs}
+                    fill="#ffffff"
+                    stroke="#1a1a1a"
+                    strokeWidth={unit * 1.5}
+                    style={{ cursor: handleCursor(h.id, resizeFor.rotation) }}
+                    onPointerDown={(e) => onResizePointerDown(e, h.id)}
+                    aria-label={resizeFor.single ? "Resize" : `Resize from the ${h.id}`}
+                  />
+                );
+              })}
+            </g>
+          ) : null}
+
+          {/* The turn handle on a selection of several: the formation turns as one (spec 60 C.2). */}
+          {editable && selectionOutline && !dragView ? (
+            <g>
+              <line x1={(selectionOutline.x0 + selectionOutline.x1) / 2} y1={selectionOutline.y0 - 10 * unit} x2={(selectionOutline.x0 + selectionOutline.x1) / 2} y2={selectionOutline.y0 - 34 * unit} stroke="#b0532b" strokeWidth={unit * 1.5} style={{ pointerEvents: "none" }} />
+              <circle
+                data-handle="formation"
+                cx={(selectionOutline.x0 + selectionOutline.x1) / 2}
+                cy={selectionOutline.y0 - 34 * unit}
+                r={(touchy ? 12 : 8) * unit}
+                fill="#ffffff"
+                stroke="#b0532b"
+                strokeWidth={unit * 2}
+                style={{ cursor: "grab" }}
+                onPointerDown={onFormationPointerDown}
+                aria-label="Turn the group"
+              />
+            </g>
+          ) : null}
       </svg>
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {live}
@@ -1571,16 +1733,19 @@ function fixtureBodyLayer(f: SeatingFixture): "decor" | "furniture" {
 
 /** The lines a drag draws: edges and centres it lined up with, and the equal gaps it kept, labelled in cm and coloured by the walkway thresholds. */
 function GuideLines({ guides, unit, settings }: { guides: Guide[]; unit: number; settings: Parameters<typeof classifyWalkway>[1] }) {
+  // Lines up with other furniture are pink; lines up with the building (walls, doors, markers, areas) are violet (spec 60 C.3).
   const GUIDE = "#d6336c";
+  const GUIDE_BUILDING = "#6741d9";
   return (
     <g style={{ pointerEvents: "none" }}>
       {guides.map((g, i) => {
         const horizontal = g.axis === "y";
+        const lineColour = g.source === "building" ? GUIDE_BUILDING : GUIDE;
         if (g.kind !== "spacing") {
           return horizontal ? (
-            <line key={i} x1={g.from} y1={g.at} x2={g.to} y2={g.at} stroke={GUIDE} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
+            <line key={i} x1={g.from} y1={g.at} x2={g.to} y2={g.at} stroke={lineColour} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
           ) : (
-            <line key={i} x1={g.at} y1={g.from} x2={g.at} y2={g.to} stroke={GUIDE} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
+            <line key={i} x1={g.at} y1={g.from} x2={g.at} y2={g.to} stroke={lineColour} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
           );
         }
         // A spacing guide: a dimension line across the gap with end ticks and its length.

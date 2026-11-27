@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { FIXTURE_DEFAULTS, normaliseDegrees } from "@/lib/seating/geometry";
 import { nextTableLabel } from "@/lib/seating/model";
 import { LOCKED_MESSAGE } from "@/lib/seating/lock";
+import { FIXTURE_LIMITS, RESIZABLE_TABLE_SHAPES, TABLE_LIMITS } from "@/lib/seating/resize";
 import { requireWedding } from "@/server/queries/wedding";
 import { resolveLayout, resolveSpace } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
@@ -122,6 +123,57 @@ export async function moveSeatingItems(
   }
   revalidate(eventId);
   return ok({ moved: parsed.data.length });
+}
+
+/**
+ * Resizes one table or fixture (spec 60 C.1): dragging a handle changes the size and, because the opposite edge stays
+ * put, the centre too, so both are written together. Only the shapes whose drawing follows their size can be resized
+ * this way; a round or square table has one size (its diameter or side).
+ */
+export async function resizeSeatingItem(
+  eventId: string,
+  layoutId: string | undefined,
+  input: { kind: "table" | "fixture"; id: string; x: number; y: number; width: number; depth: number },
+): Promise<ActionResult> {
+  const parsed = refSchema.extend({ x: coord, y: coord, width: z.number().int(), depth: z.number().int() }).safeParse(input);
+  if (!parsed.success) return fail("That's not a size");
+  const { kind, id, x, y, width, depth } = parsed.data;
+  const limits = kind === "table" ? TABLE_LIMITS : FIXTURE_LIMITS;
+  if (width < limits.min || width > limits.max || depth < limits.min || depth > limits.max) {
+    return fail(`Sizes run from ${limits.min} cm to ${limits.max} cm`);
+  }
+  const ctx = await writableLayout(eventId, layoutId);
+  if (!ctx.ok) return fail(ctx.error);
+
+  const supabase = await createClient();
+  if (kind === "fixture") {
+    const { data, error } = await supabase
+      .from("seating_fixtures")
+      .update({ pos_x_cm: Math.round(x), pos_y_cm: Math.round(y), width_cm: width, depth_cm: depth })
+      .eq("id", id)
+      .eq("wedding_id", ctx.wedding.id)
+      .eq("layout_id", ctx.layout.id)
+      .select("id");
+    if (error) return fail(error.message);
+    if (!data?.length) return fail(STALE);
+  } else {
+    const { data: current, error: readError } = await supabase.from("seating_tables").select("shape").eq("id", id).eq("wedding_id", ctx.wedding.id).eq("layout_id", ctx.layout.id).maybeSingle();
+    if (readError) return fail(readError.message);
+    if (!current) return fail(STALE);
+    if (!RESIZABLE_TABLE_SHAPES.includes(current.shape)) return fail("That shape's size is set in the table's form, not by dragging");
+    const single = current.shape === "round" || current.shape === "square";
+    const { data, error } = await supabase
+      .from("seating_tables")
+      .update({ pos_x_cm: Math.round(x), pos_y_cm: Math.round(y), length_cm: width, width_cm: single ? width : depth })
+      .eq("id", id)
+      .eq("wedding_id", ctx.wedding.id)
+      .eq("layout_id", ctx.layout.id)
+      .select("id");
+    if (error) return fail(error.message);
+    if (!data?.length) return fail(STALE);
+  }
+  revalidate(eventId);
+  return ok(undefined);
 }
 
 /**
