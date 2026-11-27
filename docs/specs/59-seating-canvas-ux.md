@@ -37,10 +37,15 @@ The designer has the features; working in it on a laptop is hard.
 Design canvases (Figma, Miro, tldraw, Excalidraw) agree on one model: two-finger
 scroll pans, pinch or Ctrl/⌘+scroll zooms smoothly about the cursor, Space+drag
 or a Hand tool pans, dragging empty canvas with the Select tool draws a selection
-box, and a "keep tool" lock lets one tool place many things. Event-diagram tools
-(Cvent Social Tables, Prismm, formerly AllSeated) add table-level design
-applied to one table or the whole room, but bulk placement is a known gap. This
-spec takes the canvas model wholesale and adds rule-based placement on tables.
+box, and a "keep tool" lock lets one tool place many things. Miro's automatic
+mouse-or-trackpad detection is a common source of confusion; an explicit,
+easily switched mode is not. Event-diagram tools (Cvent Social Tables, Prismm,
+formerly AllSeated, Lovely Seating) add box selection, editing many objects of
+one type, align and distribute, snap guides that line tables into rows, layers
+and locking, a favourites list, and table design applied to one table or the
+whole room; bulk placement is a known gap and none places table items by rule.
+This spec takes the canvas model wholesale, matches those features, and adds
+rule-based placement on tables.
 
 ## 4. Part A — The plan fills the screen
 
@@ -93,14 +98,18 @@ The drawing tools stay hidden while the room is locked (spec 57 Part D).
 
 The pointer over the canvas never scrolls or zooms the page.
 
-- **Two-finger scroll** (trackpad) or **mouse wheel** pans. Shift+wheel pans
-  sideways.
 - **Pinch**, or **Ctrl/⌘+scroll**, zooms about the cursor in proportion to the
   gesture (no fixed step per event, so a trackpad doesn't race and a mouse
   notch is about 10%).
 - **Space+drag**, **middle-button drag** and the Hand tool pan from any tool.
-- In Settings (per device): **"Mouse wheel zooms"**, off by default, for people
-  on a mouse who expect it; Ctrl/⌘ then pans.
+- **Navigation mode**, per device, one of two, never detected automatically:
+  - **Trackpad** (default): two-finger scroll or the wheel pans; Shift+scroll
+    pans sideways.
+  - **Mouse:** the wheel zooms about the cursor; Shift+wheel pans sideways and
+    Ctrl/⌘+wheel pans up and down.
+  It is switched in Settings, from right-clicking empty canvas ("Navigation:
+  Trackpad / Mouse"), and from the zoom box menu. The first time a person
+  scrolls on the plan, the hint line says which mode is on and how to switch.
 - Keys: `+` / `−` zoom, **Shift+1** fit the space, **Shift+2** zoom to the
   selection, **0** zoom to 100%. Double-clicking a table opens its close-up
   (spec 57 C.2), as today.
@@ -115,9 +124,14 @@ The pointer over the canvas never scrolls or zooms the page.
   adds or removes. **⌘/Ctrl+A** selects everything movable in the space.
 - **Drag on empty canvas** with Select draws a box; everything it touches is
   selected (Alt: only what it fully contains). Shift+box adds to the selection.
-- **Walls, doors and the venue drawing** are selected only while the Venue
-  panel is open or a drawing tool is active, so a selection box over the room
-  picks furniture, not the building.
+- **Layers:** Venue (walls, doors, windows, areas, the drawing), Tables,
+  Room furniture, Flowers & décor, Notes. Each can be shown or hidden (the
+  existing Show menu) and **locked**: a locked layer is drawn but can't be
+  clicked, box-selected or moved. The Venue layer is locked by default and
+  unlocks while the Venue panel is open or a drawing tool is active, so a
+  selection box over the room picks furniture, not the building. Layer locks
+  are per device, separate from Lock room (spec 57 Part D), which binds
+  everyone.
 - **Select similar** (right-click, or ⌘/Ctrl+Shift+A): every item of the
   selection's kind and size in the space (all 180 cm rounds, all candles).
 - **Drag** any selected item to move the whole selection; arrow keys nudge it
@@ -130,6 +144,12 @@ The pointer over the canvas never scrolls or zooms the page.
   a grid** with a gap in cm.
 - **Lock item** (right-click): an item stays put and is skipped by box
   selection until unlocked. Separate from Lock room.
+- **Snap guides:** while dragging, the moving item (or the selection's
+  outline) snaps to the centres and edges of nearby tables and items and to
+  equal spacing between them, and a thin line shows what it lined up with, so
+  tables fall into rows and even gaps by eye. Guides take priority over the
+  grid; Alt while dragging turns all snapping off. A spacing guide shows the
+  gap in cm and is coloured by the plan's walkway thresholds (spec 57 Part I).
 - Each move, duplicate, paste, align or delete of a selection is **one undo
   step** and **one server write** (§9).
 - Moving a table moves its chairs, its table décor and dishes (Part D) and its
@@ -156,7 +176,7 @@ The pointer over the canvas never scrolls or zooms the page.
 A context menu on an item or a selection: Duplicate, Copy, Paste, Delete, Turn
 90°, Select similar, Align (submenu), Lock item, Add a note here, Bring to
 front / Send to back. On a table also: Open close-up, Apply style, Add table
-décor (Part D). On empty canvas: Paste here, Add a note here, Fit.
+décor (Part D). On empty canvas: Paste here, Add a note here, Fit, Navigation: Trackpad / Mouse, Lock or unlock a layer.
 
 ## 6. Part C — Placing many things fast
 
@@ -165,9 +185,13 @@ décor (Part D). On empty canvas: Paste here, Add a note here, Fit.
   Esc, V, or another tool. Every placed item saves at once (each click is its
   own undo step).
 - Dragging a tile onto the canvas still places one and returns to Select.
-- **Recent:** the last six items stamped appear at the top of the Library and
-  on keys 1–6 while Stamp is active, so switching from candles to lanterns is
-  one key.
+- **Favourites:** a star on any library tile, décor item, dish or the couple's
+  own item pins it to a Favourites row at the top of the Library, in the
+  order starred (drag to reorder). Favourites are wedding-wide, so every
+  collaborator sees the same row.
+- **Recent:** the last six items stamped sit under Favourites.
+- While Stamp is active, keys 1–9 pick the first nine of Favourites then
+  Recent, so switching from candles to lanterns is one key.
 - **Stamp along a line:** with Stamp active, Shift+drag places the item every
   *N* cm along the drag (N shown and typed in the hint bar; default the item's
   width plus 20 cm). This is aisle flowers down the aisle, lanterns along a
@@ -253,6 +277,9 @@ An item can be placed by a **rule** instead of by hand. A rule is one of:
   `src/lib/seating/drawing.ts`), `{ id, x, y, text, vendor_ids, table_id? }`,
   so they need no table.
 - `seating_fixtures.locked boolean not null default false` (A.5 Lock item).
+- Favourites: an ordered list of item references in the plan settings
+  (spec 57 Part I), so no new table. Navigation mode and layer locks are per
+  device (browser storage), never stored.
 - `seating_state()` / `restore_seating_state()` redefined to carry the new
   columns, or undo and History silently drop them.
 
@@ -266,21 +293,21 @@ An item can be placed by a **rule** instead of by hand. A rule is one of:
 
 **Pure, tested (`src/lib/seating/`):** `rulePositions(table, rule)` (positions
 for every shape), `alignItems`, `distributeItems`, `gridItems`,
-`boxHits(items, box, mode)`, wheel/pinch delta to zoom factor.
+`boxHits(items, box, mode)`, `snapGuides(moving, others, threshold)` (edge,
+centre and equal-spacing matches), wheel/pinch delta to zoom factor.
 
 ## 10. Out of scope
 
-3D views; live co-editing; snapping guides between items (beyond the grid and
-table snaps); a minimap (question 6); touch and phone changes beyond keeping
+3D views and a large 3D object library; live co-editing; a minimap (question 6); touch and phone changes beyond keeping
 today's pinch-to-zoom and tap-to-seat.
 
 ## 11. Open questions
 
 1. **Focus mode by default?** (a) Room view always opens full-window (recommended),
    (b) a "Focus" button on today's page, (c) both, with the choice remembered.
-2. **Plain mouse wheel:** (a) pans, with "Mouse wheel zooms" as a setting
-   (recommended: matches Figma and Miro; trackpads are the laptop case), (b)
-   zooms, as today, with a setting to pan.
+2. **Default navigation mode** (A.4): (a) Trackpad, the wheel pans
+   (recommended: trackpads are the laptop case), (b) Mouse, the wheel zooms, as
+   today. Either way the mode is switched in one right-click and never guessed.
 3. **Placing from the library:** (a) a tile click starts Stamp and stays until
    Esc (recommended), (b) one placement then back to Select, with a lock toggle
    to stay.
@@ -297,10 +324,11 @@ today's pinch-to-zoom and tap-to-seat.
 
 ## 12. Build order (once answered)
 
-1. Navigation and selection model (A.3–A.6, Part B): wheel, pinch, Space, Hand,
-   selection box, multi-select moves and the batch actions. No migration.
+1. Navigation and selection model (A.3–A.6, Part B): navigation modes, pinch,
+   Space, Hand, selection box, layers and their locks, multi-select moves, snap
+   guides and the batch actions. No migration.
 2. Focus mode, rail and inspector (A.1, A.2).
-3. Stamp, recent, stamp along a line, repeat (Part C).
+3. Stamp, favourites, recent, stamp along a line, repeat (Part C).
 4. Migration `0062`; table items and rules in the close-up and the room (Part D).
 5. Notes and the export changes (Part E).
 
@@ -311,8 +339,10 @@ Each step is usable on its own.
 Typecheck, unit tests for the §9 pure functions, the SQL suite for `0062` (and
 `seating_state` round-tripping the new columns), the build. Navigation must be
 tried in a real browser: headless Chromium for wheel and pointer events, and a
-person on a MacBook trackpad in Safari and Chrome for pinch and two-finger
-scroll, which headless testing cannot reproduce. Say which were run.
+person on a MacBook trackpad in Safari and Chrome, and on a plain mouse, for
+pinch, two-finger scroll and both navigation modes, which headless testing
+cannot reproduce. Snap guides must stay smooth dragging a 20-table selection in
+a room of 40 tables. Say which were run.
 
 ## 14. Risks
 
