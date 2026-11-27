@@ -621,8 +621,9 @@ Built across two sessions on branches `claude/visual-seating-plan-gkbppo` (63) a
 the spec has something built; the lists below say what is missing.**
 Typechecked, unit-tested (1828), SQL-suite tested (1067 assertions), the
 single-transaction migration check passes, and `npm run build` passes.
-**Never run against live Supabase, a real iPad or a printer; nothing is applied
-to live.** What was seen in a real browser (headless Chromium, 1440 and 390 px,
+**Migrations `0055`–`0061` are applied to live (checked 2026-11-27 with
+`supabase/checks/verify_migrations_applied.sql`); the app has not yet been
+walked through on live data, a real iPad or a printer.** What was seen in a real browser (headless Chromium, 1440 and 390 px,
 the real components with the server actions stubbed and sample data): the Room
 view with the venue drawing, the library, the drawing tools (walls, curved
 walls, doors, areas, text, measure, select, drag a corner, split, delete), the
@@ -678,6 +679,6 @@ not run under Next with a database.
 
 ### Order for whoever continues
 
-Apply `0055`–`0061` to live in order (`0055` alone first), then open a real event
+`0055`–`0061` are already applied to live. Open a real event
 with seating: check the Room view, make a draft and swap it live and back, share a
 link with a passcode, and print each export once.
