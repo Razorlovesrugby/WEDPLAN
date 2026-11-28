@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { parseStyleChanges, parseStyleCentre, parseStylePlace, STYLE_LIMITS } from "@/lib/seating/items";
+import { parseItemRules } from "@/lib/seating/table-items";
 import { requireWedding } from "@/server/queries/wedding";
 import { resolveLayout } from "@/server/seating-layout";
 import { fail, ok, type ActionResult } from "./result";
@@ -34,6 +35,8 @@ const styleInput = z.object({
   name: z.string().trim().min(1, "Give the style a name").max(STYLE_LIMITS.name, "Keep the name under 60 characters"),
   place: z.unknown(),
   centre: z.unknown(),
+  /** Spec 59 D.2. Left out on a change, the style's rules stay as they are; on a new style there are none. */
+  item_rules: z.unknown().optional(),
 });
 
 /** Creates a style, or changes one. Returns its id. */
@@ -45,12 +48,13 @@ export async function saveTableStyle(eventId: string, input: unknown): Promise<A
   const { id, name } = parsed.data;
   const place = parseStylePlace(parsed.data.place);
   const centre = parseStyleCentre(parsed.data.centre);
+  const rules = parsed.data.item_rules === undefined ? null : parseItemRules(parsed.data.item_rules);
   const supabase = await createClient();
 
   if (id) {
     const { data, error } = await supabase
       .from("seating_table_styles")
-      .update({ name, place, centre })
+      .update({ name, place, centre, ...(rules ? { item_rules: rules } : {}) })
       .eq("id", id)
       .eq("wedding_id", wedding.id)
       .is("deleted_at", null)
@@ -62,7 +66,7 @@ export async function saveTableStyle(eventId: string, input: unknown): Promise<A
   }
   const { data, error } = await supabase
     .from("seating_table_styles")
-    .insert({ wedding_id: wedding.id, name, place, centre })
+    .insert({ wedding_id: wedding.id, name, place, centre, item_rules: rules ?? [] })
     .select("id")
     .single();
   if (error) return fail(error.code === "23505" ? "You already have a style with that name" : error.message);
@@ -116,9 +120,16 @@ export async function applyTableStyle(eventId: string, styleId: string | null, t
 export async function setTableStyleChanges(eventId: string, tableId: string, changes: unknown): Promise<ActionResult> {
   const wedding = await requireWedding();
   if (!(await eventBelongs(wedding.id, eventId)) || !uuid.safeParse(tableId).success) return fail("That table doesn't exist");
-  const parsed = changes === null ? null : parseStyleChanges(changes);
+  let parsed = changes === null ? null : parseStyleChanges(changes);
   if (changes !== null && !parsed) return fail("Those changes aren't right");
   const supabase = await createClient();
+  // The form that changes a table's place settings and centre doesn't know about its own rules (spec 59 D.2): keep them.
+  if (parsed && parsed.item_rules === undefined) {
+    const { data: current, error: readError } = await supabase.from("seating_tables").select("style_changes").eq("id", tableId).eq("wedding_id", wedding.id).maybeSingle();
+    if (readError) return fail(readError.message);
+    const own = parseStyleChanges(current?.style_changes)?.item_rules;
+    if (own) parsed = { ...parsed, item_rules: own };
+  }
   const { data, error } = await supabase
     .from("seating_tables")
     .update({ style_changes: parsed })

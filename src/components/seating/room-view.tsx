@@ -12,7 +12,7 @@ import {
   updateSeatingFixture,
   updateSeatingRoom,
 } from "@/server/actions/seating";
-import { createSeatingFixtures, deleteSeatingItems, duplicateSeatingItems, moveSeatingItems } from "@/server/actions/seating-items";
+import { createSeatingFixtures, createSeatingTables, deleteSeatingItems, duplicateSeatingItems, moveSeatingItems, orderSeatingItems, resizeSeatingItem, setSeatingItemsLocked } from "@/server/actions/seating-items";
 import { applyTableStyle } from "@/server/actions/seating-styles";
 import { chairDetail, chairFirstName, chairMarks, initials, readableText, type ChairDetail } from "@/lib/seating/chairs";
 import { colourCounts, guestColour } from "@/lib/seating/colour";
@@ -58,6 +58,11 @@ import {
   type View,
 } from "@/lib/seating/canvas";
 import { classifyWalkway } from "@/lib/seating/plan-settings";
+import { HELD_MESSAGE } from "@/lib/seating/lock";
+import { FIXTURE_LIMITS, RESIZABLE_TABLE_SHAPES, SIZE_STEP_CM, TABLE_LIMITS, allInRoom, handleCursor, handlePoints, handlesVisible, resizeBody, turnAbout, type HandleId, type Resizable, type Resized } from "@/lib/seating/resize";
+import { buildingGuides, buildingLines, wallGaps } from "@/lib/seating/building";
+import { emptyDrawing, parseDrawing } from "@/lib/seating/drawing";
+import { LONG_PRESS_MS, describeChange, describeFixture, describePosition, describeTable, focusOrder, movedTooFar, nextFocus, type Change } from "@/lib/seating/keyboard";
 import { isTypingTarget } from "@/lib/shortcuts";
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
 import type { SeatingFixtureKind } from "@/lib/types/database";
@@ -75,7 +80,13 @@ import { FloatingToolbar } from "./canvas-toolbar";
 import { CanvasMenu, type MenuItem } from "./canvas-menu";
 import { FirstVisitTips, ShortcutSheet } from "./canvas-help";
 import { MultiSelectionPanel } from "./selection-inspector";
-import { TableInspector } from "./table-inspector";
+import { TableInspector, type InspectorTab } from "./table-inspector";
+import { TableItemsEditor, getHeldDecor, hasHeldDecor, holdDecor } from "./table-items-editor";
+import { TableItemGlyph } from "./table-item-glyph";
+import { effectiveRules, parseTableItems, pasteItems, ruleItems } from "@/lib/seating/table-items";
+import { parseStyleChanges } from "@/lib/seating/items";
+import { parseMenu } from "@/lib/seating/service";
+import { setTableItems } from "@/server/actions/seating-items";
 import { setDesignerHandler } from "./designer-bridge";
 
 const GRID_CM = 25;
@@ -87,17 +98,24 @@ const WALKWAY_COLOUR = { comfortable: "#2f7d4f", tight: "#c27c0e", too_tight: "#
 let clipboard: { layoutId: string | undefined; items: { kind: "table" | "fixture"; id: string; x: number; y: number; rotation: number }[]; centre: Point } | null = null;
 
 type Drag =
-  | { mode: "move"; keys: string[]; primary: string; start: Point; origins: Map<string, Body>; startBox: Box; others: Box[]; moved: boolean; copy: boolean; wasSelected: boolean; shift: boolean; delta: Delta }
+  | { mode: "move"; keys: string[]; primary: string; clicked: string; start: Point; origins: Map<string, Body>; startBox: Box; others: Box[]; moved: boolean; copy: boolean; wasSelected: boolean; shift: boolean; delta: Delta }
   | { mode: "rotate"; key: string; centre: Point; last: number; origin: Body }
   | { mode: "pan"; start: { x: number; y: number }; view: View; moved: boolean }
   | { mode: "box"; start: Point; base: Set<string>; moved: boolean }
   /** Stamp along a line: Shift+drag with Stamp in hand. */
   | { mode: "line"; start: Point; item: PlaceItem }
+  /** Spec 60 C.1: a handle on the one picked item. */
+  | { mode: "resize"; key: string; handle: HandleId; origin: Resizable; targets: { xs: number[]; ys: number[] }; last: Resized | null }
+  /** Spec 60 C.2: the turn handle on a selection of several. */
+  | { mode: "formation"; origins: Map<string, Body>; centre: Point; a0: number; last: number }
   | null;
 
 /** The view with its height following the window's shape, so a screen pixel is the same distance both ways. */
 const withAspect = (v: View, size: { w: number; h: number }): View => ({ ...v, h: (v.w * size.h) / size.w });
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+/** Where an item was when the screen last saw it. */
+type Start = { x: number; y: number; rotation: number };
+const startFor = (b: Body): Start => ({ x: b.x, y: b.y, rotation: b.rotation });
 const kindOf = (key: string) => parseKey(key)!;
 
 /**
@@ -115,7 +133,7 @@ const kindOf = (key: string) => parseKey(key)!;
  * Guests still drop onto tables here, and tap-to-place works as in the Tables view.
  */
 export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onLeaveFocus?: () => void } = {}) {
-  const { eventId, layoutId, spaceId, data, tables, setTables, refresh, setError, held, hold, move, track, tool, setTool, show, locked, leftTab, setLeftTab, openTable, settings, assignments } = useSeating();
+  const { eventId, layoutId, spaceId, data, tables, setTables, fixtures, setFixtures, holdSync, refresh, setError, held, hold, move, track, tool, setTool, show, locked, leftTab, setLeftTab, openTable, settings, assignments } = useSeating();
   // Below tablet width the room is for looking at and seating people: no moving furniture, no drawing (spec 57 Part A). A locked room is the same (Part D).
   const editable = useMediaQuery(TABLET_UP) && !locked;
   const plan = data.plan;
@@ -177,7 +195,6 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [snapOn, setSnapOn] = useState(true);
   const [rings, setRings] = useState(false);
-  const [fixtures, setFixtures] = useState<SeatingFixture[]>(data.fixtures);
   const [calibrating, setCalibrating] = useState<Point[] | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -185,8 +202,19 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const [guides, setGuides] = useState<Guide[]>([]);
   const [box, setBox] = useState<Box | null>(null);
   const [, startTransition] = useTransition();
+  // Keyboard and touch (spec 60 B): the item Tab has reached (the plan keeps real focus; the item is its active descendant),
+  // what the live region says, and the touch-only switches.
+  const [kbFocus, setKbFocus] = useState<string | null>(null);
+  const [live, setLive] = useState("");
+  const [multi, setMulti] = useState(false);
+  const [lineSwitch, setLineSwitch] = useState(false);
+  /** Add table décor (right-click) asks the inspector for its Décor tab. */
+  const [inspectorTab, setInspectorTab] = useState<{ tab: InspectorTab; at: number } | null>(null);
+  const touchy = useMediaQuery("(pointer: coarse)", false);
+  const spaceUsed = useRef(false);
+  const longPress = useRef<{ from: Point; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const pressFired = useRef(false);
 
-  useEffect(() => setFixtures(data.fixtures), [data.fixtures]);
   useEffect(() => setSelection(new Set()), [spaceId, layoutId]);
 
   const unit = view.w / size.w;
@@ -197,12 +225,15 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   // Each room shows its own tables and furniture; a table with no place yet waits to be put in whichever room is open.
   const placed = useMemo(() => tables.filter((t) => t.pos_x_cm !== null && (!spaceId || t.space_id === spaceId) && show.tables), [tables, spaceId, show.tables]);
   const unplaced = tables.filter((t) => t.pos_x_cm === null);
+  // Furniture and décor draw in the order the couple set (Bring to front, Send to back), ties by when they were made; tables draw above both (spec 60 A.4).
   const hereFixtures = useMemo(
     () =>
-      fixtures.filter((f) => {
-        if (spaceId && f.space_id !== spaceId) return false;
-        return fixtureGroup(f.kind) === "decor" ? show.decor : show.furniture;
-      }),
+      fixtures
+        .filter((f) => {
+          if (spaceId && f.space_id !== spaceId) return false;
+          return fixtureGroup(f.kind) === "decor" ? show.decor : show.furniture;
+        })
+        .sort((a, b) => a.z - b.z || a.created_at.localeCompare(b.created_at)),
     [fixtures, spaceId, show.decor, show.furniture],
   );
 
@@ -210,21 +241,61 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const bodies = useMemo(() => {
     const list: Body[] = [];
     for (const t of placed) {
-      const b = tableBody(t);
+      const b = tableBody(t, t.locked);
       if (b) list.push(b);
     }
-    for (const f of hereFixtures) list.push(fixtureBody(f));
+    for (const f of hereFixtures) list.push(fixtureBody(f, f.locked));
     return list;
   }, [placed, hereFixtures]);
   const bodiesRef = useRef(bodies);
   bodiesRef.current = bodies;
+  // The building, for snapping (spec 60 C.3): the shown room's walls, doors, markers and areas, while the venue layer is shown.
+  const drawing = useMemo(() => {
+    const r = parseDrawing((data.spaces.find((x) => x.id === spaceId) ?? data.spaces[0])?.drawing);
+    return r.ok ? r.drawing : emptyDrawing();
+  }, [data.spaces, spaceId]);
+  const lines = useMemo(() => (show.venue ? buildingLines(drawing) : []), [drawing, show.venue]);
   const bodyByKey = useMemo(() => new Map(bodies.map((b) => [b.key, b])), [bodies]);
-  const pickable = useCallback((b: Body) => !locks[b.layer] && !b.locked, [locks]);
+  // A locked layer is drawn but never picked. A held item (Lock item, spec 60 A.3) can be clicked, tabbed to and edited, but is
+  // skipped by the selection box, Select all and Select similar, and can't be dragged, nudged, turned, aligned or deleted.
+  const clickable = useCallback((b: Body) => !locks[b.layer], [locks]);
+  const pickable = useCallback((b: Body) => clickable(b) && !b.locked, [clickable]);
+  /** The ones of `list` that can be changed. Says so when that leaves none. */
+  const free = (list: Body[]): Body[] => {
+    const out = list.filter((b) => !b.locked);
+    if (out.length === 0 && list.length > 0) setError(HELD_MESSAGE);
+    return out;
+  };
   // Keys of things that are gone (deleted, or in another room) drop out of the selection without a second render.
   const sel = useMemo(() => new Set([...selection].filter((k) => bodyByKey.has(k))), [selection, bodyByKey]);
-  const selBodies = useMemo(() => [...sel].map((k) => bodyByKey.get(k)!).filter(pickable), [sel, bodyByKey, pickable]);
+  const selBodies = useMemo(() => [...sel].map((k) => bodyByKey.get(k)!).filter(clickable), [sel, bodyByKey, clickable]);
   const selRef = useRef(sel);
   selRef.current = sel;
+
+  // Tab's order (locked layers are skipped), and what the keys act on: the selection, or else the item Tab has reached.
+  const order = useMemo(() => focusOrder(bodies.filter((b) => !locks[b.layer])), [bodies, locks]);
+  const focusBody = kbFocus ? bodyByKey.get(kbFocus) : undefined;
+  const actBodies = selBodies.length > 0 ? selBodies : focusBody && clickable(focusBody) ? [focusBody] : [];
+  useEffect(() => {
+    if (kbFocus && !bodyByKey.has(kbFocus)) setKbFocus(null);
+  }, [kbFocus, bodyByKey]);
+  /** What each thing is called, for the live region. */
+  const nameOf = useCallback(
+    (b: Body | undefined): string | undefined => {
+      if (!b) return undefined;
+      if (b.kind === "table") return tables.find((t) => t.id === b.id)?.label;
+      const f = fixtures.find((x) => x.id === b.id);
+      if (!f) return undefined;
+      const custom = f.custom_item_id ? data.customItems.find((c) => c.id === f.custom_item_id) : undefined;
+      return f.label ?? custom?.name ?? FIXTURE_DEFAULTS[f.kind]?.label ?? f.kind;
+    },
+    [tables, fixtures, data.customItems],
+  );
+  /** Says it in the polite live region; the same words twice in a row still get read. */
+  const say = useCallback((c: Change) => {
+    const text = describeChange(c);
+    setLive((prev) => (prev === text ? `${text}\u200b` : text));
+  }, []);
 
   /** Screen point → room centimetres. */
   const toRoom = useCallback((clientX: number, clientY: number): Point => {
@@ -257,7 +328,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     if (tools.hasSelection) setSelection(new Set());
   }, [tools.hasSelection]);
   useEffect(() => {
-    if (!venueOpen) tools.setSelected(null);
+    // The building is locked until asked for, so a pick in it goes when it closes. A note isn't the building: it stays picked.
+    if (!venueOpen && tools.selected?.kind !== "note") tools.setSelected(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueOpen]);
 
@@ -286,14 +358,20 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
 
   /** One write for the whole selection, and one undo step. */
   const commitMoves = useCallback(
-    (moves: { key: string; x: number; y: number; rotation?: number }[], label: string) => {
+    (moves: { key: string; x: number; y: number; rotation?: number }[], label: string, from?: Map<string, Start>) => {
       if (moves.length === 0) return;
+      // Each item says where the screen last saw it: if the server's copy is anywhere else (another person moved it since), the
+      // whole write is refused (spec 60 E.2). Unless told, that is where it is on screen as this is called, before the move shows.
+      const startOf = (key: string): Start | undefined => {
+        const b = bodiesRef.current.find((x) => x.key === key);
+        return from?.get(key) ?? (b ? { x: b.x, y: b.y, rotation: b.rotation } : undefined);
+      };
       startTransition(async () => {
         const r = await track(label, () =>
           moveSeatingItems(
             eventId,
             layoutId,
-            moves.map((m) => ({ ...kindOf(m.key), x: m.x, y: m.y, rotation: m.rotation })),
+            moves.map((m) => ({ ...kindOf(m.key), x: m.x, y: m.y, rotation: m.rotation, from: startOf(m.key) })),
           ),
         );
         if (!r.ok) setError(r.error);
@@ -321,8 +399,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
 
   const inRoom = (p: Point): Point => ({ x: Math.round(clamp(p.x, 0, roomW)), y: Math.round(clamp(p.y, 0, roomD)) });
 
-  const duplicateSelection = (list: Body[] = selBodies) => {
-    if (!editable) return;
+  const duplicateSelection = (list: Body[] = actBodies) => {
+    if (!editable || list.length === 0) return;
+    say({ kind: "duplicate", count: list.length });
     copyItems(
       list.map((b) => {
         const at = inRoom({ x: b.x + 50, y: b.y + 50 });
@@ -332,8 +411,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     );
   };
 
-  const copySelection = (list: Body[] = selBodies) => {
+  const copySelection = (list: Body[] = actBodies) => {
     if (list.length === 0) return;
+    say({ kind: "copy", count: list.length });
     const box = unionBox(list.map((b) => boundsOf(b.poly)))!;
     clipboard = {
       layoutId,
@@ -346,6 +426,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const pasteAt = (at: Point | null) => {
     if (!editable || !clipboard) return;
     if (clipboard.layoutId !== layoutId) return setError("That was copied from another layout. Copy and paste work within one layout.");
+    say({ kind: "paste", count: clipboard.items.length });
     const v = viewRef.current;
     const target = at ?? { x: v.x + v.w / 2, y: v.y + v.h / 2 };
     const dx = target.x - clipboard.centre.x;
@@ -359,12 +440,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     );
   };
 
-  const deleteSelection = (list: Body[] = selBodies) => {
+  const deleteSelection = (listIn: Body[] = actBodies) => {
+    const list = free(listIn);
     if (!editable || list.length === 0) return;
     const tableIds = new Set(list.filter((b) => b.kind === "table").map((b) => b.id));
     const seated = assignments.filter((a) => tableIds.has(a.tableId)).length;
     if (seated > 0 && !window.confirm(`Delete ${list.length === 1 ? "this table" : `these ${tableIds.size} tables`}? ${seated} ${seated === 1 ? "guest goes" : "guests go"} back to the tray. You can undo it.`)) return;
     const gone = new Set(list.map((b) => b.key));
+    say({ kind: "delete", count: list.length });
     setSelection(new Set());
     setTables((ts) => ts.filter((t) => !gone.has(`t:${t.id}`)));
     setFixtures((fs) => fs.filter((f) => !gone.has(`f:${f.id}`)));
@@ -376,7 +459,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   };
 
   // Arrow keys and R repeat quickly: the screen follows every press, and one write goes out when they stop.
-  const pending = useRef<{ keys: Set<string>; label: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const pending = useRef<{ keys: Set<string>; label: string; timer: ReturnType<typeof setTimeout>; from: Map<string, Start> } | null>(null);
   const flush = useCallback(() => {
     const p = pending.current;
     if (!p) return;
@@ -388,38 +471,49 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         return b ? [{ key: k, x: b.x, y: b.y, rotation: b.rotation }] : [];
       }),
       p.label,
+      p.from,
     );
-  }, [commitMoves]);
+    // The write is queued (and counted) by now, so the server's copy stays held until it lands.
+    holdSync("nudges", false);
+  }, [commitMoves, holdSync]);
   // Only on unmount: a re-render must never cut a run of key presses short.
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => () => flushRef.current(), []);
-  const later = (keys: string[], label: string) => {
+  /** `bodies` are the things about to change, as they are now: where each starts is remembered for the whole run. */
+  const later = (bodies: Body[], label: string) => {
+    holdSync("nudges", true);
     const timer = setTimeout(flush, 400);
     if (pending.current) clearTimeout(pending.current.timer);
-    pending.current = { keys: new Set([...(pending.current?.keys ?? []), ...keys]), label, timer };
+    const from = new Map(pending.current?.from ?? []);
+    for (const b of bodies) if (!from.has(b.key)) from.set(b.key, startFor(b));
+    pending.current = { keys: new Set([...(pending.current?.keys ?? []), ...bodies.map((b) => b.key)]), label, timer, from };
   };
 
   const nudge = (dx: number, dy: number) => {
-    if (!editable || selBodies.length === 0) return;
-    const d = clampDelta(selBodies, { dx, dy }, roomW, roomD);
-    applyMoves(selBodies.map((b) => ({ key: b.key, x: b.x + d.dx, y: b.y + d.dy, rotation: b.rotation })));
-    later(selBodies.map((b) => b.key), moveLabel(selBodies.map((b) => b.key)));
+    const list = free(actBodies);
+    if (!editable || list.length === 0) return;
+    const d = clampDelta(list, { dx, dy }, roomW, roomD);
+    applyMoves(list.map((b) => ({ key: b.key, x: b.x + d.dx, y: b.y + d.dy, rotation: b.rotation })));
+    say({ kind: "move", count: list.length, name: nameOf(list[0]), dx: d.dx, dy: d.dy });
+    later(list, moveLabel(list.map((b) => b.key)));
   };
 
   /** Each item turns about its own centre. */
   const turn = (deg: number, now = false) => {
-    if (!editable || selBodies.length === 0) return;
-    const moves = selBodies.map((b) => ({ key: b.key, x: b.x, y: b.y, rotation: normaliseDegrees(b.rotation + deg) }));
+    const list = free(actBodies);
+    if (!editable || list.length === 0) return;
+    const moves = list.map((b) => ({ key: b.key, x: b.x, y: b.y, rotation: normaliseDegrees(b.rotation + deg) }));
     applyMoves(moves);
-    const label = selBodies.length === 1 ? "Turned an item" : `Turned ${selBodies.length} things`;
+    say({ kind: "turn", count: list.length, name: nameOf(list[0]), deg });
+    const label = list.length === 1 ? "Turned an item" : `Turned ${list.length} things`;
     if (now) commitMoves(moves, label);
-    else later(selBodies.map((b) => b.key), label);
+    else later(list, label);
   };
 
   const arrange = (deltas: Map<string, Delta>, label: string) => {
     if (!editable || deltas.size === 0) return;
-    const moves = selBodies.flatMap((b) => {
+    const moves = free(selBodies).flatMap((b) => {
       const d = deltas.get(b.key);
       return d && (d.dx !== 0 || d.dy !== 0) ? [{ key: b.key, x: clamp(b.x + d.dx, 0, roomW), y: clamp(b.y + d.dy, 0, roomD), rotation: b.rotation }] : [];
     });
@@ -427,12 +521,90 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     applyMoves(moves);
     commitMoves(moves, label);
   };
-  const align = (how: Align) => arrange(alignBodies(selBodies, how), `Aligned ${selBodies.length} things`);
-  const distribute = (axis: "x" | "y") => arrange(distributeBodies(selBodies, axis), `Spaced ${selBodies.length} things evenly`);
-  const grid = (gap: number) => arrange(gridBodies(selBodies, gap), `Arranged ${selBodies.length} things in a grid`);
+  const align = (how: Align) => arrange(alignBodies(selBodies.filter((b) => !b.locked), how), `Aligned ${selBodies.length} things`);
+  const distribute = (axis: "x" | "y") => arrange(distributeBodies(selBodies.filter((b) => !b.locked), axis), `Spaced ${selBodies.length} things evenly`);
+  const grid = (gap: number) => arrange(gridBodies(selBodies.filter((b) => !b.locked), gap), `Arranged ${selBodies.length} things in a grid`);
+
+  /** Lock item and Unlock item (spec 60 A.3): holds the things still, for everyone. Seating guests at a held table still works. */
+  const setLocked = (list: Body[], locked: boolean) => {
+    if (!editable || list.length === 0) return;
+    const keys = new Set(list.map((b) => b.key));
+    setTables((ts) => ts.map((t) => (keys.has(`t:${t.id}`) ? { ...t, locked } : t)));
+    setFixtures((fs) => fs.map((f) => (keys.has(`f:${f.id}`) ? { ...f, locked } : f)));
+    say({ kind: "lock", count: list.length, locked });
+    startTransition(async () => {
+      const label = locked ? (list.length === 1 ? "Locked an item" : `Locked ${list.length} things`) : list.length === 1 ? "Unlocked an item" : `Unlocked ${list.length} things`;
+      const r = await track(label, () => setSeatingItemsLocked(eventId, layoutId, list.map((b) => ({ kind: b.kind, id: b.id })), locked));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+  };
+  /** Bring to front and Send to back, among furniture and décor in a room: tables always draw above both (spec 60 A.4). */
+  const orderItems = (list: Body[], where: "front" | "back") => {
+    if (!editable) return;
+    const ids = new Set(list.filter((b) => b.kind === "fixture").map((b) => b.id));
+    if (ids.size === 0) return setError("Only furniture and décor have an order. Tables always sit above them.");
+    // Keep the things' own order among themselves: the lowest goes first, so for the front it ends lowest of the group.
+    const sorted = fixtures.filter((f) => ids.has(f.id)).sort((a, b) => a.z - b.z || a.created_at.localeCompare(b.created_at));
+    setFixtures((fs) => {
+      let next = fs;
+      for (const f of sorted) {
+        const zs = next.filter((x) => x.space_id === f.space_id).map((x) => x.z);
+        const z = where === "front" ? (zs.length ? Math.max(...zs) : 0) + 1 : (zs.length ? Math.min(...zs) : 0) - 1;
+        next = next.map((x) => (x.id === f.id ? { ...x, z } : x));
+      }
+      return next;
+    });
+    say({ kind: "order", count: sorted.length, where });
+    startTransition(async () => {
+      const r = await track(where === "front" ? "Brought to the front" : "Sent to the back", () => orderSeatingItems(eventId, layoutId, sorted.map((f) => f.id), where));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+  };
+
+  // ---- décor on tables (spec 59 Part D) ---------------------------------------------
+  /** Names for the dishes and the couple's own items, for what is drawn on a table. */
+  const itemNames = useMemo(() => {
+    const m = parseMenu(data.plan?.menu);
+    const dishes = (m.ok ? m.menu : []).flatMap((c) => c.dishes.map((d) => [d.id, d.name] as const));
+    return Object.fromEntries([...dishes, ...data.customItems.map((c) => [c.id, c.name] as const)]) as Record<string, string>;
+  }, [data.plan?.menu, data.customItems]);
+
+  const openDecor = (tableId: string) => {
+    tools.setSelected(null);
+    setSelection(new Set([`t:${tableId}`]));
+    setInspectorTab({ tab: "items", at: Date.now() });
+  };
+  const copyDecorOf = (tableId: string) => {
+    const t = tables.find((x) => x.id === tableId);
+    if (!t) return;
+    const items = parseTableItems(t.table_items);
+    holdDecor({ items, rules: parseStyleChanges(t.style_changes)?.item_rules ?? null });
+    say({ kind: "copy", count: items.length });
+  };
+  /** Paste table décor onto each table picked: items keep their place relative to the table's length, so they land where they were whatever its size (D.3). */
+  const pasteDecorOn = (tableIds: string[]) => {
+    const held = getHeldDecor();
+    if (!editable || !held || tableIds.length === 0) return;
+    const updates = tableIds.flatMap((id) => {
+      const t = tables.find((x) => x.id === id);
+      if (!t) return [];
+      const current = parseTableItems(t.table_items);
+      return [{ tableId: id, items: [...current, ...pasteItems(held.items, new Set(current.map((i) => i.id)))].slice(0, 200), ...(held.rules ? { rules: held.rules } : {}) }];
+    });
+    if (updates.length === 0) return;
+    setTables((ts) => ts.map((t) => (updates.some((u) => u.tableId === t.id) ? { ...t, table_items: updates.find((u) => u.tableId === t.id)!.items as typeof t.table_items } : t)));
+    say({ kind: "paste", count: held.items.length * updates.length });
+    startTransition(async () => {
+      const r = await track(updates.length === 1 ? "Pasted table décor" : `Pasted table décor on ${updates.length} tables`, () => setTableItems(eventId, layoutId, updates));
+      if (!r.ok) setError(r.error);
+      refresh();
+    });
+  };
 
   const selectAll = () => setSelection(new Set(bodies.filter(pickable).map((b) => b.key)));
-  const selectLike = () => setSelection(new Set(selectSimilar(bodies.filter(pickable), sel)));
+  const selectLike = () => setSelection(new Set(selectSimilar(bodies.filter(pickable), actBodies.map((b) => b.key))));
 
   // ---- the view --------------------------------------------------------------
   /** Keyboard shortcuts live on the plan: after a toolbar button, put focus back there. */
@@ -555,12 +727,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             })),
           });
         }
-        let last: { ok: boolean; error?: string } = { ok: true };
-        for (const p of pts) {
-          last = await createSeatingTable(eventId, { shape: item.shape, capacity: item.capacity, pos_x_cm: p.x, pos_y_cm: p.y, ...item.extra }, layoutId, spaceId);
-          if (!last.ok) break;
-        }
-        return last as { ok: boolean; error: string };
+        return createSeatingTables(eventId, layoutId, { spaceId, items: pts.map((p) => ({ shape: item.shape, capacity: item.capacity, reserved_seats: item.extra?.reserved_seats, x: p.x, y: p.y })) });
       });
       if (!r.ok) setError((r as { error: string }).error);
       refresh();
@@ -595,13 +762,43 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
 
   // ---- the pointer -----------------------------------------------------------
   const drag = useRef<Drag>(null);
+  /** A drag, a selection box or a stamp line holds the server's copy back until it ends (spec 60 E.1); a pan writes nothing. */
+  const setDrag = (d: Drag) => {
+    drag.current = d;
+    holdSync("gesture", d !== null && d.mode !== "pan");
+  };
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; view: View; mid: Point } | null>(null);
   const panBy = tool.kind === "hand" || spaceHeld;
 
+  // Long-press (touch): a finger resting on an item or the floor opens the right-click menu there (spec 60 B.2).
+  const cancelLongPress = () => {
+    if (longPress.current) clearTimeout(longPress.current.timer);
+    longPress.current = null;
+  };
+  const startLongPress = (e: RPointerEvent, key: string | null) => {
+    if (e.pointerType !== "touch" || e.button !== 0) return;
+    cancelLongPress();
+    pressFired.current = false;
+    const from = { x: e.clientX, y: e.clientY };
+    longPress.current = {
+      from,
+      timer: setTimeout(() => {
+        longPress.current = null;
+        pressFired.current = true;
+        // The press is not also a drag or a tap.
+        setDrag(null);
+        setDragView(null);
+        setBox(null);
+        setGuides([]);
+        openMenu(from.x, from.y, key);
+      }, LONG_PRESS_MS),
+    };
+  };
+
   const startPan = (e: RPointerEvent) => {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false };
+    setDrag({ mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false });
     setPanning(true);
   };
 
@@ -612,13 +809,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     const body = bodyByKey.get(key);
     if (!body) return;
     e.stopPropagation();
+    if (spaceHeld) spaceUsed.current = true;
     svgRef.current?.focus({ preventScroll: true });
+    setKbFocus(null);
     tools.setSelected(null);
+    startLongPress(e, key);
+    // Select several (touch): a tap adds or removes, as Shift does with a mouse.
+    const toggle = e.shiftKey || multi;
     // A guest in hand seats at the table tapped; picking and moving are for when nobody is held.
     let keys = [...sel];
     const wasSelected = sel.has(key);
     if (!held) {
-      if (e.shiftKey) {
+      if (toggle) {
         const next = new Set(sel);
         if (!next.delete(key)) next.add(key);
         setSelection(next);
@@ -630,14 +832,19 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       }
     } else keys = [key];
     const movable = keys.map((k) => bodyByKey.get(k)).filter((b): b is Body => Boolean(b) && pickable(b!));
-    if (movable.length === 0) return;
+    if (movable.length === 0) {
+      // Only held things under the finger: a plain click on one of several picks just that one.
+      if (wasSelected && !toggle && sel.size > 1) setSelection(new Set([key]));
+      return;
+    }
     const startBox = unionBox(movable.map((b) => boundsOf(b.poly)))!;
     const moving = new Set(movable.map((b) => b.key));
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = {
+    setDrag({
       mode: "move",
       keys: movable.map((b) => b.key),
       primary: movable.some((b) => b.key === key) ? key : movable[0]!.key,
+      clicked: key,
       start: toRoom(e.clientX, e.clientY),
       origins: new Map(movable.map((b) => [b.key, b])),
       startBox,
@@ -646,9 +853,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       // Alt before the drag copies; Alt during one turns snapping off.
       copy: e.altKey && editable && !held,
       wasSelected,
-      shift: e.shiftKey,
+      shift: toggle,
       delta: { dx: 0, dy: 0 },
-    };
+    });
   };
 
   const onRotatePointerDown = (e: RPointerEvent, key: string) => {
@@ -657,40 +864,120 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     if (!b) return;
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    drag.current = { mode: "rotate", key, centre: { x: b.x, y: b.y }, last: b.rotation, origin: b };
+    setDrag({ mode: "rotate", key, centre: { x: b.x, y: b.y }, last: b.rotation, origin: b });
+  };
+
+  // ---- resize and formation turn (spec 60 C) ------------------------------------
+  /** What the one picked item is, for resizing; null when it can't be (a locked one, or a shape drawn from its own pieces). */
+  const resizableOf = (key: string): Resizable | null => {
+    const body = bodyByKey.get(key);
+    if (!body || body.locked || !pickable(body)) return null;
+    if (body.kind === "table") {
+      const t = tables.find((x) => x.id === body.id);
+      if (!t || t.pos_x_cm === null || t.pos_y_cm === null || !RESIZABLE_TABLE_SHAPES.includes(t.shape)) return null;
+      const size = tableSize(t);
+      return { x: t.pos_x_cm, y: t.pos_y_cm, rotation: t.rotation_deg, w: size.length, d: size.width, limits: TABLE_LIMITS, single: t.shape === "round" ? "round" : t.shape === "square" ? "square" : undefined };
+    }
+    const f = fixtures.find((x) => x.id === body.id);
+    return f ? { x: f.pos_x_cm, y: f.pos_y_cm, rotation: f.rotation_deg, w: f.width_cm, d: f.depth_cm, limits: FIXTURE_LIMITS } : null;
+  };
+  /** Shows the new size at once, ahead of the server. */
+  const applyResize = (key: string, r: Resized, single?: Resizable["single"]) => {
+    const { id } = kindOf(key);
+    if (key.startsWith("t:")) {
+      setTables((ts) => ts.map((t) => (t.id === id ? { ...t, pos_x_cm: r.x, pos_y_cm: r.y, length_cm: r.w, width_cm: single ? r.w : r.d } : t)));
+    } else {
+      setFixtures((fs) => fs.map((f) => (f.id === id ? { ...f, pos_x_cm: r.x, pos_y_cm: r.y, width_cm: r.w, depth_cm: r.d } : f)));
+    }
+  };
+  /** One write and one undo step for a whole drag of a handle. */
+  const commitResize = (key: string, r: Resized, origin: Resizable) => {
+    say({ kind: "resize", name: nameOf(bodyByKey.get(key)) ?? "Item", width: r.w, depth: r.d });
+    // A fixture's size is stored, so a resize says what it started from; a table's is derived from its shape, so only its place counts.
+    const from = { x: origin.x, y: origin.y, rotation: origin.rotation, ...(key.startsWith("f:") ? { width: origin.w, depth: origin.d } : {}) };
+    startTransition(async () => {
+      const res = await track("Resized an item", () => resizeSeatingItem(eventId, layoutId, { ...kindOf(key), x: r.x, y: r.y, width: r.w, depth: r.d, from }));
+      if (!res.ok) setError(res.error);
+      refresh();
+    });
+  };
+  const onResizePointerDown = (e: RPointerEvent, handle: HandleId) => {
+    const key = single;
+    const origin = key ? resizableOf(key) : null;
+    if (!editable || !key || !origin) return;
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    // The lines the moving edge may snap to: the other things' edges and centres, and the building's.
+    const xs = lines.filter((l) => l.axis === "x").map((l) => l.at);
+    const ys = lines.filter((l) => l.axis === "y").map((l) => l.at);
+    for (const b of bodies) {
+      if (b.key === key) continue;
+      const bx = boundsOf(b.poly);
+      xs.push(bx.x0, (bx.x0 + bx.x1) / 2, bx.x1);
+      ys.push(bx.y0, (bx.y0 + bx.y1) / 2, bx.y1);
+    }
+    setDrag({ mode: "resize", key, handle, origin, targets: { xs, ys }, last: null });
+  };
+  /** The turn handle on a selection: the whole formation turns about its centre. */
+  const onFormationPointerDown = (e: RPointerEvent) => {
+    if (!editable || selBodies.length < 2) return;
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    const box = unionBox(selBodies.map((b) => boundsOf(b.poly)))!;
+    const centre = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
+    const p = toRoom(e.clientX, e.clientY);
+    setDrag({ mode: "formation", origins: new Map(selBodies.map((b) => [b.key, b])), centre, a0: Math.atan2(p.y - centre.y, p.x - centre.x), last: 0 });
+  };
+  /** Turn 90° as a group (the menu, and the inspector). */
+  const turnGroup = (deg: number, listIn: Body[] = selBodies) => {
+    const list = free(listIn);
+    if (!editable || list.length < 2) return;
+    const box = unionBox(list.map((b) => boundsOf(b.poly)))!;
+    const moves = turnAbout(list, { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }, deg);
+    if (!allInRoom(moves, roomW, roomD)) return setError("That would turn part of the group out of the room.");
+    applyMoves(moves);
+    say({ kind: "turn", count: list.length, deg, group: true });
+    commitMoves(moves, `Turned ${list.length} things as a group`);
   };
 
   const onBackgroundPointerDown = (e: RPointerEvent) => {
     svgRef.current?.focus({ preventScroll: true });
+    setKbFocus(null);
+    if (spaceHeld) spaceUsed.current = true;
     if (e.button === 2) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
-      drag.current = null;
+      cancelLongPress();
+      setDrag(null);
       setPanning(false);
       pinch.current = { dist: Math.hypot(a!.x - b!.x, a!.y - b!.y), view: viewRef.current, mid: toRoom((a!.x + b!.x) / 2, (a!.y + b!.y) / 2) };
       return;
     }
-    if (tool.kind === "place" && editable && e.shiftKey && e.button === 0 && e.pointerType !== "touch" && !panBy) {
+    // A finger holds the menu open after a long press, unless it is stamping or drawing.
+    if (!calibrating && !isDrawing(tool) && tool.kind !== "place") startLongPress(e, null);
+    // Stamp along a line: Shift+drag with a mouse, or the Line switch with a finger.
+    if (tool.kind === "place" && editable && (e.shiftKey || lineSwitch) && e.button === 0 && (e.pointerType !== "touch" || lineSwitch) && !panBy) {
       const raw = toRoom(e.clientX, e.clientY);
       const start = { x: snap(raw.x, snapOn ? GRID_CM : 0), y: snap(raw.y, snapOn ? GRID_CM : 0) };
-      drag.current = { mode: "line", start, item: tool.item };
+      setDrag({ mode: "line", start, item: tool.item });
       setLineAt({ item: tool.item, stops: [start] });
       return;
     }
     // Pan: the middle button, Space, the Hand tool, a finger, and any tool that draws (a click is its click, a drag moves the view).
     // Otherwise the Select tool draws a selection box.
-    if (e.button === 1 || panBy || e.pointerType === "touch" || tool.kind !== "select") {
-      drag.current = { mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false };
+    if (e.button === 1 || panBy || (e.pointerType === "touch" && !multi) || tool.kind !== "select") {
+      setDrag({ mode: "pan", start: { x: e.clientX, y: e.clientY }, view: viewRef.current, moved: false });
       if (e.button === 1 || panBy) setPanning(true);
     } else {
-      drag.current = { mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey ? new Set(sel) : new Set(), moved: false };
+      setDrag({ mode: "box", start: toRoom(e.clientX, e.clientY), base: e.shiftKey || multi ? new Set(sel) : new Set(), moved: false });
     }
   };
 
   const onPointerMove = (e: RPointerEvent) => {
     lastPointer.current = toRoom(e.clientX, e.clientY);
+    if (longPress.current && movedTooFar(longPress.current.from, { x: e.clientX, y: e.clientY })) cancelLongPress();
     if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2 && pinch.current) {
       const [a, b] = [...pointers.current.values()];
@@ -713,10 +1000,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       let dy: number;
       if (snapOn && !(e.altKey && !d.copy)) {
         // Guides first, the grid on whichever axis found no neighbour.
-        const g = snapGuides({ x0: d.startBox.x0 + raw.dx, y0: d.startBox.y0 + raw.dy, x1: d.startBox.x1 + raw.dx, y1: d.startBox.y1 + raw.dy }, d.others, SNAP_PX * unit);
-        dx = g.x ? raw.dx + g.dx : snap(prim.x + raw.dx, GRID_CM) - prim.x;
-        dy = g.y ? raw.dy + g.dy : snap(prim.y + raw.dy, GRID_CM) - prim.y;
-        setGuides(g.guides);
+        const moved = { x0: d.startBox.x0 + raw.dx, y0: d.startBox.y0 + raw.dy, x1: d.startBox.x1 + raw.dx, y1: d.startBox.y1 + raw.dy };
+        const g = snapGuides(moved, d.others, SNAP_PX * unit);
+        // Then the building, on whichever axis no neighbour caught (C.3).
+        const b = buildingGuides(moved, lines, SNAP_PX * unit, { x: g.x, y: g.y });
+        dx = g.x ? raw.dx + g.dx : b.x ? raw.dx + b.dx : snap(prim.x + raw.dx, GRID_CM) - prim.x;
+        dy = g.y ? raw.dy + g.dy : b.y ? raw.dy + b.dy : snap(prim.y + raw.dy, GRID_CM) - prim.y;
+        const at = { x0: d.startBox.x0 + dx, y0: d.startBox.y0 + dy, x1: d.startBox.x1 + dx, y1: d.startBox.y1 + dy };
+        setGuides([...g.guides, ...b.guides, ...wallGaps(at, drawing)]);
       } else {
         dx = Math.round(prim.x + raw.dx) - prim.x;
         dy = Math.round(prim.y + raw.dy) - prim.y;
@@ -724,6 +1015,26 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       }
       d.delta = clampDelta([...d.origins.values()], { dx, dy }, roomW, roomD);
       setDragView({ keys: new Set(d.keys), dx: d.delta.dx, dy: d.delta.dy, copy: d.copy });
+    } else if (d.mode === "resize") {
+      const r = resizeBody(d.origin, d.handle, lastPointer.current, {
+        shift: e.shiftKey,
+        alt: e.altKey,
+        step: snapOn ? SIZE_STEP_CM : 0,
+        targets: snapOn ? d.targets : undefined,
+        threshold: SNAP_PX * unit,
+      });
+      d.last = r;
+      applyResize(d.key, r, d.origin.single);
+    } else if (d.mode === "formation") {
+      const p = lastPointer.current;
+      const raw = ((Math.atan2(p.y - d.centre.y, p.x - d.centre.x) - d.a0) * 180) / Math.PI;
+      const deg = e.shiftKey ? Math.round(raw) : Math.round(raw / 15) * 15;
+      const moves = turnAbout([...d.origins.values()], d.centre, deg);
+      // Stops at the room's edge rather than turning part of the group out of it.
+      if (allInRoom(moves, roomW, roomD)) {
+        d.last = deg;
+        applyMoves(moves);
+      }
     } else if (d.mode === "rotate") {
       const p = lastPointer.current;
       const deg = (Math.atan2(p.y - d.centre.y, p.x - d.centre.x) * 180) / Math.PI + 90;
@@ -758,16 +1069,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     else if (editable && tools.onCanvasClick(p, e)) {
       // The tool took the click.
     } else {
-      if (!e.shiftKey) setSelection(new Set());
+      // With Select several on, a tap on empty floor leaves the selection alone.
+      if (!e.shiftKey && !multi) setSelection(new Set());
       tools.setSelected(null);
     }
   };
 
   const onPointerUp = (e: RPointerEvent) => {
+    cancelLongPress();
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
     const d = drag.current;
-    drag.current = null;
+    setDrag(null);
     setPanning(false);
     setBox(null);
     if (!d) return;
@@ -789,10 +1102,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         hold(null);
       } else if (d.wasSelected && !d.shift && sel.size > 1) {
         // A plain click on one of several picks just that one.
-        setSelection(new Set([d.primary]));
+        setSelection(new Set([d.clicked]));
       }
     } else if (d.mode === "rotate") {
-      commitMoves([{ key: d.key, x: d.centre.x, y: d.centre.y, rotation: d.last }], "Turned an item");
+      commitMoves([{ key: d.key, x: d.centre.x, y: d.centre.y, rotation: d.last }], "Turned an item", new Map([[d.key, startFor(d.origin)]]));
+    } else if (d.mode === "resize") {
+      if (d.last) commitResize(d.key, d.last, d.origin);
+    } else if (d.mode === "formation") {
+      if (d.last !== 0) {
+        const moves = turnAbout([...d.origins.values()], d.centre, d.last);
+        say({ kind: "turn", count: moves.length, deg: d.last, group: true });
+        commitMoves(moves, `Turned ${moves.length} things as a group`, new Map([...d.origins].map(([k, b]) => [k, startFor(b)])));
+      }
     } else if (d.mode === "line") {
       setLineAt(null);
       // A cancelled pointer (the window lost focus) is not a drop: nothing is placed.
@@ -806,11 +1127,55 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   };
 
   // ---- the keyboard ----------------------------------------------------------
+  /** Esc: out of the plan to the next control on the page. */
+  const leavePlan = () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const tabbable = [...document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    tabbable.slice(tabbable.indexOf(svg as unknown as HTMLElement) + 1).find((el) => !svg.contains(el) && el.getClientRects().length > 0)?.focus();
+  };
+  /** Brings a thing into view when Tab reaches it off screen, so the ring is never somewhere you can't see. */
+  const reveal = (b: Body) => {
+    const box = boundsOf(b.hit);
+    const v = viewRef.current;
+    if (box.x0 >= v.x && box.x1 <= v.x + v.w && box.y0 >= v.y && box.y1 <= v.y + v.h) return;
+    setView((cur) => ({ ...cur, x: (box.x0 + box.x1) / 2 - cur.w / 2, y: (box.y0 + box.y1) / 2 - cur.h / 2 }));
+  };
+  const focusItem = (key: string | null) => {
+    setKbFocus(key);
+    if (!key) return;
+    const b = bodyByKey.get(key);
+    if (b) reveal(b);
+    say({ kind: "focus", name: nameOf(b) ?? "Item", index: order.indexOf(key) + 1, total: order.length, selected: sel.has(key) });
+  };
+  const sayPicked = (picked: Set<string>) => say({ kind: "select", count: picked.size, name: picked.size === 1 ? nameOf(bodyByKey.get([...picked][0]!)) : undefined });
+  /** Shift+Enter, and Space on its own: add the item Tab has reached to the selection, or take it out. */
+  const toggleFocused = () => {
+    const b = kbFocus ? bodyByKey.get(kbFocus) : undefined;
+    if (!kbFocus || !b || !clickable(b)) return;
+    const next = new Set(sel);
+    if (!next.delete(kbFocus)) next.add(kbFocus);
+    setSelection(next);
+    sayPicked(next);
+  };
+  /** Enter: pick the item and open it: a table's close-up, or a piece of furniture's inspector. */
+  const openFocused = () => {
+    const b = kbFocus ? bodyByKey.get(kbFocus) : undefined;
+    if (!kbFocus || !b || !clickable(b)) return;
+    tools.setSelected(null);
+    setSelection(new Set([kbFocus]));
+    if (b.kind === "table") openTable(b.id);
+    sayPicked(new Set([kbFocus]));
+  };
+
   const onKeyDown = (e: RKeyboardEvent) => {
     if (isTypingTarget(e.target as HTMLElement)) return;
     if (e.key === " ") {
       e.preventDefault();
-      if (!e.repeat) setSpaceHeld(true);
+      if (!e.repeat) {
+        setSpaceHeld(true);
+        spaceUsed.current = false;
+      }
       return;
     }
     if (e.key === "?") {
@@ -821,6 +1186,17 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       return;
     }
     if (editable && tools.onKey(e)) return;
+    // Tab walks the plan's tables and furniture in reading order; past either end it leaves the plan, as Tab does anywhere.
+    if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const to = nextFocus(order, kbFocus, e.shiftKey ? -1 : 1);
+      if (to === "leave") return setKbFocus(null);
+      e.preventDefault();
+      return focusItem(to);
+    }
+    if (e.key === "Enter" && kbFocus) {
+      e.preventDefault();
+      return e.shiftKey ? toggleFocused() : openFocused();
+    }
     const command = e.metaKey || e.ctrlKey;
     if (command) {
       const k = e.key.toLowerCase();
@@ -831,7 +1207,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
       } else if (k === "d" && editable) {
         e.preventDefault();
         duplicateSelection();
-      } else if (k === "c" && selBodies.length > 0) {
+      } else if (k === "c" && actBodies.length > 0) {
         e.preventDefault();
         copySelection();
       } else if (k === "v" && editable) {
@@ -856,23 +1232,33 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     else if (e.shiftKey && e.code === "Digit1") showFit();
     else if (e.shiftKey && e.code === "Digit2") showSelection();
     else if (e.key === "Escape") {
-      if (sel.size) setSelection(new Set());
+      if (multi) setMulti(false);
+      else if (sel.size) setSelection(new Set());
+      // Something Tab has reached: Esc steps out of the plan to the next control.
+      else if (kbFocus) {
+        setKbFocus(null);
+        leavePlan();
+      }
       // Nothing picked and no tool in hand: Esc leaves focus mode.
       else if (focus && tool.kind === "select" && !tools.hasSelection) onLeaveFocus?.();
     }
-    else if (e.key === "ArrowLeft" && sel.size) (e.preventDefault(), nudge(-step, 0));
-    else if (e.key === "ArrowRight" && sel.size) (e.preventDefault(), nudge(step, 0));
-    else if (e.key === "ArrowUp" && sel.size) (e.preventDefault(), nudge(0, -step));
-    else if (e.key === "ArrowDown" && sel.size) (e.preventDefault(), nudge(0, step));
-    else if ((e.key === "r" || e.key === "R") && sel.size) turn(e.shiftKey ? -15 : 15);
-    else if ((e.key === "Delete" || e.key === "Backspace") && sel.size) (e.preventDefault(), deleteSelection());
+    else if (e.key === "ArrowLeft" && actBodies.length) (e.preventDefault(), nudge(-step, 0));
+    else if (e.key === "ArrowRight" && actBodies.length) (e.preventDefault(), nudge(step, 0));
+    else if (e.key === "ArrowUp" && actBodies.length) (e.preventDefault(), nudge(0, -step));
+    else if (e.key === "ArrowDown" && actBodies.length) (e.preventDefault(), nudge(0, step));
+    else if ((e.key === "r" || e.key === "R") && actBodies.length) turn(e.shiftKey ? -15 : 15);
+    else if ((e.key === "Delete" || e.key === "Backspace") && actBodies.length) (e.preventDefault(), deleteSelection());
     else {
       const next = toolForKey(e.key);
       if (next && !e.shiftKey && (editable || next.kind === "select" || next.kind === "hand")) setTool(tool.kind === next.kind && next.kind !== "select" ? SELECT : next);
     }
   };
   const onKeyUp = (e: RKeyboardEvent) => {
-    if (e.key === " ") setSpaceHeld(false);
+    if (e.key !== " ") return;
+    setSpaceHeld(false);
+    // A short press with no drag picks the item Tab has reached; held with a drag it was a pan.
+    if (!spaceUsed.current) toggleFocused();
+    spaceUsed.current = false;
   };
 
   const finishCalibration = (points: Point[]) => {
@@ -893,11 +1279,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   // ---- right-click -----------------------------------------------------------
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (calibrating || isDrawing(tool)) return;
     const el = (e.target as Element).closest("[data-key]");
-    const key = el?.getAttribute("data-key") ?? null;
-    const at = { x: e.clientX, y: e.clientY };
-    const here = toRoom(e.clientX, e.clientY);
+    openMenu(e.clientX, e.clientY, el?.getAttribute("data-key") ?? null);
+  };
+  /** The menu at a screen point, for the thing there (`key`) or the empty floor. A right-click and a long-press both come here. */
+  const openMenu = (clientX: number, clientY: number, key: string | null) => {
+    if (calibrating || isDrawing(tool)) return;
+    const at = { x: clientX, y: clientY };
+    const here = toRoom(clientX, clientY);
     const navigation: MenuItem = {
       label: "Navigation",
       children: [
@@ -910,19 +1299,20 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         at,
         items: [
           { label: "Paste here", keys: "⌘V", disabled: !editable || !clipboard, onSelect: () => pasteAt(here) },
+          { label: "Add a note here", disabled: !editable, onSelect: () => tools.addNoteAt(here) },
           "sep",
           { label: "Fit the room", keys: "⇧1", onSelect: showFit },
           navigation,
           {
             label: "Lock or unlock a layer",
-            children: LAYERS.filter((l) => l.id !== "notes").map((l) => ({ label: l.label, checked: locks[l.id], onSelect: () => setLocks({ ...locks, [l.id]: !locks[l.id] }) })),
+            children: LAYERS.map((l) => ({ label: l.label, checked: locks[l.id], onSelect: () => setLocks({ ...locks, [l.id]: !locks[l.id] }) })),
           },
         ],
       });
       return;
     }
     const body = bodyByKey.get(key)!;
-    if (!pickable(body)) return;
+    if (!clickable(body)) return;
     const list = sel.has(key) ? selBodies : [body];
     if (!sel.has(key)) setSelection(new Set([key]));
     const one = list.length === 1 ? list[0]! : null;
@@ -942,7 +1332,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         { label: "Delete", keys: "Del", disabled: !editable, onSelect: () => deleteSelection(list) },
         "sep",
         { label: "Turn 90°", disabled: !editable, onSelect: () => turn(90, true) },
+        ...(list.length > 1 ? ([{ label: "Turn 90° as a group", disabled: !editable, onSelect: () => turnGroup(90, list) }] as MenuItem[]) : []),
+        "sep",
+        { label: list.every((b) => b.locked) ? "Unlock item" : "Lock item", disabled: !editable, onSelect: () => setLocked(list, !list.every((b) => b.locked)) },
+        { label: "Bring to front", disabled: !editable || !list.some((b) => b.kind === "fixture"), onSelect: () => orderItems(list, "front") },
+        { label: "Send to back", disabled: !editable || !list.some((b) => b.kind === "fixture"), onSelect: () => orderItems(list, "back") },
+        "sep",
         { label: "Select similar", keys: "⌘⇧A", onSelect: () => setSelection(new Set(selectSimilar(bodies.filter(pickable), list.map((b) => b.key)))) },
+        { label: "Add a note here", disabled: !editable, onSelect: () => tools.addNoteAt(here) },
         ...(list.length > 1
           ? ([
               {
@@ -960,7 +1357,14 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         ...(tableBodies.length > 0
           ? ([
               "sep",
-              ...(one && one.kind === "table" ? ([{ label: "Open close-up", onSelect: () => openTable(one.id) }] as MenuItem[]) : []),
+              ...(one && one.kind === "table"
+                ? ([
+                    { label: "Open close-up", onSelect: () => openTable(one.id) },
+                    { label: "Add table décor", disabled: !editable, onSelect: () => openDecor(one.id) },
+                    { label: "Copy table décor", onSelect: () => copyDecorOf(one.id) },
+                  ] as MenuItem[])
+                : []),
+              { label: "Paste table décor", disabled: !editable || !hasHeldDecor(), onSelect: () => pasteDecorOn(tableIds) },
               { label: "Apply style", disabled: !editable || data.styles.length === 0, children: styleItems },
             ] as MenuItem[])
           : []),
@@ -1016,6 +1420,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const selectedTable = single?.startsWith("t:") ? tables.find((t) => `t:${t.id}` === single) : undefined;
   const selectedFixture = single?.startsWith("f:") ? fixtures.find((f) => `f:${f.id}` === single) : undefined;
   const handleR = view.w / 40;
+  const resizeFor = single ? resizableOf(single) : null;
   const fontSize = Math.max(14, view.w / 70);
 
   const itemCursor = !editable ? (locked ? "not-allowed" : "pointer") : held ? "copy" : "move";
@@ -1051,14 +1456,18 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           ? "Trackpad mode: two-finger scroll pans, pinch or ⌘/Ctrl+scroll zooms. On a mouse, switch to Mouse mode in the zoom box or by right-clicking the plan."
           : "Mouse mode: the wheel zooms, Shift+wheel pans sideways. On a trackpad, switch to Trackpad mode in the zoom box or by right-clicking the plan."
         : tool.kind === "place"
-          ? `Stamp: ${tool.item.label} · click to place · Shift+drag a line · 1–9 switch · Esc to stop`
+          ? `Stamp: ${tool.item.label} · click to place · ${lineSwitch ? "drag stamps a line" : "Shift+drag a line"} · 1–9 switch · Esc to stop`
           : tools.status
             ? tools.status
             : tool.kind === "hand" || spaceHeld
               ? "Hand: drag to pan · V for Select"
-              : sel.size > 0
-                ? `${sel.size} selected · drag to move · arrows nudge · R turns · Alt before dragging copies · Delete removes`
-                : "Select: click, or drag a box · Shift adds · Space+drag pans · ? for shortcuts";
+              : multi
+                ? "Select several: tap to add or remove · drag on the floor for a box · Esc or the button turns it off"
+                : kbFocus && sel.size === 0
+                  ? `${nameOf(focusBody) ?? "Item"} · Enter opens · Shift+Enter or Space picks · arrows nudge · Tab next · Esc leaves the plan`
+                  : sel.size > 0
+                    ? `${sel.size} selected · drag to move · arrows nudge · R turns · Alt before dragging copies · Delete removes`
+                    : "Select: click, or drag a box · Shift adds · Space+drag pans · ? for shortcuts";
 
   const strip = (
     <RoomStrip
@@ -1108,11 +1517,29 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   const inspector = (
     <>
       {tools.selectionPanel}
+      {selBodies.length > 0 ? (
+        <LockRow
+          allLocked={selBodies.every((b) => b.locked)}
+          anyFixture={selBodies.some((b) => b.kind === "fixture")}
+          editable={editable}
+          onLock={(locked) => setLocked(selBodies, locked)}
+          onFront={() => orderItems(selBodies, "front")}
+          onBack={() => orderItems(selBodies, "back")}
+        />
+      ) : null}
       {selectedTable ? (
         focus ? (
-          <TableInspector table={selectedTable} seats={<SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />} />
+          <TableInspector table={selectedTable} openTab={inspectorTab} seats={<SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />} />
         ) : (
-          <SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />
+          <>
+            <SelectedTablePanel table={selectedTable} onUnplace={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} />
+            <details className="card p-2" open={inspectorTab !== null}>
+              <summary className="cursor-pointer text-sm font-medium">Décor on {selectedTable.label}</summary>
+              <div className="pt-2">
+                <TableItemsEditor table={selectedTable} />
+              </div>
+            </details>
+          </>
         )
       ) : null}
       {selectedFixture ? <SelectedFixturePanel fixture={selectedFixture} onDone={() => setSelection(new Set())} editable={editable} onRepeat={repeatSelection} /> : null}
@@ -1127,6 +1554,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           onSimilar={selectLike}
           onDuplicate={() => duplicateSelection()}
           onTurn={() => turn(90, true)}
+          onTurnGroup={() => turnGroup(90)}
           onDelete={() => deleteSelection()}
           onClear={() => setSelection(new Set())}
         />
@@ -1154,7 +1582,10 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         tabIndex={0}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
-        onBlur={() => setSpaceHeld(false)}
+        onBlur={() => {
+          setSpaceHeld(false);
+          setKbFocus(null);
+        }}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -1176,7 +1607,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             /* not one of ours */
           }
         }}
-        aria-label="Floor plan"
+        aria-label="Floor plan. Tab moves through the tables and furniture, Enter opens one, Shift+Enter or Space picks it."
+        aria-activedescendant={kbFocus ? `plan-${kbFocus}` : undefined}
         role="application"
       >
           <rect x={view.x - view.w} y={view.y - view.h} width={view.w * 3} height={view.h * 3} fill="transparent" onPointerDown={onBackgroundPointerDown} />
@@ -1209,8 +1641,9 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
                     itemKey={key}
                     selected={sel.has(key)}
                     hovered={hoverKey === key}
-                    cursor={itemCursor}
+                    cursor={f.locked ? "not-allowed" : itemCursor}
                     fontSize={fontSize}
+                    where={describePosition({ x: f.pos_x_cm, y: f.pos_y_cm }, roomW, roomD)}
                     onPointerDown={stableDown}
                     onHover={setHoverKey}
                   />
@@ -1227,10 +1660,13 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
                     itemKey={key}
                     selected={sel.has(key)}
                     hovered={hoverKey === key}
-                    cursor={itemCursor}
+                    cursor={t.locked ? "not-allowed" : itemCursor}
                     rings={rings}
                     fontSize={fontSize}
                     detail={detail}
+                    showItems={zoomPct >= 100}
+                    itemNames={itemNames}
+                    where={describePosition({ x: t.pos_x_cm ?? 0, y: t.pos_y_cm ?? 0 }, roomW, roomD)}
                     onPointerDown={stableDown}
                     onHover={setHoverKey}
                   />
@@ -1240,6 +1676,22 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           </g>
 
           {tools.overlay}
+
+          {/* The item Tab has reached: a ring outside its outline (and its chairs), in its own colour, never the hover colour. */}
+          {focusBody ? (
+            <g transform={shift(focusBody.key)} style={{ pointerEvents: "none" }} aria-hidden>
+              <polygon points={focusBody.hit.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#ffffff" strokeWidth={unit * 7} strokeLinejoin="round" />
+              <polygon points={focusBody.hit.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#2563eb" strokeWidth={unit * 3.5} strokeLinejoin="round" />
+            </g>
+          ) : null}
+
+          {/* A padlock on a held item when it is hovered or selected (spec 60 A.3). */}
+          {bodies
+            .filter((b) => b.locked && (sel.has(b.key) || hoverKey === b.key))
+            .map((b) => {
+              const bx = boundsOf(b.poly);
+              return <Padlock key={b.key} x={bx.x1} y={bx.y0} unit={unit} />;
+            })}
 
           {calibrating?.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={view.w / 150} fill="#b0532b" style={{ pointerEvents: "none" }} />
@@ -1291,11 +1743,58 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             </g>
           ) : null}
 
-          {editable && selectedTable && !dragView && selectedTable.pos_x_cm !== null ? (
+          {editable && selectedTable && !selectedTable.locked && !dragView && selectedTable.pos_x_cm !== null ? (
             <RotateHandle item={selectedTable} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `t:${selectedTable.id}`)} />
           ) : null}
-          {editable && selectedFixture && !dragView ? <RotateHandle item={selectedFixture} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `f:${selectedFixture.id}`)} /> : null}
+          {editable && selectedFixture && !selectedFixture.locked && !dragView ? <RotateHandle item={selectedFixture} r={handleR} onPointerDown={(e) => onRotatePointerDown(e, `f:${selectedFixture.id}`)} /> : null}
+
+          {/* Resize handles (spec 60 C.1) on the one picked item, when it is big enough on screen for them not to crowd each other. */}
+          {editable && single && !dragView && resizeFor && handlesVisible(resizeFor, unit) ? (
+            <g>
+              {handlePoints(resizeFor).map((h) => {
+                const hs = (touchy ? 15 : 9) * unit;
+                return (
+                  <rect
+                    key={h.id}
+                    data-handle={h.id}
+                    x={h.at.x - hs / 2}
+                    y={h.at.y - hs / 2}
+                    width={hs}
+                    height={hs}
+                    fill="#ffffff"
+                    stroke="#1a1a1a"
+                    strokeWidth={unit * 1.5}
+                    style={{ cursor: handleCursor(h.id, resizeFor.rotation) }}
+                    onPointerDown={(e) => onResizePointerDown(e, h.id)}
+                    aria-label={resizeFor.single ? "Resize" : `Resize from the ${h.id}`}
+                  />
+                );
+              })}
+            </g>
+          ) : null}
+
+          {/* The turn handle on a selection of several: the formation turns as one (spec 60 C.2). */}
+          {editable && selectionOutline && !dragView ? (
+            <g>
+              <line x1={(selectionOutline.x0 + selectionOutline.x1) / 2} y1={selectionOutline.y0 - 10 * unit} x2={(selectionOutline.x0 + selectionOutline.x1) / 2} y2={selectionOutline.y0 - 34 * unit} stroke="#b0532b" strokeWidth={unit * 1.5} style={{ pointerEvents: "none" }} />
+              <circle
+                data-handle="formation"
+                cx={(selectionOutline.x0 + selectionOutline.x1) / 2}
+                cy={selectionOutline.y0 - 34 * unit}
+                r={(touchy ? 12 : 8) * unit}
+                fill="#ffffff"
+                stroke="#b0532b"
+                strokeWidth={unit * 2}
+                style={{ cursor: "grab" }}
+                onPointerDown={onFormationPointerDown}
+                aria-label="Turn the group"
+              />
+            </g>
+          ) : null}
       </svg>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {live}
+      </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex flex-col items-center gap-1.5 px-3">
         <FloatingToolbar
@@ -1313,6 +1812,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
           setNavMode={setNavMode}
           onDone={focusPlan}
           onStamp={startStamp}
+          onMulti={touchy && editable ? () => setMulti((on) => !on) : undefined}
+          multi={multi}
         />
         {panelsHidden ? null : (
           <p className="max-w-full rounded bg-white/90 px-2 py-0.5 text-center text-xs text-muted shadow-sm" role="status" aria-live="polite">
@@ -1337,6 +1838,12 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
             />
             cm
           </label>
+        ) : null}
+        {tool.kind === "place" && !panelsHidden && touchy && editable ? (
+          // A finger has no Shift: with Line on, a drag stamps along it (spec 60 B.2).
+          <button type="button" aria-pressed={lineSwitch} className={`pointer-events-auto rounded border px-2.5 py-1 text-xs shadow-sm ${lineSwitch ? "border-ink bg-ink text-white" : "border-line bg-white/90"}`} onClick={() => setLineSwitch((on) => !on)}>
+            Line: {lineSwitch ? "on, drag to stamp along it" : "off"}
+          </button>
         ) : null}
       </div>
     </>
@@ -1380,6 +1887,40 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
   );
 }
 
+/** Lock item, and Bring to front / Send to back, for what is picked. */
+function LockRow({ allLocked, anyFixture, editable, onLock, onFront, onBack }: { allLocked: boolean; anyFixture: boolean; editable: boolean; onLock: (locked: boolean) => void; onFront: () => void; onBack: () => void }) {
+  return (
+    <div className="card flex flex-wrap items-center gap-2 p-2 text-sm">
+      <label className="flex items-center gap-1.5">
+        <input type="checkbox" checked={allLocked} disabled={!editable} onChange={(e) => onLock(e.target.checked)} />
+        Lock item <span className="text-xs text-muted">holds it still, for everyone</span>
+      </label>
+      {anyFixture ? (
+        <span className="flex gap-1">
+          <button type="button" className="btn py-1" disabled={!editable} onClick={onFront}>
+            Bring to front
+          </button>
+          <button type="button" className="btn py-1" disabled={!editable} onClick={onBack}>
+            Send to back
+          </button>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** A small padlock at a corner of a held item. */
+function Padlock({ x, y, unit }: { x: number; y: number; unit: number }) {
+  const s = 14 * unit;
+  return (
+    <g transform={`translate(${x - s / 2} ${y - s / 2})`} style={{ pointerEvents: "none" }} aria-hidden>
+      <circle cx={s / 2} cy={s / 2} r={s * 0.78} fill="#ffffff" stroke="#1a1a1a" strokeWidth={unit * 1.2} />
+      <path d={`M ${s * 0.3} ${s * 0.5} V ${s * 0.36} a ${s * 0.2} ${s * 0.2} 0 0 1 ${s * 0.4} 0 V ${s * 0.5}`} fill="none" stroke="#1a1a1a" strokeWidth={unit * 1.6} />
+      <rect x={s * 0.22} y={s * 0.48} width={s * 0.56} height={s * 0.38} rx={unit * 1.5} fill="#1a1a1a" />
+    </g>
+  );
+}
+
 /** The layer a fixture is on: décor, or furniture. */
 function fixtureBodyLayer(f: SeatingFixture): "decor" | "furniture" {
   return fixtureGroup(f.kind) === "decor" ? "decor" : "furniture";
@@ -1387,16 +1928,19 @@ function fixtureBodyLayer(f: SeatingFixture): "decor" | "furniture" {
 
 /** The lines a drag draws: edges and centres it lined up with, and the equal gaps it kept, labelled in cm and coloured by the walkway thresholds. */
 function GuideLines({ guides, unit, settings }: { guides: Guide[]; unit: number; settings: Parameters<typeof classifyWalkway>[1] }) {
+  // Lines up with other furniture are pink; lines up with the building (walls, doors, markers, areas) are violet (spec 60 C.3).
   const GUIDE = "#d6336c";
+  const GUIDE_BUILDING = "#6741d9";
   return (
     <g style={{ pointerEvents: "none" }}>
       {guides.map((g, i) => {
         const horizontal = g.axis === "y";
+        const lineColour = g.source === "building" ? GUIDE_BUILDING : GUIDE;
         if (g.kind !== "spacing") {
           return horizontal ? (
-            <line key={i} x1={g.from} y1={g.at} x2={g.to} y2={g.at} stroke={GUIDE} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
+            <line key={i} x1={g.from} y1={g.at} x2={g.to} y2={g.at} stroke={lineColour} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
           ) : (
-            <line key={i} x1={g.at} y1={g.from} x2={g.at} y2={g.to} stroke={GUIDE} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
+            <line key={i} x1={g.at} y1={g.from} x2={g.at} y2={g.to} stroke={lineColour} strokeWidth={unit} strokeDasharray={g.kind === "centre" ? `${unit * 4} ${unit * 3}` : undefined} />
           );
         }
         // A spacing guide: a dimension line across the gap with end ticks and its length.
@@ -1504,6 +2048,9 @@ function TableShapeBase({
   rings,
   fontSize,
   detail,
+  showItems,
+  itemNames,
+  where,
   onPointerDown,
   onHover,
 }: {
@@ -1515,6 +2062,10 @@ function TableShapeBase({
   rings: boolean;
   fontSize: number;
   detail: ChairDetail;
+  /** Spec 59 D.1: what is on the table's top is drawn to scale from 100% zoom, and left out below it. */
+  showItems: boolean;
+  itemNames: Readonly<Record<string, string>>;
+  where: string;
   onPointerDown: (e: RPointerEvent, key: string) => void;
   onHover: (key: string | null) => void;
 }) {
@@ -1522,6 +2073,12 @@ function TableShapeBase({
   const clearance = settings.walkway.comfortable;
   const { setNodeRef, isOver } = useDroppable({ id: `table:${table.id}` });
   const { length, width } = tableSize(table);
+  const onTop = useMemo(() => {
+    if (!showItems) return [];
+    const style = data.styles.find((s) => s.id === table.style_id);
+    const rules = effectiveRules(style?.item_rules ?? [], parseStyleChanges(table.style_changes)?.item_rules ?? null);
+    return [...parseTableItems(table.table_items), ...ruleItems(table, rules)];
+  }, [showItems, data.styles, table]);
   const occ = occupancy.get(table.id)!;
   const warn = (warningsByTable.get(table.id) ?? []).some((w) => w.severity === "warning");
   const seats = seatPositions({ ...table, pos_x_cm: 0, pos_y_cm: 0, rotation_deg: 0 }) ?? [];
@@ -1536,13 +2093,14 @@ function TableShapeBase({
     <g
       ref={setNodeRef as unknown as React.Ref<SVGGElement>}
       transform={`translate(${table.pos_x_cm} ${table.pos_y_cm}) rotate(${table.rotation_deg})`}
+      id={`plan-${itemKey}`}
       data-key={itemKey}
       onPointerDown={(e) => onPointerDown(e, itemKey)}
       onPointerEnter={() => onHover(itemKey)}
       onPointerLeave={() => onHover(null)}
       style={{ cursor }}
       role="button"
-      aria-label={`${table.label}, ${occ.chairsTaken} of ${table.capacity}`}
+      aria-label={describeTable({ label: table.label, shape: table.shape, capacity: table.capacity, taken: occ.chairsTaken, where })}
     >
       {rings ? (
         table.shape === "round" ? (
@@ -1642,6 +2200,14 @@ function TableShapeBase({
           strokeWidth={selected ? 6 : 4}
         />
       )}
+      {/* What is on the table, to scale, from 100% zoom (spec 59 D.1); dashed ones are placed by a rule. */}
+      {onTop.length > 0 ? (
+        <g style={{ pointerEvents: "none" }} aria-hidden>
+          {onTop.map((it) => (
+            <TableItemGlyph key={it.id} item={it} length={length} width={width} ghost={"fromRule" in it} name={it.ref ? itemNames[it.ref] : undefined} textSize={8} />
+          ))}
+        </g>
+      ) : null}
       <g transform={`rotate(${-table.rotation_deg})`} style={{ pointerEvents: "none" }}>
         <text textAnchor="middle" y={-fs * 0.15} fontSize={fs} fill="#1a1a1a">
           {table.label}
@@ -1686,6 +2252,7 @@ function FixtureShapeBase({
   hovered,
   cursor,
   fontSize,
+  where,
   onPointerDown,
   onHover,
 }: {
@@ -1695,6 +2262,7 @@ function FixtureShapeBase({
   hovered: boolean;
   cursor: string;
   fontSize: number;
+  where: string;
   onPointerDown: (e: RPointerEvent, key: string) => void;
   onHover: (key: string | null) => void;
 }) {
@@ -1711,13 +2279,14 @@ function FixtureShapeBase({
   return (
     <g
       transform={`translate(${fixture.pos_x_cm} ${fixture.pos_y_cm}) rotate(${fixture.rotation_deg})`}
+      id={`plan-${itemKey}`}
       data-key={itemKey}
       onPointerDown={(e) => onPointerDown(e, itemKey)}
       onPointerEnter={() => onHover(itemKey)}
       onPointerLeave={() => onHover(null)}
       style={{ cursor }}
       role="button"
-      aria-label={fixture.quantity > 1 ? `${label}, ${fixture.quantity}` : label}
+      aria-label={describeFixture({ label, quantity: fixture.quantity, where })}
     >
       {marquee ? (
         <MarqueeBody width={w} length={d} template={marquee} fill={fill} stroke={stroke} strokeWidth={selected ? 6 : 3} />

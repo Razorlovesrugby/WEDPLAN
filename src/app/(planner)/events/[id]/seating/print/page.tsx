@@ -42,7 +42,7 @@ export default async function SeatingPrintPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: string; colour?: string; layout?: string; paper?: string; orient?: string; spaces?: string; size?: string }>;
+  searchParams: Promise<{ view?: string; colour?: string; layout?: string; paper?: string; orient?: string; spaces?: string; size?: string; vendor?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -67,7 +67,7 @@ export default async function SeatingPrintPage({
   const backgrounds = isExportView(view)
     ? Object.fromEntries(await Promise.all(data.spaces.map(async (s) => [s.id, s.background_path ? await signPath(s.background_path) : null] as const)))
     : {};
-  const exportInput = { data, eventName: event.name, paper, spaceIds, backgrounds, colourBy: parseColourBy(sp.colour ?? data.plan?.colour_by) };
+  const exportInput = { data, eventName: event.name, paper, spaceIds, backgrounds, colourBy: parseColourBy(sp.colour ?? data.plan?.colour_by), vendorId: data.vendors.some((v) => v.id === sp.vendor) ? sp.vendor : null };
 
   return (
     <div className="space-y-5">

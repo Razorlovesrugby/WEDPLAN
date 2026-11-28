@@ -139,9 +139,97 @@ describe("the shared page", () => {
   });
   it("writes nothing: no form, no button that saves", () => {
     expect(out).not.toContain("<form");
-    expect(out).not.toContain("<button");
+    // The only buttons are each plan's zoom controls (spec 60 D.1), which move the picture and nothing else.
+    const zoom = /<div data-zoom-control[\s\S]*?<\/button><\/div>/g;
+    expect(out.match(zoom)?.length).toBe(2);
+    expect(out.replace(zoom, "")).not.toContain("<button");
   });
   it("doesn't carry what a supplier shouldn't have", () => {
     expect(out).not.toContain("Needs a ramp");
+  });
+});
+
+describe("notes and table items (spec 59 Parts D and E)", () => {
+  const V1 = "11111111-1111-4111-8111-111111111111";
+  const V2 = "22222222-2222-4222-8222-222222222222";
+  const T1 = "33333333-3333-4333-8333-333333333333";
+  const withNotes = {
+    ...data,
+    // Real ids are uuids, and a note on a table names it by one.
+    tables: (data.tables as unknown as Record<string, unknown>[]).map((t) => (t.id === "t1" ? { ...t, id: T1 } : t)),
+    assignments: (data.assignments as unknown as { tableId: string }[]).map((a) => (a.tableId === "t1" ? { ...a, tableId: T1 } : a)),
+    vendors: [{ id: V1, name: "Bloom & Co" }, { id: V2, name: "Rentals Ltd" }],
+    spaces: (data.spaces as unknown as { id: string; drawing?: unknown }[]).map((sp) =>
+      sp.id === "s1"
+        ? {
+            ...sp,
+            drawing: {
+              notes: [
+                { id: "n1", text: "Flowers hang from this beam", x: 400, y: 300, vendor_ids: [V1], table_id: null },
+                { id: "n2", text: "Cake here, power behind", x: 20, y: 0, vendor_ids: [], table_id: T1 },
+                { id: "n3", text: "Chairs stacked by the door", x: 900, y: 900, vendor_ids: [V2], table_id: null },
+              ],
+            },
+          }
+        : sp,
+    ),
+  } as unknown as SeatingPlanData;
+
+  it("the florist's export numbers each note on the plan and lists it beside, saying who it is for", () => {
+    const out = html(FloristExport, { data: withNotes });
+    expect(out).toContain("Flowers hang from this beam");
+    expect(out).toContain("for Bloom &amp; Co");
+    expect(out).toContain("Cake here, power behind");
+    expect(out).toContain("data-note=\"n1\"");
+    expect(out).toContain("Notes");
+  });
+
+  it("a note on a table is drawn at the table, wherever it is", () => {
+    const out = html(CatererExport, { data: withNotes });
+    // Table 1 is at 600,600, the note's offset 20,0: the pin is at 620,600.
+    expect(out).toContain("translate(620 600)");
+    expect(out).toContain('data-note="n2"');
+  });
+
+  it("an export for one supplier has the notes for everyone and for them, and nobody else's", () => {
+    const out = html(HireExport, { data: withNotes, vendorId: V2 });
+    expect(out).toContain("Chairs stacked by the door");
+    expect(out).toContain("Cake here, power behind");
+    expect(out).not.toContain("Flowers hang from this beam");
+  });
+
+  it("with no supplier named, every note shows", () => {
+    const out = html(VenueExport, { data: withNotes });
+    expect(out).toContain("Flowers hang from this beam");
+    expect(out).toContain("Chairs stacked by the door");
+  });
+
+  it("the shared page lists the notes too, and still writes nothing", () => {
+    const out = renderToStaticMarkup(createElement(SharedPlan, { data: withNotes, eventName: "Reception", token: "tok", backgrounds: {} } as never));
+    expect(out).toContain("Flowers hang from this beam");
+    expect(out).not.toContain("<form");
+  });
+
+  it("a table's placed items and its rules' items are drawn on its close-up in the print pack, rules dashed", () => {
+    const decorated = {
+      ...data,
+      styles: [{ id: "st", name: "Garden", place: {}, centre: {}, item_rules: [{ id: "r1", kind: "arrangement", rule: "each_end" }] }],
+      tables: (data.tables as unknown as Record<string, unknown>[]).map((t) =>
+        t.id === "t2" ? { ...t, style_id: "st", table_items: [{ id: "a", kind: "candles", along: 0, across: 0, rotation: 0 }] } : t,
+      ),
+    } as unknown as SeatingPlanData;
+    const out = html(CatererExport, { data: decorated });
+    expect(out).toContain('data-item="a"');
+    expect(out).toContain('data-item="rule:r1:0"');
+    expect(out).toContain('data-item="rule:r1:1"');
+    expect(out).toContain('stroke-dasharray="3 2"');
+  });
+
+  it("the florist's and the hire company's exports show each decorated table's close-up", () => {
+    const decorated = {
+      ...data,
+      tables: (data.tables as unknown as Record<string, unknown>[]).map((t) => (t.id === "t1" ? { ...t, table_items: [{ id: "a", kind: "candles", along: 0, across: 0, rotation: 0 }] } : t)),
+    } as unknown as SeatingPlanData;
+    expect(html(FloristExport, { data: decorated })).toContain('data-item="a"');
   });
 });

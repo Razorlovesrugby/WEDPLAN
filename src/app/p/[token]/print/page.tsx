@@ -16,7 +16,7 @@ export default async function SharedSeatingPrintPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ view?: string; paper?: string; orient?: string; spaces?: string }>;
+  searchParams: Promise<{ view?: string; paper?: string; orient?: string; spaces?: string; vendor?: string }>;
 }) {
   const { token } = await params;
   const sp = await searchParams;
@@ -37,7 +37,7 @@ export default async function SharedSeatingPrintPage({
     supabase.from("events").select("name").eq("id", check.eventId).eq("wedding_id", check.weddingId).maybeSingle(),
   ]);
   const backgrounds = Object.fromEntries(await Promise.all(data.spaces.map(async (s) => [s.id, s.background_path ? await signPath(s.background_path) : null] as const)));
-  const input = { data, eventName: event.data?.name ?? "Seating", paper, spaceIds: (sp.spaces ?? "").split(",").filter(Boolean), backgrounds, colourBy: parseColourBy(data.plan?.colour_by) };
+  const input = { data, eventName: event.data?.name ?? "Seating", paper, spaceIds: (sp.spaces ?? "").split(",").filter(Boolean), backgrounds, colourBy: parseColourBy(data.plan?.colour_by), vendorId: data.vendors.some((v) => v.id === sp.vendor) ? sp.vendor : null };
 
   return (
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">

@@ -102,7 +102,7 @@ export function FocusShell({
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-paper" role="region" aria-label="Seating plan, full window">
-      <TopBar eventName={eventName} timeZone={timeZone} shareLinks={shareLinks} collaborators={collaborators} printHref={printHref} unseated={unseated} onLeave={onLeave} hidden={rail.hidden} onShow={() => setRail({ hidden: false })} />
+      <TopBar eventName={eventName} timeZone={timeZone} shareLinks={shareLinks} collaborators={collaborators} printHref={printHref} unseated={unseated} onLeave={onLeave} hidden={rail.hidden} onShow={() => setRail({ hidden: false })} onHide={() => setRail({ hidden: true })} />
       <div className="relative flex min-h-0 flex-1">
         {!rail.hidden ? (
           <nav aria-label="Panels" className="flex w-12 shrink-0 flex-col items-stretch gap-0.5 overflow-y-auto border-r border-line bg-white py-1">
@@ -165,6 +165,7 @@ function TopBar({
   onLeave,
   hidden,
   onShow,
+  onHide,
 }: {
   eventName: string;
   timeZone: string;
@@ -175,6 +176,7 @@ function TopBar({
   onLeave: () => void;
   hidden: boolean;
   onShow: () => void;
+  onHide: () => void;
 }) {
   const { eventId, data, undo, redo, canUndo, canRedo, undoLabel, redoLabel, saving, setError } = useSeating();
   const router = useRouter();
@@ -209,11 +211,10 @@ function TopBar({
         </span>
       </div>
       <div className="ml-auto flex items-center gap-1">
-        {hidden ? (
-          <button type="button" className="btn py-1" onClick={onShow} title="Bring the panels back (\)">
-            Show panels
-          </button>
-        ) : null}
+        {/* A button as well as the key (spec 60 B.2): on a tablet there is no \ key. */}
+        <button type="button" className="btn py-1" onClick={hidden ? onShow : onHide} title={hidden ? "Bring the panels back (\\)" : "Hide the rail, panels and inspector to see more of the plan (\\)"}>
+          {hidden ? "Show panels" : "Hide panels"}
+        </button>
         {current ? (
           <button
             type="button"

@@ -22,6 +22,7 @@ import type {
   SeatingTable,
 } from "@/lib/seating/model";
 import { applyMove } from "@/lib/seating/moves";
+import { HOLD_MAX_MS, NO_HOLDS, giveUpMessage, isHeld, skipPoll, syncDecision, type SyncHolds } from "@/lib/seating/sync";
 import { defaultTrayMode, trayHouseholds, type TrayMode } from "@/lib/seating/tray";
 import {
   computeWarnings,
@@ -34,8 +35,8 @@ import {
 } from "@/lib/seating/warnings";
 
 /** The Show menu: chair names and numbers, and the layers of the room (Venue, Tables, Furniture, Flowers & décor). */
-export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; tables: boolean; furniture: boolean; decor: boolean };
-const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, tables: true, furniture: true, decor: true };
+export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; tables: boolean; furniture: boolean; decor: boolean; /** Notes for suppliers (spec 59 Part E). */ notes: boolean };
+const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, tables: true, furniture: true, decor: true, notes: true };
 
 /** The panel open beside the Room view: who to seat, the Library, or the venue's drawing tools. */
 export type LeftTab = "guests" | "library" | "venue";
@@ -85,6 +86,14 @@ type SeatingState = {
   assignments: SeatingAssignment[];
   tables: SeatingTable[];
   setTables: (update: (tables: SeatingTable[]) => SeatingTable[]) => void;
+  /** The optimistic copy of the room's furniture and décor, held the same way as `tables`. */
+  fixtures: SeatingFixture[];
+  setFixtures: (update: (fixtures: SeatingFixture[]) => SeatingFixture[]) => void;
+  /**
+   * Tells the provider something of the person's own is pending (spec 60 E.1): a run of nudges waiting to be saved, or a
+   * drag, box or line in progress. While it is, the server's copy is held back; releasing it takes the copy.
+   */
+  holdSync: (reason: "nudges" | "gesture", on: boolean) => void;
   guestById: Map<string, SeatingGuest>;
   tableById: Map<string, SeatingTable>;
   occupancy: Map<string, TableOccupancy>;
@@ -177,6 +186,7 @@ export function SeatingProvider({
   const [pending, startTransition] = useTransition();
   const [assignments, setAssignments] = useState(data.assignments);
   const [tables, setTablesState] = useState(data.tables);
+  const [fixtures, setFixturesState] = useState(data.fixtures);
   const [trayMode, setTrayMode] = useState<TrayMode>(() => defaultTrayMode(data.guests));
   const [colourBy, setColourBy] = useState<ColourBy>(initialColourBy);
   const [held, hold] = useState<Held>(null);
@@ -201,6 +211,7 @@ export function SeatingProvider({
           tables: on(saved.tables, true),
           furniture: on(saved.furniture, true),
           decor: on(saved.decor, true),
+          notes: on(saved.notes, true),
         });
       }
     } catch {
@@ -216,16 +227,82 @@ export function SeatingProvider({
     }
   }, []);
 
-  // A fresh server render is the truth: take it over the optimistic copy.
-  useEffect(() => setAssignments(data.assignments), [data.assignments]);
-  useEffect(() => setTablesState(data.tables), [data.tables]);
+  // A fresh server render is the truth, but not while something of the person's own is pending (spec 60 E.1): taken then, it
+  // would move an item back, or drop part of a run of arrow presses. The screen keeps its copy and takes the server's once
+  // nothing is pending, or after HOLD_MAX_MS.
+  const holds = useRef<SyncHolds>(NO_HOLDS);
+  const waiting = useRef(false);
+  const heldSince = useRef<number | null>(null);
+  const capTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef(data);
+  latest.current = data;
+  const shownLayout = useRef(data.layoutId);
+
+  const clearHold = useCallback(() => {
+    waiting.current = false;
+    heldSince.current = null;
+    if (capTimer.current) clearTimeout(capTimer.current);
+    capTimer.current = null;
+  }, []);
+  const take = useCallback(() => {
+    clearHold();
+    setAssignments(latest.current.assignments);
+    setTablesState(latest.current.tables);
+    setFixturesState(latest.current.fixtures);
+  }, [clearHold]);
+  const giveUp = useCallback(() => {
+    const message = giveUpMessage(holds.current);
+    if (message) setError(message);
+    take();
+  }, [take]);
+
+  useEffect(() => {
+    // Another layout is a different plan: nothing of the old one's is worth keeping.
+    if (shownLayout.current !== data.layoutId) {
+      shownLayout.current = data.layoutId;
+      take();
+      return;
+    }
+    const since = heldSince.current;
+    const decision = syncDecision(holds.current, since === null ? 0 : Date.now() - since);
+    if (decision === "take") return take();
+    if (decision === "give-up") return giveUp();
+    waiting.current = true;
+    if (since === null) {
+      heldSince.current = Date.now();
+      capTimer.current = setTimeout(() => waiting.current && giveUp(), HOLD_MAX_MS);
+    }
+  }, [data.assignments, data.tables, data.fixtures, data.layoutId, take, giveUp]);
+  useEffect(() => () => clearHold(), [clearHold]);
 
   const refresh = useCallback(() => router.refresh(), [router]);
 
-  // Live on the day (spec 53 Part I): arrivals and moves from day links show up within 15 seconds.
+  /** Called when a hold ends. A copy held back may predate the write that just landed, so it is dropped and the plan asked for again. */
+  const release = useCallback(() => {
+    if (!waiting.current || isHeld(holds.current)) return;
+    clearHold();
+    router.refresh();
+  }, [clearHold, router]);
+  const addWrites = useCallback(
+    (by: 1 | -1) => {
+      holds.current = { ...holds.current, writes: Math.max(0, holds.current.writes + by) };
+      if (by < 0) release();
+    },
+    [release],
+  );
+  const holdSync = useCallback(
+    (reason: "nudges" | "gesture", on: boolean) => {
+      if (holds.current[reason] === on) return;
+      holds.current = { ...holds.current, [reason]: on };
+      if (!on) release();
+    },
+    [release],
+  );
+
+  // Live on the day (spec 53 Part I): arrivals and moves from day links show up within 15 seconds. A tick is skipped, not queued, while an edit is pending.
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.visibilityState === "visible" && navigator.onLine) router.refresh();
+      if (document.visibilityState === "visible" && navigator.onLine && !skipPoll(holds.current)) router.refresh();
     }, 15_000);
     return () => clearInterval(id);
   }, [router]);
@@ -241,6 +318,7 @@ export function SeatingProvider({
   const track = useCallback(
     <T extends { ok: boolean }>(label: string, write: () => Promise<T>): Promise<T> => {
       setInflight((n) => n + 1);
+      addWrites(1);
       const job = queue.current.then(async () => {
         const before = await captureSeatingState(eventId, true, layoutId).catch(() => null);
         const result = await write();
@@ -259,22 +337,24 @@ export function SeatingProvider({
       });
       queue.current = job.catch(() => undefined);
       // Saved once the write has finished, whether it worked or not (a failure shows its own error).
-      void job.then(
-        () => setInflight((n) => n - 1),
-        () => setInflight((n) => n - 1),
-      );
+      const done = () => {
+        setInflight((n) => n - 1);
+        addWrites(-1);
+      };
+      void job.then(done, done);
       return job;
     },
-    [eventId, layoutId],
+    [eventId, layoutId, addWrites],
   );
 
   const step = useCallback(
     (direction: "undo" | "redo") => {
       const from = direction === "undo" ? undoStack : redoStack;
+      addWrites(1);
       queue.current = queue.current.then(async () => {
         // Read the entry here, in turn, so two quick presses never take the same one.
         const entry = from.current.at(-1);
-        if (!entry) return;
+        if (!entry) return addWrites(-1);
         const payload = direction === "undo" ? entry.before : entry.after;
         const expected = direction === "undo" ? entry.afterHash : entry.beforeHash;
         const result = await restoreSeatingState(eventId, payload, expected, layoutId).catch(() => null);
@@ -290,10 +370,11 @@ export function SeatingProvider({
           setError(result && !result.ok ? result.error : "That couldn't be undone.");
         }
         touch();
+        addWrites(-1);
         router.refresh();
       });
     },
-    [eventId, layoutId, router],
+    [eventId, layoutId, router, addWrites],
   );
   const undo = useCallback(() => step("undo"), [step]);
   const redo = useCallback(() => step("redo"), [step]);
@@ -369,13 +450,14 @@ export function SeatingProvider({
   );
 
   const setTables = useCallback((update: (t: SeatingTable[]) => SeatingTable[]) => setTablesState(update), []);
+  const setFixtures = useCallback((update: (f: SeatingFixture[]) => SeatingFixture[]) => setFixturesState(update), []);
 
   const value = useMemo<SeatingState>(() => {
     const guestById = new Map(data.guests.map((g) => [g.id, g]));
     const tableById = new Map(tables.map((t) => [t.id, t]));
     const input = {
       tables,
-      fixtures: data.fixtures,
+      fixtures,
       guests: data.guests,
       assignments,
       rules: data.rules,
@@ -402,6 +484,9 @@ export function SeatingProvider({
       assignments,
       tables,
       setTables,
+      fixtures,
+      setFixtures,
+      holdSync,
       guestById,
       tableById,
       occupancy: occupancy(tables, data.guests, assignments),
@@ -443,7 +528,7 @@ export function SeatingProvider({
       undoLabel: undoStack.current.at(-1)?.label ?? null,
       redoLabel: redoStack.current.at(-1)?.label ?? null,
     };
-  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, trayMode, colourBy, held, move, openTableId, error, pending, inflight, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, tool, leftTab, show, setShow]);
+  }, [eventId, timeZone, layoutId, data, assignments, tables, setTables, fixtures, setFixtures, holdSync, trayMode, colourBy, held, move, openTableId, error, pending, inflight, refresh, track, undo, redo, stackVersion, selectMode, selected, toggleSelected, highlightGuestId, focusGuest, tool, leftTab, show, setShow]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

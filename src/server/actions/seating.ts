@@ -8,8 +8,8 @@ import { calibrateRoom, normaliseDegrees, readSegments } from "@/lib/seating/geo
 import { nextTableLabel } from "@/lib/seating/model";
 import { zonedInputToUtc } from "@/lib/timezone";
 import { getSessionUser, requireWedding } from "@/server/queries/wedding";
-import { resolveLayout, resolveSpace, roomIsLocked } from "@/server/seating-layout";
-import { LOCKED_MESSAGE } from "@/lib/seating/lock";
+import { itemIsHeld, resolveLayout, resolveSpace, roomIsLocked } from "@/server/seating-layout";
+import { HELD_MESSAGE, LOCKED_MESSAGE } from "@/lib/seating/lock";
 import { fail, ok, type ActionResult } from "./result";
 
 /**
@@ -278,6 +278,9 @@ export async function deleteSeatingTable(tableId: string, eventId: string): Prom
   const lock = await roomIsLocked(wedding.id, { tableId });
   if (lock.error) return fail(lock.error);
   if (lock.locked) return fail(LOCKED_MESSAGE);
+  const held = await itemIsHeld(wedding.id, { tableId });
+  if (held.error) return fail(held.error);
+  if (held.held) return fail(HELD_MESSAGE);
   const supabase = await createClient();
   const { error } = await supabase.from("seating_tables").delete().eq("id", tableId).eq("wedding_id", wedding.id);
   if (error) return fail(error.message);
@@ -299,6 +302,9 @@ export async function moveSeatingTable(
   const lock = await roomIsLocked(wedding.id, { tableId });
   if (lock.error) return fail(lock.error);
   if (lock.locked) return fail(LOCKED_MESSAGE);
+  const held = await itemIsHeld(wedding.id, { tableId });
+  if (held.error) return fail(held.error);
+  if (held.held) return fail(HELD_MESSAGE);
 
   const supabase = await createClient();
   // Placing a table in a room puts it in THAT room: the same layout's other space (the composite key refuses a space of another layout).
@@ -835,6 +841,12 @@ export async function updateSeatingFixture(
   const lock = await roomIsLocked(wedding.id, { fixtureId });
   if (lock.error) return fail(lock.error);
   if (lock.locked) return fail(LOCKED_MESSAGE);
+  // A held piece can still be renamed or counted; where it is, how big and which way it faces are held still.
+  if (f.pos_x_cm !== undefined || f.pos_y_cm !== undefined || f.width_cm !== undefined || f.depth_cm !== undefined || f.rotation_deg !== undefined) {
+    const held = await itemIsHeld(wedding.id, { fixtureId });
+    if (held.error) return fail(held.error);
+    if (held.held) return fail(HELD_MESSAGE);
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -861,6 +873,9 @@ export async function deleteSeatingFixture(fixtureId: string, eventId: string): 
   const lock = await roomIsLocked(wedding.id, { fixtureId });
   if (lock.error) return fail(lock.error);
   if (lock.locked) return fail(LOCKED_MESSAGE);
+  const held = await itemIsHeld(wedding.id, { fixtureId });
+  if (held.error) return fail(held.error);
+  if (held.held) return fail(HELD_MESSAGE);
   const supabase = await createClient();
   const { error } = await supabase.from("seating_fixtures").delete().eq("id", fixtureId).eq("wedding_id", wedding.id);
   if (error) return fail(error.message);

@@ -14,7 +14,7 @@ import {
 } from "@/lib/seating/drawing";
 
 /** What the pointer can pick in the venue's drawing. */
-export type DrawingPick = { kind: "wall" | "opening" | "marker" | "area" | "label" | "dimension"; id: string };
+export type DrawingPick = { kind: "wall" | "opening" | "marker" | "area" | "label" | "dimension" | "note"; id: string };
 
 const WALL = "#4a4540";
 const PICK = "#b0532b";

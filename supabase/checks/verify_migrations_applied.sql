@@ -1,7 +1,7 @@
 -- Which migrations have been applied to this database?  (read-only)
 --
 -- Paste the whole file into the Supabase SQL editor and run it. It returns one
--- row per migration file, 0001 to 0061:
+-- row per migration file, 0001 to 0062:
 --
 --   applied        the objects that migration creates (or changes) are there
 --   MISSING        something it creates is not there, so it has not run, or
@@ -326,7 +326,15 @@ checks(migration, looked_for, ok) as (values
   ('0061_seating_share_check',
    'seating_share_check(), seating_share_links.failed_attempts',
    ('seating_share_check' in (select k from fn)
-      and 'seating_share_links.failed_attempts' in (select k from col)))
+      and 'seating_share_links.failed_attempts' in (select k from col))),
+  ('0062_seating_canvas_round_two',
+   'seating_tables.table_items / locked, seating_fixtures.locked / z, seating_table_styles.item_rules, seating_apply_items()',
+   ('seating_tables.table_items' in (select k from col)
+      and 'seating_tables.locked' in (select k from col)
+      and 'seating_fixtures.locked' in (select k from col)
+      and 'seating_fixtures.z' in (select k from col)
+      and 'seating_table_styles.item_rules' in (select k from col)
+      and 'seating_apply_items' in (select k from fn)))
 ),
 result as (
   select migration,

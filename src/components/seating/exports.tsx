@@ -3,7 +3,8 @@ import { dietaryText, hasAllergy, hasAnyDietary } from "@/lib/dietary";
 import { colourCounts, colourLegend, guestColour, type ColourBy } from "@/lib/seating/colour";
 import { tableSize } from "@/lib/seating/geometry";
 import { closeupFood, buildKitchen, mealQuestion, type Kitchen } from "@/lib/seating/kitchen";
-import { effectiveStyle, parseStyleChanges, CENTRE_LABEL, type ItemLine } from "@/lib/seating/items";
+import { effectiveStyle, parseStyleChanges, CENTRE_LABEL, type ItemLine, type TableStyle } from "@/lib/seating/items";
+import { effectiveRules, parseTableItems, ruleItems, type TableItem } from "@/lib/seating/table-items";
 import { itemLines, tableCounts } from "@/lib/seating/item-lines";
 import { fixtureGroup } from "@/lib/seating/library";
 import { compareBySurname, guestName, type SeatingTable } from "@/lib/seating/model";
@@ -12,6 +13,9 @@ import { SERVICE_LABEL, isServiceStyle, parseMenu } from "@/lib/seating/service"
 import { pluralise } from "@/lib/format";
 import type { SeatingPlanData } from "@/server/queries/seating";
 import { PlanDrawing, type PlanSeat } from "./plan-drawing";
+import { NotesList } from "./notes-layer";
+import { parseDrawing } from "@/lib/seating/drawing";
+import { notesFor, numberNotes } from "@/lib/seating/notes";
 import { TableCloseup } from "./table-closeup";
 
 /** The exports a couple hands to suppliers (spec 57 Part E). Server-rendered print views. */
@@ -38,6 +42,8 @@ export type ExportInput = {
   /** The venue plan's signed address per space, if any. */
   backgrounds: Readonly<Record<string, string | null>>;
   colourBy: ColourBy;
+  /** Show only the notes for this supplier and those for everyone (spec 59 Part E); none: every note, each saying who it is for. */
+  vendorId?: string | null;
 };
 
 const SHAPE_WORD: Record<string, string> = {
@@ -57,6 +63,24 @@ function Page({ title, children, last = false }: { title: string; children: Reac
 /** The paper the browser prints on. */
 export function PaperStyle({ paper }: { paper: Paper }) {
   return <style>{`@media print { @page { size: ${paper.size.toUpperCase()} ${paper.orient}; margin: 10mm; } }`}</style>;
+}
+
+/** The notes on one space, numbered, for the reader this export is for. */
+function spaceNotes(space: { drawing: unknown }, i: ExportInput) {
+  const parsed = parseDrawing(space.drawing);
+  return numberNotes(notesFor(parsed.ok ? parsed.drawing.notes : [], i.vendorId), i.data.tables, i.data.vendors);
+}
+
+/** What is on a table's top: placed by hand, and placed by its rules (its own, or its style's). Spec 59 Part D. */
+function tableTopItems(t: SeatingTable, styles: readonly TableStyle[]): (TableItem & { fromRule?: string })[] {
+  const style = t.style_id ? styles.find((s) => s.id === t.style_id) : undefined;
+  const rules = effectiveRules(style?.item_rules ?? [], parseStyleChanges(t.style_changes)?.item_rules ?? null);
+  return [...parseTableItems(t.table_items), ...ruleItems(t, rules)];
+}
+/** Names for the dishes and the couple's own items that sit on tables. */
+function itemNamesOf(i: ExportInput): Record<string, string> {
+  const m = parseMenu(i.data.plan?.menu);
+  return Object.fromEntries([...(m.ok ? m.menu : []).flatMap((c) => c.dishes.map((d) => [d.id, d.name] as const)), ...i.data.customItems.map((c) => [c.id, c.name] as const)]);
 }
 
 function chosenSpaces(i: ExportInput) {
@@ -138,7 +162,8 @@ export function CatererExport(i: ExportInput) {
           .map(({ a, g }) => ({ at: `${tableById.get(a.tableId)?.label ?? ""}${a.seatIndex === null ? "" : `.${a.seatIndex + 1}`}`, text: dietaryText(g.dietaryNeeds, g.dietary), name: guestName(g), allergy: hasAllergy(g.dietaryNeeds) }));
         return (
           <Page key={space.id} title={`${i.eventName} — floor plan: ${space.name}`}>
-            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: false, chairs: "numbered", seats, tableText: "label_count", seatedAt }} />
+            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ notes: spaceNotes(space, i), venue: true, furniture: true, decor: false, chairs: "numbered", seats, tableText: "label_count", seatedAt }} />
+            <NotesList notes={spaceNotes(space, i)} />
             {legend.length > 0 ? (
               <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                 {counts.map((c) => (
@@ -216,7 +241,7 @@ export function CatererExport(i: ExportInput) {
         return (
           <Page key={t.id} title={`${tableName(t)}`} last={k === i.data.tables.length - 1}>
             <div className="max-w-md">
-              <TableCloseup table={t} style={style} food={food} />
+              <TableCloseup table={t} style={style} food={food} items={tableTopItems(t, i.data.styles)} dishNames={itemNamesOf(i)} />
             </div>
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -347,7 +372,8 @@ export function VenueExport(i: ExportInput) {
         const mine = i.data.tables.filter((t) => t.space_id === space.id && t.pos_x_cm !== null);
         return (
           <Page key={space.id} title={`${i.eventName} — for the venue: ${space.name}`} last={n === spaces.length - 1}>
-            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: true, chairs: "none", tableText: "label_capacity" }} />
+            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ notes: spaceNotes(space, i), venue: true, furniture: true, decor: true, chairs: "none", tableText: "label_capacity" }} />
+            <NotesList notes={spaceNotes(space, i)} />
             <p className="text-xs">
               {mine.length === 0 ? "No tables here." : mine.map((t) => `${t.label}: ${t.capacity} chairs`).join(" · ")}
             </p>
@@ -382,7 +408,8 @@ export function FloristExport(i: ExportInput) {
         const tables = i.data.tables.filter((t) => t.space_id === space.id && t.pos_x_cm !== null);
         return (
           <Page key={space.id} title={`${i.eventName} — for the florist: ${space.name}`}>
-            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: true, chairs: "none", tableText: "label", numberDecor: true }} />
+            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ notes: spaceNotes(space, i), venue: true, furniture: true, decor: true, chairs: "none", tableText: "label", numberDecor: true }} />
+            <NotesList notes={spaceNotes(space, i)} />
             <ol className="columns-1 text-sm sm:columns-2">
               {decor.map((f, k) => (
                 <li key={f.id}>
@@ -400,6 +427,17 @@ export function FloristExport(i: ExportInput) {
                 ))}
               </ul>
             ) : null}
+            {/* Each decorated table's close-up, so the florist sees which way up the arrangements go (spec 59 Part E). */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {tables
+                .filter((t) => tableTopItems(t, i.data.styles).length > 0)
+                .map((t) => (
+                  <div key={t.id} className="break-inside-avoid">
+                    <h4 className="text-sm font-medium">{t.label}</h4>
+                    <TableCloseup table={t} style={t.style_id ? (i.data.styles.find((st) => st.id === t.style_id) ?? null) : null} items={tableTopItems(t, i.data.styles)} dishNames={itemNamesOf(i)} />
+                  </div>
+                ))}
+            </div>
           </Page>
         );
       })}
@@ -459,7 +497,8 @@ export function HireExport(i: ExportInput) {
         const mine = i.data.fixtures.filter((f) => f.space_id === space.id && fixtureGroup(f.kind) !== "decor");
         return (
           <Page key={space.id} title={`${i.eventName} — for the hire company: ${space.name}`}>
-            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: false, chairs: "none", tableText: "label", markFurniture: true }} />
+            <PlanDrawing space={space} tables={i.data.tables} fixtures={i.data.fixtures} customItems={i.data.customItems} marquees={i.data.marquees} backgroundUrl={i.backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ notes: spaceNotes(space, i), venue: true, furniture: true, decor: false, chairs: "none", tableText: "label", markFurniture: true }} />
+            <NotesList notes={spaceNotes(space, i)} />
             {mine.length > 0 ? (
               <ol className="columns-1 text-sm sm:columns-2">
                 {mine.map((f, k) => (
@@ -469,6 +508,17 @@ export function HireExport(i: ExportInput) {
                 ))}
               </ol>
             ) : null}
+            {/* Each styled table's close-up, with what sits on it. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {i.data.tables
+                .filter((t) => t.space_id === space.id && t.pos_x_cm !== null && (t.style_id || tableTopItems(t, i.data.styles).length > 0))
+                .map((t) => (
+                  <div key={t.id} className="break-inside-avoid">
+                    <h4 className="text-sm font-medium">{t.label}</h4>
+                    <TableCloseup table={t} style={t.style_id ? (i.data.styles.find((st) => st.id === t.style_id) ?? null) : null} items={tableTopItems(t, i.data.styles)} dishNames={itemNamesOf(i)} />
+                  </div>
+                ))}
+            </div>
           </Page>
         );
       })}

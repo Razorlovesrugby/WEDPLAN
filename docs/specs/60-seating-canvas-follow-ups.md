@@ -1,6 +1,6 @@
 # Feature spec: The seating canvas, round two: reach it without a mouse, resize and turn, steady edits, and the holes in spec 59
 
-**Status: proposed, not built. The questions in §9 need answers before anything is built.**
+**Status: answered 2026-11-27 (every question took its recommendation, on the planner's "do everything not done"); built in session 66, migration `0062` written and not yet applied. See **Build status** at the end.**
 
 **Depends on:** spec 59 (the seating canvas on a laptop: focus mode, navigation, selection, Stamp), spec 57 (the venue
 designer: spaces, layouts, the close-up, the share link), spec 53 (undo and redo through whole-plan state), spec 45 (every
@@ -167,7 +167,8 @@ decides when the screen may take the server's copy (E.1), and the view-only zoom
 
 ## 9. Open questions
 
-Each has a recommendation; nothing is built until the answers are in.
+**Answered 2026-11-27: all 13 took the recommendation.** The planner asked for everything not yet done to be built; the
+recommendations are the answers, and the other option in each is not built.
 
 1. **Favourites scope (A.1).** *Recommended: per event's plan, as stored, with the Library saying so.* Or one row for the
    whole wedding, which needs a wedding-level setting and means dishes, which belong to an event's menu, can't be in it.
@@ -239,3 +240,77 @@ saying which were run:
   the error shown if a write has not come back.
 - **Refusing a stale move** annoys two people working in the same corner. The message says what happened and the refresh
   means repeating one edit, not many.
+
+## Build status
+
+Built in **session 66**, in the order of §11, each step its own commit on branch `claude/festive-mendel-91jlct` (nothing pushed),
+after "do everything not done" took every recommendation as the answer to §9. Migration **`0062`** is shared with spec 59 Parts D
+and E; it is written and tested but **not applied to any database**.
+
+**Built.**
+
+- **E.1 (steady edits):** the provider keeps its own copy of assignments, tables and fixtures while a write is in flight or queued
+  (including undo and redo), a run of arrow presses or turns waits to be saved, or a drag, box or stamp line is in progress, and takes
+  the server's copy when nothing is pending, or after 10 seconds with "A change hasn't finished saving" if a write hasn't come back.
+  The 15-second poll skips a tick during those moments. Fixtures' optimistic copy moved from `RoomView` into the provider so it is
+  held the same way. Pure rule: `src/lib/seating/sync.ts`.
+- **B.1 (keyboard):** Tab and Shift+Tab walk tables and furniture in reading order (`focusOrder`, locked layers skipped), Enter picks
+  and opens (a table's close-up, a fixture's inspector), Shift+Enter or Space on its own toggles it in the selection (Space held with
+  a drag still pans), Esc clears the selection and then steps out to the next control; arrows, R, Delete, ⌘/Ctrl+D, C and ⌘⇧A act
+  on the item Tab reached when nothing is picked. A polite live region ("Table 4 selected, 3 of 14", "3 things moved 5 cm right",
+  "Pasted 2 things"), accessible names with kind, seats and place ("Table 4, round, 6 of 8 seated, near the top left"), and a focus
+  ring that isn't the hover colour. The plan stays the one real focus stop; the item is its `aria-activedescendant`.
+- **B.2 (touch):** with a coarse pointer, a **Select several** switch (a tap adds or removes, a drag on empty floor draws a box, a tap
+  on empty floor leaves the selection alone), **long-press** for the right-click menu, and a **Line** switch for Stamp. The focus
+  bar gained a **Hide panels** button, so nothing in focus mode depends on `\`, Esc or Space.
+- **B.3:** already true (focus mode starts at 1024 px, `seating-screen.tsx`); no change.
+- **C.1 (resize):** eight handles on one picked fixture or explicitly sized table, one handle (the size) for a round or square
+  table; Shift keeps the proportions, Alt resizes about the centre, sizes snap to 5 cm and to neighbours' and the building's lines,
+  inside the database limits; handles appear only when the smaller side is at least 36 screen pixels. One write and one undo step
+  (`resizeSeatingItem`). `src/lib/seating/resize.ts`.
+- **C.2 (formation):** a turn handle on a selection of several, and **Turn 90° as a group** in the menu and the inspector, turn the
+  whole selection about its centre (`turnAbout`); it stops at the room's edge rather than turning part of the group out of it. R
+  still turns each about its own centre.
+- **C.3 (building):** a moving item lines up with straight walls' faces and ends, doors, windows, markers and the edges and corners
+  of areas, in **violet** against furniture's pink, and shows its distance to the nearest straight wall on each side within 3 m,
+  coloured by the walkway thresholds. Alt turns them off with the rest. `src/lib/seating/building.ts`.
+- **D.1 (view-only zoom):** `ZoomPlan` on each space of the vendor's shared plan and on the Styles panel's close-up: pinch and
+  Ctrl/⌘+scroll zoom about the pointer (10% to 800%, **100% is "fits the page"**, not 1 px per cm), a plain scroll scrolls the page,
+  a zoomed plan pans when dragged (a finger at Fit leaves a vertical swipe to the page), Fit and the zoom box on screen, `+` `−` `0`
+  and Shift+1 when focused. Its `roomNav` mode (Trackpad or Mouse, Space, Hand) is the planner's Décor tab. **The day-link seating
+  module has no plan drawing** (it is a list of guests and spare chairs), so there is nothing to zoom there.
+- **A.1, A.2:** as the recommendations said; both recorded in spec 59's Build status. **A.3 to A.5, E.2:** `0062`, with spec 59's
+  Lock item, ordering and one-transaction batch writes. A move or resize names where each item started (`from`); a server copy that
+  has since changed refuses the whole write with "Someone changed this plan while you were working. Nothing was changed; the plan is
+  up to date now." and the screen refreshes to it. For a fixture `from` includes its size; for a table only its place (its size is
+  derived from its shape).
+
+**Built differently, or not built.**
+
+- **Banquet runs, ceremony rows, half-moons and serpentines have no resize handles**: they are drawn from their own pieces or arcs, so
+  dragging a size wouldn't show what it does; their size stays in the table's form. Round, square, long, head, sweetheart and oval do.
+- **Lock item is not enforced by a database trigger.** The batch function and the app's single-item actions refuse a held item; a
+  direct SQL update does not. A held table's form can still change its shape and size.
+- **Hold cap and poll:** the 10-second cap and the poll skip are the pure rule (tested) wired into the provider; the poll skip itself
+  was not exercised in a browser (the cap and the in-flight, nudge-run and failed-write cases were).
+- **Untracked writes** (the inspector's fixture form, the unplaced-table button, drawing tools' own saves) don't count as pending, so a
+  refresh landing mid-write can still show the server's older copy for a moment. Everything the canvas does goes through `track`.
+- The E.1 and E.2 messages are shown in the browser tests by a stand-in; in the app the focus shell's banner shows them (not seen).
+
+**Verified in session 66.** `npm run typecheck`; **2007 unit tests** (about 110 new: `sync`, `keyboard`, `resize`, `building`,
+`view-zoom`, `table-items`, `notes`, and the exports with notes and items); **the SQL suite, 1133 assertions** (66 new in
+`40_seating_canvas_round_two.sql`: the columns and bounds, the state round trip and an older state, a draft copying them, and every
+refusal and all-or-nothing case of `seating_apply_items`; removing the stale check or the held-item check each fails it), the
+**single-transaction check**, and the applied-check file on a scratch database (64 applied, 0 missing); `npm run build`. In **headless
+Chromium** (the real components bundled with esbuild, the server actions stubbed, a fake server behind them, touch through the
+DevTools protocol), about 170 checks: Tab, Enter, Space, Esc and the live region; Select several, long-press and Line; E.1 with a
+slow write, a failed write, the 10-second cap and an untouched refresh; resize, Shift, Alt, limits, the formation turn, the menu's
+group turn and the building guides; zoom and pan on both pages, by wheel, keys, mouse and two fingers; Lock item, ordering and the
+stale refusal; the Décor tab (place, snap, Alt, drag, copy, delete, rule ghosts, Make it by hand, copy and paste, own rules, a
+locked room) and notes (place, edit, address, drag, follow a table, delete).
+
+**Not verified.** Any TypeScript action against a database: `seating_apply_items` was exercised through psql as the
+`authenticated` role under RLS, but the path from `supabase.rpc()` through PostgREST (including that `error.message` is exactly the
+exception text the refusal table matches on) has never run. A real trackpad or mouse, Safari's gesture events, a real iPad, and a
+screen reader. The 100-table, 4×-slowed-CPU scale run and browser zoom at 150% and 200% (§12). The migration on a copy of live data.
+

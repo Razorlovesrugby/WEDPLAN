@@ -7,7 +7,7 @@
 
 **What this is.** WEDPLAN: a wedding planning platform. Couples sign themselves up at `/start` and plan with their collaborators; guests reach RSVP links and wedding websites without an account. Next.js App Router on Vercel, Supabase (Postgres, Auth, RLS keyed to `wedding_id`), TypeScript, Vitest. `README.md` is the overview; `docs/wedding-platform-spec.md` is the technical spec; `docs/specs/README.md` is the index of per-feature specs and how the spec process works.
 
-**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is not recorded here. Specs 1–47 are built and merged to `main` (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0047`.
+**Where it stands. It is live and has real users.** The planner reported in session 55 (2026-11-09) that the app is deployed, works, and is in use by real couples and their guests. That is the planner's word: no session has run `scripts/verify-live.mjs` or seen the live project, so which migrations are applied is checked only by the planner. Specs 1–60 are built; the code for 59 (Parts D and E) and 60 is on a branch and not yet merged (per-spec status in `docs/specs/README.md`). Migrations run `0001`–`0062`; **the planner said on 2026-11-27 that `0001`–`0061` are applied to live. `0062` (session 66) is written and not applied.**
 
 **What that changes.** Every migration now runs against real guest data: no destructive change to a column without a backfill, and check what a live database already holds before assuming a fresh one. Guest-facing pages (`/w`, `/rsvp`, `/i`, `/m`, `/registry`, `/privacy`) are used by people with no account and no way to report a bug except to the couple. The app serves many weddings, so nothing may assume there is only one (session 55 found the privacy notice doing exactly that).
 
@@ -24,6 +24,36 @@
 
 ## Recent sessions
 
+**Session 66 (specs 59 D and E and 60, built; migration `0062` written, not applied):** on branch `claude/festive-mendel-91jlct`,
+asked to "do the rest of the build", thought to be spec 60, and to record that all migrations are done; "do everything not done"
+settled it as **spec 60 in full plus spec 59's Parts D and E**, every spec 60 recommendation taken. **Commits are local: nothing
+was pushed** (the planner said commit, don't push).
+
+- **`0062_seating_canvas_round_two.sql` is not applied to any database, and the app code needs it.** Apply it in the Supabase SQL
+  editor as one paste (the single-transaction check passes) **before deploying this code**: the seating query now selects
+  `seating_table_styles.item_rules`, so without the column the seating page fails, and every canvas write goes through the new
+  `seating_apply_items()`. `supabase/checks/verify_migrations_applied.sql` lists 0062 (64 applied on a scratch database).
+- **Built:** a refresh never undoes an unsaved edit (E.1); Tab, Enter, Space and a live region, **Select several**, long-press and a
+  Line switch for touch; **resize handles**, turning a selection as a formation, snapping to walls, doors, markers and areas;
+  zoom and pan on the shared plan and the Styles close-up; **Lock item**, Bring to front / Send to back, one transaction for a
+  whole move, copy, delete, stamp, lock or reorder, and a move from a stale position refused whole; **table décor and dishes**
+  (the Décor tab: place, snap, drag, copy, rules "every N seats" and the rest, Make it by hand, copy and paste, drawn in the room
+  from 100% zoom and in the exports); **notes for vendors**. What each did and where it differs from the spec is in the
+  **Build status** of specs 59 and 60.
+- **Verified:** typecheck; 2007 unit tests; the SQL suite (1133 assertions, 66 of them new, and a mutation of the stale and held-item
+  checks each fails it); the single-transaction check; `npm run build`; and about 170 checks in headless Chromium against the real
+  components with the server actions stubbed (the harness lived outside the repo and is gone). **Not verified:** any TypeScript
+  action against a database (the `supabase.rpc` path and the exact error text it returns have never run), a real trackpad, mouse,
+  Safari, iPad or screen reader, the 100-table scale run, the migration on a copy of live data.
+- **Not built:** dishes feeding the platter suggestion and the florist and hire totals, "Add to these tables", box-select and Library
+  stamping inside the close-up, a vendor picker in the Export dialog, resize handles for banquet runs, rows, half-moons and
+  serpentines. Lock item is not enforced by a trigger.
+- **Traps:** `locked` and `table_items` are in the room lock's "room part" (`lock.ts`), so an undo under a lock can't change them.
+  `Drawing` now has `notes`; a note on a table stores an offset from its centre and a note whose table is gone is hidden. A
+  table's own rules live in `style_changes.item_rules` and `setTableStyleChanges` carries them through; a place-settings form that
+  sends `{place, centre}` doesn't wipe them. The **Supabase connector in this session was a different project** (`arm15lite_PROD`, a
+  rugby club app), so live migrations couldn't be checked from here. A `| tail` after `npm test` hid a failing test once this
+  session: read the exit status.
 **Session 66 (spec 61, RSVP dietary picker removed, no migration):** on branch `claude/rsvp-dietary-spec-uf32vf`, not merged.
 
 - **Built:** the five RSVP files are back to their content before spec 57 Part H, so guests see one free-text dietary box and
@@ -34,8 +64,7 @@
 
 **Session 65 (spec 59, Parts A to C built, no migration):** on branch `claude/awesome-mendel-bdg1ak`, asked to "build the newest
 spec". The planner's Q8 order is Parts A to C first (no migration), then D and E with `0062`; this session built **A, B (most)
-and C**. **No migration; nothing to apply to live; the next free number is still `0062`, claimed by Parts D and E.** Nothing is
-committed or pushed yet.
+and C**. **No migration.** Merged to `main` as PR #114.
 
 - **Built:** the Room view opens **full-window** (a fixed overlay, `focus-shell.tsx`) with a left rail, a pinned or floating
   panel, the inspector on the right, and a floating tool bar with a zoom box; **design-tool navigation** (`canvas.ts`:
@@ -86,16 +115,13 @@ a real iPad, a printer, `/p/<token>`.
   `v_live_seat_assignments` / `v_live_seating_tables` or name a layout, or a draft will reach a guest. `pdfjs-dist` is
   pinned at `3.11.174` and `next.config.mjs` aliases its optional `canvas` import away; the build fails without that.
 
-**Session 63 (spec 57, partly built):** designed the venue designer (40 questions answered) and built the storage
-(`0055`–`0058`), the pure libraries, chairs and colour-by, table styles and the close-up. Session 64 built the rest.
-
 ---
 
 ## 1. What exists
 
 ### Database — `supabase/migrations/`
 
-Numbered migrations `0001`–`0047`, applied in order; the table below covers the
+Numbered migrations `0001`–`0062` (`0062` written, not applied), applied in order; the table below covers the
 early ones (later ones are named in each spec). `bootstrap.sql` makes a wedding by hand;
 `/start` is the normal way since spec 40. Full instructions in `supabase/migrations/README.md`.
 

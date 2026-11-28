@@ -5,23 +5,29 @@ import { updateSeatingTable } from "@/server/actions/seating";
 import type { SeatingTable } from "@/lib/seating/model";
 import { useSeating } from "./seating-state";
 import { TableStyleSection } from "./styles-panel";
+import { TableItemsEditor } from "./table-items-editor";
 
-type Tab = "seats" | "style" | "notes";
+export type InspectorTab = "seats" | "style" | "items" | "notes";
+type Tab = InspectorTab;
 const TABS: { id: Tab; label: string }[] = [
   { id: "seats", label: "Seats" },
   { id: "style", label: "Style" },
+  { id: "items", label: "Décor" },
   { id: "notes", label: "Notes" },
 ];
 
 /**
- * What the inspector shows for one table (spec 59 A.2): Seats, Style and Notes.
+ * What the inspector shows for one table (spec 59 A.2): Seats, Style, Décor and Notes.
  * Seats is the table's place in the room and how full it is (the caller passes
  * it, since it shares the move and take-out actions with the room); Style is
  * the table's style and its changes over it (spec 57 C.1); Notes are the
  * table's own note.
  */
-export function TableInspector({ table, seats }: { table: SeatingTable; seats: ReactNode }) {
+export function TableInspector({ table, seats, openTab }: { table: SeatingTable; seats: ReactNode; /** Asks for a tab (Add table décor in the right-click menu); `at` makes the same request count twice. */ openTab?: { tab: Tab; at: number } | null }) {
   const [tab, setTab] = useState<Tab>("seats");
+  useEffect(() => {
+    if (openTab) setTab(openTab.tab);
+  }, [openTab]);
   const { occupancy } = useSeating();
   const occ = occupancy.get(table.id);
   return (
@@ -47,7 +53,7 @@ export function TableInspector({ table, seats }: { table: SeatingTable; seats: R
         ))}
       </div>
       <div className="p-2" role="tabpanel">
-        {tab === "seats" ? seats : tab === "style" ? <TableStyleSection table={table} /> : <TableNotes table={table} />}
+        {tab === "seats" ? seats : tab === "style" ? <TableStyleSection table={table} /> : tab === "items" ? <TableItemsEditor table={table} /> : <TableNotes table={table} />}
       </div>
     </div>
   );

@@ -93,3 +93,24 @@ export async function roomIsLocked(
   if (error) return { locked: false, error: error.message };
   return { locked: Boolean(data?.locked_at), error: null };
 }
+
+/**
+ * Lock item (spec 60 A.3): is this table or fixture held still? Apart from the room's lock. A row that isn't there is
+ * not held (the write will say so).
+ */
+export async function itemIsHeld(
+  weddingId: string,
+  ref: { tableId?: string; fixtureId?: string },
+): Promise<{ held: boolean; error: string | null }> {
+  const id = ref.tableId ?? ref.fixtureId;
+  if (!id || !UUID.test(id)) return { held: false, error: null };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from(ref.tableId ? "seating_tables" : "seating_fixtures")
+    .select("locked")
+    .eq("id", id)
+    .eq("wedding_id", weddingId)
+    .maybeSingle();
+  if (error) return { held: false, error: error.message };
+  return { held: Boolean(data?.locked), error: null };
+}
