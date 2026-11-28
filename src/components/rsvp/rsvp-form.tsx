@@ -17,8 +17,6 @@ import { PREVIEW_NOT_SENT } from "@/lib/site/preview-guard";
 import { WeekendCalendar } from "@/components/site/weekend-calendar";
 import { QuestionField, type AnswerValue } from "./question-field";
 import { rsvpOffAttribute, type RsvpFeature } from "@/lib/site/rsvp-features";
-import { DietaryNeedsEditor } from "@/components/dietary-needs-editor";
-import { parseDietaryNeeds, type DietaryNeed } from "@/lib/dietary";
 import type {
   EventRow,
   GuestRow,
@@ -32,8 +30,6 @@ type GuestState = {
   guestId: string;
   name: string;
   dietary: string;
-  /** Structured needs (spec 57 Part H), beside the free text. */
-  needs: DietaryNeed[];
   accessibility: string;
   responses: Record<string, RsvpStatus>;
   answers: Record<string, AnswerValue>;
@@ -58,7 +54,6 @@ export function RsvpForm({
   eventWhen,
   look = "inline",
   off = [],
-  dietaryNeeds = {},
 }: {
   /**
    * The household's credential. **Null only in the editor's preview** (spec 28
@@ -102,8 +97,6 @@ export function RsvpForm({
    * off puts back what the form did before that change. Empty: all on.
    */
   off?: readonly RsvpFeature[];
-  /** The household's structured dietary needs, by guest (spec 57 Part H). */
-  dietaryNeeds?: Record<string, DietaryNeed[]>;
 }) {
   const on = (feature: RsvpFeature) => !off.includes(feature);
   const offAttr = rsvpOffAttribute(off);
@@ -128,7 +121,6 @@ export function RsvpForm({
       guestId: guest.id,
       name: guest.is_plus_one ? guestName(guest) : "",
       dietary: guest.dietary ?? "",
-      needs: dietaryNeeds[guest.id] ?? [],
       accessibility: guest.accessibility ?? "",
       responses: Object.fromEntries(
         events
@@ -210,7 +202,6 @@ export function RsvpForm({
           guestId: guest.guestId,
           name: guest.name || undefined,
           dietary: guest.dietary,
-          dietaryNeeds: parseDietaryNeeds(guest.needs),
           accessibility: guest.accessibility,
           responses: Object.entries(guest.responses).map(([eventId, statusValue]) => ({
             eventId,
@@ -647,15 +638,6 @@ export function RsvpForm({
               </p>
             ) : (
               <div className={personCards ? "space-y-5 pt-5" : "space-y-3 pt-4"}>
-                <DietaryNeedsEditor
-                  value={guestState.needs}
-                  onChange={(next) => updateGuest(guest.id, { needs: next })}
-                  legendClass={fieldLabel}
-                  inputClass={fieldClass}
-                  label="Dietary needs"
-                  help="Tick what applies, and say whether it is an allergy or a preference."
-                />
-
                 <label className="block">
                   <span className={fieldLabel}>Dietary requirements</span>
                   <input

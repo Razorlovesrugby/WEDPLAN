@@ -5,6 +5,12 @@ Postgres + Auth, TypeScript, Vitest). See `README.md` for what it covers,
 `docs/wedding-platform-spec.md` for the technical spec, and
 `docs/specs/README.md` for the per-feature spec process.
 
+## How to reply
+
+- Short bullet points. Information only: no headings, no preamble, no recap.
+- Do what was asked, nothing extra. Ask before adding anything.
+- Never query a database from a session. The planner checks live.
+
 ## Start of every session
 
 Read the top of `docs/HANDOFF.md` (current state, latest sessions, what is
