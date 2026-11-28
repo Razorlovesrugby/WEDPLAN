@@ -4,6 +4,9 @@ The per-session log that used to fill `docs/HANDOFF.md`, newest first (sessions 
 
 ---
 
+**Session 63 (spec 57, partly built):** designed the venue designer (40 questions answered) and built the storage
+(`0055`–`0058`), the pure libraries, chairs and colour-by, table styles and the close-up. Session 64 built the rest.
+
 **Session 62 (spec 56, built):** on branch `claude/blissful-carson-0c4i5s`, asked to find a way through tasks, the run
 sheet and who's doing what, then "Let's build". **No migration; nothing to apply to live.**
 

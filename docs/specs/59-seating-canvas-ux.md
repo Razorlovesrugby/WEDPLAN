@@ -1,8 +1,8 @@
 # Feature spec: The seating canvas on a laptop: room to work, clear tools, fast placing
 
-**Status: answered; Parts A, B (most) and C built in session 65, no migration; Parts D and E (and
-`0062`) not built.** See **Build status** at the end. Every question answered 2026-11-27 (see
-**Answered**).
+**Status: answered; Parts A, B and C built in session 65 (no migration); Parts D and E, Lock item, Bring to front and Send
+to back and the one-transaction batch writes built in session 66 with migration `0062` (written, not yet applied).** See
+**Build status** at the end. Every question answered 2026-11-27 (see **Answered**).
 
 **Depends on:** spec 57 (the venue designer: spaces, layouts, library, drawing
 tools, table styles, close-up, food service, exports, share link), spec 53
@@ -424,4 +424,48 @@ one-finger pan and tap by touch, focus mode (window size, 44 and 48 px, pin, ove
 `deleteSeatingItems`, `createSeatingFixtures` and `setSeatingFavourites` are typechecked only, and the compensation paths
 have never run); **a real trackpad or mouse** (pinch, two-finger scroll, a wheel's real deltas) and **Safari's gesture
 events**, which headless Chromium can't produce; a real iPad; the shell's own `?` sheet not also opening beside the plan's.
+
+### Session 66: what was built after that
+
+Everything in "Not built" above except where listed under "Still not built" here. Migration **`0062_seating_canvas_round_two.sql`**
+(written; **not applied to any database**), built with spec 60's Part A (see that spec's Build status for its rest).
+
+- **Lock item, Bring to front, Send to back** (A.5, Part B): `seating_tables.locked`, `seating_fixtures.locked`, `seating_fixtures.z`.
+  Right-click or the inspector's Lock item box; a padlock on a held item when hovered or picked; held items are skipped by the box,
+  Select all and Select similar and can't be dragged, nudged, turned, resized, aligned or deleted (the batch function and the
+  single-item actions refuse; **a direct SQL update still can**, there is no trigger). Furniture and décor draw in `z` order, ties by
+  creation time, in the room, the print pack, the shared plan and every export; tables always draw above both.
+- **One transaction** (§9): `seating_apply_items()` does a whole move, resize, copy, delete, stamp (fixtures and tables), lock,
+  reorder or items write, replacing the check-then-write with a put-back. Stamping a row of tables is now atomic too.
+- **Part D, table items** (D.1): `seating_tables.table_items` (positions as fractions of the table's length and width, so a resize
+  keeps them). The **Décor** tab on the table inspector is the close-up: a palette (arrangement, candles, bud vase, lantern,
+  sign, each menu dish, the couple's own items), click the tabletop to place (the tool stays in hand), drag, Alt-drag to copy,
+  Delete, arrows; positions snap to the centre line, the ends and the points opposite each chair (Alt turns it off); zoom and pan
+  follow the Room view's navigation. In the room, items are drawn to scale on each table from **100%** zoom. Print-pack close-ups
+  and the florist and hire exports show them.
+- **Part D, rules** (D.2): `seating_table_styles.item_rules` and `style_changes.item_rules` (a table's own list replaces its style's).
+  Every N seats, N per table, at each end, at one end (head or foot), in the centre, at each seat, for every shape (`rulePositions`,
+  tested per shape); on a long or banquet table N counts chairs along one side and each place serves both sides, on one-sided tables
+  and rounds N counts chairs in order. The style editor has the rules; a table's Décor tab shows the places each makes and how many
+  guests each serves, and **Make it by hand** turns them into ordinary items and gives the table an empty list of its own.
+- **Part D, applying to many** (D.3): **Copy** and **Paste table décor** (right-click, or the Décor tab) keep relative places; one
+  transaction for many tables. Apply style (already there) is how rules reach many tables.
+- **Part E, notes**: the **Note** tool (N, or right-click **Add a note here**); a note on a table keeps an offset and moves with it;
+  for everyone or one or more vendors, the pin names them; drawn on the canvas, the Show menu's Notes layer is shown, hidden and
+  lockable; numbered on the plan with the text in a list beside it in the shared plan and every export; a print page takes
+  `?vendor=<id>` for one supplier's. Stored in the space's drawing (`notes`), so no column.
+
+**Still not built, or built differently.**
+
+- **Dishes and platters** (D.2): the number a rule places does **not** yet become the platter suggestion for that dish and table, and
+  there is no "Check platters" flag when a typed count differs. Placed and ruled items are **not** yet counted into the florist and
+  hire totals as suggestions (`computeItems` is untouched).
+- **Add to these tables** (D.3), **box selection** in the close-up and **Stamp from the Library** into the close-up are not built:
+  the close-up has its own palette, and items are picked by click and Shift-click.
+- **The Library's Favourites row for dishes**: dishes are placeable now, but the Library doesn't star them.
+- **Per-vendor exports:** the four exports are by role, not by vendor, so a note shows in all of them with who it is for; one
+  supplier's view is `?vendor=` on the print address, with no picker for it in the Export dialog.
+- A note whose table was deleted is hidden (kept in the drawing, drawn nowhere). A note is held still by the room lock (it is in
+  the drawing); table items too (`locked` and `table_items` are in the lock's room part).
+- Banquet runs, ceremony rows, half-moons and serpentines aren't resized by dragging (see spec 60).
 
