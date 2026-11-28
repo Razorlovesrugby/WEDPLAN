@@ -22,6 +22,12 @@ export type Marker = { id: string; kind: MarkerKind; x: number; y: number; w: nu
 export type Area = { id: string; name: string; points: Pt[]; tint: string | null; outdoor: boolean };
 export type Label = { id: string; text: string; x: number; y: number; size: number };
 export type Dimension = { id: string; a: Pt; b: Pt };
+/**
+ * A short note pinned on the plan for the suppliers (spec 59 Part E): "Flowers hang from this beam". `vendor_ids` names the
+ * vendors it is for (none: everyone). With a `table_id`, `x` and `y` are an offset in cm from that table's centre, so the note
+ * moves with the table; without one they are a place in the room.
+ */
+export type Note = { id: string; x: number; y: number; text: string; vendor_ids: string[]; table_id: string | null };
 
 export type Drawing = {
   walls: Wall[];
@@ -30,6 +36,7 @@ export type Drawing = {
   areas: Area[];
   labels: Label[];
   dimensions: Dimension[];
+  notes: Note[];
 };
 
 export const LIMITS = {
@@ -40,6 +47,9 @@ export const LIMITS = {
   areaPoints: 60,
   labels: 100,
   dimensions: 100,
+  notes: 100,
+  noteText: 280,
+  noteVendors: 10,
   coord: 100_000,
   thick: { min: 5, max: 100, default: 20 },
   openingWidth: { min: 40, max: 1000 },
@@ -49,7 +59,7 @@ export const LIMITS = {
 } as const;
 
 export function emptyDrawing(): Drawing {
-  return { walls: [], openings: [], markers: [], areas: [], labels: [], dimensions: [] };
+  return { walls: [], openings: [], markers: [], areas: [], labels: [], dimensions: [], notes: [] };
 }
 
 export type ParseResult = { ok: true; drawing: Drawing } | { ok: false; error: string };
@@ -214,6 +224,24 @@ export function parseDrawing(raw: unknown): ParseResult {
     if (!did || !a || !b) return { ok: false, error: "A dimension needs an id and two points." };
     if (!uniq(did)) return { ok: false, error: `Two items share the id ${did}.` };
     out.dimensions.push({ id: did, a, b });
+  }
+
+  // Notes (spec 59 Part E): a drawing saved before them has none.
+  const notes = list("notes", LIMITS.notes);
+  if (typeof notes === "string") return { ok: false, error: notes };
+  for (const n of notes) {
+    if (!isObj(n)) return { ok: false, error: "A note isn't an object." };
+    const nid = id(n.id);
+    const text = typeof n.text === "string" ? n.text.trim() : "";
+    const x = num(n.x);
+    const y = num(n.y);
+    if (!nid || !text || text.length > LIMITS.noteText || x === null || y === null) {
+      return { ok: false, error: `A note needs an id, text of up to ${LIMITS.noteText} characters and a place.` };
+    }
+    if (!uniq(nid)) return { ok: false, error: `Two items share the id ${nid}.` };
+    const vendors = Array.isArray(n.vendor_ids) ? [...new Set(n.vendor_ids.filter((v): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)))].slice(0, LIMITS.noteVendors) : [];
+    const tableId = id(n.table_id);
+    out.notes.push({ id: nid, text, x: Math.round(clamp(x, -LIMITS.coord, LIMITS.coord)), y: Math.round(clamp(y, -LIMITS.coord, LIMITS.coord)), vendor_ids: vendors, table_id: tableId });
   }
 
   return { ok: true, drawing: out };
@@ -454,7 +482,7 @@ export function newDrawingId(prefix: string, taken: ReadonlySet<string>, random:
 
 /** Every id in use in a drawing, for `newDrawingId`. */
 export function drawingIds(d: Drawing): Set<string> {
-  return new Set([...d.walls, ...d.openings, ...d.markers, ...d.areas, ...d.labels, ...d.dimensions].map((x) => x.id));
+  return new Set([...d.walls, ...d.openings, ...d.markers, ...d.areas, ...d.labels, ...d.dimensions, ...d.notes].map((x) => x.id));
 }
 
 /** The bounding box of an area's points, for placing its name. */

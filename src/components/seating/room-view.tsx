@@ -328,7 +328,8 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
     if (tools.hasSelection) setSelection(new Set());
   }, [tools.hasSelection]);
   useEffect(() => {
-    if (!venueOpen) tools.setSelected(null);
+    // The building is locked until asked for, so a pick in it goes when it closes. A note isn't the building: it stays picked.
+    if (!venueOpen && tools.selected?.kind !== "note") tools.setSelected(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueOpen]);
 
@@ -1298,12 +1299,13 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         at,
         items: [
           { label: "Paste here", keys: "⌘V", disabled: !editable || !clipboard, onSelect: () => pasteAt(here) },
+          { label: "Add a note here", disabled: !editable, onSelect: () => tools.addNoteAt(here) },
           "sep",
           { label: "Fit the room", keys: "⇧1", onSelect: showFit },
           navigation,
           {
             label: "Lock or unlock a layer",
-            children: LAYERS.filter((l) => l.id !== "notes").map((l) => ({ label: l.label, checked: locks[l.id], onSelect: () => setLocks({ ...locks, [l.id]: !locks[l.id] }) })),
+            children: LAYERS.map((l) => ({ label: l.label, checked: locks[l.id], onSelect: () => setLocks({ ...locks, [l.id]: !locks[l.id] }) })),
           },
         ],
       });
@@ -1337,6 +1339,7 @@ export function RoomView({ focus = false, onLeaveFocus }: { focus?: boolean; onL
         { label: "Send to back", disabled: !editable || !list.some((b) => b.kind === "fixture"), onSelect: () => orderItems(list, "back") },
         "sep",
         { label: "Select similar", keys: "⌘⇧A", onSelect: () => setSelection(new Set(selectSimilar(bodies.filter(pickable), list.map((b) => b.key)))) },
+        { label: "Add a note here", disabled: !editable, onSelect: () => tools.addNoteAt(here) },
         ...(list.length > 1
           ? ([
               {

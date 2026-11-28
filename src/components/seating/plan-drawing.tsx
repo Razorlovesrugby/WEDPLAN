@@ -4,6 +4,8 @@ import { fixtureGroup } from "@/lib/seating/library";
 import type { SeatingFixture, SeatingTable } from "@/lib/seating/model";
 import type { SeatingCustomItemRow, SeatingMarqueeRow, SeatingSpaceRow } from "@/lib/types/database";
 import { VenueLayer } from "./venue-layer";
+import { NotesLayer } from "./notes-layer";
+import type { NumberedNote } from "@/lib/seating/notes";
 
 /** What one chair shows on a printed plan. */
 export type PlanSeat = { label: string; colour: string | null; allergy: boolean; dot: boolean };
@@ -24,6 +26,8 @@ export type PlanOptions = {
   /** Hire: furniture pieces marked with a letter. */
   markFurniture?: boolean;
   seatedAt?: ReadonlyMap<string, number>;
+  /** Notes for suppliers, numbered, drawn as pins on top (spec 59 Part E). The list beside the plan is `NotesList`. */
+  notes?: readonly NumberedNote[];
 };
 
 type Props = {
@@ -160,6 +164,8 @@ export function PlanDrawing({ space, tables, fixtures, customItems = [], marquee
               );
             })
           : null}
+
+        {options.notes && options.notes.length > 0 ? <NotesLayer notes={[...options.notes]} unit={unit} textLimit={28} /> : null}
 
         {/* Scale bar. */}
         <g transform={`translate(0 ${d + 70})`}>

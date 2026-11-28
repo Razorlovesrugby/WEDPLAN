@@ -11,6 +11,15 @@ import type { SeatingPlanData } from "@/server/queries/seating";
 import { KitchenSummaryView } from "./exports";
 import { PlanDrawing, type PlanSeat } from "./plan-drawing";
 import { ZoomPlan } from "./zoom-plan";
+import { NotesList } from "./notes-layer";
+import { parseDrawing } from "@/lib/seating/drawing";
+import { numberNotes } from "@/lib/seating/notes";
+
+/** A space's notes, as stored. */
+const notesOf = (drawing: unknown) => {
+  const r = parseDrawing(drawing);
+  return r.ok ? r.drawing.notes : [];
+};
 
 /**
  * A shared plan, as the person with the link sees it (spec 57 E.3): the event's
@@ -76,8 +85,9 @@ export function SharedPlan({
           <h2 className="font-serif text-xl">{space.name}</h2>
           {/* Pinch or Ctrl/⌘ + scroll to zoom, drag to pan when zoomed; a plain scroll still scrolls this page (spec 60 D.1). */}
           <ZoomPlan label={`${space.name} plan`}>
-            <PlanDrawing space={space} tables={data.tables} fixtures={data.fixtures} customItems={data.customItems} marquees={data.marquees} backgroundUrl={backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: true, chairs: "numbered", seats, tableText: "label_count", seatedAt }} />
+            <PlanDrawing space={space} tables={data.tables} fixtures={data.fixtures} customItems={data.customItems} marquees={data.marquees} backgroundUrl={backgrounds[space.id] ?? null} backgroundOpacity={space.background_opacity} options={{ venue: true, furniture: true, decor: true, chairs: "numbered", seats, tableText: "label_count", seatedAt, notes: numberNotes(notesOf(space.drawing), data.tables, data.vendors) }} />
           </ZoomPlan>
+          <NotesList notes={numberNotes(notesOf(space.drawing), data.tables, data.vendors)} />
         </section>
       ))}
 

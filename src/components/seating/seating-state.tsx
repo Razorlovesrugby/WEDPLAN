@@ -35,8 +35,8 @@ import {
 } from "@/lib/seating/warnings";
 
 /** The Show menu: chair names and numbers, and the layers of the room (Venue, Tables, Furniture, Flowers & décor). */
-export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; tables: boolean; furniture: boolean; decor: boolean };
-const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, tables: true, furniture: true, decor: true };
+export type ShowSettings = { names: boolean; numbers: boolean; venue: boolean; tables: boolean; furniture: boolean; decor: boolean; /** Notes for suppliers (spec 59 Part E). */ notes: boolean };
+const DEFAULT_SHOW: ShowSettings = { names: false, numbers: false, venue: true, tables: true, furniture: true, decor: true, notes: true };
 
 /** The panel open beside the Room view: who to seat, the Library, or the venue's drawing tools. */
 export type LeftTab = "guests" | "library" | "venue";
@@ -211,6 +211,7 @@ export function SeatingProvider({
           tables: on(saved.tables, true),
           furniture: on(saved.furniture, true),
           decor: on(saved.decor, true),
+          notes: on(saved.notes, true),
         });
       }
     } catch {

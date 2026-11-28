@@ -4,8 +4,8 @@ import { LAYERS, type Layer } from "@/lib/seating/canvas";
 import { useLayerLocks } from "./canvas-prefs";
 import { useSeating, type ShowSettings } from "./seating-state";
 
-/** The layer → the Show flag that hides it. Notes join in Part E. */
-const SHOW_FLAG: Partial<Record<Layer, keyof ShowSettings>> = { venue: "venue", tables: "tables", furniture: "furniture", decor: "decor" };
+/** The layer → the Show flag that hides it. */
+const SHOW_FLAG: Partial<Record<Layer, keyof ShowSettings>> = { venue: "venue", tables: "tables", furniture: "furniture", decor: "decor", notes: "notes" };
 
 /**
  * The layers of the room (spec 59 A.5): each can be shown or hidden, and

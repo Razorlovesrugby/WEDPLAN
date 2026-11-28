@@ -13,6 +13,8 @@ export type Tool =
   | { kind: "arc" }
   | { kind: "area" }
   | { kind: "text" }
+  /** Spec 59 Part E: a note pinned on the plan or on a table, for the suppliers. */
+  | { kind: "note" }
   | { kind: "measure" }
   /** A door, window or opening: the next click puts it on the nearest wall. */
   | { kind: "opening"; opening: OpeningKind }
@@ -35,13 +37,14 @@ export type PlaceItem =
 
 export const SELECT: Tool = { kind: "select" };
 
-export const TOOL_LABEL: Record<"select" | "hand" | "wall" | "arc" | "area" | "text" | "measure", string> = {
+export const TOOL_LABEL: Record<"select" | "hand" | "wall" | "arc" | "area" | "text" | "note" | "measure", string> = {
   select: "Select",
   hand: "Hand",
   wall: "Walls",
   arc: "Curved wall",
   area: "Area",
   text: "Text",
+  note: "Note",
   measure: "Measure",
 };
 
@@ -78,13 +81,14 @@ export function isDrawing(t: Tool): boolean {
 }
 
 /** The key that picks each tool while the plan has focus (spec 59 A.3). */
-export const TOOL_KEY: Record<"select" | "hand" | "wall" | "arc" | "area" | "text" | "measure", string> = {
+export const TOOL_KEY: Record<"select" | "hand" | "wall" | "arc" | "area" | "text" | "note" | "measure", string> = {
   select: "V",
   hand: "H",
   wall: "W",
   arc: "C",
   area: "A",
   text: "T",
+  note: "N",
   measure: "M",
 };
 
@@ -97,5 +101,5 @@ export function toolForKey(key: string): Tool | null {
 
 /** The tool a click on a drawn item should hand over to: placing something ends the tool that placed it. */
 export function toolAfterPlacing(t: Tool): Tool {
-  return t.kind === "opening" || t.kind === "marker" || t.kind === "place" || t.kind === "text" ? SELECT : t;
+  return t.kind === "opening" || t.kind === "marker" || t.kind === "place" || t.kind === "text" || t.kind === "note" ? SELECT : t;
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { NavMode } from "@/lib/seating/canvas";
 import { SELECT, TOOL_KEY, TOOL_LABEL, type Tool } from "@/lib/seating/tools";
 
-const TOOLS = ["select", "hand", "wall", "arc", "area", "text", "measure"] as const;
+const TOOLS = ["select", "hand", "wall", "arc", "area", "text", "note", "measure"] as const;
 /** The drawing tools stay hidden while the room is locked (spec 57 Part D, spec 59 A.3). */
 const ALWAYS = new Set(["select", "hand"]);
 

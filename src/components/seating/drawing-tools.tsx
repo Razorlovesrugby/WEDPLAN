@@ -27,6 +27,9 @@ import { classifyWalkway, parseSettings, type Walkway } from "@/lib/seating/plan
 import { MARKER_LABEL, MARKER_SIZE, OPENING_LABEL, OPENING_WIDTH, SELECT, toolAfterPlacing } from "@/lib/seating/tools";
 import { useSeating } from "./seating-state";
 import { VenueLayer, WallPreview, type DrawingPick } from "./venue-layer";
+import { NotesLayer } from "./notes-layer";
+import { useLayerLocks } from "./canvas-prefs";
+import { addressee, newNoteAt, numberNotes } from "@/lib/seating/notes";
 
 const CORNER_SNAP_CM = 20;
 const OPENING_REACH_CM = 60;
@@ -57,7 +60,8 @@ export function useDrawingTools({
   /** Room centimetres per screen pixel. */
   unit: number;
 }) {
-  const { eventId, layoutId, spaceId, data, tables, tool, setTool, track, refresh, setError } = useSeating();
+  const { eventId, layoutId, spaceId, data, tables, tool, setTool, track, refresh, setError, show } = useSeating();
+  const [layerLocks] = useLayerLocks();
   const [, startTransition] = useTransition();
   const space = data.spaces.find((s) => s.id === spaceId) ?? data.spaces[0] ?? null;
   const hasImage = Boolean(space?.background_path);
@@ -193,6 +197,18 @@ export function useDrawingTools({
         else if (areaPts.length < LIMITS.areaPoints) setAreaPts([...areaPts, q]);
         return true;
       }
+      case "note": {
+        if (drawingRef.current.notes.length >= LIMITS.notes) {
+          setError(`A space holds up to ${LIMITS.notes} notes.`);
+          return true;
+        }
+        // Put on a table, the note is pinned to it and moves with it; on empty floor it stays where it is.
+        const note = newNoteAt(p, freshId("n"), tables, spaceId);
+        commit({ ...drawingRef.current, notes: [...drawingRef.current.notes, note] }, "Added a note");
+        setSelected({ kind: "note", id: note.id });
+        setTool(toolAfterPlacing(tool));
+        return true;
+      }
       case "text": {
         const text = window.prompt("What should it say?", "")?.trim();
         if (!text) return true;
@@ -275,6 +291,7 @@ export function useDrawingTools({
     else if (pick.kind === "marker") commit({ ...d, markers: d.markers.filter((m) => m.id !== pick.id) }, "Deleted a marker");
     else if (pick.kind === "area") commit({ ...d, areas: d.areas.filter((a) => a.id !== pick.id) }, "Deleted an area");
     else if (pick.kind === "label") commit({ ...d, labels: d.labels.filter((l) => l.id !== pick.id) }, "Deleted some text");
+    else if (pick.kind === "note") commit({ ...d, notes: d.notes.filter((n) => n.id !== pick.id) }, "Deleted a note");
     else commit({ ...d, dimensions: d.dimensions.filter((x) => x.id !== pick.id) }, "Deleted a measurement");
   };
 
@@ -354,6 +371,10 @@ export function useDrawingTools({
     if (pick.kind === "marker") {
       const m = d.markers.find((x) => x.id === pick.id);
       if (m) beginDrag(e, (b, dx, dy) => ({ ...b, markers: b.markers.map((x) => (x.id === m.id ? { ...x, x: clamp(snapTo(m.x + dx), 0, limitX), y: clamp(snapTo(m.y + dy), 0, limitY) } : x)) }), "Moved a marker");
+    } else if (pick.kind === "note") {
+      const n = d.notes.find((x) => x.id === pick.id);
+      // A note on a table keeps its offset from the table's centre, so dragging it moves that offset by the same amount.
+      if (n) beginDrag(e, (b, dx, dy) => ({ ...b, notes: b.notes.map((x) => (x.id === n.id ? { ...x, x: Math.round(n.x + dx), y: Math.round(n.y + dy) } : x)) }), "Moved a note");
     } else if (pick.kind === "label") {
       const l = d.labels.find((x) => x.id === pick.id);
       if (l) beginDrag(e, (b, dx, dy) => ({ ...b, labels: b.labels.map((x) => (x.id === l.id ? { ...x, x: clamp(snapTo(l.x + dx), 0, limitX), y: clamp(snapTo(l.y + dy), 0, limitY) } : x)) }), "Moved some text");
@@ -453,6 +474,9 @@ export function useDrawingTools({
       {tool.kind === "measure" && measure ? (
         <MeasureLine a={measure.a} b={measure.b ?? cursor} unit={unit} colour={walkway ? WALKWAY_COLOUR[walkway.state] : "#1d6fa5"} note={walkway ? `${formatLength(walkway.gap)} between tables — ${WALKWAY_WORD[walkway.state]}` : null} />
       ) : null}
+      {show.notes ? (
+        <NotesLayer notes={numberNotes(drawing.notes, tables, data.vendors)} unit={unit} selectedId={selected?.kind === "note" ? selected.id : null} onPick={tool.kind === "select" && !layerLocks.notes ? (id, e) => onPick({ kind: "note", id }, e) : undefined} />
+      ) : null}
       {selected?.kind === "wall"
         ? (() => {
             const w = drawing.walls.find((x) => x.id === selected.id);
@@ -483,6 +507,8 @@ export function useDrawingTools({
     <SelectionPanel
       pick={selected}
       drawing={drawing}
+      vendors={data.vendors}
+      tableLabel={(id) => tables.find((t) => t.id === id)?.label ?? null}
       onChange={(next, label) => commit(next, label)}
       onDelete={() => remove(selected)}
       onSplit={(wallId) => {
@@ -520,6 +546,8 @@ export function useDrawingTools({
           ? areaPts.length < 3
             ? "Click the corners of the area. Click the first one, or press Enter, to close it."
             : "Click the first corner or press Enter to close the area."
+          : tool.kind === "note"
+            ? "Click where the note goes. On a table, it moves with the table."
           : tool.kind === "text"
             ? "Click where the text goes."
             : tool.kind === "measure"
@@ -530,7 +558,15 @@ export function useDrawingTools({
                   ? `Click to put ${MARKER_LABEL[tool.marker].toLowerCase()} down.`
                   : null;
 
-  return { drawing, showHere, overlay, selectionPanel, status, onCanvasClick, onCanvasMove, onDoubleClick, onKey, selected, setSelected, commit, hasSelection: selected !== null };
+  /** Add a note here (right-click): on a table it is pinned to it. */
+  const addNoteAt = (p: Point) => {
+    if (drawingRef.current.notes.length >= LIMITS.notes) return setError(`A space holds up to ${LIMITS.notes} notes.`);
+    const note = newNoteAt(p, freshId("n"), tables, spaceId);
+    commit({ ...drawingRef.current, notes: [...drawingRef.current.notes, note] }, "Added a note");
+    setSelected({ kind: "note", id: note.id });
+  };
+
+  return { drawing, showHere, overlay, selectionPanel, status, onCanvasClick, onCanvasMove, onDoubleClick, onKey, selected, setSelected, commit, addNoteAt, hasSelection: selected !== null };
 }
 
 function MeasureLine({ a, b, unit, colour, note }: { a: Pt; b: Pt | null; unit: number; colour: string; note: string | null }) {
@@ -574,12 +610,16 @@ function NumberField({ label, value, min, max, step = 1, suffix, onSave }: { lab
 function SelectionPanel({
   pick,
   drawing,
+  vendors,
+  tableLabel,
   onChange,
   onDelete,
   onSplit,
 }: {
   pick: DrawingPick;
   drawing: Drawing;
+  vendors: { id: string; name: string }[];
+  tableLabel: (tableId: string) => string | null;
   onChange: (next: Drawing, label: string) => void;
   onDelete: () => void;
   onSplit: (wallId: string) => void;
@@ -684,6 +724,53 @@ function SelectionPanel({
           Rename
         </button>
         {del}
+      </form>
+    );
+  }
+  if (pick.kind === "note") {
+    const n = drawing.notes.find((x) => x.id === pick.id);
+    if (!n) return null;
+    const set = (patch: Partial<typeof n>, label: string) => onChange({ ...drawing, notes: drawing.notes.map((x) => (x.id === n.id ? { ...x, ...patch } : x)) }, label);
+    const on = n.table_id ? tableLabel(n.table_id) : null;
+    return (
+      <form
+        className="card space-y-2 p-2 text-sm"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const text = String(new FormData(e.currentTarget).get("text") ?? "").trim();
+          if (text && text !== n.text) set({ text: text.slice(0, LIMITS.noteText) }, "Changed a note");
+        }}
+      >
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted">Note{on ? ` on ${on}: it moves with the table` : ""}</span>
+          <textarea name="text" className="field w-full" rows={3} defaultValue={n.text} key={n.id + n.text} maxLength={LIMITS.noteText} />
+        </label>
+        <fieldset>
+          <legend className="mb-1 text-xs text-muted">For {addressee(n, vendors)}</legend>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={n.vendor_ids.length === 0} onChange={() => set({ vendor_ids: [] }, "Addressed a note to everyone")} />
+              Everyone
+            </label>
+            {vendors.map((v) => (
+              <label key={v.id} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={n.vendor_ids.includes(v.id)}
+                  onChange={(e) => set({ vendor_ids: e.target.checked ? [...n.vendor_ids, v.id].slice(0, LIMITS.noteVendors) : n.vendor_ids.filter((x) => x !== v.id) }, "Addressed a note")}
+                />
+                {v.name}
+              </label>
+            ))}
+          </div>
+          {vendors.length === 0 ? <p className="text-xs text-muted">Add your suppliers on the Vendors page to address a note to one.</p> : null}
+        </fieldset>
+        <div className="flex gap-2">
+          <button type="submit" className="btn">
+            Save
+          </button>
+          {del}
+        </div>
       </form>
     );
   }
